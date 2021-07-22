@@ -1,0 +1,332 @@
+[
+  {
+    "id" : "67d38dfe-7142-43f2-9570-af8f264a4fb4",
+    "prId" : 2674,
+    "prUrl" : "https://github.com/scalameta/metals/pull/2674#pullrequestreview-627445920",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "310097ff-9fde-4f75-bc24-3377d88a1d9b",
+        "parentId" : null,
+        "authorId" : "84490516-a7af-4f7f-9947-360c279c4400",
+        "body" : "So, I tested this and it seems fine, however I'm worried about his in the long term. Mainly because it seems that we are both cherry picking stuff from the classpath in mdoc and also in here. I feel it makes it quite difficult to understand what ultimately ends up there, and where something may have been filtered off. Just trying to understand this.\r\n\r\nWe download mdoc in this file. That's what `jars` are here for the runtime classpath. I guess I don't get why we would filter that seeing that I was _assuming_ that the evaluation that mdoc is doing has it's own separate classpath. I get even further confused because looking at the `MarkdownBuilder` I also see:\r\n\r\nhttps://github.com/scalameta/mdoc/blob/e0455f655f0c29a035a4ef703c21ad2d24902f89/mdoc/src/main/scala/mdoc/internal/markdown/MarkdownBuilder.scala#L80-L98\r\n\r\nSo It looks that when we are actually creating that we are already doing some filtering 🤔 \r\n\r\nI just don't get why this is happening and that is bleeding in here. I'm probably speaking to the choir. I'll also try to spend a little time on the mdoc side and figure this out because it baffles me.\r\n\r\nEither way for now, LGTM! But ultimately I think we should remove this in the future when the linked ticket you have attached in mdoc gets closed. ",
+        "createdAt" : "2021-04-03T08:47:37Z",
+        "updatedAt" : "2021-04-03T08:47:57Z",
+        "lastEditedBy" : "84490516-a7af-4f7f-9947-360c279c4400",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff29daa7-e352-48e5-9c26-c656bc7de6e6",
+        "parentId" : "310097ff-9fde-4f75-bc24-3377d88a1d9b",
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "This is indeed a bit hacky workaround, because I was unable to figure out why the classloader would load up something from a wrong jar. Especially that now with the recent changes, everything should work alright. I think this has something to do with how classloaders operate. So if we classload a class from a certain jar using a certain classloaders then everything else connected to it will use the same classloader. So I am thinking this is why we are actually using mdoc's classloader to load up typesafe config. But I haven't yet dug deep into how they work, this is more like my impression.\r\n\r\nThis change makes it impossible to load up that jar, which is why it's working I think. \r\n\r\n> I just don't get why this is happening and that is bleeding in here. I'm probably speaking to the choir. I'll also try to spend a little time on the mdoc side and figure this out because it baffles me.\r\n\r\nHaha, yes I am as confused as you are :sweat_smile: But this seems to work and we shouldn't get similar issues anymore.",
+        "createdAt" : "2021-04-03T09:32:59Z",
+        "updatedAt" : "2021-04-03T09:32:59Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53b6c7af-f1f5-4fb9-ab8b-b0c89c469c0a",
+        "parentId" : "310097ff-9fde-4f75-bc24-3377d88a1d9b",
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "I think the main issue stems from the fact that the worksheet classloader has the main mdoc classpath as parent, so it is not as nicely isolated as it should.",
+        "createdAt" : "2021-04-03T09:40:24Z",
+        "updatedAt" : "2021-04-03T09:40:25Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "07e5646237763d921f3fca38e0bfc49e84ac90a7",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +135,139 @@      pathString.contains(\"diffutils\")\n    }\n    val urls = runtimeClasspath.iterator.map(_.toUri().toURL()).toArray\n    new URLClassLoader(urls, parent)\n  }"
+  },
+  {
+    "id" : "382a83bb-d06c-4ee5-a406-21b94658d066",
+    "prId" : 2260,
+    "prUrl" : "https://github.com/scalameta/metals/pull/2260#pullrequestreview-538713692",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "be9c91d8-8e4a-4acd-aeb2-ab14a6b2cd45",
+        "parentId" : null,
+        "authorId" : "84490516-a7af-4f7f-9947-360c279c4400",
+        "body" : "I honestly don't love that we are doing this. Was it just not possible to publish mdoc for both M1 and M2? It seems a bit extreme that have to have logic to include 1 of 3 different versions of a single dependency.",
+        "createdAt" : "2020-11-25T17:07:07Z",
+        "updatedAt" : "2020-11-25T17:26:36Z",
+        "lastEditedBy" : "84490516-a7af-4f7f-9947-360c279c4400",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6cd03905-acd9-4cfe-b96c-28f6cb17fea0",
+        "parentId" : "be9c91d8-8e4a-4acd-aeb2-ab14a6b2cd45",
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "It seemed simpler to just put in the logic here. We need to double the code for each Scala 3 version currently and it's really only Metals doing it. I might have been too quick, but there was no real changes between all those changes that would impact worksheets.",
+        "createdAt" : "2020-11-25T17:11:02Z",
+        "updatedAt" : "2020-11-25T17:26:36Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e1ce8556-ee0d-4d38-97c6-1be9a8e063e9",
+        "parentId" : "be9c91d8-8e4a-4acd-aeb2-ab14a6b2cd45",
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "After the changes in https://github.com/lampepfl/dotty/pull/10172 we should be able to just do https://github.com/scalameta/mdoc/commit/81e43c1d42dc54fbe14c32412ee0c2cc67544d03",
+        "createdAt" : "2020-11-25T17:23:50Z",
+        "updatedAt" : "2020-11-25T17:26:36Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bad2ebdafddec4a185f9f657fbafabdb58cac798",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +187,191 @@      if (scalaVersion == \"0.27.0-RC1\") \"2.2.10\"\n      else if (scalaVersion == \"3.0.0-M1\") \"2.2.12\"\n      else BuildInfo.mdocVersion\n    Dependency.of(\n      \"org.scalameta\","
+  },
+  {
+    "id" : "05b2863b-cda5-4dc7-9606-8d0eb217c0de",
+    "prId" : 1856,
+    "prUrl" : "https://github.com/scalameta/metals/pull/1856#pullrequestreview-438133434",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fb1ea01b-9fde-43bb-ad7d-a0442efe4a29",
+        "parentId" : null,
+        "authorId" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "body" : "FWIW, it's possible to provide a custom coursier logger for the download progress https://github.com/scalameta/mdoc/blob/54f40f32ed946d3676adab35cd05bb27a6055401/mdoc-interfaces/src/main/scala/mdoc/interfaces/Mdoc.java#L17",
+        "createdAt" : "2020-06-25T17:06:54Z",
+        "updatedAt" : "2020-06-26T14:08:31Z",
+        "lastEditedBy" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "27fea4ef-e379-470b-94c1-4704f350df79",
+        "parentId" : "fb1ea01b-9fde-43bb-ad7d-a0442efe4a29",
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "The default one used by Mdoc should just report things to System.err, which should be fine, no?",
+        "createdAt" : "2020-06-25T18:23:32Z",
+        "updatedAt" : "2020-06-26T14:08:31Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "457e9556-9d2d-4e98-936e-f6bdfb3c391e",
+        "parentId" : "fb1ea01b-9fde-43bb-ad7d-a0442efe4a29",
+        "authorId" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "body" : "It might be nice to somehow display the progress via LSP but looking at the coursier logger api it might not be so easy. This is fine ",
+        "createdAt" : "2020-06-26T09:03:43Z",
+        "updatedAt" : "2020-06-26T14:08:31Z",
+        "lastEditedBy" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1f17edfb786b6f5af2def3bdb1d0b49714512fb2",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +191,195 @@    fetchSettings(dep, scalaVersion)\n      .addClassifiers(classfiers: _*)\n      .withResolutionParams(resolution)\n      .fetch()\n      .asScala"
+  },
+  {
+    "id" : "994d9ba3-3f2b-4b6d-aeb9-78cf4794b3f3",
+    "prId" : 1856,
+    "prUrl" : "https://github.com/scalameta/metals/pull/1856#pullrequestreview-437767292",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1668b91d-6fb0-4930-9a24-835657e42c28",
+        "parentId" : null,
+        "authorId" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "body" : "Add comment why?",
+        "createdAt" : "2020-06-25T17:15:29Z",
+        "updatedAt" : "2020-06-26T14:08:31Z",
+        "lastEditedBy" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01bc2439-288f-4fb3-878f-5a35df215a2c",
+        "parentId" : "1668b91d-6fb0-4930-9a24-835657e42c28",
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "Added",
+        "createdAt" : "2020-06-25T18:47:42Z",
+        "updatedAt" : "2020-06-26T14:08:31Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1f17edfb786b6f5af2def3bdb1d0b49714512fb2",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +118,122 @@     * load coursierapi.Logger and instead will use the already loaded one\n     */\n    resolutionParams.addExclusion(\"io.get-coursier\", \"interface\")\n    val jars = downloadMdoc(scalaVersion, scalaBinaryVersion, resolutionParams)\n"
+  },
+  {
+    "id" : "90d4e6a6-6a90-401d-a9da-adc556e3ae21",
+    "prId" : 1523,
+    "prUrl" : "https://github.com/scalameta/metals/pull/1523#pullrequestreview-393785868",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b9d6e918-fb79-4e14-9e58-bafc5d15db11",
+        "parentId" : null,
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "Removed the redundant method for create Scala 3 presentation compiler and just added this single condtion. Everything else is the same.",
+        "createdAt" : "2020-04-15T13:43:30Z",
+        "updatedAt" : "2020-04-15T13:50:25Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1142490703f832961ac0df1debd14b4f3b12ce7d",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +124,128 @@      .create()\n\n    if (!ScalaVersions.isScala3Version(scalaVersion))\n      resolutionParams.forceVersions(\n        List("
+  },
+  {
+    "id" : "26ebfb71-98f7-4feb-87ee-d0ab6dd4de5c",
+    "prId" : 1070,
+    "prUrl" : "https://github.com/scalameta/metals/pull/1070#pullrequestreview-318241636",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "78f8ef54-3a0c-4d8e-9ccb-739eb04757a8",
+        "parentId" : null,
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "We no longer use AppVeyor, do we need to load ScalaPresentationCompiler explicitely?",
+        "createdAt" : "2019-11-18T10:11:45Z",
+        "updatedAt" : "2019-11-20T13:47:26Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e57e1e93-af1f-455b-b847-c9c9a0ace98e",
+        "parentId" : "78f8ef54-3a0c-4d8e-9ccb-739eb04757a8",
+        "authorId" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "body" : "This is a reasonable fallback mechanism if the service loader doesn't work for some reason. This code was here before so I don't stir up things in this PR",
+        "createdAt" : "2019-11-18T10:48:01Z",
+        "updatedAt" : "2019-11-20T13:47:26Z",
+        "lastEditedBy" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8e9ddf5e5c6478ce25ea66ea4938fa0c64f27aba",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +81,85 @@    if (services.hasNext) services.next()\n    else {\n      // NOTE(olafur): ServiceLoader doesn't find the service on Appveyor for\n      // some reason, I'm unable to reproduce on my computer. Here below we\n      // fallback to manual classloading."
+  },
+  {
+    "id" : "2b9c0271-c038-4416-a09f-ae0124ec1e2a",
+    "prId" : 1030,
+    "prUrl" : "https://github.com/scalameta/metals/pull/1030#pullrequestreview-318249575",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c5c02e9a-337b-4cb3-89ec-6624757588ae",
+        "parentId" : null,
+        "authorId" : "a1d420d1-83d4-48b5-b245-772065f6633b",
+        "body" : "can we keep the call in one line like `Dependency.of(a, b, c)` ?",
+        "createdAt" : "2019-11-15T13:22:15Z",
+        "updatedAt" : "2019-11-19T14:42:54Z",
+        "lastEditedBy" : "a1d420d1-83d4-48b5-b245-772065f6633b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e5802ad-ced3-4f21-8d74-69740ff4b805",
+        "parentId" : "c5c02e9a-337b-4cb3-89ec-6624757588ae",
+        "authorId" : "20b16f42-5e51-4a68-99cd-320cac0c5fc9",
+        "body" : "Scalafmt keeps breaking this line.",
+        "createdAt" : "2019-11-18T10:43:33Z",
+        "updatedAt" : "2019-11-19T14:42:54Z",
+        "lastEditedBy" : "20b16f42-5e51-4a68-99cd-320cac0c5fc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b7f660f0-4265-4257-ae4c-4e5bfb619465",
+        "parentId" : "c5c02e9a-337b-4cb3-89ec-6624757588ae",
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "It's because it's too long, you would need to extract it to `val compilerVersion = mtags.BuildInfo.scalaCompilerVersion`. But honestly, I wouldn't bother.",
+        "createdAt" : "2019-11-18T10:50:11Z",
+        "updatedAt" : "2019-11-19T14:42:54Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "234f72c5-cfdc-42c9-8dfb-50461d979c6c",
+        "parentId" : "c5c02e9a-337b-4cb3-89ec-6624757588ae",
+        "authorId" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "body" : "Or this is a different line - got a bit confused",
+        "createdAt" : "2019-11-18T11:00:38Z",
+        "updatedAt" : "2019-11-19T14:42:54Z",
+        "lastEditedBy" : "f252b48f-54a9-478d-8bbb-85f01e5c28e7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7e0b4f32a417f5182340641e0922176285193c62",
+    "line" : 99,
+    "diffHunk" : "@@ -1,1 +104,108 @@    val scalaVersion = ScalaVersions\n      .dropVendorSuffix(info.getScalaVersion)\n    val pc = Dependency.of(\n      \"org.scalameta\",\n      s\"mtags_$scalaVersion\","
+  },
+  {
+    "id" : "fdbc451a-cb85-4c79-ae08-d4c350cae48b",
+    "prId" : 527,
+    "prUrl" : "https://github.com/scalameta/metals/pull/527#pullrequestreview-204688551",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "98a9011b-ac7f-46a4-9513-ef3043c7ce09",
+        "parentId" : null,
+        "authorId" : "d66a6438-cedf-4b6c-bfdf-ceff0a38786d",
+        "body" : "out of curiosity: why not move the classloading inside the pc-interfaces, similarly to what happens in Scalafix/Scalafmt?",
+        "createdAt" : "2019-02-17T10:55:00Z",
+        "updatedAt" : "2019-03-10T09:44:08Z",
+        "lastEditedBy" : "d66a6438-cedf-4b6c-bfdf-ceff0a38786d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e9fb21b5-35bb-4b53-9988-3a2715692cdd",
+        "parentId" : "98a9011b-ac7f-46a4-9513-ef3043c7ce09",
+        "authorId" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "body" : "The main reason is because I like making JDK `ServiceLoader` the \"public abstraction\", users of this API should know there is reflection going on.\r\n\r\n- scalafmt handles downloading via coursier, so it's a bit different\r\n- I didn't know about `ServiceLoader` when I wrote scalafix-interfaces",
+        "createdAt" : "2019-02-18T09:27:40Z",
+        "updatedAt" : "2019-03-10T09:44:08Z",
+        "lastEditedBy" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c7621ebcf6232d37856b167824069496131bae13",
+    "line" : 75,
+    "diffHunk" : "@@ -1,1 +84,88 @@  }\n\n  private val presentationCompilers: TrieMap[String, URLClassLoader] =\n    TrieMap.empty\n  def presentationCompiler("
+  },
+  {
+    "id" : "93cae6f2-5c15-4d51-a353-6b18174e1b49",
+    "prId" : 429,
+    "prUrl" : "https://github.com/scalameta/metals/pull/429#pullrequestreview-187048073",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dce3d459-0fad-4be6-84a2-7e780c97e86f",
+        "parentId" : null,
+        "authorId" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "body" : "Might be worth to link to https://github.com/scalameta/scalafmt/issues/1252",
+        "createdAt" : "2018-12-20T15:28:28Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : "cea3c370-4fa4-4787-a40c-c406eb22d8b2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ec1161fecfaec6824cba1eb2a21806f972c8f67f",
+    "line" : 58,
+    "diffHunk" : "@@ -1,1 +140,144 @@            version\n          ),\n          new coursiersmall.Dependency(\n            // We need reflect because https://github.com/scalameta/scalafmt/issues/1252\n            \"org.scala-lang\","
+  }
+]
