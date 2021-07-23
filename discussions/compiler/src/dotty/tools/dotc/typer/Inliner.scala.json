@@ -1,0 +1,1014 @@
+[
+  {
+    "id" : "b49b4be7-9be5-4c10-acd5-a9108c543798",
+    "prId" : 12815,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/12815#pullrequestreview-685068586",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b7dd6fb4-365b-40ae-9723-a4dc3277e057",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "Minor point: we could check the accessibility of `alias` at this point to generate a slightly better error message if it isn't accessible, but the current one isn't too bad:\r\n```scala\r\nobject refined:\r\n  private class Internal(x: Int)\r\n  opaque type Positive = Internal\r\n  inline def Positive(value: Int): Positive = new Internal(value)\r\n\r\nobject test:\r\n  def run: Unit =\r\n    val x = 9\r\n    val nine = refined.Positive(x)\r\n```\r\n```scala\r\n-- Error: tests/pos/opaque-inline1.scala:10:31 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\r\n10 |    val nine = refined.Positive(x)\r\n   |               ^^^^^^^^^^^^^^^^^^^\r\n   |               class Internal cannot be accessed as a member of (refined : refined.type{Positive = refined.Internal}) from module class test$.\r\n   | This location contains code that was inlined from opaque-inline1.scala:4\r\n```",
+        "createdAt" : "2021-06-15T17:27:00Z",
+        "updatedAt" : "2021-06-15T17:27:22Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d9f41f4-d97d-4d2b-9c50-6fb482cf41e4",
+        "parentId" : "b7dd6fb4-365b-40ae-9723-a4dc3277e057",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "There was a wrong condition for eliding the proxies, which is fixed in 2414033. Now pos/opaque-inline1 does not compile anymore if I remove the cast. It fails in -Ycheck with\r\n```\r\njava.lang.AssertionError: assertion failed: Found:    Int\r\nRequired: refined.Positive\r\nfound: class Int in package scala with class Int, flags = final abstract <scala-2.x> <touched>, underlying = Int, AnyVal {...}\r\nexpected: type Positive in object refined with type Positive, flags = <deferred> opaque <touched>, underlying = refined.Positive, , Any, {...}\r\ntree = {\r\n  val $proxy1: refined.type{Positive = Int} = \r\n    refined.$asInstanceOf[refined.type{Positive = Int}]\r\n  val refined$_this: ($proxy1 : refined.type{Positive = Int}) = $proxy1\r\n  refined$_this.f(x):refined$_this.Positive\r\n} while compiling opaque-inline1.scala\r\n```\r\nThe weird thing is that with the original condition everything succeeded, even though the expansion was then\r\n```scala\r\n  val x = 9\r\n  val nine = refined.f(x): refined.Positive\r\n```\r\nThis is clearly type-incorrect, since `9` is an `Int` and `refined.f` expects a `refined.Positive`. Indeed, if I write this expansion manually, it fails.\r\n```scala\r\n-- [E007] Type Mismatch Error: opaque-inline1.scala:12:25 ----------------------\r\n12 |    val nine = refined.f(x): refined.Positive\r\n   |                         ^\r\n   |                         Found:    (x : Int)\r\n   |                         Required: refined.Positive\r\n```\r\nBut somehow `-Ycheck` does not test this. I traced Ycheck's behavior and it seems to think that `refined.f: Int => Int` even though it should be `refined.f: Positive => Positive`. The reason for this is that it copies the tree `refined.f` as is from the inline method, which is in a scope where `Positive = Int`. Hence, `Int => Int` is a legal type for `f` there. It's the copying that is wrong, and unfortunately Ycheck does not catch it.\r\n\r\nBut the case won't arise anymore with this PR.",
+        "createdAt" : "2021-06-16T11:54:07Z",
+        "updatedAt" : "2021-06-16T11:57:30Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d4e8f5d666ae5abed2fd85d8288c7e8173576a0e",
+    "line" : 56,
+    "diffHunk" : "@@ -1,1 +608,612 @@                val opaq = cls.info.member(rname).symbol\n                if opaq.isOpaqueAlias then\n                  (rname, alias.stripLazyRef.asSeenFrom(ref, cls))\n                  :: openOpaqueAliases(parent)\n                else Nil"
+  },
+  {
+    "id" : "ce16f311-4c23-4a63-9ed0-137f19e4b08d",
+    "prId" : 12193,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/12193#pullrequestreview-645522411",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a962a440-93ef-4298-a40d-cc7cf6c587c7",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "The fix failed the following code:\r\n\r\n```Scala\r\ninline def test[T](inline t: T): T = ${ identity('{ identity(${ identity('{ identity(${ identity('t) }) }) }) }) }\r\n```",
+        "createdAt" : "2021-04-23T12:12:43Z",
+        "updatedAt" : "2021-04-27T07:26:22Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c4e12be9-f965-4d0b-adcb-5ac1ab1ab5c9",
+        "parentId" : "a962a440-93ef-4298-a40d-cc7cf6c587c7",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "That is a different problem. I will open an issue for it. See #12225.",
+        "createdAt" : "2021-04-26T14:37:11Z",
+        "updatedAt" : "2021-04-27T07:26:22Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9901749e-549a-46b6-b276-0071d8b43057",
+        "parentId" : "a962a440-93ef-4298-a40d-cc7cf6c587c7",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "What about this one:\r\n\r\n```Scala\r\ninline def test[T](inline t: T): T = ${ '{ ${ '{ ${ 't } } } } }\r\n```",
+        "createdAt" : "2021-04-26T22:27:49Z",
+        "updatedAt" : "2021-04-27T07:26:22Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "edf0ce18-7758-4a38-8d71-cdb497d3bc75",
+        "parentId" : "a962a440-93ef-4298-a40d-cc7cf6c587c7",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "That one works. Added it as a regression test.",
+        "createdAt" : "2021-04-27T07:26:47Z",
+        "updatedAt" : "2021-04-27T07:26:48Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2a97c3dc017a2c3f12538b0d50dc95c96b876345",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +1381,1385 @@          case Quoted(Spliced(inner)) => inner\n          case _ => tree\n      val res = cancelQuotes(constToLiteral(betaReduce(super.typedApply(tree, pt)))) match {\n        case res: Apply if res.symbol == defn.QuotedRuntime_exprSplice\n                        && level == 0"
+  },
+  {
+    "id" : "972dde62-972a-42d8-bc65-744e1dff4006",
+    "prId" : 12157,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/12157#pullrequestreview-641251989",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d90ee79a-114d-4f47-99d3-b0517ca427ac",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "What are the criteria for deciding what methods should be specialized? Is it possible to generalize the specialization?",
+        "createdAt" : "2021-04-21T08:48:45Z",
+        "updatedAt" : "2021-04-21T09:00:37Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3ab2cd6-e220-4d34-b8a8-36ebddca69b4",
+        "parentId" : "d90ee79a-114d-4f47-99d3-b0517ca427ac",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "The criteria is that it is an `==` or `!=` on `Any` \r\n```\r\nsel.symbol == defn.Any_== || sel.symbol == defn.Any_!=\r\n```\r\nand that the types of the compared values are the same value class\r\n```\r\ndefn.ScalaValueClasses().find { cls =>\r\n          arg1.tpe.derivesFrom(cls) && arg2.tpe.derivesFrom(cls)\r\n```\r\n",
+        "createdAt" : "2021-04-21T09:03:34Z",
+        "updatedAt" : "2021-04-21T09:13:25Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e4791e6-b461-4c04-8398-316879985246",
+        "parentId" : "d90ee79a-114d-4f47-99d3-b0517ca427ac",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "We might generalize it for different classes. For example Short == Int.\r\n\r\nThe other potential generalization is on `Numeric` ops but that is much more complex.",
+        "createdAt" : "2021-04-21T09:06:44Z",
+        "updatedAt" : "2021-04-21T09:13:25Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7439f83c-f748-4e35-b057-0b73c4d80537",
+        "parentId" : "d90ee79a-114d-4f47-99d3-b0517ca427ac",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I am thinking why even specialize `==` and `!=`. This seems to related to the discussion about whether inlining should re-resolve selections. Such specialization helps very little in that perspective, I'm thinking whether it's worthwhile to complicate the compiler.",
+        "createdAt" : "2021-04-21T12:50:00Z",
+        "updatedAt" : "2021-04-21T12:50:01Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70fb6997-6fed-4087-abd5-549fbd588971",
+        "parentId" : "d90ee79a-114d-4f47-99d3-b0517ca427ac",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "No, in this case it is about the partial evaluation of the operation. If we have `(2: Any) == (3: Any)` we know that this will end calling `2 == 3` and return that result.\r\n\r\nAll the testing frameworks will benefit from this as the variants of `assertEquals` will generate this code.  That is already a large enough use case.",
+        "createdAt" : "2021-04-21T15:42:34Z",
+        "updatedAt" : "2021-04-21T15:42:34Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "48f0e897664093fda6bdb823a08f8f80604d879e",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +1479,1483 @@        }\n      case _ =>\n        tree\n\n  /** Drop any side-effect-free bindings that are unused in expansion or other reachable bindings."
+  },
+  {
+    "id" : "b79a33cf-43a9-4c53-970a-618a75f8c968",
+    "prId" : 11917,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/11917#pullrequestreview-622748685",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "10da8c1d-c378-40b7-b062-2826d08da100",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I'm wondering will `mt.paramInfos` work here?",
+        "createdAt" : "2021-03-28T12:24:06Z",
+        "updatedAt" : "2021-03-28T13:16:38Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29a4b3e8-6df4-4e62-8a40-72f7c0d778b3",
+        "parentId" : "10da8c1d-c378-40b7-b062-2826d08da100",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "No, because parameter types can depend on parameters in the same clause.\r\n",
+        "createdAt" : "2021-03-28T13:28:24Z",
+        "updatedAt" : "2021-03-28T13:28:24Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ee78815e-2269-4d6c-a72e-506a0d4d1320",
+        "parentId" : "10da8c1d-c378-40b7-b062-2826d08da100",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "That's tested in test4, which failed before when I used paramInfos.\r\n",
+        "createdAt" : "2021-03-28T13:28:49Z",
+        "updatedAt" : "2021-03-28T13:28:49Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a562c9b75516c514e7f6d12f78199331a181c930",
+    "line" : 113,
+    "diffHunk" : "@@ -1,1 +700,704 @@      case Apply(fn, args) =>\n        fn.tpe.widen.match\n          case mt: MethodType => paramTypess(fn, mt.instantiateParamInfos(args.tpes) :: acc)\n          case _ => Nil\n      case TypeApply(fn, _) => paramTypess(fn, acc)"
+  },
+  {
+    "id" : "0f9135c3-fd39-4f6d-9f48-a33e1bad15c7",
+    "prId" : 10801,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/10801#pullrequestreview-552440591",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "298b7209-34a2-42c4-9861-7b0c77dfbd42",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I thought `finalize` will ensure `fixSpan` is called. Just curious if there is something to fix for `TreeCopier`.",
+        "createdAt" : "2020-12-15T10:55:02Z",
+        "updatedAt" : "2020-12-15T10:55:11Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb520af4-0334-4c92-86ad-23b7b9d39fa6",
+        "parentId" : "298b7209-34a2-42c4-9861-7b0c77dfbd42",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Probably not. This kind of span/source change is only done here. When we will finally support JSR-45 we will remove all this code anyway.",
+        "createdAt" : "2020-12-15T11:08:42Z",
+        "updatedAt" : "2020-12-15T11:08:42Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ddbd92bb-0e1c-4588-a224-a226dab554e8",
+        "parentId" : "298b7209-34a2-42c4-9861-7b0c77dfbd42",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I was thinking about overridding `def postProcess` in `TreeCopier`:\r\n\r\n```scala\r\nclass Reposition extends TreeMap(cpyWithNewSource) {\r\n  override val cpy: TypedTreeCopier = new TypedTreeCopier() {\r\n      protected def postProcess(tree: Tree, copied: untpd.Tree): copied.ThisTree[T] = ...\r\n      protected def postProcess(tree: Tree, copied: untpd.MemberDef): copied.ThisTree[T] = ...\r\n  }\r\n}\r\n``` \r\n\r\nNo need to address in this PR.",
+        "createdAt" : "2020-12-15T11:15:18Z",
+        "updatedAt" : "2020-12-15T11:15:18Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd3f1258-8613-4dc5-983a-664fb6542870",
+        "parentId" : "298b7209-34a2-42c4-9861-7b0c77dfbd42",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Maybe. I would not worry to much about this code and just port the support JSR-45 from Scala 2.",
+        "createdAt" : "2020-12-15T13:20:28Z",
+        "updatedAt" : "2020-12-15T13:20:40Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8bdd0aa55f7d735cceed131479342d4274aaed2c",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +255,259 @@            case tree: DefTree => super.transform(tree).setDefTree\n            case EmptyTree => tree\n            case _ => fixSpan(super.transform(tree))\n        }\n      }"
+  },
+  {
+    "id" : "f94f3213-1c44-4427-9e00-39cad6f18051",
+    "prId" : 10780,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/10780#pullrequestreview-551264394",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ed233521-8dbb-4110-9d97-f2a57b63750a",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I'm wondering if this logic can be moved to `letBindUnless`. Maybe add a TODO here.",
+        "createdAt" : "2020-12-14T10:31:55Z",
+        "updatedAt" : "2020-12-14T10:32:07Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f5d794b-88c9-492e-b2a7-d92dbcec1bdc",
+        "parentId" : "ed233521-8dbb-4110-9d97-f2a57b63750a",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "It would be more expensive to do it in `letBindUnless`. So far I've only seen this happened once inside a `letBindUnless`.",
+        "createdAt" : "2020-12-14T11:07:05Z",
+        "updatedAt" : "2020-12-14T11:27:56Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "207cc20a4e9258f8a1fe510208f6237bfb507e92",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +894,898 @@                else\n                  def argsSpan = trailing.map(_.span).foldLeft(arg.span)(_.union(_))\n                  letBindUnless(TreeInfo.Pure, arg)(Block(trailing, _).withSpan(argsSpan))\n              finish(seq(prefix, seq(leading, argInPlace)))\n            }"
+  },
+  {
+    "id" : "8759801c-230d-47a5-b81c-a4d641411f3a",
+    "prId" : 9800,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/9800#pullrequestreview-489311379",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "288069af-7583-435f-a7da-6855d0edcc9e",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "What about use a case specifically for `TermRef`:\r\n\r\n```scala\r\ncase t @ TermRef(NoPrefix, _) if t.termSymbol.isAllOf(Inline | Param) =>\r\n    mapOver(t.widenTermRefExpr)\r\ncase t: SingletonType =>\r\n    paramProxy.getOrElse(t, mapOver(t))\r\n```",
+        "createdAt" : "2020-09-15T19:35:39Z",
+        "updatedAt" : "2020-09-15T19:36:14Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "086c8b77-f81d-4051-bfeb-952961155fba",
+        "parentId" : "288069af-7583-435f-a7da-6855d0edcc9e",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "That was my original code but den I redactores it to avoid the unnecessary extra type test.",
+        "createdAt" : "2020-09-16T06:30:33Z",
+        "updatedAt" : "2020-09-16T06:30:33Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85e01c56b0db570dabe2e88d19235ac936f33481",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +675,679 @@            case t: TypeRef => paramProxy.getOrElse(t, mapOver(t))\n            case t: SingletonType =>\n              if t.termSymbol.isAllOf(Inline | Param) then mapOver(t.widenTermRefExpr)\n              else paramProxy.getOrElse(t, mapOver(t))\n            case t => mapOver(t)"
+  },
+  {
+    "id" : "8a7883f9-7459-46b7-a183-f8924afd3e94",
+    "prId" : 9753,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/9753#pullrequestreview-485632584",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "339455e9-cf92-4313-a11c-1abfa1a83b9d",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "A typo? Can it be handled in `isPureRef`?\r\n\r\n```suggestion\r\n        isPureRef(tree) || !tree.symbol.isAllOf(Inline | Param)\r\n```",
+        "createdAt" : "2020-09-10T05:52:16Z",
+        "updatedAt" : "2020-09-10T06:20:49Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1189f493-34a9-4e89-bafc-36bc39de360a",
+        "parentId" : "339455e9-cf92-4313-a11c-1abfa1a83b9d",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Inline parameters always elide their binding. Previously we elided them because they were wrongly identified as pure.",
+        "createdAt" : "2020-09-10T06:38:46Z",
+        "updatedAt" : "2020-09-10T06:38:46Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7df15885-cd3c-43eb-a6bf-931ebe3fd3f1",
+        "parentId" : "339455e9-cf92-4313-a11c-1abfa1a83b9d",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "Makes sense 👍 ",
+        "createdAt" : "2020-09-10T06:57:02Z",
+        "updatedAt" : "2020-09-10T06:57:02Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c15936185c153781a0e055f5c6201075b6b84c14",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +522,526 @@        true\n      case Ident(_) =>\n        isPureRef(tree) || tree.symbol.isAllOf(Inline | Param)\n      case Select(qual, _) =>\n        if (tree.symbol.is(Erased)) true"
+  },
+  {
+    "id" : "afde771f-abcc-40e9-997b-a05bc044ce48",
+    "prId" : 9701,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/9701#pullrequestreview-481014852",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "74ecae1c-e848-4f33-a3c9-479a439177d7",
+        "parentId" : null,
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Maybe the folowing would be slightly easier to read\r\n```suggestion\r\n       && tree.symbol.owner.companionModule == defn.CompiletimeTestingPackageObject\r\n    then\r\n```",
+        "createdAt" : "2020-09-02T08:33:58Z",
+        "updatedAt" : "2020-09-02T08:34:20Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a9c10e1-a127-4634-8d38-46b7cc3dba93",
+        "parentId" : "74ecae1c-e848-4f33-a3c9-479a439177d7",
+        "authorId" : "1fb1c568-b2de-43fc-b333-4ad9eebcd79c",
+        "body" : "yeah that would be more readable, but you merged it already so I don't know what now, create single PR with this single change? ❓ ",
+        "createdAt" : "2020-09-02T13:21:48Z",
+        "updatedAt" : "2020-09-02T13:21:48Z",
+        "lastEditedBy" : "1fb1c568-b2de-43fc-b333-4ad9eebcd79c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a3823ab-5b9b-4d1b-8cfe-944baa7f9e39",
+        "parentId" : "74ecae1c-e848-4f33-a3c9-479a439177d7",
+        "authorId" : "1fb1c568-b2de-43fc-b333-4ad9eebcd79c",
+        "body" : "will do another PR",
+        "createdAt" : "2020-09-02T16:52:56Z",
+        "updatedAt" : "2020-09-02T16:52:56Z",
+        "lastEditedBy" : "1fb1c568-b2de-43fc-b333-4ad9eebcd79c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "939811bc52eaddbba2b2e86df8305fe034e74be6",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +74,78 @@\n    if tree.symbol.denot != SymDenotations.NoDenotation\n        && tree.symbol.owner.companionModule == defn.CompiletimeTestingPackageObject then\n      if (tree.symbol == defn.CompiletimeTesting_typeChecks) return Intrinsics.typeChecks(tree)\n      if (tree.symbol == defn.CompiletimeTesting_typeCheckErrors) return Intrinsics.typeCheckErrors(tree)"
+  },
+  {
+    "id" : "fbc72e82-8b70-43d5-b52e-d775e9e83aed",
+    "prId" : 8870,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/8870#pullrequestreview-486871124",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f64a1896-b6b7-46f7-bc8e-0039ae0eab57",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I remember that retype checking of leaf nodes is problematic. I was surprised that the CI is green.",
+        "createdAt" : "2020-09-11T10:32:23Z",
+        "updatedAt" : "2020-09-11T10:32:24Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9aad0b54-b8c4-4b30-9af1-56ebb355538e",
+        "parentId" : "f64a1896-b6b7-46f7-bc8e-0039ae0eab57",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "I have been fixing those for a while aiming to fix this one.",
+        "createdAt" : "2020-09-11T10:49:59Z",
+        "updatedAt" : "2020-09-11T10:50:00Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "96f3c471-4ace-4eb3-934a-7b1608916708",
+        "parentId" : "f64a1896-b6b7-46f7-bc8e-0039ae0eab57",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Did you have any specific one mind? ",
+        "createdAt" : "2020-09-11T10:51:40Z",
+        "updatedAt" : "2020-09-11T10:51:40Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "562f22eb-268f-4bb3-b188-afde174f8656",
+        "parentId" : "f64a1896-b6b7-46f7-bc8e-0039ae0eab57",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I think name resolution will be a big problem, in particular in the presence of implicits.\r\n\r\nFor example, given the following program:\r\n\r\n```Scala\r\ndef test(using c: Int) = {\r\n  def foo(c: Int): Int = summon[Int]\r\n}\r\n```\r\n\r\nAfter type check the body of `foo`, we get the tree `c`. Retype check the name `c` will change semantics of the program.\r\n",
+        "createdAt" : "2020-09-11T11:08:55Z",
+        "updatedAt" : "2020-09-11T11:08:56Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "267f0984-d600-4b9e-b979-dc8b43a951c4",
+        "parentId" : "f64a1896-b6b7-46f7-bc8e-0039ae0eab57",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "The Inliner already retypes the tree without changing the initial elaboration. All implicit should already be resolved and not change in this tree. ",
+        "createdAt" : "2020-09-11T14:39:50Z",
+        "updatedAt" : "2020-09-11T14:39:50Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49924a30-50a9-4c0b-a753-b6c316b6e44f",
+        "parentId" : "f64a1896-b6b7-46f7-bc8e-0039ae0eab57",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I see, because we are already in `ReTyper`.",
+        "createdAt" : "2020-09-11T14:43:41Z",
+        "updatedAt" : "2020-09-11T14:43:42Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31a470ba577128348ae393995a31c303456b3497",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +1241,1245 @@                        && !suppressInline =>\n          val expanded = expandMacro(res.args.head, tree.span)\n          typedExpr(expanded) // Inline calls and constant fold code generated by the macro\n        case res => res\n      }"
+  },
+  {
+    "id" : "e54a6b7f-226a-482e-af7f-2c1e49d8cb8a",
+    "prId" : 8648,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/8648#pullrequestreview-386541316",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c63abe53-5730-4406-88ce-c9eb886f6da5",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "Do we need to change the `tree.source`?",
+        "createdAt" : "2020-04-02T12:26:23Z",
+        "updatedAt" : "2020-04-02T12:28:26Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d091fea-de45-4197-9753-a98a7b035b65",
+        "parentId" : "c63abe53-5730-4406-88ce-c9eb886f6da5",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "That is done by the [`cpyWithNewSource`](https://github.com/lampepfl/dotty/pull/8648/files#diff-021cdae2fbad688e5717101b37e981d1R181). This logic did not change. ",
+        "createdAt" : "2020-04-02T15:28:37Z",
+        "updatedAt" : "2020-04-02T15:28:37Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1b34c7060c9ce70a64467bf7b4ad5bf871046e8",
+    "line" : 56,
+    "diffHunk" : "@@ -1,1 +184,188 @@        def finalize(copied: untpd.Tree) =\n          val span = if tree.source == curSource then tree.span else callSpan\n          copied.withSpan(span).withAttachmentsFrom(tree).withTypeUnchecked(tree.tpe)\n\n        given as Context = ctx.withSource(curSource)"
+  },
+  {
+    "id" : "3eab0b70-9ea4-49a1-839a-8a7395ad92fa",
+    "prId" : 7490,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/7490#pullrequestreview-311042185",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "42f7230b-3a1c-48e1-81ab-7b55a722fc77",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "If we call `ConstFold` here, should we add a test like `typeChecks(\"1\" + \"1\")`?",
+        "createdAt" : "2019-11-04T10:08:01Z",
+        "updatedAt" : "2019-11-04T12:40:18Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a38b795e-e952-4e0d-b699-9d23007649e0",
+        "parentId" : "42f7230b-3a1c-48e1-81ab-7b55a722fc77",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Added it to `tests/run/i7487.scala`",
+        "createdAt" : "2019-11-04T12:40:25Z",
+        "updatedAt" : "2019-11-04T12:40:26Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "33ebb4ad513b10a68fe6afd1344e087ae1894ffc",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +204,208 @@\n      val Apply(_, codeArg :: Nil) = tree\n      ConstFold(stripTyped(codeArg.underlyingArgument)).tpe.widenTermRefExpr match {\n        case ConstantType(Constant(code: String)) =>\n          val ctx2 = ctx.fresh.setNewTyperState().setTyper(new Typer)"
+  },
+  {
+    "id" : "e7b92dea-677b-41d5-a74c-09ca8a64918a",
+    "prId" : 7365,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/7365#pullrequestreview-297414301",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3099d29-bddb-4bdd-8e5b-02ec135da65f",
+        "parentId" : null,
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "We missed something up in [line 767](https://github.com/lampepfl/dotty/pull/7365/files#diff-021cdae2fbad688e5717101b37e981d1R767). We calls `closureDef` which strips `Inlined` nodes the we should keep.",
+        "createdAt" : "2019-10-04T11:29:12Z",
+        "updatedAt" : "2020-03-09T17:35:17Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "be19498c6f52d4a731a8b7014981b9c2aa8eb912",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +818,822 @@              substFrom = ddef.vparamss.head.map(_.symbol),\n              substTo = argSyms)\n            Block(bindingsBuf.toList, expander.transform(ddef.rhs))\n          case _ => tree\n        }"
+  },
+  {
+    "id" : "95ab89bc-66ad-4296-a6c1-efe56267aa12",
+    "prId" : 6066,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/6066#pullrequestreview-215116130",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cd8064cc-5cdf-4b99-b7f1-915695881deb",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "Maybe add one line document to `def span`?",
+        "createdAt" : "2019-03-15T12:47:04Z",
+        "updatedAt" : "2019-03-15T15:54:58Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3b74c3b2-e509-4480-939a-878f29c4b6e7",
+        "parentId" : "cd8064cc-5cdf-4b99-b7f1-915695881deb",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Added a comment and renamed `span` to `argSpan` to make it clearer.",
+        "createdAt" : "2019-03-15T15:57:48Z",
+        "updatedAt" : "2019-03-15T15:57:48Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0206e5750912edb7377201691572a69f86edbf6f",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +449,453 @@            if (tree.name == nme.WILDCARD) tree.span // From type match\n            else if (tree.symbol.isTypeParam && tree.symbol.owner.isClass) tree.span // TODO is this the correct span?\n            else paramSpan(tree.name)\n          paramProxy.get(tree.tpe) match {\n            case Some(t) if tree.isTerm && t.isSingleton =>"
+  },
+  {
+    "id" : "da66c656-daee-4fd4-a0c7-39c1bb5c39a8",
+    "prId" : 5657,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/5657#pullrequestreview-189448210",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9f0a083d-718e-4042-b918-9d86c8db9670",
+        "parentId" : null,
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Here I would opt against defining from, to separately. Have the test read `(fromBuf.isEmpty)` and convert to lists in the following `subst` call.",
+        "createdAt" : "2018-12-30T10:15:49Z",
+        "updatedAt" : "2019-01-07T13:36:52Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da0f7303-921b-49e2-b32c-5fac6c48f5e4",
+        "parentId" : "9f0a083d-718e-4042-b918-9d86c8db9670",
+        "authorId" : "3a56b927-736f-4aab-8690-358cd24ca570",
+        "body" : "`to` is used another time on a line below, so it seems to me it's better if we just extract both results from the buffers at the same time.",
+        "createdAt" : "2019-01-03T17:57:19Z",
+        "updatedAt" : "2019-01-07T13:36:52Z",
+        "lastEditedBy" : "3a56b927-736f-4aab-8690-358cd24ca570",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6051712c-ff09-4689-beaf-5eeb81eec67b",
+        "parentId" : "9f0a083d-718e-4042-b918-9d86c8db9670",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Ah I overlooked that",
+        "createdAt" : "2019-01-04T17:04:06Z",
+        "updatedAt" : "2019-01-07T13:36:52Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e772dbb799fe25a817c395fa389a304753597d84",
+    "line" : 193,
+    "diffHunk" : "@@ -1,1 +870,874 @@        if (reducePattern(caseBindingsBuf, fromBuf, toBuf, scrutineeSym.termRef, cdef.pat)(gadtCtx) && guardOK) {\n          val caseBindings = caseBindingsBuf.toList\n          val from = fromBuf.toList\n          val to = toBuf.toList\n          if (from.isEmpty) Some((caseBindings, cdef.body))"
+  },
+  {
+    "id" : "4a9af3b3-6ae9-47c2-8ff6-1932d1e7130c",
+    "prId" : 5657,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/5657#pullrequestreview-189124909",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "31918e85-d35a-43d5-a0e0-68bc0e817005",
+        "parentId" : null,
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Are we sure this covers only blocks generated by the reduceMatch? Or could this be a synthetic block that was previously computed in which case the operations would be unsound? Can we find a more robust criterion for this?",
+        "createdAt" : "2018-12-30T10:18:05Z",
+        "updatedAt" : "2019-01-07T13:36:52Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "833ce72c-fd2f-43f3-913a-bc991b80e033",
+        "parentId" : "31918e85-d35a-43d5-a0e0-68bc0e817005",
+        "authorId" : "3a56b927-736f-4aab-8690-358cd24ca570",
+        "body" : "As I understand it, `reduceMatch` exposes the final block that could be inlined. I think the code is sound as long as long as type ascriptions/casts at the absolute end of blocks are inserted only to hide internal types and support GADT bounds. Note that even if some types still need to be hidden, casts will be re-inserted by `typedExpr` below.\r\n\r\nIf that's necessary, we could add annotations to casts intended to hide internal types, and look for them here. I believe we cannot simply avoid inserting these casts, since then the check for escaping internal types would complain when visiting inline method definitions.",
+        "createdAt" : "2019-01-03T18:18:55Z",
+        "updatedAt" : "2019-01-07T13:36:52Z",
+        "lastEditedBy" : "3a56b927-736f-4aab-8690-358cd24ca570",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e772dbb799fe25a817c395fa389a304753597d84",
+    "line" : 214,
+    "diffHunk" : "@@ -1,1 +959,963 @@            // note that any actually necessary casts will be reinserted by the typing pass below\n            val rhs1 = rhs0 match {\n              case Block(stats, t) if t.pos.isSynthetic =>\n                t match {\n                  case Typed(expr, _) =>"
+  },
+  {
+    "id" : "c4a93853-9e29-4a77-ab8c-4c89484419f6",
+    "prId" : 5392,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/5392#pullrequestreview-177365566",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d62c6ab-d94e-4581-bb7a-7dece11131f8",
+        "parentId" : null,
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "What if the constructor has multiple parameter lists?\r\n\r\n",
+        "createdAt" : "2018-11-21T10:31:56Z",
+        "updatedAt" : "2018-11-21T19:26:41Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7319de15-95c1-4088-a654-571592fb59bb",
+        "parentId" : "7d62c6ab-d94e-4581-bb7a-7dece11131f8",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "We don't handle that right now (i.e. we cannot reduce a projection involving  constructor with multiple argument lists). I'd leave that as a TODO if we want to pursue the partial evaluation route. I think this one would not be among the most pressing extensions, and it would be quite tricky to implement.",
+        "createdAt" : "2018-11-21T17:54:55Z",
+        "updatedAt" : "2018-11-21T19:26:41Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "330f666fd25c147c886badd87fb2e0b625c47e5f",
+    "line" : 96,
+    "diffHunk" : "@@ -1,1 +496,500 @@          }\n        tree match {\n          case Apply(fn, args) =>\n            fn match {\n              case Select(New(tpt), nme.CONSTRUCTOR) =>"
+  },
+  {
+    "id" : "3c32c620-b380-4924-867d-7c2b392650a5",
+    "prId" : 5203,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/5203#pullrequestreview-162032085",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cc4179f3-43dd-4fee-93fd-2109e859d058",
+        "parentId" : null,
+        "authorId" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "body" : "Unrelated. I think this is always true. Untyped inline does not exist anymore right?",
+        "createdAt" : "2018-10-05T13:39:25Z",
+        "updatedAt" : "2018-10-05T15:57:20Z",
+        "lastEditedBy" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c54153a8e2949c25fabda40c7953c04779b883c2",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +26,30 @@  import tpd._\n\n  val typedInline: Boolean = true\n\n  /** `sym` is an inline method with a known body to inline (note: definitions coming"
+  },
+  {
+    "id" : "a0551518-41a6-421b-bbbe-2bce286a601c",
+    "prId" : 4916,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4916#pullrequestreview-148544250",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "778f3694-85c3-4324-91a9-4eac1c3f2698",
+        "parentId" : null,
+        "authorId" : "6d71bb21-e402-4464-b2b1-8bdd8e068461",
+        "body" : "Can't we get anything other than a `TypeAlias` here?",
+        "createdAt" : "2018-08-21T07:18:02Z",
+        "updatedAt" : "2018-08-22T15:51:34Z",
+        "lastEditedBy" : "6d71bb21-e402-4464-b2b1-8bdd8e068461",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c9307b27-95a9-461c-877e-2d8b962e6f44",
+        "parentId" : "778f3694-85c3-4324-91a9-4eac1c3f2698",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "It should always be a `TypeAlias` because of the way we generate type bindings. So `boundTypes.contains(tp.symbol)` should imply `tp.info` is a `TypeAlias`.\r\n",
+        "createdAt" : "2018-08-22T15:40:05Z",
+        "updatedAt" : "2018-08-22T15:51:34Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "103237e3573585076fc26b4515685783f53f0af8",
+    "line" : 119,
+    "diffHunk" : "@@ -1,1 +887,891 @@              tp match {\n                case tp: TypeRef if boundTypes.contains(tp.symbol) =>\n                  val TypeAlias(alias) = tp.info\n                  alias\n                case _ => tp"
+  },
+  {
+    "id" : "22cbcfb6-3d65-40eb-ac57-862d9bccdc71",
+    "prId" : 4916,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4916#pullrequestreview-148543404",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b75da828-b02d-43cb-8acd-3364a2a95912",
+        "parentId" : null,
+        "authorId" : "6d71bb21-e402-4464-b2b1-8bdd8e068461",
+        "body" : "This feels a bit ad hoc, isn't there a way to reuse normal type checking of patterns instead of redoing all that work here?",
+        "createdAt" : "2018-08-21T08:08:33Z",
+        "updatedAt" : "2018-08-22T15:51:34Z",
+        "lastEditedBy" : "6d71bb21-e402-4464-b2b1-8bdd8e068461",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "31cefa58-8d81-4a6d-93d0-46f6660d4a43",
+        "parentId" : "b75da828-b02d-43cb-8acd-3364a2a95912",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "I tried, but did not find a good way to re-use what's there. it's spread out over several different things.",
+        "createdAt" : "2018-08-22T15:38:15Z",
+        "updatedAt" : "2018-08-22T15:51:34Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "103237e3573585076fc26b4515685783f53f0af8",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +668,672 @@            }\n            val boundVars = getBoundVars(Nil, tpt)\n            for (bv <- boundVars) ctx.gadt.setBounds(bv, bv.info.bounds)\n            if (isImplicit) searchImplicit(nme.WILDCARD, tpt)\n            else scrut <:< tpt.tpe && {"
+  },
+  {
+    "id" : "51a4c5ea-dd7f-4558-93dc-5cb20c855d47",
+    "prId" : 4881,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4881#pullrequestreview-143945819",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0fc1c076-bd2f-4632-bb4e-d0b7c171e42f",
+        "parentId" : null,
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "it would be clearer and more performant if the conditions are inverted\r\n\r\n```scala\r\n!boundSym.is(TransparentImplicitMethod) &&\r\nrefCount.get(boundSym) match {\r\n  ...\r\n```",
+        "createdAt" : "2018-08-02T07:46:04Z",
+        "updatedAt" : "2018-08-07T11:18:51Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "305eb2cb-c706-4d2c-a4ce-f23ec2198470",
+        "parentId" : "0fc1c076-bd2f-4632-bb4e-d0b7c171e42f",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "I doubt the \"more performant part\" since the test is`boundSym.is(TransparentImplicitMethod)` is ~99% likely to succeed. So it's better to put the test first that prunes more cases.",
+        "createdAt" : "2018-08-07T11:09:52Z",
+        "updatedAt" : "2018-08-07T11:18:51Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8b941d611b7ba09b91328e3632c89e2c4d5b7864",
+    "line" : 89,
+    "diffHunk" : "@@ -1,1 +843,847 @@        case none => true\n      }\n    } && !boundSym.is(TransparentImplicitMethod)\n\n    val inlineBindings = new TreeMap {"
+  },
+  {
+    "id" : "cf55104f-73d9-439f-866f-7c5840b5fb1a",
+    "prId" : 4634,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4634#pullrequestreview-127369199",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "65c35dac-dd25-4b4c-a185-6de6a32bbc29",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "Is all of this code needed just to create accessors to private-qualified methods? Since they'll end up being public method in the bytecode anyway, maybe we can just relax the accessibility rules inside inlined trees for them.",
+        "createdAt" : "2018-06-09T14:26:30Z",
+        "updatedAt" : "2018-06-09T14:26:30Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb2492b3-768c-4d65-a9df-9d6873e9764b",
+        "parentId" : "65c35dac-dd25-4b4c-a185-6de6a32bbc29",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "It could also be package private methods in Java classes. Also, in the future we would like to avoid widening `protected` to public, so it would apply to Scala-defined classes as well.",
+        "createdAt" : "2018-06-09T14:49:04Z",
+        "updatedAt" : "2018-06-09T14:49:04Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42913c90fa414d03ea62488a1d23b4c6b4b2c5f5",
+    "line" : 85,
+    "diffHunk" : "@@ -1,1 +96,100 @@     *\n     *    class C[T](x: T) {\n     *      private[inlines] def next[U](y: U): (T, U) = (x, y)\n     *    }\n     *    class TestPassing {"
+  },
+  {
+    "id" : "77759541-d4a9-4756-81a3-9f2baa6206e2",
+    "prId" : 4622,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4622#pullrequestreview-126120921",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "586db866-5bf2-4950-9b6d-10de0f9e7511",
+        "parentId" : null,
+        "authorId" : "70ef1594-3bb7-4579-b053-2189b409b5dc",
+        "body" : "~~This doesn't seem to be used anywhere.~~ (The following commit does use it.)",
+        "createdAt" : "2018-06-05T19:50:53Z",
+        "updatedAt" : "2018-06-06T12:14:33Z",
+        "lastEditedBy" : "70ef1594-3bb7-4579-b053-2189b409b5dc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b359c7dd2a24ffbfdf4bf85673a9ac789362d83a",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +81,85 @@  }\n\n  def isLocal(sym: Symbol, inlineMethod: Symbol)(implicit ctx: Context) =\n    sym.isContainedIn(inlineMethod) &&\n    sym != inlineMethod &&"
+  },
+  {
+    "id" : "9f7afb92-2c33-423d-ac87-7b9e63b914a7",
+    "prId" : 4622,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4622#pullrequestreview-126120921",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5cb99462-c559-42cb-a8cc-09e2aa4b78df",
+        "parentId" : null,
+        "authorId" : "70ef1594-3bb7-4579-b053-2189b409b5dc",
+        "body" : "Docs should be updated. Maybe call it `inlineSym`, since it's not inline**d** at this point?",
+        "createdAt" : "2018-06-05T20:36:54Z",
+        "updatedAt" : "2018-06-06T12:14:33Z",
+        "lastEditedBy" : "70ef1594-3bb7-4579-b053-2189b409b5dc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b359c7dd2a24ffbfdf4bf85673a9ac789362d83a",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +95,99 @@   */\n  def registerInlineInfo(\n      inlined: Symbol, treeExpr: Context => Tree)(implicit ctx: Context): Unit = {\n    inlined.unforcedAnnotation(defn.BodyAnnot) match {\n      case Some(ann: ConcreteBodyAnnotation) =>"
+  },
+  {
+    "id" : "f4cd8e30-c2fb-4631-b615-08de1a1f6089",
+    "prId" : 4622,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4622#pullrequestreview-126120921",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1c1b2182-fffe-46c7-bea8-cb6e3331ea91",
+        "parentId" : null,
+        "authorId" : "70ef1594-3bb7-4579-b053-2189b409b5dc",
+        "body" : "(I have no useful comment, but I will say that I don't understand Inliner well enough yet to really judge this change.)",
+        "createdAt" : "2018-06-05T20:47:03Z",
+        "updatedAt" : "2018-06-06T12:14:33Z",
+        "lastEditedBy" : "70ef1594-3bb7-4579-b053-2189b409b5dc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b359c7dd2a24ffbfdf4bf85673a9ac789362d83a",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +54,58 @@      // of types of other things. For the moment we do nothing and complain\n      // at the implicit expansion site if there's a reference to an inaccessible type.\n      override def transform(tree: Tree)(implicit ctx: Context): Tree =\n        super.transform(accessorIfNeeded(tree)) match {\n          case tree1 @ Assign(lhs: RefTree, rhs) if lhs.symbol.name.is(InlineAccessorName) =>"
+  },
+  {
+    "id" : "e7ccc8f1-4c2d-465c-a2ae-66e493129837",
+    "prId" : 4620,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4620#pullrequestreview-126347042",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0cd770d8-6dbb-43a4-93f3-9819ba959c9f",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "> `defn.isFunctionType(cl.tpe)`\r\n\r\nA more efficient way to check this is `cl.tpt.isEmpty`",
+        "createdAt" : "2018-06-06T12:14:51Z",
+        "updatedAt" : "2018-06-06T12:14:52Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0c7ef1354e5ee16e4f4e2f0b4d6719ef49a3fb11",
+    "line" : 121,
+    "diffHunk" : "@@ -1,1 +481,485 @@       */\n      def betaReduce(tree: Tree) = tree match {\n        case Apply(Select(cl @ closureDef(ddef), nme.apply), args) if defn.isFunctionType(cl.tpe) =>\n          ddef.tpe.widen match {\n            case mt: MethodType if ddef.vparamss.head.length == args.length =>"
+  },
+  {
+    "id" : "522cfc32-814f-4e3f-8981-a8a5e9ea7812",
+    "prId" : 4616,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4616#pullrequestreview-139255008",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0cd0ce90-46b2-4fed-97e3-f1588ec714b8",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "Repurposing the `Inlined` tree here seems weird, I would use an annotation instead.",
+        "createdAt" : "2018-07-20T23:29:22Z",
+        "updatedAt" : "2018-07-26T14:54:44Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e408396-5fdd-48b8-b691-411b92baa0f7",
+        "parentId" : "0cd0ce90-46b2-4fed-97e3-f1588ec714b8",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "The problem is that everybody has to know to update their contexts when traversing into one of these nodes. It's too easily forgotten if this is an annotation. If this is an Inline code then\r\n\r\n - either some code will not update contexts either for Inlined code or for inlined arguments. That's OK as long as positions don't have to be reported accurately.\r\n - or some code will update contexts for both.\r\n\r\nWe avoid the annoying case by design where code will only update context for inlined code but forget to undo the update for inlined arguments.",
+        "createdAt" : "2018-07-21T10:32:01Z",
+        "updatedAt" : "2018-07-26T14:54:44Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "88e7d180574eda8a71037d1735ac6a3ff76a1c08",
+    "line" : 451,
+    "diffHunk" : "@@ -1,1 +291,295 @@  def integrate(tree: Tree, originalOwner: Symbol)(implicit ctx: Context) = {\n    val result = tree.changeOwner(originalOwner, ctx.owner)\n    if (!originalOwner.isContainedIn(inlinedMethod)) Inlined(EmptyTree, Nil, result)\n    else result\n  }"
+  },
+  {
+    "id" : "9b14f209-887f-4a1b-8c14-769779fc5db5",
+    "prId" : 2978,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/2978#pullrequestreview-57908898",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c8b5cf80-7aa2-47bf-af78-c189e8d603c0",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I'm wondering why use `AnySelectionProto` instead of using `selectionProto(tree.name, pt, this)` as expected type in `Retyper.typedSelect`?",
+        "createdAt" : "2017-08-22T20:52:50Z",
+        "updatedAt" : "2017-08-22T20:53:05Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "53e35e0e2fb32a8715abd62bd76349b7fb22a8bf",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +528,532 @@      assert(tree.hasType, tree)\n      val qual1 = typed(tree.qualifier, selectionProto(tree.name, pt, this))\n      val res = untpd.cpy.Select(tree)(qual1, tree.name).withType(tree.typeOpt)\n      ensureAccessible(res.tpe, tree.qualifier.isInstanceOf[untpd.Super], tree.pos)\n      res"
+  }
+]

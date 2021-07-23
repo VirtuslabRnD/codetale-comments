@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "437dab32-21f1-471f-9867-02e0537f71bf",
+    "prId" : 5436,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/5436#pullrequestreview-175002587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "17ad702c-161a-4123-a182-22af566794fc",
+        "parentId" : null,
+        "authorId" : "321b3909-e7ce-4c63-91ca-d05d80aabdfe",
+        "body" : "it's a shame this is not seen as dead code. `Expr[T]` is sealed, and there are only three valid values for `T`: `Pos`, `Int` and `String`, each of which is fully determined by the subclass.\r\n\r\nWould be nice if `case PosExpr(p) => p` was seen as a total match here.",
+        "createdAt" : "2018-11-13T15:31:29Z",
+        "updatedAt" : "2018-11-13T15:31:29Z",
+        "lastEditedBy" : "321b3909-e7ce-4c63-91ca-d05d80aabdfe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d662b5d-49e5-405a-91da-63997bfc1bb3",
+        "parentId" : "17ad702c-161a-4123-a182-22af566794fc",
+        "authorId" : "98bdc06d-7937-462c-9d62-1f850e7819aa",
+        "body" : "You can have that (seeing `case StrExpr(_)` as dead) by moving the match to the companion of the opaque type. You **should not** have that otherwise, as it would be making the abstraction leak, which is very bad.\r\n\r\nAlso, `case PosExpr(p)` is not \"total\" as any `IntExpr(_)` can also be given type `Expr[Pos]`.",
+        "createdAt" : "2018-11-13T15:38:20Z",
+        "updatedAt" : "2018-11-13T15:38:43Z",
+        "lastEditedBy" : "98bdc06d-7937-462c-9d62-1f850e7819aa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e9629f5b-e417-4bd8-8a71-0afa1b59db68",
+        "parentId" : "17ad702c-161a-4123-a182-22af566794fc",
+        "authorId" : "321b3909-e7ce-4c63-91ca-d05d80aabdfe",
+        "body" : "right, I neglected the existence of `coerce` here, which can translate `F[Int]` to `F[Pos]`. I see your point: for an opaque type, we have to inspect and understand all possible functions like this in the companion, and it may be pretty non-trivial to rule out certain branches.",
+        "createdAt" : "2018-11-13T16:03:20Z",
+        "updatedAt" : "2018-11-13T16:03:20Z",
+        "lastEditedBy" : "321b3909-e7ce-4c63-91ca-d05d80aabdfe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb39a79e-a544-43ed-9013-fb11b5d52f7d",
+        "parentId" : "17ad702c-161a-4123-a182-22af566794fc",
+        "authorId" : "348fab8e-49e2-442e-884d-850c7f41fdde",
+        "body" : "Agree with @LPTK.\r\n@johnynek There are two different problems — checking whether `StringExpr` is dead and whether `IntExpr` is dead. Checking those scenarios would break guarantees you expect from a type system. For both, it'd only be fine in whole-program static analysis tools, but you have different expectations. This is a tradeoff currently under discussion.\r\n\r\n- As @LPTK \tsaid, it's easy to figure out that `StrExpr` is dead once you know that `Pos` is implemented as `Int` — ignoring `eval(StrExpr.asInstanceOf[Expr[Pos])` (which we should). But we shall not do it to avoid abstraction leaks. To be more precise on the guarantee: If client code compiles and you change `Pos` to be implemented as `String`, the client code should keep compiling.\r\n- It's hard to figure out whether `IntExpr` is dead, by checking whether `coerce`-like functions exist. It might be possible by static analysis of the companion object, but again you change warnings in client code depending on implementation details that (it seems) should be hidden (and are not visible in types). That breaks separate compilation/separate typechecking. Type systems usually don't do that, because if they did it'd be much harder to keep a library source-compatible. Especially with `-Xfatal-warnings`.",
+        "createdAt" : "2018-11-14T18:09:17Z",
+        "updatedAt" : "2018-11-14T18:09:17Z",
+        "lastEditedBy" : "348fab8e-49e2-442e-884d-850c7f41fdde",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "41eeec471b59d4c40b2faafb5ce78bc32829893c",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +19,23 @@    // since Pos is potentially equal to any other type\n    case IntExpr(_) => Pos.mkPos(1)\n    case StrExpr(_) => ???\n  }\n  "
+  }
+]

@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "f6b7ef35-38fe-4658-a35c-7993b4305d2c",
+    "prId" : 9650,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/9650#pullrequestreview-476922450",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8ed0382a-ffeb-4eea-b714-241696ba49e9",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "This isn't urgent but instead of hardcoding the ExecutionContext we should probably get it from the Context to allow it to be customized by the build tool if it uses a different thread pool, etc.",
+        "createdAt" : "2020-08-27T17:11:24Z",
+        "updatedAt" : "2020-08-27T17:11:24Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4ecb50135f653365363e8986ae3534bb3cfa1d62",
+    "line" : 90,
+    "diffHunk" : "@@ -1,1 +94,98 @@            }\n          pickled\n        }(using ExecutionContext.global)\n      }\n      def force(): Array[Byte] ="
+  },
+  {
+    "id" : "060ea21f-3a29-4027-b7e3-9d505131dc8b",
+    "prId" : 9619,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/9619#pullrequestreview-473698275",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b396b04c-e35a-4d19-9d0f-df361c61f0ec",
+        "parentId" : null,
+        "authorId" : "4107dafe-4e7b-4e85-8d5b-63e06e0e6318",
+        "body" : "Is this really going to parallelize things? Or should we also surround some parts with `concurrent.blocking`?",
+        "createdAt" : "2020-08-24T11:50:24Z",
+        "updatedAt" : "2020-08-24T17:15:17Z",
+        "lastEditedBy" : "4107dafe-4e7b-4e85-8d5b-63e06e0e6318",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38b80b25-a17f-4a2d-a213-5d337b530d19",
+        "parentId" : "b396b04c-e35a-4d19-9d0f-df361c61f0ec",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Why would it not parallelize? I thought a `Future {...}` spans a separate computation. From the 2.13 Future API:\r\n```\r\nfinal def apply[T](body: => T)(implicit executor: ExecutionContext): Future[T]\r\n\r\nStarts an asynchronous computation and returns a Future instance with the result of that computation.\r\n...\r\nThe result becomes available once the asynchronous computation is completed.\r\n```\r\nI don't know `concurrent.blocking`. Can you explain what it would do?\r\n",
+        "createdAt" : "2020-08-24T15:41:57Z",
+        "updatedAt" : "2020-08-24T17:15:17Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48e4666f-8890-488c-b8d6-07ca60338306",
+        "parentId" : "b396b04c-e35a-4d19-9d0f-df361c61f0ec",
+        "authorId" : "4107dafe-4e7b-4e85-8d5b-63e06e0e6318",
+        "body" : "When you have several `Future { ... }` computations, the only thing you can tell is that they will run concurrently. Whether or not they will be run in parallel depends on the behavior of the underlying `ExecutionContext`. In this regard, the behavior of `ExecutionContext.global` does not parallelize `Future { ... }` blocks unless they are marked as `blocking`. See https://github.com/scala/bug/issues/12089 for a (longer) discussion.\r\n\r\nBy the way I just see that in your case you `Await` for the `Future` to be completed *within* the `for` loop, which means that these computations can’t be executed in parallel anyway. You probably want to create a list of `Future` and then await that these `Futures` have been evaluated?",
+        "createdAt" : "2020-08-24T15:55:02Z",
+        "updatedAt" : "2020-08-24T17:15:17Z",
+        "lastEditedBy" : "4107dafe-4e7b-4e85-8d5b-63e06e0e6318",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8871d773-2a75-4ecc-91e7-5be869ac1d60",
+        "parentId" : "b396b04c-e35a-4d19-9d0f-df361c61f0ec",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : ">  See scala/bug#12089 for a (longer) discussion.\r\n\r\nIsn't this issue about nested Future blocks? Here we don't do any nesting so I'd expect the default executioncontext to run up to n Future in parallel where n is the number of processor cores.\r\n\r\n> By the way I just see that in your case you Await for the Future to be completed within the for loop,\r\n\r\nWhich for loop are you refering to? Await is called from `force()`, a reference to `force` is stored in `pickled` and it is then executed much later in the backend",
+        "createdAt" : "2020-08-24T16:05:18Z",
+        "updatedAt" : "2020-08-24T17:15:17Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "606f187c-a9a8-4204-9930-bc3e39174117",
+        "parentId" : "b396b04c-e35a-4d19-9d0f-df361c61f0ec",
+        "authorId" : "4107dafe-4e7b-4e85-8d5b-63e06e0e6318",
+        "body" : "> Isn't this issue about nested Future blocks?\r\n\r\nTrue.\r\n\r\n> Here we don't do any nesting so I'd expect the default executioncontext to run up to n Future in parallel where n is the number of processor cores.\r\n\r\nThat’s what I’d expect too, but we should check :)\r\n\r\n> Await is called from `force()`, a reference to `force` is stored in `pickled` and it is then executed much later in the backend\r\n\r\nOh, thanks for clarifying, I thought `force` was a *call* (without parenthesis), not an eta-expansion. So, forget what I told about the loop :)",
+        "createdAt" : "2020-08-24T16:08:49Z",
+        "updatedAt" : "2020-08-24T17:15:17Z",
+        "lastEditedBy" : "4107dafe-4e7b-4e85-8d5b-63e06e0e6318",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f5e793db-be6a-445a-9b56-c6c8dbc68e00",
+        "parentId" : "b396b04c-e35a-4d19-9d0f-df361c61f0ec",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "I just verified by adding some debug output. It runs indeed in parallel. \r\n",
+        "createdAt" : "2020-08-24T17:15:42Z",
+        "updatedAt" : "2020-08-24T17:15:42Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "18a13c6196601ad69036772cdf311e8b4b26835e",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +63,67 @@      val treePkl = pickler.treePkl\n      treePkl.pickle(tree :: Nil)\n      val pickledF = Future {\n        treePkl.compactify()\n        if tree.span.exists then"
+  }
+]

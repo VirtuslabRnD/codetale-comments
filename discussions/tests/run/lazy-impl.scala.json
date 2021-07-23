@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "9391329a-43e7-4cc0-9ebe-840e9bfb1f76",
+    "prId" : 6979,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/6979#pullrequestreview-272130361",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c2ba533f-8654-47cf-94c8-f2ba95c6b334",
+        "parentId" : null,
+        "authorId" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "body" : "I believe this is equivalent to a [CountDownLatch](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CountDownLatch.html) initialised with a `count` of 1. `release()` is now `countDown()` and `awaitRelease()` is `await()`. It may be worth benchmarking both",
+        "createdAt" : "2019-08-07T17:53:39Z",
+        "updatedAt" : "2019-08-07T18:52:53Z",
+        "lastEditedBy" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eb5dbca5b7c46b0f5f3b0b9aedf96610949f1e19",
+    "line" : 177,
+    "diffHunk" : "@@ -1,1 +175,179 @@class LazyControl\n\nclass Waiting extends LazyControl {\n\n  private var done = false"
+  },
+  {
+    "id" : "7e75e1b6-7c31-4252-9d76-e00d81795633",
+    "prId" : 6979,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/6979#pullrequestreview-272130361",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "89eec64a-374c-44c9-b979-a753e9b7e17a",
+        "parentId" : null,
+        "authorId" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "body" : "I don't think we need a CAS here:\r\n```scala\r\nunsafe.putObjectVolatile(base, offset, result)\r\n```",
+        "createdAt" : "2019-08-07T18:17:57Z",
+        "updatedAt" : "2019-08-07T18:52:54Z",
+        "lastEditedBy" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eb5dbca5b7c46b0f5f3b0b9aedf96610949f1e19",
+    "line" : 164,
+    "diffHunk" : "@@ -1,1 +162,166 @@    if (!unsafe.compareAndSwapObject(base, offset, Evaluating, result)) {\n      val lock = unsafe.getObject(base, offset).asInstanceOf[Waiting]\n      unsafe.compareAndSwapObject(base, offset, lock, result)\n      lock.release()\n    }"
+  },
+  {
+    "id" : "a0b35bc7-d386-41e2-a860-8d0e9ee6bbb4",
+    "prId" : 6979,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/6979#pullrequestreview-273477592",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5cc06720-2ee1-4c8f-be75-b5fe415aaf42",
+        "parentId" : null,
+        "authorId" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "body" : "Currently `Tailrec` runs before `LazyVals`. We need to write the loop manually:\r\n```scala\r\ndef x$lzy: String = {\r\n  while (<EmptyTree>) {\r\n    val current = _x\r\n    if (current.isInstanceOf[String])\r\n      return current.asInstanceOf[String]\r\n    else {\r\n      val offset = C.x_offset\r\n      if (current == null) {\r\n        if (LazyRuntime.isUnitialized(this, offset)) {\r\n          try {\r\n            val result = init(\"x\")\r\n            LazyRuntime.initialize(this, offset, result)\r\n            return result\r\n          catch {\r\n            case ex: Throwable =>\r\n              LazyRuntime.initialize(this, offset, null)\r\n              throw ex\r\n          }\r\n        }\r\n      }\r\n      else\r\n        LazyRuntime.awaitInitialized(this, offset, current)\r\n    }\r\n  }\r\n}\r\n```\r\nNote the `while(<EmptyTree>)`.  We special case it in the compiler. It means infinite loop and types to `Nothing`: https://github.com/lampepfl/dotty/blob/963719ed2679f3d4c8188ec068e53941b181ef76/compiler/src/dotty/tools/dotc/typer/TypeAssigner.scala#L529-L530",
+        "createdAt" : "2019-08-07T18:52:07Z",
+        "updatedAt" : "2019-08-07T18:52:54Z",
+        "lastEditedBy" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76291a26-0935-49ba-87af-6384e0f03e12",
+        "parentId" : "5cc06720-2ee1-4c8f-be75-b5fe415aaf42",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Good to know. That's trap one could fall into easily.\r\n",
+        "createdAt" : "2019-08-08T08:35:51Z",
+        "updatedAt" : "2019-08-08T08:35:52Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88e688c0-c8e9-46b8-a7b3-2d1c15621fae",
+        "parentId" : "5cc06720-2ee1-4c8f-be75-b5fe415aaf42",
+        "authorId" : "ef85e0a1-2504-4b97-8562-8bbbafc283f9",
+        "body" : "Might want to rethrow the original exception in case the second initialize fails.",
+        "createdAt" : "2019-08-08T09:03:53Z",
+        "updatedAt" : "2019-08-08T09:03:53Z",
+        "lastEditedBy" : "ef85e0a1-2504-4b97-8562-8bbbafc283f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d487a22-2f61-47b6-a3af-0e4e1b73a439",
+        "parentId" : "5cc06720-2ee1-4c8f-be75-b5fe415aaf42",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "I don't think the second initialize can fail. There's no user code exectuted for it.\r\n",
+        "createdAt" : "2019-08-11T17:38:36Z",
+        "updatedAt" : "2019-08-11T17:38:36Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a18bd85-a527-4b86-85c2-3a16f829f8cc",
+        "parentId" : "5cc06720-2ee1-4c8f-be75-b5fe415aaf42",
+        "authorId" : "ef85e0a1-2504-4b97-8562-8bbbafc283f9",
+        "body" : "@odersky Good point. I guess in the cases it fails it is something like a SoE or similar VME.",
+        "createdAt" : "2019-08-11T20:12:19Z",
+        "updatedAt" : "2019-08-11T20:12:19Z",
+        "lastEditedBy" : "ef85e0a1-2504-4b97-8562-8bbbafc283f9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eb5dbca5b7c46b0f5f3b0b9aedf96610949f1e19",
+    "line" : 112,
+    "diffHunk" : "@@ -1,1 +110,114 @@  }\n\n  def x$lzy: String = {\n    val current = _x\n    if (current.isInstanceOf[String])"
+  }
+]

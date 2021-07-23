@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "5ce743cb-921f-4804-86ec-91982b5d06fe",
+    "prId" : 11442,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/11442#pullrequestreview-599691914",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3ba7b6e-56f6-43ab-adcd-556fe3883a31",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "It seems to me that the need to thread through `Quotes` might be a source of errors in practice. It's not obvious why it's necessary.\r\n\r\nThe need might come from staging. As macros are much more widely used than staging, I think it's worth optimizing more for macros.\r\n\r\nIs it possible to achieve the same goal without complicating the user interface (I mean with only one `Quotes`)? That would be a big contribution.",
+        "createdAt" : "2021-02-25T19:48:09Z",
+        "updatedAt" : "2021-03-01T13:27:59Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "52505826-a0ab-4269-b220-01c892629f43",
+        "parentId" : "b3ba7b6e-56f6-43ab-adcd-556fe3883a31",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "> It seems to me that the need to thread through Quotes might be a source of errors in practice. It's not obvious why it's necessary.\r\n\r\nThis would have been avoided if we could have made `Expr` path dependent on the instance of `Quotes`. Because we do not have this we need to do runtime checks to catch the cases that did leak an expression outside of a splice. \r\n\r\nEven if we then un-extrude the quote, there is a performance penalty for doing it the wrong way as the owners might be wrong and would need to be changed. With this check we ensure that we have the correct ones at creation. \r\n\r\nIf we ensure that we have the correct context we will also be able to rely on it to perform stronger yChecks in the reflection API. Instead of letting the error pass and be detected by the global yCheck.\r\n\r\n> The need might come from staging. As macros are much more widely used than staging, I think it's worth optimizing more for macros.\r\n\r\nIt does not come from staging. Here it came due to a badly designed API. `eqSumBody` should have been a `def` from the start. Probably it shouldn't be a local method as well.\r\n\r\n> Is it possible to achieve the same goal without complicating the user interface (I mean with only one Quotes)? That would be a big contribution.\r\n\r\nThe point of adding the `Quotes` is to use a single `Quotes` instance to crate `'x`/`'y` in `${eqSumBody('x, 'y)})` and use the same instance in `eqSumBody` to create `'{ $ordx == $ordy && ... }`. This would be clearer if the method was not defined locally. \r\n\r\nOr simply write it without the method as\r\n```scala\r\nval elements = Expr.ofList(elemInstances)\r\n'{\r\n  eqSum((x: T, y: T) => {\r\n    $m.ordinal(x) == $m.ordinal(y) && \r\n    $elements.apply($m.ordinal(x)).asInstanceOf[Eq[Any]].eqv(x, y)\r\n  })\r\n}\r\n```\r\nThe original code looks messy because it was not well designed.",
+        "createdAt" : "2021-02-26T09:45:28Z",
+        "updatedAt" : "2021-03-01T13:27:59Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d8d2fc9-76c4-4d1a-beeb-8056cf78bdab",
+        "parentId" : "b3ba7b6e-56f6-43ab-adcd-556fe3883a31",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "I also removed the old `scopeId` checks and they can be subsumed by these checks.",
+        "createdAt" : "2021-02-26T15:37:35Z",
+        "updatedAt" : "2021-03-01T13:27:59Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7e2e6d31030bba0b3f2fd526eef4733375283bf7",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +56,60 @@      case '{ $m: Mirror.SumOf[T] { type MirroredElemTypes = elementTypes }} =>\n        val elemInstances = summonAll[elementTypes]\n        def eqSumBody(x: Expr[T], y: Expr[T])(using Quotes): Expr[Boolean] = {\n          val ordx = '{ $m.ordinal($x) }\n          val ordy = '{ $m.ordinal($y) }"
+  }
+]

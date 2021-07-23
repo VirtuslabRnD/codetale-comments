@@ -1,0 +1,178 @@
+[
+  {
+    "id" : "a4cee332-6778-4577-afef-9046f86c8fda",
+    "prId" : 563,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d3170ec0-91d5-4e18-8007-b7138cb1d9c4",
+        "parentId" : null,
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Why not make classTag, typeTag lazy vals? Seems overkill to use side-effects here.\n",
+        "createdAt" : "2015-05-13T16:14:46Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c39938c8-e2a2-4cc4-b8cd-cea2025a200c",
+        "parentId" : "d3170ec0-91d5-4e18-8007-b7138cb1d9c4",
+        "authorId" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "body" : "They depend on context to be initialized. Which context would those lazy vals use?\n",
+        "createdAt" : "2015-05-13T20:27:16Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "736682e306ae3c9cb48d83b2750e9d36dee4e9b5",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +26,30 @@  import ast.tpd._\n\n  private var classTagCache: Symbol = null\n  private var typeTagCache: Symbol  = null\n  private var scala2ClassTagModule: Symbol = null"
+  },
+  {
+    "id" : "b8d296c7-897c-4fe9-922b-bc5cd6427732",
+    "prId" : 563,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d498884c-c57c-4846-811a-7a55ca897028",
+        "parentId" : null,
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "Will this do the right thing for:\n\n```\nscala> reflect.classTag[Array[Int]]\nres2: scala.reflect.ClassTag[Array[Int]] = Array[int]\n```\n",
+        "createdAt" : "2015-05-13T23:03:25Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "00e88586-9493-409b-80e5-0fc7098526a3",
+        "parentId" : "d498884c-c57c-4846-811a-7a55ca897028",
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "Is it possible to get `NoSymbol` back here? `classSymbol` seems to return that for some `OrType`s.\n",
+        "createdAt" : "2015-05-13T23:06:13Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "87591168-cbb1-4173-8571-471b72df9aea",
+        "parentId" : "d498884c-c57c-4846-811a-7a55ca897028",
+        "authorId" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "body" : "Thanks for Array example, It's indeed not handled correctly.\n`classSymbol` for `OrTypes` is bugged, see comment https://github.com/lampepfl/dotty/blob/master/src/dotty/tools/dotc/core/Types.scala#L308. It should not return NoSymbol.\nThough this code will not work for some `AndTypes`.\n\nIt seems that `classSymbol.orElse(classSymbols.head)` should do it correctly.\n",
+        "createdAt" : "2015-05-14T07:07:45Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23d79b50-d7f7-4323-99e8-d2e691efbec2",
+        "parentId" : "d498884c-c57c-4846-811a-7a55ca897028",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "On Thu, May 14, 2015 at 9:07 AM, Dmitry Petrashko notifications@github.com\nwrote:\n\n> In src/dotty/tools/dotc/transform/ClassTags.scala\n> https://github.com/lampepfl/dotty/pull/563#discussion_r30301852:\n> \n> > +\n> > +\n> > -  override def prepareForUnit(tree: tpd.Tree)(implicit ctx: Context): TreeTransform = {\n> > -    val predefClass = defn.DottyPredefModule.moduleClass.asClass\n> > -    classTagCache = ctx.requiredMethod(predefClass,  names.classTag)\n> > -    typeTagCache = ctx.requiredMethod(predefClass,  names.typeTag)\n> > -    scala2ClassTagModule = ctx.requiredModule(\"scala.reflect.ClassTag\")\n> > -    this\n> > -  }\n> >   +\n> > -  override def phaseName: String = \"classTags\"\n> >   +\n> > -  override def transformTypeApply(tree: tpd.TypeApply)(implicit ctx: Context, info: TransformerInfo): tpd.Tree =\n> > -    if (tree.fun.symbol eq classTagCache) {\n> > -      val tp = tree.args.head.tpe\n> > -      val claz = tp.classSymbol\n> \n> Thanks for Array example, It's indeed not handled correctly.\n> classSymbol for OrTypes is bugged, see comment\n> https://github.com/lampepfl/dotty/blob/master/src/dotty/tools/dotc/core/Types.scala#L308.\n> It should not return NoSymbol.\n> Though this code will not work for some AndTypes.\n> \n> It seems that classSymbol.orElse(classSymbols.head) should do it\n> correctly.\n> \n> That will return a symbol. but how do you know it's the right one? We are\n> missing a spec here. I think the most robust would be to take the\n> classSymbol of the erased type. That has a simple spec and it is likely to\n> be the one we will want in the end.\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/lampepfl/dotty/pull/563/files#r30301852.\n\n## \n\nMartin Odersky\nEPFL\n",
+        "createdAt" : "2015-05-14T08:48:30Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37fddcaf-f081-4cf6-894f-e53b1ceb6f17",
+        "parentId" : "d498884c-c57c-4846-811a-7a55ca897028",
+        "authorId" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "body" : "Indeed. Thanks.\n",
+        "createdAt" : "2015-05-14T08:51:24Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ed43d36-55cb-4f4c-8289-d661fa860606",
+        "parentId" : "d498884c-c57c-4846-811a-7a55ca897028",
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "In Scala, give a value class `Meter`, `classTag[Meter]` and `classOf[Meter]` return `Meter.class`, not the underlying type.\n\nSo I think using Scala erasure might be a little bit too simple. You could instead use the java erasure, which, after [my fix](https://github.com/scala/scala/pull/4490) for @smarter's recent bug report, does not unwrap value classes.\n\nHere's a few test cases:\n\n``` scala\nobject Test { \n  type T = String\n  type U\n\n  def test = {\n\n    val a /* : Class[T]                  */ = classOf[T]                        // [Ljava/lang/String;\n    val b /* : ClassTag[T]               */ = reflect.classTag[T]               // ClassTag(classOf[java.lang.String])\n\n//  val c /* :                           */ = classOf[T with U]                 // error: class type required but Test.T with Test.U found\n    val d /* : ClassTag[T with U]        */ = reflect.classTag[T with U]        // ClassTag(classOf[java.lang.String])\n\n    val e /* : Class[Array[T with U]]    */ = classOf[Array[T with U]]          // [Ljava/lang/String;\n    val f /* : ClassTag[Array[T with U]] */ = reflect.classTag[Array[T with U]] // ClassTag(arrayClass(classOf[java.lang.String]))\n\n    val g /* : Class[Meter]              */ = classOf[Meter]                    // [LMeter;\n    val h /* : ClassTag[Meter]           */ = reflect.classTag[Meter]           // ClassTag(classOf[Meter])\n  }\n}\n\nclass Meter(val i: Int) extends AnyVal\n```\n",
+        "createdAt" : "2015-05-15T02:46:31Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9355b489-8302-45f2-9f36-ae04d8871187",
+        "parentId" : "d498884c-c57c-4846-811a-7a55ca897028",
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "Here's the code that backs the `materializeClassTag` macro in Scala: https://github.com/scala/scala/blob/2.11.x/src/compiler/scala/reflect/reify/package.scala#L49-L72\n",
+        "createdAt" : "2015-05-15T02:49:00Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "736682e306ae3c9cb48d83b2750e9d36dee4e9b5",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +50,54 @@      }\n\n      val claz = tp.classSymbol\n      val elemClaz = elemType.classSymbol\n      assert(!claz.isPrimitiveValueClass) // should be inserted by typer"
+  },
+  {
+    "id" : "3f74980a-23d1-4b22-b3b8-bcba947bbb25",
+    "prId" : 563,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b35c6f2c-9ded-4f06-842b-36b35445638a",
+        "parentId" : null,
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "Do you intend for `Context` to be eligible for garbage collection after a compilation run in a resident setting? Will caches like these prevent that? \n",
+        "createdAt" : "2015-05-14T00:05:57Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1c15c46-1396-4c64-a49f-2ec60cca38f5",
+        "parentId" : "b35c6f2c-9ded-4f06-842b-36b35445638a",
+        "authorId" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "body" : "The phases themselves are only stored in context. https://github.com/lampepfl/dotty/blob/master/src/dotty/tools/dotc/core/Phases.scala\n\nThey are reallocated per-run. Currently, this will not stop GC. If it would, we can cleanup in `transformUnit`.\n",
+        "createdAt" : "2015-05-14T07:01:57Z",
+        "updatedAt" : "2015-05-15T09:11:48Z",
+        "lastEditedBy" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "736682e306ae3c9cb48d83b2750e9d36dee4e9b5",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +36,40 @@    typeTagCache = ctx.requiredMethod(predefClass, nme.typeTag)\n    scala2ClassTagModule = ctx.requiredModule(\"scala.reflect.ClassTag\")\n    this\n  }\n"
+  },
+  {
+    "id" : "c13125b4-cddb-470e-9bd8-a744b50db837",
+    "prId" : 563,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0f799ede-bd09-40a0-b619-266bcec5e350",
+        "parentId" : null,
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "I usually use myClassTag/myTypeTag for private variables, includes variables serving as a cache. \n",
+        "createdAt" : "2015-05-15T13:56:14Z",
+        "updatedAt" : "2015-05-15T13:56:14Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "736682e306ae3c9cb48d83b2750e9d36dee4e9b5",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +27,31 @@\n  private var classTagCache: Symbol = null\n  private var typeTagCache: Symbol  = null\n  private var scala2ClassTagModule: Symbol = null\n"
+  }
+]

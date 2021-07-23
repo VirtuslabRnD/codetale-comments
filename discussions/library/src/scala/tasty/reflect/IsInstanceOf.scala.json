@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "0432011a-e1ff-482d-a614-9b226042131f",
+    "prId" : 7528,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/7528#pullrequestreview-317784587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "72e0067e-a6c6-4839-9047-9246ab7d36db",
+        "parentId" : null,
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Given comment https://github.com/lampepfl/dotty/pull/7394#issuecomment-553272477, there is the question if it it possible to fix class tag to be sound even when considering paths.",
+        "createdAt" : "2019-11-13T08:26:58Z",
+        "updatedAt" : "2019-11-18T20:26:19Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "396cbb9d-2dd4-4fae-8e60-692a81f44394",
+        "parentId" : "72e0067e-a6c6-4839-9047-9246ab7d36db",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "@odersky @sjrd WDYT? \r\n\r\nNote that there is also a case we did not discuss with `r1.Nat` and `r1.Idx` where the paths are equal, the classtags are equal and the unapply of the class tag are the same but there is no subtyping relationship between the two abstract types.",
+        "createdAt" : "2019-11-13T08:29:59Z",
+        "updatedAt" : "2019-11-18T20:26:19Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf218cb8-5843-4ea1-b399-377ca7627f40",
+        "parentId" : "72e0067e-a6c6-4839-9047-9246ab7d36db",
+        "authorId" : "5a9cd756-9120-4d5e-ac88-e9c636084f0e",
+        "body" : "To me, from the last discussion we had, there is only one reasonable path forward that will solve all the problems at once, with a clean design, and no migration issue:\r\n\r\nFirst, introduce a new typeclass\r\n```scala\r\ntrait TypeTest[A] {\r\n  def isInstance(x: Any): Boolean\r\n}\r\n```\r\nthat can be synthesized by the compiler for `A = p.T` in exactly the same situations where an `x.isInstanceOf[p.T]` would be valid, and synthesizes it precisely as\r\n```scala\r\nnew TypeTest[p.T] {\r\n  def isInstance(x: Any): Boolean = x.isInstanceOf[p.T]\r\n}\r\n```\r\n\r\nThen, in pattern-matching, for `case x: A` or `case Extractor(x)` where the `Extractor` expects an `A`, if `A` cannot be tested natively, try summoning a `TypeTest[A]`. Only if that fails as well, try summoning a `ClassTag[A]`.\r\n\r\nFinally, deprecated `ClassTag.unapply` and summoning a `ClassTag[A]` to implement a type test, since they are unsound.\r\n\r\n`ClassTag`s were designed for `Array`s. This is the use case they are widely used for, and they work *perfectly* for that use case. It is only later on that the type-test feature was bolted on, without giving it more thought than a PR review. Please let's not pretend that `ClassTag`s are broken and need fixing because *that bolted-on feature* is broken. `ClassTag`s are correct. It's using `ClassTag`s for type tests that's broken. The correct fix is not to fix `ClassTag`s but to fix type-tests.\r\n\r\n---\r\n\r\nThe above `TypeTest` typeclass is slightly unsound because one can implement a custom `TypeTest` for any `A` that always returns `true`. The subsequent compiler-generated `.asInstanceOf[A]` will throw a CCE. We can fix that design by complicating a bit the `TypeTest` API as follows:\r\n```scala\r\ntrait TypeTest[A] {\r\n  def isInstance(x: Any): TypeTest.Result[x.type & A]\r\n}\r\nobject TypeTest {\r\n  opaque type Result[A] = Boolean\r\n\r\n  def success[A](x: A): Result[A] = true\r\n  def failure[A]: Result[A] = false\r\n}\r\n```\r\nNow a synthesized `TypeTest[p.T]` would look like\r\n```scala\r\nnew TypeTest[p.T] {\r\n  def isInstance(x: Any): TypeTest.Result[x.type & p.T] = x match {\r\n    case x: p.T => TypeTest.success(x)\r\n    case _      => TypeTest.failure\r\n  }\r\n}\r\n```\r\nand we can safely write custom `TypeTest[A]` instances that are sound down the line.",
+        "createdAt" : "2019-11-13T10:44:07Z",
+        "updatedAt" : "2019-11-18T20:26:19Z",
+        "lastEditedBy" : "5a9cd756-9120-4d5e-ac88-e9c636084f0e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e35edde-3b17-4f7e-9339-def9af6c5e3d",
+        "parentId" : "72e0067e-a6c6-4839-9047-9246ab7d36db",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Small fix:\r\n\r\n```scala\r\nnew TypeTest[p.T] {\r\n  def isInstance(x: Any): TypeTest.Result[x.type & p.T] = x match {\r\n    case x: (p.T & x.type) => TypeTest.success(x)\r\n    case _                 => TypeTest.failure\r\n  }\r\n}\r\n```",
+        "createdAt" : "2019-11-13T15:41:17Z",
+        "updatedAt" : "2019-11-18T20:26:19Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df3de19d-1232-44cf-8994-cbb01d36e3f3",
+        "parentId" : "72e0067e-a6c6-4839-9047-9246ab7d36db",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "There is still something missing, when we do have an implicit `p2.Y` in scope we can match a `p1.Y` without an unchecked warning.\r\n```scala\r\nobject Test {\r\n  def main(args: Array[String]): Unit = {\r\n    val p1: T = T1\r\n    import p1.given\r\n\r\n    val p2: T = T1\r\n    import p2.given\r\n\r\n    (p1.y: p1.X) match {\r\n      case x: p2.Y => // should be an unchecked cast but is not\r\n      case x: p1.Y =>\r\n      case _ =>\r\n    }\r\n  }\r\n\r\n}\r\n\r\ntrait T {\r\n  type X\r\n  type Y <: X\r\n  def x: X\r\n  def y: Y\r\n  given TypeTest[Y] = typeTestOfY\r\n  protected def typeTestOfY: TypeTest[Y]\r\n}\r\n\r\nobject T1 extends T {\r\n  type X = Boolean\r\n  type Y = true\r\n  def x: X = false\r\n  def y: Y = true\r\n  protected def typeTestOfY: TypeTest[Y] = new {\r\n    def isInstance(x: Any): TypeTest.Result[x.type & Y] = x match\r\n      case x: (true & x.type) => TypeTest.success(x)\r\n      case _ => TypeTest.failure\r\n  }\r\n}\r\n```\r\n\r\n\r\nThis can be solved by adding adding a second type parameter like in #7394. \r\n\r\n```scala\r\ntrait TypeTest[S, T <: S] {\r\n\r\n  def isInstance(x: S): TypeTest.Result[x.type & T]\r\n\r\n  def unapply(x: S): Option[x.type & T] =\r\n    TypeTest.unapply(x)(given this)\r\n\r\n}\r\n\r\nobject TypeTest {\r\n\r\n  opaque type Result[A] = Boolean\r\n\r\n  def success[A](x: A): Result[A] = true\r\n\r\n  def failure[A]: Result[A] = false\r\n\r\n  def unapply[S, T <: S](x: S)(given tt: TypeTest[S, T]): Option[x.type & T] =\r\n    if tt.isInstance(x) then Some(x.asInstanceOf[x.type & T])\r\n    else None\r\n\r\n}\r\n```\r\nAnd using it in the following way\r\n```scala\r\ntrait T {\r\n  type X\r\n  type Y <: X\r\n  def x: X\r\n  def y: Y\r\n  given TypeTest[X, Y] = typeTestOfY\r\n  protected def typeTestOfY: TypeTest[X, Y]\r\n}\r\nobject T1 extends T {\r\n  type X = Boolean\r\n  type Y = true\r\n  def x: X = false\r\n  def y: Y = true\r\n  protected def typeTestOfY: TypeTest[X, Y] = new {\r\n    def isInstance(x: X): TypeTest.Result[x.type & Y] = x match\r\n      case x: (true & x.type) => TypeTest.success(x)\r\n      case _ => TypeTest.failure\r\n  }\r\n}\r\n```\r\n\r\nThough we would need to ensure that `S` in `TypeTest[S, T]` is defined locally to ensure we do not get the previous unsoundness.",
+        "createdAt" : "2019-11-13T20:07:04Z",
+        "updatedAt" : "2019-11-18T20:26:19Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "84d8acc0-be47-4d22-be9b-bc0a88910eca",
+        "parentId" : "72e0067e-a6c6-4839-9047-9246ab7d36db",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "We could also consider defining it like\r\n```scala\r\ntrait TypeTest[S, T <: S] {\r\n  def unapply(x: S): TypeTest.Result[x.type & T]\r\n}\r\n\r\nobject TypeTest {\r\n\r\n  opaque type Result[A] = A | Failure.type\r\n\r\n  object Result {\r\n    given [A](res: Result[A]) { // currently fails, not sure where to put the extension methods\r\n      def isEmpty: Boolean = res == Failure\r\n      def get: A = res.asInstanceOf[A]\r\n    }\r\n  }\r\n\r\n  private object Failure\r\n\r\n  def success[A](x: A): Result[A] = x\r\n\r\n  def failure[A]: Result[A] = Failure\r\n\r\n}\r\n```",
+        "createdAt" : "2019-11-13T20:37:08Z",
+        "updatedAt" : "2019-11-18T20:26:19Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "24df0ef0-4276-4048-8706-84beea3f9632",
+        "parentId" : "72e0067e-a6c6-4839-9047-9246ab7d36db",
+        "authorId" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "body" : "Moved discussion to #7554",
+        "createdAt" : "2019-11-15T18:13:29Z",
+        "updatedAt" : "2019-11-18T20:26:19Z",
+        "lastEditedBy" : "a7e5fcc8-eade-485d-96d2-94106dd74f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3798b6ff97f64be290d46310128fcc630508146d",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +35,39 @@   }\n   ```\n*/\n/** Place holder until we implement a ClassTag like abstraction that is sound for all type tests */\ntype IsInstanceOf[T] = scala.reflect.ClassTag[T]"
+  }
+]

@@ -1,0 +1,35 @@
+[
+  {
+    "id" : "ea7e2c0e-d063-4f5f-a1ab-79bba4e7b284",
+    "prId" : 6898,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/6898#pullrequestreview-267175429",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2c273e6-34f0-4b54-8186-908f52d2a8cd",
+        "parentId" : null,
+        "authorId" : "3a3c9c08-5985-41f6-a86b-7fc5a427f51a",
+        "body" : "I would rewrite this as follows:\r\n\r\n```scala\r\ntrait FromString[T] {\r\n  def fromString(str: String): Option[T]\r\n}\r\n\r\nobject FromString {\r\n  def catchILE[T](f: String => T): FromString[T] = str =>\r\n    try Some(f(str))\r\n    catch { case ex: IllegalArgumentException => None }\r\n\r\n  delegate for FromString[String ] = catchILE(identity   )\r\n  delegate for FromString[Boolean] = catchILE(_.toBoolean)\r\n  delegate for FromString[Byte   ] = catchILE(_.toByte   )\r\n  delegate for FromString[Short  ] = catchILE(_.toShort  )\r\n  delegate for FromString[Int    ] = catchILE(_.toInt    )\r\n  delegate for FromString[Long   ] = catchILE(_.toLong   )\r\n  delegate for FromString[Float  ] = catchILE(_.toFloat  )\r\n  delegate for FromString[Double ] = catchILE(_.toDouble )\r\n}\r\n```\r\n\r\nI believe the protocol should be encoded in the types. It is much more intuitive this way for the end-user. Throwing an `IllegalArgumentException` is quite an obscure way to signal that the function cannot process the given input. Another choice is `PartialFunction`.\r\n\r\nAlso, a type class user will most probably expect the type class to be pure. This is a reasonable expectation given people are used to Cats & Haskell type classes which are pure. I don't think there is enough motivation here to break this expectation.\r\n\r\nA good example of an existing logic to consider here is the `unapply` method. You always need to implement it but never to call it manually. You know how to implement it by simply looking at its type. And the overhead of the result being wrapped in an `Option` never bothers you because you never actually call `unapply` manually.\r\n\r\n`toByte`, `toShort` etc family of methods are different. You always call them but never implement them. Hence it doesn't really matter that much what protocol you should follow in your implementation (e.g. what exactly exception you should throw) – because you never write one. When using them, you need no knowledge of monads since the result is a plain type.\r\n\r\nI believe the type class of `FromString` is closer to `unapply` than to `toByte`. You will only ever need to implement it but never actually call it yourself.",
+        "createdAt" : "2019-07-26T11:29:48Z",
+        "updatedAt" : "2019-07-29T16:55:34Z",
+        "lastEditedBy" : "3a3c9c08-5985-41f6-a86b-7fc5a427f51a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e463dd8-8858-4e0c-b55b-aa1d180e02a9",
+        "parentId" : "e2c273e6-34f0-4b54-8186-908f52d2a8cd",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "`Option` is clearly not an adequate replacement, since it does not allow to pass an error string _why_ the argument does not conform. \r\n\r\nAlso, in the end my user-level method takes, say an `Int` and `Boolean`. If the arguments do not conform to that I _must_ throw an exception. There's no other way to do it. Unless you make @main programs take only `Option` or `Either` arguments, but that's completely wrong! The whole point of @main functions is that the person writing the @main can decide what degree of error checking should be done, and how. If you force @main functions to handle errors by analyzing `Option` or `Either` arguments you made the choice for them.\r\n\r\nIn summary: exceptions are actually pretty nice! And we will fix the part that they don't show up in the types...",
+        "createdAt" : "2019-07-26T13:07:51Z",
+        "updatedAt" : "2019-07-29T16:55:34Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eb374a15d3918a661e6d06098b26347dcad3319c",
+    "line" : 3,
+    "diffHunk" : "@@ -1,1 +1,5 @@package scala.util\n\ntrait FromString[T] {\n  /** Can throw java.lang.IllegalArgumentException */\n  def fromString(s: String): T"
+  }
+]

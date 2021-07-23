@@ -1,0 +1,156 @@
+[
+  {
+    "id" : "38b02884-c5fd-4936-8fcc-b0656ae2d838",
+    "prId" : 11526,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/11526#pullrequestreview-607601332",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "Why is this change needed?",
+        "createdAt" : "2021-02-25T18:05:01Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f70796ec-359b-4110-a938-0c205abd169b",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "7f4dd8e1-6dc3-48f1-ac69-2bad57c15767",
+        "body" : "@liufengyun Here, I was asking myself the same question !",
+        "createdAt" : "2021-02-25T18:22:20Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "7f4dd8e1-6dc3-48f1-ac69-2bad57c15767",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33a6fd7b-d942-45fa-b6dd-8d1532302146",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "Good question. We need to widen the scrutinee type instead.",
+        "createdAt" : "2021-02-25T18:52:19Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "686906a3-752e-4fb3-8e14-a9c60288152e",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "Actually, we have the following error without the change:\r\n\r\n```Scala\r\n-- [E007] Type Mismatch Error: tests/run/option-extract.scala:10:11 ----------------------------------------------------\r\n10 |      case None => default\r\n   |           ^^^^\r\n   |           Found:    (Option.None : Option[Nothing])\r\n   |           Required: Any{ExtractResult = LazyRef([B] =>> (=> B) => B)} & Option[A]\r\n   |           pattern type is incompatible with expected type\r\n```\r\n\r\nThis seems to be a subtle interaction with opaque types in subtype checking.",
+        "createdAt" : "2021-02-25T19:03:52Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2559cc2b-a9e4-4fcc-9671-5513646ad818",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I tried to play with the opaque types with the following change:\r\n\r\n``` diff\r\n--- a/compiler/src/dotty/tools/dotc/core/Types.scala\r\n+++ b/compiler/src/dotty/tools/dotc/core/Types.scala\r\n@@ -4548,6 +4548,7 @@ object Types {\r\n\r\n     private var selfTypeCache: Type = null\r\n     private var appliedRefCache: Type = null\r\n+    private var selfTypeWithoutOpaqueCache: Type = null\r\n\r\n     /** The self type of a class is the conjunction of\r\n      *   - the explicit self type if given (or the info of a given self symbol), and\r\n@@ -4566,6 +4567,23 @@ object Types {\r\n       selfTypeCache\r\n     }\r\n\r\n+    /** The self type without opaque members refinements */\r\n+    def selfTypeWithoutOpaque(using Context): Type = {\r\n+      def dropRefinement(tp: Type): Type = tp match\r\n+        case RefinedType(parent, _, _: TypeAlias) =>\r\n+          // TODO: maybe strengthen the check for Opaque flag\r\n+          parent\r\n+        case AndType(tp1, tp2) =>\r\n+          dropRefinement(tp1) & dropRefinement(tp2)\r\n+        case _ =>\r\n+          tp\r\n+      end dropRefinement\r\n+\r\n+      if selfTypeWithoutOpaqueCache == null then\r\n+        selfTypeWithoutOpaqueCache = dropRefinement(selfType)\r\n+      selfTypeWithoutOpaqueCache\r\n+    }\r\n```\r\n\r\nBut found no place where we could sensibly use `selfTypeWithoutOpaque` in the code. ",
+        "createdAt" : "2021-03-01T10:49:17Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "188857d4-ac38-4417-a10e-f13071cfb6c0",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I managed to do this: in widen we always strip the opaque refinement for `ThisType`. See bf3b50a",
+        "createdAt" : "2021-03-08T12:50:37Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b07fb2b7-cd94-4fe3-880f-b036dbb32169",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "I'm not sure if stripping these refinements by default is a good idea since it's not clear in what situation this is safe to do. Also this isn't specific to opaque refinements:\r\n```scala\r\ntrait Mixin\r\n\r\nsealed trait Foo { self: Mixin =>\r\n  def foo = this match {\r\n    case this =>\r\n  }\r\n}\r\n```\r\n```scala\r\n-- [E029] Pattern Match Exhaustivity Warning: try/selfmatch.scala:4:12 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------\r\n4 |  def foo = this match {\r\n  |            ^^^^\r\n  |            match may not be exhaustive.\r\n  |\r\n  |            It would fail on pattern case: _: Mixin & Foo\r\n```\r\n\r\nI think the exhaustiveness checking logic should just ignore self-types in general.",
+        "createdAt" : "2021-03-08T13:21:22Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff2e2178-bf5f-4856-96cc-c5fb7b43f1ec",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "This PR follows #11327, which is part of type checking, not exhaustivity check. It issues errors, instead of warnings. \r\n\r\nThe motivation is to detect more bugs in programs: the error found in the compiler in this PR is evidence of its usefulness.\r\n\r\nThe example you posted above is another orthogonal issue --- it comes from the fact that we always widen the scrutinee in exhaustivity check.\r\n\r\n> I'm not sure if stripping these refinements by default is a good idea since it's not clear in what situation this is safe to do.\r\n\r\nCurrently, the refinemen is stripped in widening, and kept in member selection. What cases you have mind that this PR will be a problem?\r\n\r\nWe have several choice here:\r\n\r\n- Close this PR and revert #11327 for consistency\r\n- Keep this PR w/o stripping and change the test case `tests/run/option-extract.scala` with `(this: Option[A])`\r\n- Keep this PR with stripping\r\n",
+        "createdAt" : "2021-03-08T13:44:41Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cbfff6c3-6712-4493-a0da-a4063b5e9c4b",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "> Currently, the refinemen is stripped in widening, and kept in member selection. What cases you have mind that this PR will be a problem?\r\n\r\nI don't know, but I see things the other way around: we shouldn't do more stripping than we need to, and we shouldn't special-case opaque types more than we have to.\r\n\r\n> The example you posted above is another orthogonal issue --- it comes from the fact that we always widen the scrutinee in exhaustivity check.\r\n\r\nI believe the following should also compile without warnings:\r\n```scala\r\ntrait Mixin\r\n\r\nsealed trait Foo { self: Mixin =>\r\n  def foo = this match {\r\n    case _: Foo =>\r\n  }\r\n}\r\n```\r\nIt really seems that the cleanest fix for this sort of issues is for the exhaustiveness checker to always strip self types.",
+        "createdAt" : "2021-03-08T14:14:42Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2280454d-fc3e-4df7-9af3-a2c66b83e0cc",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "I kind of agree that stripping of opaque refinements should be avoided if possible. Among the following 3 choices:\r\n\r\n1. Close this PR and revert #11327 for consistency\r\n1. Keep this PR w/o stripping and change the test case `tests/run/option-extract.scala` with `(this: Option[A])`\r\n1. Keep this PR with stripping\r\n\r\nMaybe the 2nd is a good compromise?\r\n\r\nBTW, this PR and `#11327` are not fixing any existing issues. They intend to harden type checking and align with Scala 2 behavoir in type checking patterns.",
+        "createdAt" : "2021-03-08T14:24:47Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f8d56ad-7446-4e4e-84cc-7cdb0b717d9f",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "> Maybe the 2nd is a good compromise?\r\n\r\nI'm fine with that if we also open an issue to keep track of the issue with the exhaustivity checker.",
+        "createdAt" : "2021-03-08T14:40:55Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ed2ca39-97aa-4c7f-bf2d-a7ef93b37452",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "> I'm fine with that if we also open an issue to keep track of the issue with the exhaustivity checker.\r\n\r\nAgreed. I'll create an issue for the test `tests/run/option-extract.scala` (it's a typing error, not an exhaustivity warning).",
+        "createdAt" : "2021-03-08T14:47:11Z",
+        "updatedAt" : "2021-03-09T15:12:16Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b8e56f0-4d41-47f5-92c5-23dfeae24226",
+        "parentId" : "f0118a11-a69e-41e5-a8dc-9d52646cd1f8",
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "The last commit removed and we created an issue #11669 for `tests/run/option-extract.scala`.",
+        "createdAt" : "2021-03-09T16:21:18Z",
+        "updatedAt" : "2021-03-09T16:21:18Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f7e0d31e519c93d489d5082ac64fc7d5c3bac3d6",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +7,11 @@\n  def extract[B](f: A => B): ExtractResult[B] =\n    def result(default: => B): B = (this: Option[A]) match\n      case None => default\n      case Some(elem) => f(elem)"
+  }
+]

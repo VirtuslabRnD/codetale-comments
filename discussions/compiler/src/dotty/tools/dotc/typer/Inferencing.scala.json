@@ -1,0 +1,277 @@
+[
+  {
+    "id" : "43efb4ac-f0bf-4d78-a6f2-0ebf33e8c089",
+    "prId" : 11037,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/11037#pullrequestreview-568049599",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "38cbc1b0-3705-4160-8d6c-7f43a5b04acd",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "Minor: maybe add documentation to the method `canDefineFurther` as it might have side effects when returning `true`.",
+        "createdAt" : "2021-01-14T10:39:57Z",
+        "updatedAt" : "2021-01-15T12:29:30Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2dcbb6935ccd3f276b1cde0ca73bf4fe5fe4d033",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +45,49 @@    val prevConstraint = ctx.typerState.constraint\n    isFullyDefined(tp, force = ForceDegree.all)\n    && (ctx.typerState.constraint ne prevConstraint)\n\n  /** The fully defined type, where all type variables are forced."
+  },
+  {
+    "id" : "ae441fa8-ce2c-4bdd-90a1-4ef32d890789",
+    "prId" : 10205,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/10205#pullrequestreview-526256373",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "12a16dd9-9e07-4b2e-92a0-2faedfabae5d",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "I don't think that's quite right either since given `?F[?A]` I need to instantiate at least `?F`, and then if it's a type lambda I may or may not need to instantaite `?A` too. Also since this is a selection prefix, we want to avoid `Nothing` if possible, in fact in all situation where we're trying to avoid `Nothing`, we only want to avoid it at the top-level. This is what I came up last time I was looking at this: https://github.com/dotty-staging/dotty/blob/63c7bad7f01c5fccf4620376aa7c8f70bc90b66d/compiler/src/dotty/tools/dotc/typer/Inferencing.scala#L49-L83\r\nbut I was a bit concerned that this duplicated code from IsFullyDefinedAccumulator.",
+        "createdAt" : "2020-11-09T11:01:52Z",
+        "updatedAt" : "2020-11-17T14:07:54Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f52926aa-d5e9-4bd2-9444-25e54e35cc36",
+        "parentId" : "12a16dd9-9e07-4b2e-92a0-2faedfabae5d",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Right. In this particular case we need to instantiate the `?F`. The `?A` can come later when we recursively call `typedSelect` on the new call. I have taken your changes and adapted them to `couldInstantiateTypeVar`. You don't need to check for `LazyRef`  in either code, since that is already eliminated by `dealias`. On the other hand, one should look inside AndTypes, OrTypes, and AnnotatedTypes.\r\n",
+        "createdAt" : "2020-11-09T13:28:54Z",
+        "updatedAt" : "2020-11-17T14:07:54Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ee631c21f180b9fcc99cca7d74d8a448d46fb082",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +86,90 @@   *  could uncover new type members.\n   */\n  def couldInstantiateTypeVar(tp: Type)(using Context): Boolean = tp.dealias match\n    case tvar: TypeVar\n    if !tvar.isInstantiated"
+  },
+  {
+    "id" : "d7c24f13-fd41-4d8d-90ba-8b27c8f556e7",
+    "prId" : 10205,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/10205#pullrequestreview-536642692",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "59a2235d-fab3-4035-8d95-cbfd24884133",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "When trying to select from something that doesn't have a lower-bound, rather than giving up I think it makes sense to try the upper bound, since it might be precise enough, also we could take `instDireciton` into account to be closer to the normal behavior of `isFullyDefined`:\r\n```suggestion\r\n      =>\r\n      val direction = instDirection(tvar.origin)\r\n      tvar.instantiate(fromBelow = direction < 0 || tvar.hasLowerBound)\r\n```",
+        "createdAt" : "2020-11-17T14:09:33Z",
+        "updatedAt" : "2020-11-17T14:20:21Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "11428c7a-2f0a-4cd6-be71-552d4cf1bf90",
+        "parentId" : "59a2235d-fab3-4035-8d95-cbfd24884133",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "I am not sure that will help. The situation is that we try to select a member that does not exist on the type variable. Instantiating to the upper bound would not help in this case. If the member existed on the upper bound, it would also exist on the variable itself.\r\n",
+        "createdAt" : "2020-11-23T09:12:07Z",
+        "updatedAt" : "2020-11-23T09:12:07Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c7291f24-4376-42b8-80da-45bdbbd3a5d6",
+        "parentId" : "59a2235d-fab3-4035-8d95-cbfd24884133",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "> If the member existed on the upper bound, it would also exist on the variable itself.\r\n\r\nAh indeed, because `goParam` in `findMember` will recurse on the upper bound, but isn't that actually problematic? If I have a selection `x.foo` where the type of `x` is a type variable `?T <: B`, we'll end up selecting some overload of `B#foo`, but it's possible that `?T` is then instantiated to some more precise type which contains another overload of `foo` (or an override with a more precise result type), meaning that the member selected is not preserved by retyping (in practice our ReTyper will keep the original selection, but this still seems like a source of confusion since the meaning of the code is not apparent from the types the user sees).",
+        "createdAt" : "2020-11-23T14:08:02Z",
+        "updatedAt" : "2020-11-23T14:08:03Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3f9fd3a4-a5cc-4de1-b2f4-585bb05a2dc2",
+        "parentId" : "59a2235d-fab3-4035-8d95-cbfd24884133",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "This could be a problem. But (1) it's not related to this issue.(2) I don't know how to solve it.\r\n",
+        "createdAt" : "2020-11-23T14:10:54Z",
+        "updatedAt" : "2020-11-23T14:10:54Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "47768b74-9a59-4ad3-a80e-9c1045f6a59b",
+        "parentId" : "59a2235d-fab3-4035-8d95-cbfd24884133",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "I think the change I'm proposing together with removing the recursion on the upper bound in `goParam` would solve that issue, but I agree this can be treated separately from this PR.",
+        "createdAt" : "2020-11-23T16:29:14Z",
+        "updatedAt" : "2020-11-23T16:29:14Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ee631c21f180b9fcc99cca7d74d8a448d46fb082",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +91,95 @@       && ctx.typerState.constraint.contains(tvar)\n       && tvar.hasLowerBound =>\n      tvar.instantiate(fromBelow = true)\n      true\n    case AppliedType(tycon, _) =>"
+  },
+  {
+    "id" : "3d402d65-8eaf-48c8-a285-0c43c8b6b902",
+    "prId" : 9322,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/9322#pullrequestreview-447329260",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5d91b37f-6ac3-4e4e-8b1b-6b3969d4d254",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "I'm still concerned about the stuff I mentioned in https://github.com/lampepfl/dotty/issues/9274#issuecomment-653130226, it seems that if I have a method `def foo[T <: X] = ...`, then I immediately get a GADT constraint `T <: X`, and based on this documentation I would guess this means that ApproximateGadtAccumulator will replace `Option[T]` by `Option[X]`, even though there's no need to do any approximation and nothing GADT related is actually going on?",
+        "createdAt" : "2020-07-10T08:49:15Z",
+        "updatedAt" : "2020-07-14T11:46:42Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "494d2cca-63af-4a65-8aa5-9bb8a950adbf",
+        "parentId" : "5d91b37f-6ac3-4e4e-8b1b-6b3969d4d254",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "OK, I now realize that approximateGADT is only called when the type of the tree is not a subtype of the expected type, so it's probably OK technically, but I think it's confusing and not great for performance that we run this stuff in situations which have nothing to do with GADTs. A few suggestions:\r\n- Add some documentation above the call to approximateGADT in adaptToSubType, describing in what situation this might help (e.g., with a simple example)\r\n- As far as I can tell, the result of the approximation is ignored unless `pt` is a `SelectjonProto` and `ctx.gadt.nonEmpty`, so we should only run the type map when these conditions are true, this is better for performance and for understanding what's going on.\r\n- In https://github.com/lampepfl/dotty/issues/9274 you said:\r\n  >  it's not possible to tell whether a symbol is a type parameter of an enclosing function after descending into its body; therefore, we need to stick those symbols somewhere when we see them and we stick them into GadtConstraint\r\n   Type parameters have the `TypeParam` flag set, and I think method type parameters should always be TypeRefs where the prefix is `NoPrefix`, is that enough?",
+        "createdAt" : "2020-07-11T16:38:05Z",
+        "updatedAt" : "2020-07-14T11:46:42Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38f74137-b09e-401a-aa10-acfa5326231c",
+        "parentId" : "5d91b37f-6ac3-4e4e-8b1b-6b3969d4d254",
+        "authorId" : "3a56b927-736f-4aab-8690-358cd24ca570",
+        "body" : "Re. documentation: I'll add the doc to code in `adaptToSubType`. We need to approximate GADTs in `adapt` in order to look up members that should be there b/c of GADT constraints. We cannot take GADT constraints into account when doing normal member lookup b/c of cache. Sample code is https://github.com/lampepfl/dotty/pull/9322/files#diff-70e7287c36d5e6a572c97c2b51613049R1-R9.\r\n\r\nRe. lazily performing the approximation: will do, doing it eagerly is a remainder from the old `recover`, which also used the result of approx.\r\n\r\nRe. type parameters: key issue is telling whether the type parameters are from an enclosing method, or from somewhere else (i.e. a class?) Now that I think about it, there may be some way of doing so. Question is, do we actually get any performance out of it. I'd prefer to know for sure that there's a performance issue with this code before trying to change it.\r\n\r\nFinal concern: can you take a look @ https://github.com/lampepfl/dotty/pull/9322/files#diff-1b5c8ce1eaca91d793eef217487d5a59R754 and see whether that change makes sense to you? `isNewSubType` would at most return `false` early before doing the type comparison, so I cannot really see any way that this change is wrong, but at the same time all the justification I have for it is that no test broke and it fixes my issue.",
+        "createdAt" : "2020-07-12T16:01:07Z",
+        "updatedAt" : "2020-07-14T11:46:42Z",
+        "lastEditedBy" : "3a56b927-736f-4aab-8690-358cd24ca570",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5bca2a3c-9f17-4178-b2d9-e0fb35cc609e",
+        "parentId" : "5d91b37f-6ac3-4e4e-8b1b-6b3969d4d254",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "> Re. type parameters: key issue is telling whether the type parameters are from an enclosing method, or from somewhere else (i.e. a class?)\r\n\r\nCheck if the owner is a method, type parameters from methods which are not enclosing should not be in scope at all.\r\n\r\n> Final concern: can you take a look @ #9322 (files) and see whether that change makes sense to you? \r\n\r\nI guess that usage of isNewSubType was incorrect before? Maybe something worth asking Martin about.",
+        "createdAt" : "2020-07-12T22:16:52Z",
+        "updatedAt" : "2020-07-14T11:46:42Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2554a5bf-506a-43d2-a189-b729106c45e4",
+        "parentId" : "5d91b37f-6ac3-4e4e-8b1b-6b3969d4d254",
+        "authorId" : "3a56b927-736f-4aab-8690-358cd24ca570",
+        "body" : "> > Re. type parameters: key issue is telling whether the type parameters are from an enclosing method, or from somewhere else (i.e. a class?)\r\n> \r\n> Check if the owner is a method, type parameters from methods which are not enclosing should not be in scope at all.\r\n\r\nYeah, that's what I was thinking about when I said \"there may be some way of doing so\". I'd still like an indication that we have a performance problem here.\r\n\r\n> > Final concern: can you take a look @ #9322 (files) and see whether that change makes sense to you?\r\n> \r\n> I guess that usage of isNewSubType was incorrect before? Maybe something worth asking Martin about.\r\n\r\n@odersky can you take a look at the single line modified in TypeComparer in https://github.com/lampepfl/dotty/pull/9322/files#diff-1b5c8ce1eaca91d793eef217487d5a59R754 and check if the change looks OK to you? The problem that this change fixes is https://github.com/lampepfl/dotty/pull/9322#issuecomment-655570104.",
+        "createdAt" : "2020-07-13T10:34:05Z",
+        "updatedAt" : "2020-07-14T11:46:42Z",
+        "lastEditedBy" : "3a56b927-736f-4aab-8690-358cd24ca570",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "800bdd33-267d-48f6-983c-555b00aa1709",
+        "parentId" : "5d91b37f-6ac3-4e4e-8b1b-6b3969d4d254",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "> I'd still like an indication that we have a performance problem here.\r\n\r\nEven if it's not a performance problem, I think it's nicer if GADT code doesn't run when nothing GADT related is going on: it makes it easier to know what code can be safely ignored when trying to understand or debug something, and it makes the output of debug printers easier to read (especially the subtyping printer which is hard enough to follow in the best of situations), but this isn't a blocker for this PR, and if you think it would make the resulting GADT logic too complicated then we can keep the current logic of course.",
+        "createdAt" : "2020-07-13T14:55:49Z",
+        "updatedAt" : "2020-07-14T11:46:42Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c43494959e5e4e05be3923155061abed89592b26",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +192,196 @@      * Examples:\n      *   - If we have GADT cstr A <: Int, then for all A <: Int, Option[A] <: Option[Int].\n      *     Therefore, we can approximate Option[A] ~~ Option[Int].\n      *   - If we have A >: S <: T, then for all such A, A => A <: S => T. This\n      *     illustrates that it's fine to differently approximate different"
+  },
+  {
+    "id" : "8033929b-c858-49c4-8fe8-0313d003f332",
+    "prId" : 4059,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4059#pullrequestreview-100866422",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "96bd34fb-d0de-4e8a-9178-2d80ab2ca959",
+        "parentId" : null,
+        "authorId" : "348fab8e-49e2-442e-884d-850c7f41fdde",
+        "body" : "@odersky We were wondering about\r\n\r\n> We take this into account to instantiate the variable so that it narrows the overall constraint the least, defaulting again to lower bound if there is not best direction.\r\n\r\nAre you trying to give the biggest type to the typing context? If so, do you know the variance of `tv`'s occurrences in the typing context? It could occur in either covariant or contravariant positions, and that affects the polarity of occurrences of `tvar` in `tv`'s bounds, but it doesn't look like `tvar`'s polarity is accounted for...",
+        "createdAt" : "2018-03-02T18:21:25Z",
+        "updatedAt" : "2018-03-02T18:21:26Z",
+        "lastEditedBy" : "348fab8e-49e2-442e-884d-850c7f41fdde",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4b1b9e17af9568e652c6241854b4295c76dae62d",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +332,336 @@        val otherParam = tv.origin\n        val fs1 = if (constraint.isLess(tparam, otherParam)) fs &~ Covariant else fs\n        val fs2 = if (constraint.isLess(otherParam, tparam)) fs1 &~ Contravariant else fs1\n        accu(fs2, constraint.entry(otherParam))\n      }"
+  },
+  {
+    "id" : "a1dbaaa5-80af-4ed9-b072-8a0be47ca246",
+    "prId" : 4059,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/4059#pullrequestreview-101001718",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "00f91a59-7157-4577-bea8-60645df2eddb",
+        "parentId" : null,
+        "authorId" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "body" : "Can you add documentation for this method",
+        "createdAt" : "2018-03-04T10:48:28Z",
+        "updatedAt" : "2018-03-04T10:48:29Z",
+        "lastEditedBy" : "223e67d6-1873-432a-9af9-f40b82a7eedd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4b1b9e17af9568e652c6241854b4295c76dae62d",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +315,319 @@  }\n\n  private def varianceInContext(tvar: TypeVar)(implicit ctx: Context): FlagSet = {\n    object accu extends TypeAccumulator[FlagSet] {\n      def apply(fs: FlagSet, t: Type): FlagSet ="
+  },
+  {
+    "id" : "6a785be5-5d0e-4b81-b6d7-a5652964155c",
+    "prId" : 3774,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/3774#pullrequestreview-88586280",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8ed60504-f79d-4263-816e-9cdb103ed096",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "I think it would be cleaner to do:\r\n```scala\r\nvar isConstrained = tree.isInstanceOf[Apply] || tree.tpe.isInstanceOf[MethodOrPoly]\r\n```",
+        "createdAt" : "2018-01-08T18:06:39Z",
+        "updatedAt" : "2018-01-08T18:07:06Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "265f4e91-4c09-44c0-8d93-cea0225f635b",
+        "parentId" : "8ed60504-f79d-4263-816e-9cdb103ed096",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "I saw that comment to late, after merging. I'll attach the change to a subsequent PR.",
+        "createdAt" : "2018-01-12T19:52:03Z",
+        "updatedAt" : "2018-01-12T19:52:04Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b22f22afe990bba2522cd9b4c127ea6f14c1bb10",
+    "line" : 109,
+    "diffHunk" : "@@ -1,1 +342,346 @@      }\n\n      var isConstrained = false\n      def ensureConstrained() =\n        if (!isConstrained) {"
+  }
+]

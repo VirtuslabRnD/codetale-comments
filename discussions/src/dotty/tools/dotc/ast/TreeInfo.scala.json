@@ -1,0 +1,233 @@
+[
+  {
+    "id" : "595f6b9f-c2f3-4aba-a3c6-830bfc433828",
+    "prId" : 1492,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/1492#pullrequestreview-2448694",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ff8c315a-a184-4b9c-b9ab-1d32cc62da32",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "This is only correct for closures created by `desugar.makeClosure` and only for certain phases, we have similar pattern matches in other places that makes similar assumption and I don't like it either, I think `ExpandSAMs#transformBlock` is the only one which tries to be careful, maybe we could use that here:\n\n``` scala\ncase Block(stats @ (fn: DefDef) :: Nil, Closure(_, fnRef, tpt)) if fnRef.symbol == fn.symbol =>\n```\n",
+        "createdAt" : "2016-09-23T15:41:43Z",
+        "updatedAt" : "2016-10-05T16:02:27Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8d5676c9-6f3e-4853-8462-3dde1921321a",
+        "parentId" : "ff8c315a-a184-4b9c-b9ab-1d32cc62da32",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Not sure about this one. The question is, how should closures in other blocks be categorized? Is that still a closure or something else? For the moment I'd leave as is. \n",
+        "createdAt" : "2016-10-02T12:58:49Z",
+        "updatedAt" : "2016-10-05T16:02:27Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e0a14e7939eda6a7f4914831975b2ac8877696f2",
+    "line" : 61,
+    "diffHunk" : "@@ -1,1 +450,454 @@  object closure {\n    def unapply(tree: Tree): Option[(List[Tree], Tree, Tree)] = tree match {\n      case Block(_, Closure(env, meth, tpt)) => Some(env, meth, tpt)\n      case Closure(env, meth, tpt) => Some(env, meth, tpt)\n      case _ => None"
+  },
+  {
+    "id" : "b61448cf-8635-4aac-9f14-000a19d4d90d",
+    "prId" : 520,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "21484770-5b3e-42d0-905c-8304aa8b47a8",
+        "parentId" : null,
+        "authorId" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "body" : "This seems unrelated to this PR.\n",
+        "createdAt" : "2015-05-02T19:55:23Z",
+        "updatedAt" : "2015-05-02T19:55:23Z",
+        "lastEditedBy" : "5bf81a51-885f-46a7-83a3-61092da8405f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "60ab9f8f525d319aa5b6d5052018c6781da036eb",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +28,32 @@   */\n  def isNoInitMember(tree: Tree): Boolean = unsplice(tree) match {\n    case EmptyTree | Import(_, _) | TypeDef(_, _) | DefDef(_, _, _, _, _) => true\n    case tree: ValDef => tree.unforcedRhs == EmptyTree\n    case _ => false"
+  },
+  {
+    "id" : "1a3ac24b-a671-41e0-9c6a-66f2d811a9b3",
+    "prId" : 140,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ef7dd5fa-583b-4b72-ab83-efbdbec6a1c6",
+        "parentId" : null,
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "Lazy vals aren't actually idempotent.\n\n```\nscala> import util._; object O { lazy val foo = { println(\"!!\"); ??? } }; Try(O.foo); Try(O.foo); \"\"\n!!\n!!\nimport util._\ndefined object O\nres0: String = \"\"\n```\n",
+        "createdAt" : "2014-07-11T14:53:46Z",
+        "updatedAt" : "2014-07-17T09:54:35Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c5d21285-c2fa-419f-a0aa-f2ed330f7585",
+        "parentId" : "ef7dd5fa-583b-4b72-ab83-efbdbec6a1c6",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Yes, but we'd like to treat them as such for evalOnce, right? Looks like we need a better effect analysis to make any progress here.\n",
+        "createdAt" : "2014-07-13T16:15:23Z",
+        "updatedAt" : "2014-07-17T09:54:35Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "736dceb837d059df35c12f2d35fbbe0bf0f9f8f5",
+    "line" : 99,
+    "diffHunk" : "@@ -1,1 +355,359 @@    if (!tree.tpe.widen.isParameterless) Pure\n    else if (!tree.symbol.is(Stable)) Impure\n    else if (tree.symbol.is(Lazy)) Idempotent // TODO add Module flag, sinxce Module vals or not Lazy from the start.\n    else Pure\n"
+  },
+  {
+    "id" : "2ef9d4b4-3a6a-4e6d-b599-df255fcd998a",
+    "prId" : 69,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dd21bb04-78dc-4a19-aff1-14092d0e97db",
+        "parentId" : null,
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "This looks a bit dicey to me. Could this search be expressed with a regular `TreeAccumulator`, customized to prune based on positions?\n",
+        "createdAt" : "2014-03-14T14:57:13Z",
+        "updatedAt" : "2014-03-14T14:57:13Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c04592d3-3f4b-4528-897c-eabf22dea67c",
+        "parentId" : "dd21bb04-78dc-4a19-aff1-14092d0e97db",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "That's an interesting idea. But it would affect more code than just this one. I.e. compare with Positioned#contains, which is used in Inferencing to determine whether a type variable may be instantiated. So I prefer delegating a change like this to a separate commit.\n",
+        "createdAt" : "2014-03-16T12:00:35Z",
+        "updatedAt" : "2014-03-16T12:00:35Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4016c9ba-2566-479f-9d54-84a5014e9e48",
+        "parentId" : "dd21bb04-78dc-4a19-aff1-14092d0e97db",
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "The duplication with `Positioned#contains` makes it all the more worthwhile to either factor out this `productIterator` based approach or replace it with a `TreeAccumulator` :)\n",
+        "createdAt" : "2014-03-16T13:21:05Z",
+        "updatedAt" : "2014-03-16T13:21:05Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25d6b983-7de0-4fe2-a77b-192eaea1da14",
+        "parentId" : "dd21bb04-78dc-4a19-aff1-14092d0e97db",
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "Here's a stab at the refactoring: #76\n",
+        "createdAt" : "2014-03-16T17:06:37Z",
+        "updatedAt" : "2014-03-16T17:06:37Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1554fddc964e71285b0c3860ec3834557fdd2cd4",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +433,437 @@          if (definedSym(tree) == sym) tree :: Nil\n          else if (tree.envelope.contains(sym.pos)) {\n            val p = search(tree.productIterator)\n            if (p.isEmpty) p else tree :: p\n          } else Nil"
+  },
+  {
+    "id" : "c3cf526e-57e4-4377-9b7c-1ba456032a7e",
+    "prId" : 69,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "03567a79-2585-4e8b-844b-965d3daeb4d9",
+        "parentId" : null,
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "naked asserts are to be avoided, prefer `require(sym.pos.exists, sym)`.\n",
+        "createdAt" : "2014-03-14T14:58:25Z",
+        "updatedAt" : "2014-03-14T14:58:25Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74745c05-4ab8-458c-b94d-5b7982e6eaff",
+        "parentId" : "03567a79-2585-4e8b-844b-965d3daeb4d9",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "That's a judgement call. We do create a closure for each second argument of assert or require right? So this could well be a reason for avoiding the second argument. Not saying this is the case here, but I would be careful about establishing a genera rule. The whole argument goes away once assert is a macro, then naked asserts are indeed to be avoided almost everywhere.\n",
+        "createdAt" : "2014-03-16T12:03:16Z",
+        "updatedAt" : "2014-03-16T12:03:16Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1554fddc964e71285b0c3860ec3834557fdd2cd4",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +444,448 @@      }\n    }\n    require(sym.pos.exists)\n    search(root)\n  }"
+  },
+  {
+    "id" : "678b1043-e248-494c-a6f2-a371e07b9277",
+    "prId" : 69,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ed8e74e2-c2d8-4037-85fa-c3cb0c3413ba",
+        "parentId" : null,
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "Why would you want to annotate the pattern? No warning is issued by scalac.\n",
+        "createdAt" : "2014-03-14T15:05:02Z",
+        "updatedAt" : "2014-03-14T15:05:02Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33e21be7-606d-48c4-8f28-fd4372caf319",
+        "parentId" : "ed8e74e2-c2d8-4037-85fa-c3cb0c3413ba",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "Indeed. There was an unchecked warning for a while, but it has gone away. Maybe it was  a presentation compiler problem. Anyway the @unchecked is gone in the latest versions.\n",
+        "createdAt" : "2014-03-16T12:05:40Z",
+        "updatedAt" : "2014-03-16T12:05:40Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1554fddc964e71285b0c3860ec3834557fdd2cd4",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +430,434 @@    def search(from: Any): List[Tree] = ctx.debugTraceIndented(s\"search(${show(from)})\") {\n      from match {\n        case tree: Tree => // Dotty problem: cannot write Tree @ unchecked, this currently gives a syntax error\n          if (definedSym(tree) == sym) tree :: Nil\n          else if (tree.envelope.contains(sym.pos)) {"
+  },
+  {
+    "id" : "31f5c5cc-c6f3-478a-8f35-dc39a3914752",
+    "prId" : 69,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ec5bc864-6bb3-4f50-8f0a-38e88d979952",
+        "parentId" : null,
+        "authorId" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "body" : "It seems that this code is never executed by current tests. I guess that's expected as we don't have transformer phases calling `companionModule` right now, but it would be good to mention that sort of thing explicitly in the pull request.\n",
+        "createdAt" : "2014-03-16T13:19:11Z",
+        "updatedAt" : "2014-03-16T13:19:11Z",
+        "lastEditedBy" : "1f1241a4-206b-4204-be44-be9e433da151",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1554fddc964e71285b0c3860ec3834557fdd2cd4",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +421,425 @@   *  Pre: `sym` must have a position.\n   */\n  def defPath(sym: Symbol, root: Tree)(implicit ctx: Context): List[Tree] = ctx.debugTraceIndented(s\"defpath($sym with position ${sym.pos}, ${root.show})\") {\n    def show(from: Any): String = from match {\n      case tree: Trees.Tree[_] => s\"${tree.show} with attachments ${tree.allAttachments}\""
+  }
+]

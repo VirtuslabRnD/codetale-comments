@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "11580ac5-d3c4-4f4b-a690-456881ee1d62",
+    "prId" : 11741,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/11741#pullrequestreview-614295661",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6bff440f-e654-44d3-976b-0f31cde3e373",
+        "parentId" : null,
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "While this fixes the immediate problem, it's worth noting that Scala 2 completely removed the subparent logic in https://github.com/scala/scala/pull/7439/commits/cc55bd92dd53fe2eaff29943a3479782bda2ddf2 because:\r\n> subclassing on traits does not imply one's linearisation is contained in the other's\r\n\r\nThe testcase from that commit is:\r\n```scala\r\ntrait IO {\r\n  def c(x: Int): Int = ???\r\n}\r\ntrait SO extends IO {\r\n  override final def c(x: Int): Int = ???\r\n}\r\ntrait SOIO extends IO {\r\n  override def c(x: Int): Int = ???\r\n}\r\ntrait SOSO extends SOIO with SO\r\nabstract class AS extends SO\r\nclass L extends AS with SOSO // error expected: c definined in SOIO overrides final method c in SO \r\n```\r\nWhich currently compiles in Dotty, even though we end up overriding a final def with a non-final def. We already have an issue open to keep track of this (https://github.com/lampepfl/dotty/issues/7551) so we don't necessarily need to handle this now.",
+        "createdAt" : "2021-03-15T13:32:17Z",
+        "updatedAt" : "2021-03-15T13:32:33Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d374a4b-1908-44bd-99e4-322db0eb5f27",
+        "parentId" : "6bff440f-e654-44d3-976b-0f31cde3e373",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "OK. We should evaluate the performance implications of subParents before removing them. Also bridge generation currently relies on the check being present, otherwise you would get duplicate bridges.\r\n",
+        "createdAt" : "2021-03-17T13:15:24Z",
+        "updatedAt" : "2021-03-17T13:15:24Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e9d9d64-7313-4f4f-9bf7-aa5eb0d504e1",
+        "parentId" : "6bff440f-e654-44d3-976b-0f31cde3e373",
+        "authorId" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "body" : "> Also bridge generation currently relies on the check being present, otherwise you would get duplicate bridges.\r\n\r\nIndeed, but Scala 2 had the same issue so https://github.com/scala/scala/commit/cc55bd92dd53fe2eaff29943a3479782bda2ddf2 also takes care of that:\r\n```scala\r\n// Skip nextEntry if the (non-trait) class in `parents` is a subclass of the owners of both low and high.\r\n// this means we'll come back to this entry when we consider `nonTraitParent`, and the linearisation order will be the same\r\n// (this only works for non-trait classes, since subclassing on traits does not imply one's linearisation is contained in the other's)\r\n// This is not just an optimization -- bridge generation relies on visiting each such class only once.\r\nif (!isMatch || (nonTraitParent.isNonBottomSubClass(low.owner) && nonTraitParent.isNonBottomSubClass(high.owner)))\r\n```",
+        "createdAt" : "2021-03-17T13:21:13Z",
+        "updatedAt" : "2021-03-17T13:21:13Z",
+        "lastEditedBy" : "9ffc9890-522c-4d3a-8fe5-fb5cbad2b309",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aaab38918200e2f8d742b94e36353d8c04436c75",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +75,79 @@    protected def isSubParent(parent: Symbol, bc: Symbol)(using Context) =\n      bc.typeParams.isEmpty\n      || self.baseType(parent).baseType(bc) == self.baseType(bc)\n\n    private val subParents = MutableSymbolMap[BitSet]()"
+  },
+  {
+    "id" : "256e3fce-4df5-42b5-9674-2a0a81784698",
+    "prId" : 1913,
+    "prUrl" : "https://github.com/lampepfl/dotty/pull/1913#pullrequestreview-18989549",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4d414bbf-5afa-4f06-b05b-be90a3828c09",
+        "parentId" : null,
+        "authorId" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "body" : "As a general rule in development, may I understand that `try/catch` can only be used as the last resort? Just want to know.",
+        "createdAt" : "2017-01-29T08:19:05Z",
+        "updatedAt" : "2017-01-29T13:44:44Z",
+        "lastEditedBy" : "bc4c7970-6d84-475b-b408-2ed0f22a7bf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb8171f3-636e-451a-b8be-1cb4456c492a",
+        "parentId" : "4d414bbf-5afa-4f06-b05b-be90a3828c09",
+        "authorId" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "body" : "It's complicated. Cyclic references can only be handled with try-catch, because at the points they are raised we typically do not have a way to back out cleanly. So if a cyclic reference is a possibility we need to handle it with try/catch. And we should try to minimize the places where cyclic references can be raised.\r\n\r\nI would think twice before we introduce other exceptions and handle them with try/catch.\r\n\r\n",
+        "createdAt" : "2017-01-29T09:48:16Z",
+        "updatedAt" : "2017-01-29T13:44:44Z",
+        "lastEditedBy" : "d08d2c4a-dc79-4be6-96b0-506d21e90d1d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56fb15888fb98e3a6a535f5734bb8ce82fcd76c3",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +135,139 @@              // See neg/i1750a for an example where a cyclic error can arise.\n              // The root cause in this example is an illegal \"override\" of an inner trait\n              ctx.error(cyclicErrorMsg(ex), base.pos)\n          }\n        } else {"
+  }
+]
