@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "e3335bba-3ed6-44c6-998e-7f3a8fdb1a3f",
+    "prId" : 2241,
+    "prUrl" : "https://github.com/akka/alpakka/pull/2241#pullrequestreview-384585919",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5ae6eb44-86da-4ca7-9a04-cb953da71de7",
+        "parentId" : null,
+        "authorId" : "9500ec63-4ee5-4a4b-820c-121a3523fbda",
+        "body" : "I wonder if we can provide helpers to get the size from the stream, but that requires to process the source twice.\r\n\r\nFor example\r\n```scala\r\n            .map { path =>\r\n              path.getFileName.toString -> FileIO.fromPath(path)\r\n            }\r\n            .mapAsync(1) {\r\n              case (name, fileSource) =>\r\n                val size = fileSource.runWith(Sink.fold(0)(_ + _.size))\r\n                size.map { s =>\r\n                  ArchiveMetadataWithSize(name, s) -> fileSource\r\n                }(system.dispatcher)\r\n            }\r\n```",
+        "createdAt" : "2020-03-30T11:05:50Z",
+        "updatedAt" : "2020-03-31T12:57:46Z",
+        "lastEditedBy" : "9500ec63-4ee5-4a4b-820c-121a3523fbda",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da738a89-f40f-454e-b19c-c848d94d3a6f",
+        "parentId" : "5ae6eb44-86da-4ca7-9a04-cb953da71de7",
+        "authorId" : "13a1abbd-b9b6-45df-a421-b00b5b0a01f4",
+        "body" : "Yeah it is unfortunate, that for TAR files you need to know the size of the files upfront. But I think  finding out the size is not in the scope of this.\r\n\r\nBut what I maybe should add is a check, that one actually provides a stream of matching size. So Running\r\n\r\n```scala\r\nval files = List(\r\n  (ArchiveMetadataWithSize(\"file.txt\", 1), Source.single(ByteString(\"too long\"))\r\n)\r\nSource(files).via(Archive.tar()).runWith(...)\r\n```\r\n\r\nshould fail.",
+        "createdAt" : "2020-03-30T12:55:36Z",
+        "updatedAt" : "2020-03-31T12:57:46Z",
+        "lastEditedBy" : "13a1abbd-b9b6-45df-a421-b00b5b0a01f4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c7914904-d9f8-4523-8aa5-e2097a39e26c",
+        "parentId" : "5ae6eb44-86da-4ca7-9a04-cb953da71de7",
+        "authorId" : "13a1abbd-b9b6-45df-a421-b00b5b0a01f4",
+        "body" : "@ennru What you think about this for verifying the actual stream size matches the header:\r\n\r\n```scala\r\n  private def ensureFileSize(header: TarArchiveHeader): Flow[ByteString, ByteString, NotUsed] =\r\n    Flow[ByteString]\r\n    .map(Option.apply)\r\n    .concat(Source.single(None))\r\n    .statefulMapConcat(() => {\r\n      var size = 0L\r\n      elem => elem match {\r\n        case Some(chunk) =>\r\n          size = size + chunk.size\r\n          chunk :: Nil\r\n        case None =>\r\n          if (size == header.size) Nil\r\n          else throw new IllegalStateException(s\"Byte stream for ${header.filePath} had $size bytes but expected were ${header.size} bytes\")\r\n      }\r\n    })\r\n```",
+        "createdAt" : "2020-03-30T13:13:19Z",
+        "updatedAt" : "2020-03-31T12:57:46Z",
+        "lastEditedBy" : "13a1abbd-b9b6-45df-a421-b00b5b0a01f4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "505b45cb-1905-4d69-be84-eaee9478d72a",
+        "parentId" : "5ae6eb44-86da-4ca7-9a04-cb953da71de7",
+        "authorId" : "13a1abbd-b9b6-45df-a421-b00b5b0a01f4",
+        "body" : "Wrote the size checking as a custom stage (so I don't have to wrap every single chunk in a `Some(_)`).",
+        "createdAt" : "2020-03-30T13:39:21Z",
+        "updatedAt" : "2020-03-31T12:57:46Z",
+        "lastEditedBy" : "13a1abbd-b9b6-45df-a421-b00b5b0a01f4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "678e349c-01dd-434c-ab12-e7b5e64ee38c",
+        "parentId" : "5ae6eb44-86da-4ca7-9a04-cb953da71de7",
+        "authorId" : "9500ec63-4ee5-4a4b-820c-121a3523fbda",
+        "body" : "That's a great addition.\r\nIn many situations, the size might be known. Let's leave the auto-detection for now.",
+        "createdAt" : "2020-03-31T10:12:39Z",
+        "updatedAt" : "2020-03-31T12:57:46Z",
+        "lastEditedBy" : "9500ec63-4ee5-4a4b-820c-121a3523fbda",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c840b040e07c48029d4145f179e0422a74214e05",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +140,144 @@        val fileContent2 = ByteString(Files.readAllBytes(filePath2))\n        val fileSize1 = Files.size(filePath1)\n        val fileSize2 = Files.size(filePath2)\n\n        /*"
+  },
+  {
+    "id" : "b8798426-f275-4e6b-b251-b7b73e52cbc2",
+    "prId" : 2040,
+    "prUrl" : "https://github.com/akka/alpakka/pull/2040#pullrequestreview-344675877",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ddc46fec-758b-4339-a134-f098f14ccce7",
+        "parentId" : null,
+        "authorId" : "9500ec63-4ee5-4a4b-820c-121a3523fbda",
+        "body" : "This has been failing from time to time, this rendering might improve our chances to understand why.\r\nThis won't solve it, see https://github.com/akka/alpakka/issues/1909#issuecomment-575897404",
+        "createdAt" : "2020-01-17T16:03:30Z",
+        "updatedAt" : "2020-01-20T16:46:03Z",
+        "lastEditedBy" : "9500ec63-4ee5-4a4b-820c-121a3523fbda",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d18a0d0b444f36873b8d918611cce5862e8d78c5",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +95,99 @@        val res = resultFileContent.map(toHex).mkString(\"\")\n        val ref = referenceFileContent.map(toHex).mkString(\"\")\n        res shouldBe ref\n\n        //cleanup"
+  }
+]

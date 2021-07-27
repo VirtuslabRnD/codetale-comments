@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "88067ee1-52bd-43c0-8e67-2f60bddb525e",
+    "prId" : 2548,
+    "prUrl" : "https://github.com/akka/alpakka/pull/2548#pullrequestreview-596844771",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8e70a9d8-a03f-4b83-8389-469e54412094",
+        "parentId" : null,
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "What will happen if retries are exhausted and the `Future` is unsuccessful?",
+        "createdAt" : "2021-02-22T17:53:34Z",
+        "updatedAt" : "2021-03-11T20:37:28Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23900230-2583-49cc-8b57-bde9a3a0d570",
+        "parentId" : "8e70a9d8-a03f-4b83-8389-469e54412094",
+        "authorId" : "0f602f47-e8d3-4bc5-b20c-220fb24fc52f",
+        "body" : "The source should fail right? Is this not the desired behavior?",
+        "createdAt" : "2021-02-22T23:29:43Z",
+        "updatedAt" : "2021-03-11T20:37:28Z",
+        "lastEditedBy" : "0f602f47-e8d3-4bc5-b20c-220fb24fc52f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8dfd3980-3097-4367-8e23-8df8ce214098",
+        "parentId" : "8e70a9d8-a03f-4b83-8389-469e54412094",
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "It should fail, but I think because you're using the for comprehension to resolve this intermediate `Future` any failure will just get swallowed and the end result would be the `Source` getting stuck.\r\n\r\nI reproduced that behaviour with this sample.\r\n\r\n```\r\n        def fail: Future[String] = Future(throw new Exception(\"error\"))\r\n\r\n        val source: Source[String, Future[NotUsed]] = Source.lazyFutureSource { () =>\r\n          for {\r\n            r1 <- Future.successful(\"f1\")\r\n            r2 <- fail\r\n          } yield Source(List(r1, r2))\r\n        }\r\n\r\n        val f = source.runWith(Sink.collection)\r\n\r\n        val strs = Await.result(f, 5.seconds)\r\n```\r\n\r\nI could be missing something though..",
+        "createdAt" : "2021-02-23T15:55:54Z",
+        "updatedAt" : "2021-03-11T20:37:28Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "77868620-6070-4973-9ddd-7a7f9137b1fe",
+        "parentId" : "8e70a9d8-a03f-4b83-8389-469e54412094",
+        "authorId" : "0f602f47-e8d3-4bc5-b20c-220fb24fc52f",
+        "body" : "Really? I just ran your code snippet and it throws the exception immediately.",
+        "createdAt" : "2021-02-23T17:42:37Z",
+        "updatedAt" : "2021-03-11T20:37:28Z",
+        "lastEditedBy" : "0f602f47-e8d3-4bc5-b20c-220fb24fc52f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e42e6ccc-f69a-451c-8706-45ccb1d42200",
+        "parentId" : "8e70a9d8-a03f-4b83-8389-469e54412094",
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "That's strange. I added the snippet as a test in `BigQueryQueriesSpec` and [pushed a branch](https://github.com/seglo/alpakka/tree/seglo/wip-new-bigquery).\r\n\r\nhttps://github.com/seglo/alpakka/commit/8cff3db2465a1abeb19fcbe45c64912abd859334\r\n\r\n```\r\nsbt:alpakka> google-cloud-bigquery/testOnly *.BigQueryQueriesSpec -- -z \"should fail when failed future for comprehension\"\r\n[info] BigQueryQueriesSpec:\r\n14:18:24.150 [pool-1-thread-1] INFO io.specto.hoverfly.junit.core.TempFileManager - Selecting the following binary based on the current operating system: hoverfly_linux_amd64\r\n14:18:24.152 [pool-1-thread-1] INFO io.specto.hoverfly.junit.core.TempFileManager - Storing binary in temporary directory /tmp/hoverfly.2557597409281694884/hoverfly_linux_amd64\r\n14:18:24.230 [pool-1-thread-1] INFO io.specto.hoverfly.junit.core.Hoverfly - Executing binary at /tmp/hoverfly.2557597409281694884/hoverfly_linux_amd64\r\n14:18:24.234 [pool-1-thread-1] DEBUG org.zeroturnaround.exec.ProcessExecutor - Executing [/tmp/hoverfly.2557597409281694884/hoverfly_linux_amd64, -pp, 8500, -ap, 8888, -logs, json] in /tmp/hoverfly.2557597409281694884.\r\n14:18:24.238 [pool-1-thread-1] DEBUG org.zeroturnaround.exec.ProcessExecutor - Started Process[pid=56875, exitValue=\"not exited\"]\r\n14:18:24.248 [Thread-3] INFO hoverfly - Default proxy port has been overwritten port=8500\r\n14:18:24.250 [Thread-3] INFO hoverfly - Default admin port has been overwritten port=8888\r\n14:18:24.250 [Thread-3] INFO hoverfly - Using memory backend\r\n14:18:24.250 [Thread-3] INFO hoverfly - Proxy prepared... Destination=. Mode=simulate ProxyPort=8500\r\n14:18:24.251 [Thread-3] INFO hoverfly - current proxy configuration destination=. mode=simulate port=8500\r\n14:18:24.251 [Thread-3] INFO hoverfly - Admin interface is starting... AdminPort=8888\r\n14:18:24.251 [Thread-3] INFO hoverfly - serving proxy\r\n14:18:24.257 [Thread-3] INFO hoverfly - Mode has been changed mode=simulate\r\n14:18:24.262 [pool-1-thread-1] INFO io.specto.hoverfly.junit.core.ProxyConfigurer - Setting proxy host to localhost\r\n14:18:24.262 [pool-1-thread-1] INFO io.specto.hoverfly.junit.core.ProxyConfigurer - Setting proxy proxyPort to 8500\r\n[info] BigQueryQueries\r\n[info]   should get query results\r\n[info]   should fail\r\n[info]   - when failed future for comprehension *** FAILED *** (5 seconds, 53 milliseconds)\r\n[info]     java.util.concurrent.TimeoutException: Futures timed out after [5 seconds]\r\n[info]     at scala.concurrent.impl.Promise$DefaultPromise.ready(Promise.scala:259)\r\n[info]     at scala.concurrent.impl.Promise$DefaultPromise.result(Promise.scala:263)\r\n[info]     at scala.concurrent.Await$.$anonfun$result$1(package.scala:220)\r\n[info]     at scala.concurrent.BlockContext$DefaultBlockContext$.blockOn(BlockContext.scala:57)\r\n[info]     at scala.concurrent.Await$.result(package.scala:146)\r\n[info]     at akka.stream.alpakka.googlecloud.bigquery.scaladsl.BigQueryQueriesSpec.$anonfun$new$13(BigQueryQueriesSpec.scala:216)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.transformToOutcomeParam$1(AsyncWordSpecLike.scala:134)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.$anonfun$registerTestToRun$1(AsyncWordSpecLike.scala:135)\r\n[info]     at org.scalatest.AsyncTestSuite.$anonfun$transformToOutcome$1(AsyncTestSuite.scala:240)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike$$anon$3.apply(AsyncWordSpecLike.scala:1061)\r\n[info]     at org.scalatest.AsyncTestSuite.withFixture(AsyncTestSuite.scala:313)\r\n[info]     at org.scalatest.AsyncTestSuite.withFixture$(AsyncTestSuite.scala:312)\r\n[info]     at akka.stream.alpakka.googlecloud.bigquery.scaladsl.BigQueryQueriesSpec.withFixture(BigQueryQueriesSpec.scala:33)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.invokeWithAsyncFixture$1(AsyncWordSpecLike.scala:1059)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.$anonfun$runTest$1(AsyncWordSpecLike.scala:1073)\r\n[info]     at org.scalatest.AsyncSuperEngine.runTestImpl(AsyncEngine.scala:374)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.runTest(AsyncWordSpecLike.scala:1073)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.runTest$(AsyncWordSpecLike.scala:1053)\r\n[info]     at akka.stream.alpakka.googlecloud.bigquery.scaladsl.BigQueryQueriesSpec.runTest(BigQueryQueriesSpec.scala:33)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.$anonfun$runTests$1(AsyncWordSpecLike.scala:1132)\r\n[info]     at org.scalatest.AsyncSuperEngine.$anonfun$runTestsInBranch$1(AsyncEngine.scala:432)\r\n[info]     at scala.collection.LinearSeqOptimized.foldLeft(LinearSeqOptimized.scala:126)\r\n[info]     at scala.collection.LinearSeqOptimized.foldLeft$(LinearSeqOptimized.scala:122)\r\n[info]     at scala.collection.immutable.List.foldLeft(List.scala:89)\r\n[info]     at org.scalatest.AsyncSuperEngine.traverseSubNodes$1(AsyncEngine.scala:406)\r\n[info]     at org.scalatest.AsyncSuperEngine.runTestsInBranch(AsyncEngine.scala:479)\r\n[info]     at org.scalatest.AsyncSuperEngine.$anonfun$runTestsInBranch$1(AsyncEngine.scala:460)\r\n[info]     at scala.collection.LinearSeqOptimized.foldLeft(LinearSeqOptimized.scala:126)\r\n[info]     at scala.collection.LinearSeqOptimized.foldLeft$(LinearSeqOptimized.scala:122)\r\n[info]     at scala.collection.immutable.List.foldLeft(List.scala:89)\r\n[info]     at org.scalatest.AsyncSuperEngine.traverseSubNodes$1(AsyncEngine.scala:406)\r\n[info]     at org.scalatest.AsyncSuperEngine.runTestsInBranch(AsyncEngine.scala:479)\r\n[info]     at org.scalatest.AsyncSuperEngine.$anonfun$runTestsInBranch$1(AsyncEngine.scala:460)\r\n[info]     at scala.collection.LinearSeqOptimized.foldLeft(LinearSeqOptimized.scala:126)\r\n[info]     at scala.collection.LinearSeqOptimized.foldLeft$(LinearSeqOptimized.scala:122)\r\n[info]     at scala.collection.immutable.List.foldLeft(List.scala:89)\r\n[info]     at org.scalatest.AsyncSuperEngine.traverseSubNodes$1(AsyncEngine.scala:406)\r\n[info]     at org.scalatest.AsyncSuperEngine.runTestsInBranch(AsyncEngine.scala:487)\r\n[info]     at org.scalatest.AsyncSuperEngine.runTestsImpl(AsyncEngine.scala:555)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.runTests(AsyncWordSpecLike.scala:1132)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.runTests$(AsyncWordSpecLike.scala:1131)\r\n[info]     at akka.stream.alpakka.googlecloud.bigquery.scaladsl.BigQueryQueriesSpec.runTests(BigQueryQueriesSpec.scala:33)\r\n[info]     at org.scalatest.Suite.run(Suite.scala:1112)\r\n[info]     at org.scalatest.Suite.run$(Suite.scala:1094)\r\n[info]     at akka.stream.alpakka.googlecloud.bigquery.scaladsl.BigQueryQueriesSpec.org$scalatest$wordspec$AsyncWordSpecLike$$super$run(BigQueryQueriesSpec.scala:33)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.$anonfun$run$1(AsyncWordSpecLike.scala:1177)\r\n[info]     at org.scalatest.AsyncSuperEngine.runImpl(AsyncEngine.scala:625)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.run(AsyncWordSpecLike.scala:1177)\r\n[info]     at org.scalatest.wordspec.AsyncWordSpecLike.run$(AsyncWordSpecLike.scala:1175)\r\n[info]     at akka.stream.alpakka.googlecloud.bigquery.scaladsl.BigQueryQueriesSpec.org$scalatest$BeforeAndAfterAll$$super$run(BigQueryQueriesSpec.scala:33)\r\n[info]     at org.scalatest.BeforeAndAfterAll.liftedTree1$1(BeforeAndAfterAll.scala:213)\r\n[info]     at org.scalatest.BeforeAndAfterAll.run(BeforeAndAfterAll.scala:210)\r\n[info]     at org.scalatest.BeforeAndAfterAll.run$(BeforeAndAfterAll.scala:208)\r\n[info]     at akka.stream.alpakka.googlecloud.bigquery.scaladsl.BigQueryQueriesSpec.run(BigQueryQueriesSpec.scala:33)\r\n[info]     at org.scalatest.tools.Framework.org$scalatest$tools$Framework$$runSuite(Framework.scala:318)\r\n[info]     at org.scalatest.tools.Framework$ScalaTestTask.execute(Framework.scala:513)\r\n[info]     at sbt.ForkMain$Run.lambda$runTest$1(ForkMain.java:413)\r\n[info]     at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)\r\n[info]     at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\r\n[info]     at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\r\n[info]     at java.base/java.lang.Thread.run(Thread.java:834)\r\n14:18:29.384 [pool-1-thread-1] INFO io.specto.hoverfly.junit.core.Hoverfly - Destroying hoverfly process\r\n14:18:29.385 [WaitForProcess-Process[pid=56875, exitValue=\"not exited\"]] DEBUG org.zeroturnaround.exec.WaitForProcess - Process[pid=56875, exitValue=143] stopped with exit code 143\r\n[info] ScalaTest\r\n[info] Run completed in 6 seconds, 473 milliseconds.\r\n[info] Total number of tests run: 1\r\n[info] Suites: completed 1, aborted 0\r\n[info] Tests: succeeded 0, failed 1, canceled 0, ignored 0, pending 0\r\n[info] *** 1 TEST FAILED ***\r\n[error] Failed: Total 1, Failed 1, Errors 0, Passed 0\r\n[error] Failed tests:\r\n[error]         akka.stream.alpakka.googlecloud.bigquery.scaladsl.BigQueryQueriesSpec\r\n[error] (google-cloud-bigquery / Test / testOnly) sbt.TestsFailedException: Tests unsuccessful\r\n[error] Total time: 7 s, completed Feb. 23, 2021, 2:18:29 p.m.\r\nsbt:alpakka>\r\n```",
+        "createdAt" : "2021-02-23T19:24:02Z",
+        "updatedAt" : "2021-03-11T20:37:28Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "607fb1c1-0051-4ffb-bdd7-a68992337220",
+        "parentId" : "8e70a9d8-a03f-4b83-8389-469e54412094",
+        "authorId" : "0f602f47-e8d3-4bc5-b20c-220fb24fc52f",
+        "body" : "Ok thanks, when I run your test it times out as you say. Still confused why this doesn't happen when I run your snippet in a new project or why it happens at all. I'm going to poke around with this a bit.",
+        "createdAt" : "2021-02-23T20:24:00Z",
+        "updatedAt" : "2021-03-11T20:37:28Z",
+        "lastEditedBy" : "0f602f47-e8d3-4bc5-b20c-220fb24fc52f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e55267a2-30b0-4558-b48c-6b2e67f239a6",
+        "parentId" : "8e70a9d8-a03f-4b83-8389-469e54412094",
+        "authorId" : "0f602f47-e8d3-4bc5-b20c-220fb24fc52f",
+        "body" : "Ok, I can get your test to work by adding `import system.dispatcher`. The timeout you observe seems to occur when using the `SerialExecutionContext` provided by `AsyncTestSuite`.\r\n",
+        "createdAt" : "2021-02-23T20:36:56Z",
+        "updatedAt" : "2021-03-11T20:37:28Z",
+        "lastEditedBy" : "0f602f47-e8d3-4bc5-b20c-220fb24fc52f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3d75f7f4-ff2f-48d8-b80a-2cf886afde61",
+        "parentId" : "8e70a9d8-a03f-4b83-8389-469e54412094",
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "Got it. Thanks for the explanation.",
+        "createdAt" : "2021-02-23T22:12:46Z",
+        "updatedAt" : "2021-03-11T20:37:28Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d2c4285a6e5eb0829498243b53ee404e8d498124",
+    "line" : 70,
+    "diffHunk" : "@@ -1,1 +68,72 @@            entity <- Marshal(query).to[RequestEntity]\n            initialRequest = HttpRequest(POST, BigQueryEndpoints.queries(settings.projectId), entity = entity)\n            response <- BigQueryHttp().retryRequestWithOAuth(initialRequest)\n            initialQueryResponse <- Unmarshal(response.entity).to[QueryResponse[Out]]\n          } yield {"
+  }
+]

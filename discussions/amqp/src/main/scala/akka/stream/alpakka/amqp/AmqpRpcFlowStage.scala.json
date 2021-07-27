@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "a6b4c685-a790-40ce-b4f0-806e9d9571fb",
+    "prId" : 638,
+    "prUrl" : "https://github.com/akka/alpakka/pull/638#pullrequestreview-84820104",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "19112868-1c54-478d-aeaf-e3ff9205db11",
+        "parentId" : null,
+        "authorId" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "body" : "This means that if a user forgot to ack/nack the stream will never complete, imagine doing a filter or having a buffer somewhere that has unconsumed elements in it. \r\n\r\nI'm not sure how to deal with this in a good way, I think a timeout of some kind may be the only solution and then either fail the stage or nack all those elements after the timeout. Wdyt?",
+        "createdAt" : "2017-12-18T08:06:20Z",
+        "updatedAt" : "2017-12-18T08:07:19Z",
+        "lastEditedBy" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bf1e2d40-7e97-4e96-8100-915e32c79662",
+        "parentId" : "19112868-1c54-478d-aeaf-e3ff9205db11",
+        "authorId" : "8779d4b6-da6a-4241-8d85-b546e1f6666c",
+        "body" : "This is the way akka streams kafka does it. And I think that is a good way (I had exactly this problem last week).\r\n\r\nIf the user forgets to ack/nack (I did forget to nack bogus messages), he'll soon reach the inflight limit and the queue will block making it very obvious that messages are not flowing and not wasting messages or modifying the order of the queue.\r\n\r\nSetting a timeout will essentially hide the issue.\r\nAlso, there are few thing:\r\n* I'm not sure if nacking will preserve the order or if it's better to just fail and disconnect the client.\r\n* How do we set the timeout? based on the oldest unacked message? Then we would need to store the time with the messages and store the list in the queue. Based on the latest message? This might be easier\r\n* I think that the timeout will need to be configurable since we don't know how time-consuming the processing that the users are doing is.\r\n* Is there a possibility that, if you are using some retry supervision like backoff, you might end up in a loop where everything seems to be running but nothing is actually happening??\r\n\r\nWdyt?",
+        "createdAt" : "2017-12-18T08:54:38Z",
+        "updatedAt" : "2017-12-18T08:54:38Z",
+        "lastEditedBy" : "8779d4b6-da6a-4241-8d85-b546e1f6666c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d2fc66ac-ac68-40de-8857-995123b585a1",
+        "parentId" : "19112868-1c54-478d-aeaf-e3ff9205db11",
+        "authorId" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "body" : "There is a big difference with Kafka though, where there isn't really individual message-acks but  rather a highest-seen-committed counter. But maybe keep it as is and see if people have problems with it and solve that if so.\r\n\r\nIf we implement it, I think it should you are right it should be just failing the stage. The timeout could be from configuration, with a generous default, the timer would start when downstream or upstream completing, if the timeout hits and there still are outstanding non-acked (in counter) then we fail the stage and tear down the connection (I'm guessing the server will see that as nack:s then for the outstanding messages).",
+        "createdAt" : "2017-12-18T13:03:21Z",
+        "updatedAt" : "2017-12-18T13:03:21Z",
+        "lastEditedBy" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aae4584c-55cf-41d3-9155-360267960a79",
+        "parentId" : "19112868-1c54-478d-aeaf-e3ff9205db11",
+        "authorId" : "8779d4b6-da6a-4241-8d85-b546e1f6666c",
+        "body" : "I think that it's a good idea to keep it as it is and act if people find problems.\r\nIf you are happy with that I'll consider this done.\r\n\r\nIf you still consider the timeout necessary, just let me know :)",
+        "createdAt" : "2017-12-18T15:48:59Z",
+        "updatedAt" : "2017-12-18T15:48:59Z",
+        "lastEditedBy" : "8779d4b6-da6a-4241-8d85-b546e1f6666c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "06e7e59c-b449-41e9-8357-b713eeb34f70",
+        "parentId" : "19112868-1c54-478d-aeaf-e3ff9205db11",
+        "authorId" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "body" : "Let's merge it like this and see if is surprising to people using it.",
+        "createdAt" : "2017-12-20T16:29:33Z",
+        "updatedAt" : "2017-12-20T16:29:34Z",
+        "lastEditedBy" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "10f66e2a4a6994b366dde1559ae9ad7e53b309cc",
+    "line" : 108,
+    "diffHunk" : "@@ -1,1 +172,176 @@          override def onDownstreamFinish(): Unit = {\n            setKeepGoing(true)\n            if (unackedMessages.get() == 0) super.onDownstreamFinish()\n          }\n        }"
+  },
+  {
+    "id" : "593d6f3e-10d0-4db1-97bb-1931c4067296",
+    "prId" : 161,
+    "prUrl" : "https://github.com/akka/alpakka/pull/161#pullrequestreview-32337384",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5e1d6a41-f04d-42f0-b340-9c96317efa39",
+        "parentId" : null,
+        "authorId" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "body" : "Hmm, shouldn't we rather back pressure if there is no room in the buffer for the response?",
+        "createdAt" : "2017-03-16T09:54:04Z",
+        "updatedAt" : "2017-04-26T23:27:17Z",
+        "lastEditedBy" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "183c18a9-afd4-4e6d-92f8-66fac3327206",
+        "parentId" : "5e1d6a41-f04d-42f0-b340-9c96317efa39",
+        "authorId" : "650f2d8a-7c82-4c0e-aa30-139dbf57ac4a",
+        "body" : "I took this from the AmqpSourceStage that currently exists. I believe the idea is that the else should never happen. This would be a situation where for some reason we have more responses coming in from rabbit than we asked for.",
+        "createdAt" : "2017-04-05T00:50:01Z",
+        "updatedAt" : "2017-04-26T23:27:17Z",
+        "lastEditedBy" : "650f2d8a-7c82-4c0e-aa30-139dbf57ac4a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "991ad8dc-3a86-442f-aef5-615678b4c8a4",
+        "parentId" : "5e1d6a41-f04d-42f0-b340-9c96317efa39",
+        "authorId" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "body" : "Alright, I think you are right. We shouldn't have asked for an element if the buffer didn't have space for it it or out was available.",
+        "createdAt" : "2017-04-12T10:37:42Z",
+        "updatedAt" : "2017-04-26T23:27:17Z",
+        "lastEditedBy" : "7b601e48-f550-477f-a23e-0dc6ca34c971",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "999d3054b8276fa139a5a9f8c526ad12328c53df",
+    "line" : 114,
+    "diffHunk" : "@@ -1,1 +112,116 @@        } else {\n          if (queue.size + 1 > bufferSize) {\n            failStage(new RuntimeException(s\"Reached maximum buffer size $bufferSize\"))\n          } else {\n            queue.enqueue(message)"
+  }
+]

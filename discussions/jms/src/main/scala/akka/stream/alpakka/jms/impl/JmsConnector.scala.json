@@ -1,0 +1,189 @@
+[
+  {
+    "id" : "ff009c49-9cac-41a5-9c04-66f8b7004b67",
+    "prId" : 2067,
+    "prUrl" : "https://github.com/akka/alpakka/pull/2067#pullrequestreview-340109170",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "82a1ac24-c6a6-4e83-b4b9-131e2d218842",
+        "parentId" : null,
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "Is it possible that a buffer of 1 could result in a strange sequence of connection states downstream?  The first subscriber should be alright, but for subsequent subscriptions it's possible they could get an old stale connection state from the `BroadcastHub.sink` buffer first before the latest messages from the queue.  \r\n\r\nAlso, if the queue overflows it's possible you could still see gaps in downstream consumers, but I guess that's how it worked before as well.",
+        "createdAt" : "2020-01-06T21:17:02Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "42155a83-d0a3-4e2d-91db-6f54a01b81ac",
+        "parentId" : "82a1ac24-c6a6-4e83-b4b9-131e2d218842",
+        "authorId" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "body" : "Nice catch; When I designed this originally, I did this on purpose so that a state consumer would still get all the intermediate states if they subscribed \"a bit late\", i.e. after the connection has already been established. I also thought that the connection status stream wouldn't be one with high volume of messages, and consumers would probably easily keep up with the update rate.\r\n\r\nThe only easy way I saw feasible for draining the connection state was to use a BroadcastHub. This now means that in the case we have multiple status update consumers (which wasn't possible before), with one of those consumers being very, very slow (i.e. slower than the connection status change rate), there could be gaps in the status update sequence. \r\n\r\nWe could increase the buffer sizes to mitigate this to a certain point, or even make the buffer size configurable. What do you think? Which option would you favor?",
+        "createdAt" : "2020-01-07T06:52:36Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a58c07e5-eecd-4d01-929f-6c0d57c9605f",
+        "parentId" : "82a1ac24-c6a6-4e83-b4b9-131e2d218842",
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "I think keeping the buffer size of the broadcast hub to 1 mitigates the problem the best (there will only ever be possibly 1 stale element).  I wrote some code to demonstrate:\r\n\r\n```\r\n      val (queue, source) =\r\n        Source\r\n          .queue[Int](2, OverflowStrategy.dropHead)\r\n          .toMat(BroadcastHub.sink(1))(Keep.both)\r\n          .run()(this.materializer)\r\n      val offers = (1 to 10).map(queue.offer)\r\n      Await.result(Future.sequence(offers), scala.concurrent.duration.Duration.Inf)\r\n      val subscriber1 = source.map(i => s\"subscriber1: $i\").runForeach(println)\r\n// prints\r\nsubscriber1: 1\r\nsubscriber1: 9\r\nsubscriber1: 10\r\n```\r\n\r\nI can't think of a simple way to give the broadcast hub the same semantics as the queue (only buffer the last 2 elements) using the akka streams operator DSL.",
+        "createdAt" : "2020-01-07T16:51:34Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df478c39-10de-49a3-b181-fe6c7bd7ff71",
+        "parentId" : "82a1ac24-c6a6-4e83-b4b9-131e2d218842",
+        "authorId" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "body" : "Yes, fully agree. And to continue your example, we could mitigate the gaps if the queue had a buffer size of 9 elements. So increasing the queue connection buffer size would mitigate that effect to a certain extent. So the question I am having is: should we make the queue buffer size bigger, configurable, or leave it as it is?",
+        "createdAt" : "2020-01-08T15:59:55Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be5bc72b-8645-455f-b67e-8c27d86e2d11",
+        "parentId" : "82a1ac24-c6a6-4e83-b4b9-131e2d218842",
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "Increasing the buffer will only serve to distribute more stale records for late subscribers.  For example, if we increased the buffer to 10, and 100 connection status events occur before a new subscriber begins consuming elements, then they will receive 10 of the earliest records, followed by whatever comes out of the queue `1,2,3,4,5,6,7,8,9,10,99,100`.\r\n\r\nI don't know if it's a big deal or not to get stale events.  I assume it's not since the overflow strategy of the queue was `DropHead` and we could experience lossiness anyway.",
+        "createdAt" : "2020-01-08T17:47:08Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29c246ac-2e6d-4ee4-9339-4bf2038d587d",
+        "parentId" : "82a1ac24-c6a6-4e83-b4b9-131e2d218842",
+        "authorId" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "body" : "It is correct that there will always be a point where the stream will become lossy; if we buffer `n` elements in the queue with `DropHead` (that drops the oldest element from the buffer) and have a `BroadcastHub.sink(1)`, we will have one very old status update (stored in the broadcast hub), and the `n` most recent status updates. So with `10` elements and buffer size of `5`, we'll get `1,6,7,8,9,10` (with `10` being the most recent update). But still, event when we increase the buffer, eventually the stream will be losing updates. And if processing updates is slow, buffering more updates might not be the right mitigation. Therefore I was thinking that making it configurable could be an option. ",
+        "createdAt" : "2020-01-08T19:58:37Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cc4115b477547bcd87f7e35ea87dbc5324bcaf86",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +61,65 @@      Source\n        .queue[InternalConnectionState](2, OverflowStrategy.dropHead)\n        .toMat(BroadcastHub.sink(1))(Keep.both)\n        .run()(this.materializer)\n    connectionStateQueue = queue"
+  },
+  {
+    "id" : "4c254573-89d9-4b4a-9868-1fc5a02abd1d",
+    "prId" : 2067,
+    "prUrl" : "https://github.com/akka/alpakka/pull/2067#pullrequestreview-338877519",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c8caed4f-b703-4862-a1f5-09d6222babbc",
+        "parentId" : null,
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "IIUC, the behaviour of the queue (`connectionStateQueue`) is the same as before because it has its own overflow strategy.",
+        "createdAt" : "2020-01-06T21:17:07Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cc4115b477547bcd87f7e35ea87dbc5324bcaf86",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +60,64 @@    val (queue, source) =\n      Source\n        .queue[InternalConnectionState](2, OverflowStrategy.dropHead)\n        .toMat(BroadcastHub.sink(1))(Keep.both)\n        .run()(this.materializer)"
+  },
+  {
+    "id" : "2b9e333b-254f-4304-ac04-bf3395d0b29c",
+    "prId" : 2067,
+    "prUrl" : "https://github.com/akka/alpakka/pull/2067#pullrequestreview-338877519",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a46f4133-b9d9-4955-9522-431c78be78ad",
+        "parentId" : null,
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "I wonder what the consequences of closing connections asynchronously without blocking could be.  I realize that that was what was done before, but ideally, we would chain any subsequent operations after asynchronously closing the connection object with `AsyncCallbacks`.  Maybe it's not very important.",
+        "createdAt" : "2020-01-06T21:41:50Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cc4115b477547bcd87f7e35ea87dbc5324bcaf86",
+    "line" : 119,
+    "diffHunk" : "@@ -1,1 +265,269 @@  }\n\n  protected def closeConnectionAsync(eventualConnection: Future[jms.Connection]): Future[Done] =\n    eventualConnection.map(closeConnection).map(_ => Done)\n"
+  },
+  {
+    "id" : "7eb7cd10-31f1-4816-bccf-77bc6e230370",
+    "prId" : 2067,
+    "prUrl" : "https://github.com/akka/alpakka/pull/2067#pullrequestreview-340109854",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c03d8197-34e2-4aa0-b1d5-cabafec640e9",
+        "parentId" : null,
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "I wonder what the consequences of closing connections asynchronously without blocking could be.  I realize that that was what was done before, but ideally, we would chain any subsequent operations after asynchronously closing the connection object with `AsyncCallbacks`.  Maybe it's not very important.",
+        "createdAt" : "2020-01-06T21:42:24Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4db419c8-036c-4028-9165-e9ce08cef7d2",
+        "parentId" : "c03d8197-34e2-4aa0-b1d5-cabafec640e9",
+        "authorId" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "body" : "Let me think on it for a bit, I will come back to you on this.",
+        "createdAt" : "2020-01-07T06:54:50Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a6002fb0-3596-4d34-8ae4-4a8ea5f627b5",
+        "parentId" : "c03d8197-34e2-4aa0-b1d5-cabafec640e9",
+        "authorId" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "body" : "I had a look at the code and I think this is mainly relevant in [maybeReconnect](https://github.com/andreas-schroeder/alpakka/blob/jms-fix-connection-status-memory-leak/jms/src/main/scala/akka/stream/alpakka/jms/impl/JmsConnector.scala#L211). In other cases, the closing of the connection is within the stage teardown on successful completion or failure. In `maybeReconnect`, we could `scheduleOnce` in a `Future.andThen`. What do you think? ",
+        "createdAt" : "2020-01-08T15:58:32Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a576a753-5d58-4bdd-bba1-0d6cbbc2635d",
+        "parentId" : "c03d8197-34e2-4aa0-b1d5-cabafec640e9",
+        "authorId" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "body" : "Sounds good to me, but if you would like to work on it then it should be addressed in a new PR since your changes didn't introduce the issue in the first place.",
+        "createdAt" : "2020-01-08T17:51:38Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "daac5cb5-ce57-4037-a06c-7adf6a3f10e6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b0e25e8-5204-4c84-a212-66b1301a5a77",
+        "parentId" : "c03d8197-34e2-4aa0-b1d5-cabafec640e9",
+        "authorId" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "body" : "Alright. Then, let's leave it for the next PR.",
+        "createdAt" : "2020-01-08T19:59:52Z",
+        "updatedAt" : "2020-01-24T09:15:36Z",
+        "lastEditedBy" : "d15f37f8-2910-4165-af49-f865f0902a09",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cc4115b477547bcd87f7e35ea87dbc5324bcaf86",
+    "line" : 56,
+    "diffHunk" : "@@ -1,1 +82,86 @@    closeSessions()\n    val previous = updateStateWith(update)\n    closeConnectionAsync(connection(previous))\n    if (isTimerActive(\"connection-status-timeout\")) drainConnectionState()\n    connectionStateQueue.complete()"
+  }
+]
