@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "84822c77-5283-442e-bb57-5152ad9db6c8",
+    "prId" : 174,
+    "prUrl" : "https://github.com/VirtusLab/git-machete-intellij-plugin/pull/174#pullrequestreview-390157257",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3e858aaf-e3cb-4927-9ba2-1554da31f03d",
+        "parentId" : null,
+        "authorId" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "body" : "1. Ok but do we have a guarantee **now** that `getEmptyText()` never returns null?\r\n1. Why `IllegalStateException` and not NPE when `getEmptyText()` returns null?\r\n1. Btw that's super-weird that `getEmptyText()` ever returned null :hushed:  Snippet from `JBTable`:\r\n\r\n![image](https://user-images.githubusercontent.com/3383210/78800756-19b00500-79bc-11ea-8810-b079c174afe9.png)\r\n",
+        "createdAt" : "2020-04-08T15:12:32Z",
+        "updatedAt" : "2020-04-09T14:07:38Z",
+        "lastEditedBy" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90712df2-a354-4407-aaef-661449d097a9",
+        "parentId" : "3e858aaf-e3cb-4927-9ba2-1554da31f03d",
+        "authorId" : "48423025-6a70-4a33-a28c-13ad330a38e0",
+        "body" : "1) Yes, because `myEmptyText` is set up in constructor of `JBTable`\r\n2) I don't really know :confused:, this is what I got `java.lang.IllegalStateException: @NotNull method com/intellij/ui/table/JBTable.getEmptyText must not return null\r\n\tat com.intellij.ui.table.JBTable.$$$reportNull$$$0(JBTable.java)\r\n\tat com.intellij.ui.table.JBTable.getEmptyText(JBTable.java:358)\r\n\tat com.virtuslab.gitmachete.frontend.ui.table.GitMacheteGraphTable.updateUI(GitMacheteGraphTable.java:115)`\r\nThis must be some kind of runtime checker (`reportNull` ?)\r\n3) If we are looking into implementation it is pretty clear: `GitMacheteGraphTable` call constructor from `JBTable` that also call it's `super` constructor from `JTable` as first. But at the end of `JTable` constructor is invocation of `updateUI`, so when it is called the `myEmptyText` is not set up yet, so it's null.",
+        "createdAt" : "2020-04-08T16:31:44Z",
+        "updatedAt" : "2020-04-09T14:07:38Z",
+        "lastEditedBy" : "48423025-6a70-4a33-a28c-13ad330a38e0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08c1f2f7-77b3-4262-baa4-5306d97d39e1",
+        "parentId" : "3e858aaf-e3cb-4927-9ba2-1554da31f03d",
+        "authorId" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "body" : "Ad 3. wow that's a very brittle design in general on the part of `javax.swing.JTable` (to invoke a non-final, non-private, non-static method from c'tor... fortunately we can't do that in our own codebase coz `InitalizationChecker` won't allow us ;) )",
+        "createdAt" : "2020-04-08T16:42:21Z",
+        "updatedAt" : "2020-04-09T14:07:38Z",
+        "lastEditedBy" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c193e3c-200c-4e66-90da-a739955fddd3",
+        "parentId" : "3e858aaf-e3cb-4927-9ba2-1554da31f03d",
+        "authorId" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "body" : "Actually, this introduces a possible threat to plugin stability... know what? let's prevent that statically!",
+        "createdAt" : "2020-04-08T16:49:49Z",
+        "updatedAt" : "2020-04-09T14:07:38Z",
+        "lastEditedBy" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f5209c8c-ff8a-44dd-885d-a70cc9a3db94",
+        "parentId" : "3e858aaf-e3cb-4927-9ba2-1554da31f03d",
+        "authorId" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "body" : "Suggested remedy:\r\n\r\n1. Pls stub-annotate `this` in all non-final methods invoked from `JTable` c'tor as `@UnknownInitialization`, esp.`updateUI`:\r\n\r\n![image](https://user-images.githubusercontent.com/3383210/78811268-e07e9180-79c9-11ea-92ba-9287a36cbe84.png)\r\n\r\nThis will cascade to our overridden impl of `updateUI`.\r\n\r\n2. Pls explicitly check if `getEmptyText()` in `GitMacheteGraphTable#updateUI` returns a null value; call `.setText()` and set `doesTextForEmptyGraphRequireUpdate = false` only if the result is non-null\r\n\r\n3. Likely we'll still have an error due to calling `getEmptyText()` on possibly uninitialized `this` - let's suppress this warning",
+        "createdAt" : "2020-04-08T16:54:10Z",
+        "updatedAt" : "2020-04-09T14:07:38Z",
+        "lastEditedBy" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "283d611ef8e1c81c5913d469f6f333f6ee506602",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +54,58 @@  private String lowerTextForEmptyGraph = \"\";\n  // wasTextForEmptyGraphChanged var is mainly to prevent invocation of getEmptyText() in updateUI() method in early\n  // stage of GitMacheteGraphTable existence that cause IllegalStateException coz getEmptyText() returns null. This is\n  // also introduced for performance optimization (to not update empty text when unnecessary)\n  private boolean doesTextForEmptyGraphRequireUpdate = false;"
+  },
+  {
+    "id" : "754b81ba-b043-4d7a-b59e-ea7bed2dccef",
+    "prId" : 170,
+    "prUrl" : "https://github.com/VirtusLab/git-machete-intellij-plugin/pull/170#pullrequestreview-388454523",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7ea096ae-b78e-4fc4-b622-84d5483f0b63",
+        "parentId" : null,
+        "authorId" : "48423025-6a70-4a33-a28c-13ad330a38e0",
+        "body" : "nice, it's worth to know about this",
+        "createdAt" : "2020-04-06T17:13:19Z",
+        "updatedAt" : "2020-04-06T18:12:25Z",
+        "lastEditedBy" : "48423025-6a70-4a33-a28c-13ad330a38e0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3c20c9e26583273ffbd1c6a05f0431622a58f0bf",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +72,76 @@    // and all `@NonNull` fields are already initialized. `this` is already `@Initialized` (and not just\n    // `@UnderInitialization(GitMacheteGraphTableManager.class)`, as would be with a non-final class) at this point.\n\n    GraphCellPainter graphCellPainter = new SimpleGraphCellPainter(GraphEdgeColorToJBColorMapper::getColor) {\n      @Override"
+  },
+  {
+    "id" : "47972222-f4d4-43b6-bd9d-df4da1e2ed03",
+    "prId" : 152,
+    "prUrl" : "https://github.com/VirtusLab/git-machete-intellij-plugin/pull/152#pullrequestreview-385459224",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "96efb821-b0ca-4239-9eca-9e247d474a31",
+        "parentId" : null,
+        "authorId" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "body" : "TODO (possibly by @mkondratek on PR #154): missing (?) case for `KEY_SELECTED_BRANCH`",
+        "createdAt" : "2020-03-31T07:55:23Z",
+        "updatedAt" : "2020-03-31T09:36:50Z",
+        "lastEditedBy" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3eb1b9c2-82d1-4ee3-b98a-181273ee64a0",
+        "parentId" : "96efb821-b0ca-4239-9eca-9e247d474a31",
+        "authorId" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "body" : "Ok, PR #154 removed `KEY_SELECTED_BRANCH` completely",
+        "createdAt" : "2020-04-01T10:31:10Z",
+        "updatedAt" : "2020-04-01T10:31:10Z",
+        "lastEditedBy" : "1cbc94b1-89bf-4adc-8c1f-ad39035845fa",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7f9c550a35c6d7ff85b293d9c19a186c5fce6050",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +114,118 @@        typeSafeCase(CommonDataKeys.EDITOR, FileEditorManager.getInstance(project).getSelectedTextEditor()),\n        typeSafeCase(DataKeys.KEY_GIT_MACHETE_REPOSITORY, gitMacheteRepositoryRef.get()),\n        typeSafeCase(DataKeys.KEY_SELECTED_BRANCH_NAME, selectedBranchName),\n        typeSafeCase(CommonDataKeys.PROJECT, project),\n        Case($(), () -> null));"
+  }
+]
