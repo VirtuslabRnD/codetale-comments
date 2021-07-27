@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "5655a2e9-d46d-4d45-99c7-3eec655e0941",
+    "prId" : 30761,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/30761#pullrequestreview-273752371",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "326f87b7-1b54-49dd-a930-e6eabc785251",
+        "parentId" : null,
+        "authorId" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "body" : "Actually, @majnemer pointed out that other backends may not be able to implement convolutions with InputT=int8 while ResultT=float.\r\n\r\nOverall:\r\n* Before the int8 support, XLA only supports InputT = ResultT. All backends can implement this.\r\n* With these patches, we enable XLA to support InputT = int8 && ResultT = float, which may not be implementable on some of our other backends.\r\n\r\nIn order to cope with this, I think we can introduce a slightly more verbose design:\r\n* At XLA (e.g. opcode = kConvolution) level, add support for InputT=int8 and ResultT=in32.\r\n* In the cudnn_*_conv_rewriter, pattern match `convert<dest=float>(conv<InputT=int8, ResultT=int32>(...))` and lower it to `custom-call<inputT=int8, ResultT=float`. For any ResultT=int32 that's not part of the pattern, return Unimplemented.\r\n\r\nThis means that the shape verification code in this patch is still legit, but the evaluator should be left untouched (assuming that it already supports InputT=int8 and ResultT=int32).\r\n\r\nThe rest of the patches should be fine (except for the rewriter that needs to change the pattern), because they all deal with xla/service/gpu.",
+        "createdAt" : "2019-07-18T22:01:26Z",
+        "updatedAt" : "2019-07-18T22:18:27Z",
+        "lastEditedBy" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dee2c6cf-3d85-400d-bac4-f42e67273b29",
+        "parentId" : "326f87b7-1b54-49dd-a930-e6eabc785251",
+        "authorId" : "eca90909-340c-4f15-9af5-58905c41473a",
+        "body" : "Originally, we decided to use CuDNN semantics for int8 convolution and introduced the int8-to-float convolution.  Int32 could be more applicable.  I agree to make the change to use int32 as a middle ground.  I had a ToDo comment about supporting int32 later.  Now I will flip or remove it. ",
+        "createdAt" : "2019-07-18T23:19:03Z",
+        "updatedAt" : "2019-07-18T23:19:03Z",
+        "lastEditedBy" : "eca90909-340c-4f15-9af5-58905c41473a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c92d07ec-bb72-4470-b987-cef21298af40",
+        "parentId" : "326f87b7-1b54-49dd-a930-e6eabc785251",
+        "authorId" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "body" : "> Originally, we decided to use CuDNN semantics for int8 convolution and introduced the int8-to-float convolution.\r\n\r\nI think the confusion comes from not distinguishing (a) backend-agnostic, XLA convolutions (before pattern matching) and (b) XLA GPU backend representation (after pattern matching).\r\n\r\nWe still follow our decisions for (b). However, for (a), we still need to consider the implement-ability of other backends. Hence I suggested to use int32 as output type for (a).",
+        "createdAt" : "2019-07-18T23:33:44Z",
+        "updatedAt" : "2019-07-18T23:33:44Z",
+        "lastEditedBy" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a3f98927-48b9-4aef-8c5b-af31cfff31fd",
+        "parentId" : "326f87b7-1b54-49dd-a930-e6eabc785251",
+        "authorId" : "eca90909-340c-4f15-9af5-58905c41473a",
+        "body" : "Distinguishing (a) and (b) makes discussion easier.  I have the following suggestions for the design:\r\n1. This patch has enabled int8-to-int32 convolution for (a).   I just need to take out the CuDNN specific comments.\r\n2. I suggest not having int8-to-int8 convolution for (a) at this time.  It is allowed, but I don't think that's the purpose. It easily runs into overflow.  The overflow follows C language integer overflow semantics, which is undefined.  Since overflow needs many semantic parameters to define, maybe just defer it until it is requested.  Although int8-to-int32 also may see overflow, it is rare in practical use cases.  It is OK to me not to define the overflow semantics for int8-to-int32 convolution.\r\n3. I suggest also allowing int8-to-float convolution for (a) by using int8-to-int32 convolution under the hood, because they match as long as int8-to-int32 convolution doesn't overflow.  Then, it is as same as convert<dest=float>(conv<InputT=int8, ResultT=int32>(...)).\r\n4. For (b), cudnn_conv_rewriter allows int8-to-float, but not int8-to-int32.\r\n\r\nI suggest 3. and 4. to keep int8-to-float for one major reason that we don't want people to use int8-to-int32 convolution and then supply an int32 bias by mistake, such as add<Input1T=int32, Input2T=int32>(conv<InputT=int8, ResultT=int32>(...)).  In this case, we can't fuse bias with convolution in one CuDNN call, because it doesn't match CuDNN semantics.  For backends that don't support int8-to-float convolution, they may disallow it as what CuDNN does for int8-to-int32.\r\n\r\n",
+        "createdAt" : "2019-07-19T03:06:43Z",
+        "updatedAt" : "2019-07-19T03:06:43Z",
+        "lastEditedBy" : "eca90909-340c-4f15-9af5-58905c41473a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b58f1255-b296-4ac8-8564-852b10290dab",
+        "parentId" : "326f87b7-1b54-49dd-a930-e6eabc785251",
+        "authorId" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "body" : "For (2), it's already supported for (a) even without your patches. If you feed an int8-to-int8 conv today, the verifier passes, and some backends may already implemented it.\r\n\r\n> I suggest 3. and 4. to keep int8-to-float for one major reason that we don't want people to use int8-to-int32 convolution and then supply an int32 bias by mistake, such as add<Input1T=int32, Input2T=int32>(conv<InputT=int8, ResultT=int32>(...)). In this case, we can't fuse bias with convolution in one CuDNN call, because it doesn't match CuDNN semantics.\r\n\r\nI agree that the pattern matching can be \"slippery\", aka users may write the wrong code and missed the fusion. In my general compiler(LLVM, XLA, etc) experience, I don't worry too much about it, as it's users responsibility to benchmark the application and tune the program to fit cuDNN when facing such a portability problem.\r\n\r\n> For backends that don't support int8-to-float convolution, they may disallow it as what CuDNN does for int8-to-int32.\r\n\r\nCorrect, it's either adopt int8-to-float for (a) and let other backends disallow int8-to-float, or adopt int8-to-int32 for (a) and let Nvidia backend disallow int8-to-int32. To me I choose the latter because it costs less, as there are many other backends now and unbounded amount in the future.\r\n\r\nTo push this idea further, can we avoid changing (a) at all? Can we match the following pattern and use the existing int32-to-int32 for (a)?\r\n```\r\ncast<float>(conv<InputT=int32, ResultT=int32>(\r\n    cast<int32>(x), cast<int32>(y)))\r\n+ float_bias\r\n```\r\n?",
+        "createdAt" : "2019-07-22T20:24:39Z",
+        "updatedAt" : "2019-07-22T20:24:39Z",
+        "lastEditedBy" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa64bfe9-27da-4d33-b18b-c690c314400e",
+        "parentId" : "326f87b7-1b54-49dd-a930-e6eabc785251",
+        "authorId" : "eca90909-340c-4f15-9af5-58905c41473a",
+        "body" : "Using existing int32-to-int32 for (a) is a good idea.  Before making the switch, I would like check whether you have any int8 use case to share now, such as anything we must support or can't break.  The tests I add to test GPU backend have clear goal, but those for use case coverage are not quite.\r\n",
+        "createdAt" : "2019-07-23T01:16:56Z",
+        "updatedAt" : "2019-07-23T01:16:56Z",
+        "lastEditedBy" : "eca90909-340c-4f15-9af5-58905c41473a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "192c6d76-4bf6-4401-8fb3-a1f4627f1077",
+        "parentId" : "326f87b7-1b54-49dd-a930-e6eabc785251",
+        "authorId" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "body" : "I don't have any int8 use case that can be shared publicly. I don't worry about the test coverage for now, since I'll run our internal tests when integrating the patches.",
+        "createdAt" : "2019-07-23T19:42:40Z",
+        "updatedAt" : "2019-07-23T19:42:41Z",
+        "lastEditedBy" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "89a94277-86e7-4083-bcf5-f3b7cc900cfa",
+        "parentId" : "326f87b7-1b54-49dd-a930-e6eabc785251",
+        "authorId" : "eca90909-340c-4f15-9af5-58905c41473a",
+        "body" : "@timshen91 , I got back working on the pattern matching implementation and just updated two commits.  The pattern matching solution only requires https://github.com/tensorflow/tensorflow/pull/30762 (no additional changes needed for pattern matching though), https://github.com/tensorflow/tensorflow/pull/30771 (all pattern matching implementation) , and https://github.com/tensorflow/tensorflow/pull/30783 (all tests for pattern matching and some misc changes), but not this one https://github.com/tensorflow/tensorflow/pull/30761 (as we avoid all semantics changes).  If you prefer, we may move our discussion to other PRs, as people won't find these discussions via code changes.\r\n\r\nAll pattern matching happens in https://github.com/tensorflow/tensorflow/pull/30783 in phases.  Here is a summary.  Detail patterns are listed in comments (mostly in the header file).\r\n1. cudnn_conv_rewriter.cc matches \r\n    conv<InputT=int32, ResultT=int32>(convert<int32>(int8_x), convert<int32>(int8_y))\r\n    and errors out if integer convolution is in other forms.\r\n2. cudnn_fused_conv_rewriter.cc matches the rest:\r\n2.1 RunFuseConvertToFloat absorbs the int32 to float cast following the convolution custom call, if any:\r\n2.2 RunFuseBiasSideActivation does previous bias/side/activation fusion for all int8 and floating-point convolutions.\r\n2.3 RunFuseClamp absorbs the clamp at the output.  It also absorbs the optional float to int8 cast at output and the int8 to float cast at side input, if both available.\r\n\r\nI would like to get your early feedback.  I will add more tests to cover variations in addition to those https://github.com/tensorflow/tensorflow/pull/30783.  ",
+        "createdAt" : "2019-08-12T15:00:22Z",
+        "updatedAt" : "2019-08-12T15:01:57Z",
+        "lastEditedBy" : "eca90909-340c-4f15-9af5-58905c41473a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "78222b85d3f112c67e601dc05ef85d8d7dc16c9d",
+    "line" : 207,
+    "diffHunk" : "@@ -1,1 +1021,1025 @@      return HandleConvolutionImpl<ReturnT, ElementwiseT>(conv);\n    }\n    return Unimplemented(\n        \"Convolution doesn't support: input type %s and output type %s\",\n        xla::PrimitiveType_Name(input_element_type),"
+  }
+]

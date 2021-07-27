@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "9ff20082-b533-407a-a934-8a00ec49c444",
+    "prId" : 46292,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/46292#pullrequestreview-594976565",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e4196b33-d889-4e6c-a6a6-faff92adf1c8",
+        "parentId" : null,
+        "authorId" : "f7e2f722-ddb3-4eb4-aa59-5af82b0d8655",
+        "body" : "These methods and data types seem to be identical as rfft2d.cc. Can you please move them to a common file and share the logic?",
+        "createdAt" : "2021-01-12T18:37:07Z",
+        "updatedAt" : "2021-03-23T21:12:52Z",
+        "lastEditedBy" : "f7e2f722-ddb3-4eb4-aa59-5af82b0d8655",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db889ea1-75bd-431a-8831-a7d67a7190ac",
+        "parentId" : "e4196b33-d889-4e6c-a6a6-faff92adf1c8",
+        "authorId" : "f7e2f722-ddb3-4eb4-aa59-5af82b0d8655",
+        "body" : "Sorry that I forgot to submit my review a few days ago.",
+        "createdAt" : "2021-01-26T00:09:40Z",
+        "updatedAt" : "2021-03-23T21:12:52Z",
+        "lastEditedBy" : "f7e2f722-ddb3-4eb4-aa59-5af82b0d8655",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "98ae3700-e768-4093-85e5-30d261aeed45",
+        "parentId" : "e4196b33-d889-4e6c-a6a6-faff92adf1c8",
+        "authorId" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "body" : "Hey @lu-wang-g , sorry for the slow reply, and thanks for reviewing.\r\n\r\nYes, I can absolutely do that. Some of the functions overlap with 95% of code but not 100%. I'll have a look which of those I'll move into a common function that takes an additional forward/backward mode parameter, and which ones I deem easier to read when left separate. But you're right, there's a decent chunk that can go into a common file.\r\n\r\nSome questions:\r\n- I would name that file `rfft2d_shared.h`, similar to `lstm_shared.h`. Is that ok?\r\n- Right now, I have two namespaces: `tflite::ops::builtin::rfft2d` and `tflite::ops::custom::irfft2d`. Is it ok to put the shared functionality into the `tflite::ops::builtin::rfft2d` namespace, or should I choose something else? ",
+        "createdAt" : "2021-02-09T18:46:16Z",
+        "updatedAt" : "2021-03-23T21:12:52Z",
+        "lastEditedBy" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8a85c0c-103c-46b4-b7a8-624945ed387a",
+        "parentId" : "e4196b33-d889-4e6c-a6a6-faff92adf1c8",
+        "authorId" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "body" : "It seems I may need a bit of help with this. I tried implementing the proposal of my previous comment, but get linker errors when running ` bazel test //tensorflow/lite/kernels:rfft2d_test`:\r\n\r\n```\r\ndyld: Symbol not found: __ZN6tflite3ops7builtin6rfft2dL20InitTemporaryTensorsEP13TfLiteContextP10TfLiteNode\r\n  Referenced from: /private/var/tmp/_bazel_thomas/deaa089c7e830773935e4550ab22fa14/execroot/org_tensorflow/bazel-out/darwin-opt/bin/tensorflow/lite/kernels/rfft2d_test.runfiles/org_tensorflow/tensorflow/lite/kernels/../../../_solib_darwin_x86_64//libtensorflow_Slite_Skernels_Slibbuiltin_Uop_Ukernels.so\r\n  Expected in: flat namespace\r\n```\r\n\r\nWhich is surprising to me given that I defined the following library in the `BUILD` file:\r\n\r\n```\r\ncc_library(\r\n    name = \"rfft2d_shared\",\r\n    srcs = [\"rfft2d_shared.cc\"],\r\n    hdrs = [\"rfft2d_shared.h\"],\r\n    compatible_with = get_compatible_with_portable(),\r\n    copts = tflite_copts(),\r\n    deps = [\r\n        \":kernel_util\",\r\n        \"//tensorflow/lite/kernels/internal:tensor\",\r\n    ],\r\n)\r\n```\r\n\r\nAnd then listed this as a dependency for the builtin_ops and custom_ops target.\r\n\r\nBUILD file, rfft2d_shared.h/cc are here: https://gist.github.com/tcwalther/44a7a9884b5bb21b4e498c885eb21be6\r\n\r\nI also still wonder whether it may be worth putting everything into a single file (i.e., everything in rfft2d.cc, getting rid of irfft2d.cc entirely). I'm just not 100% sure about it. The code of these two files is very similar, but differs in small spaces, and unifying it with several if/else statements here and there might make it a lot less readable for someone trying to understand what's going on.\r\n\r\nIf you could give me some advice on how to proceed on this, I'd greatly appreciate it!",
+        "createdAt" : "2021-02-09T21:25:25Z",
+        "updatedAt" : "2021-03-23T21:12:52Z",
+        "lastEditedBy" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c9b55720-9a8c-40c3-a793-d8edc092b5cc",
+        "parentId" : "e4196b33-d889-4e6c-a6a6-faff92adf1c8",
+        "authorId" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "body" : "Please note that if I do put everything into rfft2d.cc, this would make the IRFFT a built-in operator, too. Which would be perfect IMO, but I just want to point it out instead of sneaking it in.",
+        "createdAt" : "2021-02-11T14:23:12Z",
+        "updatedAt" : "2021-03-23T21:12:52Z",
+        "lastEditedBy" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df6d34cc-bfe3-4271-bcd7-5ce7e6151f04",
+        "parentId" : "e4196b33-d889-4e6c-a6a6-faff92adf1c8",
+        "authorId" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "body" : "I've created an attempt at putting everything into `rfft2d.cc` to minimize code duplication. As said before, I'm not sure it's more readable:\r\n\r\nhttps://gist.github.com/tcwalther/ed573256748cfc48847a4304068d5f69\r\n\r\nI don't understand yet how to register a new builtin op and properly add it to the schema; as such, the tests currently fail with this file. If you want, you can look at this approach in its own branch at https://github.com/tcwalther/tensorflow/tree/tw-tflite-irfft-one-file\r\n\r\nPlease let me know which approach you prefer.",
+        "createdAt" : "2021-02-18T14:34:53Z",
+        "updatedAt" : "2021-03-23T21:12:52Z",
+        "lastEditedBy" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b44e7814-9a14-4b88-bade-b212b256ffb5",
+        "parentId" : "e4196b33-d889-4e6c-a6a6-faff92adf1c8",
+        "authorId" : "3e6006c2-4c04-4965-92d6-06c7a5bf1363",
+        "body" : "+1 I prefer this approach to put everything in rfft2d.cc (maybe we should change the file name). ",
+        "createdAt" : "2021-02-19T02:16:03Z",
+        "updatedAt" : "2021-03-23T21:12:52Z",
+        "lastEditedBy" : "3e6006c2-4c04-4965-92d6-06c7a5bf1363",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5316d61e-9508-4f93-9e6f-b17e8b3162ba",
+        "parentId" : "e4196b33-d889-4e6c-a6a6-faff92adf1c8",
+        "authorId" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "body" : "Thanks @thaink. In that case, could you please give me guidance on how to add a built-in op properly to the schema? I've had a look at the git commit that promotes RFFT2D to built-in: https://github.com/tensorflow/tensorflow/commit/bc295ed3bc729e94a0aa16214ae3c5a8b642858c\r\n\r\nIt seems to me that some of these changes were manual where others seem to be the result of some script that one runs (in particular, `schema_generated.h`). If could point me to a documentation outlining the required steps, I will update this PR accordingly.",
+        "createdAt" : "2021-02-21T11:11:46Z",
+        "updatedAt" : "2021-03-23T21:12:52Z",
+        "lastEditedBy" : "d60cea6f-5d2f-42b1-81eb-630e84c16afa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7ee687f-817e-401b-9fe0-a9614a191d92",
+        "parentId" : "e4196b33-d889-4e6c-a6a6-faff92adf1c8",
+        "authorId" : "3e6006c2-4c04-4965-92d6-06c7a5bf1363",
+        "body" : "Oh, I see. @renjie-liu Is it acceptable to define both ops in the same file but leave one as custom op?\r\n",
+        "createdAt" : "2021-02-22T02:46:00Z",
+        "updatedAt" : "2021-03-23T21:12:52Z",
+        "lastEditedBy" : "3e6006c2-4c04-4965-92d6-06c7a5bf1363",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4ab987bd40cc7c395ed80fdd3e518980c8a55bac",
+    "line" : 158,
+    "diffHunk" : "@@ -1,1 +156,160 @@  return kTfLiteOk;\n}\n\nvoid* Init(TfLiteContext* context, const char* buffer, size_t length) {\n  auto* data = new OpData;"
+  }
+]

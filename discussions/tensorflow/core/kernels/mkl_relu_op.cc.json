@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "d595109e-66b9-404a-9121-a645f1bdb83c",
+    "prId" : 36469,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/36469#pullrequestreview-356290299",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c59dd84e-0010-45dd-9b57-9c9a6294a823",
+        "parentId" : null,
+        "authorId" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "body" : "Can we refactor this (lines 180-197) into a function? It can be used for `bwd_pd` in lines 469-490 as well. Since this is used in other ops as well, please put it in a shared file, e.g., mkl_util.h, mkl_types.h, etc.",
+        "createdAt" : "2020-02-06T21:45:00Z",
+        "updatedAt" : "2020-02-10T01:17:45Z",
+        "lastEditedBy" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9740e02f-3fd3-42f7-a3bb-c7a4a237708a",
+        "parentId" : "c59dd84e-0010-45dd-9b57-9c9a6294a823",
+        "authorId" : "25745d2d-fe01-49de-975c-879c043e0b34",
+        "body" : "Although the code looks similar, it is actually different. So we don't get much benefit from code reuse if we refactor it into a function. Memory (for inputs/outputs) is different for every op as well as for fwd/bwd. Also, context_ is different for fwd/bwd.",
+        "createdAt" : "2020-02-10T01:24:25Z",
+        "updatedAt" : "2020-02-10T01:24:25Z",
+        "lastEditedBy" : "25745d2d-fe01-49de-975c-879c043e0b34",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2a4e53a-66d1-416d-a231-65db4eddc3b1",
+        "parentId" : "c59dd84e-0010-45dd-9b57-9c9a6294a823",
+        "authorId" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "body" : "Thank you for the clarification!",
+        "createdAt" : "2020-02-10T21:51:46Z",
+        "updatedAt" : "2020-02-10T21:52:48Z",
+        "lastEditedBy" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eaa9fed5a1a18b92f36635607db8aaee66152cec",
+    "line" : 166,
+    "diffHunk" : "@@ -1,1 +175,179 @@\n#ifdef ENABLE_MKLDNN_V1\n    // Create memory primitive based on dummy data\n    context_.src_mem.reset(new MEMORY_CONSTRUCTOR(fwd_pd->PRIMITIVE_DESC_SRC,\n                                                  cpu_engine_, DummyData));"
+  },
+  {
+    "id" : "6b2502f4-4189-49f1-9b6d-4919cea69ce4",
+    "prId" : 36469,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/36469#pullrequestreview-356290299",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f9db2920-f90f-485e-8f15-db405aaf38e4",
+        "parentId" : null,
+        "authorId" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "body" : "Do you expect `MklEltwiseBwdParams` to have a different key structure from `MklEltwiseFwdParams`? If not, maybe it's worth making a super class `MklEltwiseParams` that has the shared functions (`CreateKey`, `GetEltwise`, `SetEltwise`, etc) so that both Fwd and Bwd subclasses don't have to define redundant functions.\r\n\r\n(I'm also fine with leaving it like this for now.)",
+        "createdAt" : "2020-02-06T21:57:15Z",
+        "updatedAt" : "2020-02-10T01:17:45Z",
+        "lastEditedBy" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e759f990-95a1-4c12-b8bb-849fc8c09c04",
+        "parentId" : "f9db2920-f90f-485e-8f15-db405aaf38e4",
+        "authorId" : "25745d2d-fe01-49de-975c-879c043e0b34",
+        "body" : "In fact, MKL-DNN now supports primitive caching internally so it does not need to be handled at the user level. And the plan is to remove the primitive caching all together soon. So leaving it as is for now. ",
+        "createdAt" : "2020-02-10T01:27:09Z",
+        "updatedAt" : "2020-02-10T01:27:09Z",
+        "lastEditedBy" : "25745d2d-fe01-49de-975c-879c043e0b34",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ad7f0562-bf9b-478e-bc94-02ce831c26d6",
+        "parentId" : "f9db2920-f90f-485e-8f15-db405aaf38e4",
+        "authorId" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "body" : "Got it. Thank you for the info!",
+        "createdAt" : "2020-02-10T21:50:38Z",
+        "updatedAt" : "2020-02-10T21:52:48Z",
+        "lastEditedBy" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eaa9fed5a1a18b92f36635607db8aaee66152cec",
+    "line" : 463,
+    "diffHunk" : "@@ -1,1 +479,483 @@\n private:\n  static string CreateKey(const MklEltwiseBwdParams<T>& bwdParams) {\n    string prefix = \"eltwise_bwd\";\n    FactoryKeyCreator key_creator;"
+  },
+  {
+    "id" : "cab75b7d-dcdc-4579-978d-a11126298ba9",
+    "prId" : 22716,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/22716#pullrequestreview-161745675",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ac609abb-8bed-4671-928f-00a45d4257ce",
+        "parentId" : null,
+        "authorId" : "0ba8fb18-637a-4ab3-a7c8-cd971823fe45",
+        "body" : "Wouldn't static_cast<int> suffice?",
+        "createdAt" : "2018-10-04T15:59:35Z",
+        "updatedAt" : "2018-10-04T15:59:41Z",
+        "lastEditedBy" : "0ba8fb18-637a-4ab3-a7c8-cd971823fe45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "583a06d9-7cea-47b0-90d1-33735269e645",
+        "parentId" : "ac609abb-8bed-4671-928f-00a45d4257ce",
+        "authorId" : "2269ed4f-d48a-424d-9867-b8befe797645",
+        "body" : "Not sure, I just did what all other function calls were doing in the same file.",
+        "createdAt" : "2018-10-04T16:09:01Z",
+        "updatedAt" : "2018-10-04T16:09:01Z",
+        "lastEditedBy" : "2269ed4f-d48a-424d-9867-b8befe797645",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "694e6cac-8d55-43be-bcf9-27a75a5bb4ba",
+        "parentId" : "ac609abb-8bed-4671-928f-00a45d4257ce",
+        "authorId" : "0ba8fb18-637a-4ab3-a7c8-cd971823fe45",
+        "body" : "Oh I see those variables are defined as const size_t. Nevermind.",
+        "createdAt" : "2018-10-04T18:16:58Z",
+        "updatedAt" : "2018-10-04T18:17:01Z",
+        "lastEditedBy" : "0ba8fb18-637a-4ab3-a7c8-cd971823fe45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a4a6381650bd87f775f99139144b6c4c66881cb",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +1024,1028 @@\n      OP_REQUIRES_OK(context, context->forward_input_or_allocate_output(\n                                  {static_cast<const int>(diff_dst_index)},\n                                  static_cast<const int>(diff_src_index),\n                                  tf_shape_diff_src, &diff_src_tensor));"
+  }
+]

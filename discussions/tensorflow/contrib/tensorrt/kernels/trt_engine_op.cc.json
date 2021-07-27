@@ -1,0 +1,222 @@
+[
+  {
+    "id" : "9fb71b02-3427-416b-96ab-a141b58b7a87",
+    "prId" : 24862,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/24862#pullrequestreview-191916751",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c9bcb4c7-88eb-4149-8d93-69e4f0cfecb8",
+        "parentId" : null,
+        "authorId" : "d8ccd123-f416-49e8-8333-df30e2a1eb20",
+        "body" : "I would rephrase this to the following:\r\n\r\nnvinfer1::IExecutionContext::enqueue can be used by multiple threads simultaneously as long different threads use different execution contexts. But since we use one execution context for all threads, we guard the runtime by a mutex. Since nvinfer1::IExecutionContext::enqueue is an asynchronous function, this guard will be safe only if all the threads use the same CUDA stream which is the current behavior in Tensorflow.",
+        "createdAt" : "2019-01-12T00:30:14Z",
+        "updatedAt" : "2019-01-15T20:42:20Z",
+        "lastEditedBy" : "d8ccd123-f416-49e8-8333-df30e2a1eb20",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "458837bf-7482-4b99-a5f6-3c3c54012b98",
+        "parentId" : "c9bcb4c7-88eb-4149-8d93-69e4f0cfecb8",
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "Thanks. Since this is a comment change, instead of added a separate commit for that to the PR, I'll fix it in another commit to head.",
+        "createdAt" : "2019-01-12T00:54:32Z",
+        "updatedAt" : "2019-01-15T20:42:20Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4885913ec27773b9dbb0dcfc90b76fd28281d40d",
+    "line" : 115,
+    "diffHunk" : "@@ -1,1 +403,407 @@                                                ->GpuStreamMemberHack()));\n\n  // nvinfer1::IExecutionContext::enqueue is not thread safe and we need a mutex\n  // for it.\n  tensorflow::mutex_lock lock(engine_context->mu);"
+  },
+  {
+    "id" : "e5cf98f9-a530-4544-bfea-47091347dfc9",
+    "prId" : 24327,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/24327#pullrequestreview-190000680",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c31f1d5d-9295-47e3-95b2-bf515772a710",
+        "parentId" : null,
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "Just curious: here we only compare the first dim a.k.a the batch size, do we plan to support different non-batch dimensions? Please add comment for that.",
+        "createdAt" : "2019-01-07T22:15:34Z",
+        "updatedAt" : "2019-01-15T23:46:53Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bea8a4a3a1fb0282b0c59a687d25c6ae160316fc",
+    "line" : 61,
+    "diffHunk" : "@@ -1,1 +254,258 @@    // we'll need to to support non-batch dimensions as well. This will be done\n    // as part of the offline conversion implementation.\n    if (batch_size <= cached_batch_size) {\n      // First case: first compatible engine found\n      // Second case: smaller batch size engine found"
+  },
+  {
+    "id" : "b246a4c3-e4e7-42dd-b8c2-f74278d7cdb6",
+    "prId" : 21100,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/21100#pullrequestreview-140100292",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5269616d-1325-4ce9-ab24-bded8d277665",
+        "parentId" : null,
+        "authorId" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "body" : "Question here is whether to abort or continue. I would say abort is a better option since more engines than user expected is required.",
+        "createdAt" : "2018-07-24T21:27:21Z",
+        "updatedAt" : "2018-07-24T22:22:58Z",
+        "lastEditedBy" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "36fe311b-ed02-4a24-86c7-e8c8a7c8c700",
+        "parentId" : "5269616d-1325-4ce9-ab24-bded8d277665",
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "This one is the reason why I issue this PR. In practice we encounter a problem where the first dim is not batch size but the segment gets converted, and another segment with correct first dim as batch size gets converted, too. In that case, the batch size dim doesn't match and one of the engine will fail since we allow single cache entry. In that case we should retry.\r\n\r\nI'm not saying that we should not fix the batch dim problem, on the contrary I strongly suggest to fix it (although I don't know how). But since there is always a possibility to have bugs in the conversion regardless how many tests we added, I think we should gracefully retry on non-critical errors.",
+        "createdAt" : "2018-07-24T22:13:59Z",
+        "updatedAt" : "2018-07-24T22:22:58Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6de72a32056c68da3736e232ff3ba3fec390d81b",
+    "line" : 76,
+    "diffHunk" : "@@ -1,1 +276,280 @@  }\n  const int smallest_engine = GetEngineBatch(ctx);\n  if (smallest_engine < 0) {\n    LOG(WARNING) << \"Failed to get engine batch, running native segment\";\n    ExecuteNativeSegment(ctx, helper);"
+  },
+  {
+    "id" : "5e6354b5-f7e7-4672-846c-6cf1d9791d46",
+    "prId" : 21100,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/21100#pullrequestreview-140097554",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e88bd67d-e26f-4928-a44f-0a84717a648e",
+        "parentId" : null,
+        "authorId" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "body" : "This should never be true if Engine is connected properly thus, it should be a bug and log should be error or even fatal since neither engine nor network can be trusted!",
+        "createdAt" : "2018-07-24T21:30:49Z",
+        "updatedAt" : "2018-07-24T22:22:58Z",
+        "lastEditedBy" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20546b80-b402-4f9c-a710-9a1780295c0c",
+        "parentId" : "e88bd67d-e26f-4928-a44f-0a84717a648e",
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "I totally agree this should be a bug. But here I'm allowing it since it's possible for the bug to happen, I'll change to ERROR instead.",
+        "createdAt" : "2018-07-24T22:03:42Z",
+        "updatedAt" : "2018-07-24T22:22:58Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6de72a32056c68da3736e232ff3ba3fec390d81b",
+    "line" : 114,
+    "diffHunk" : "@@ -1,1 +311,315 @@    const size_t binding_index =\n        trt_engine_ptr->getBindingIndex(input_name.c_str());\n    if (binding_index == -1) {\n      LOG(ERROR) << \"Input node not found, at \" << input_name;\n      return kRetry;"
+  },
+  {
+    "id" : "81c21da9-dde0-4c60-b00a-07559e845129",
+    "prId" : 21100,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/21100#pullrequestreview-140103625",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "33aab02a-a95a-4117-85f4-2eef199ae1e5",
+        "parentId" : null,
+        "authorId" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "body" : "Could this ever fail?",
+        "createdAt" : "2018-07-24T21:36:59Z",
+        "updatedAt" : "2018-07-24T22:22:58Z",
+        "lastEditedBy" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4441946-8a15-4771-a4d1-7c3f9524be16",
+        "parentId" : "33aab02a-a95a-4117-85f4-2eef199ae1e5",
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "I'm not 100% sure. If it will fail, it must be also fail in native execution unless there is a bug in the conversion. In case of bugs we'd better retry.",
+        "createdAt" : "2018-07-24T22:15:29Z",
+        "updatedAt" : "2018-07-24T22:22:58Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6aadebcf-995b-4f59-bb20-3a938a7a2897",
+        "parentId" : "33aab02a-a95a-4117-85f4-2eef199ae1e5",
+        "authorId" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "body" : "In case of the errors in conversion, networks should be unusable. There is no point in trying and failing all the time. Effectively this will slow down the execution of the network.",
+        "createdAt" : "2018-07-24T22:22:55Z",
+        "updatedAt" : "2018-07-24T22:22:58Z",
+        "lastEditedBy" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bcfae68c-78af-440b-beb9-b09d79fb75d2",
+        "parentId" : "33aab02a-a95a-4117-85f4-2eef199ae1e5",
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "What do you think if I add a class-wide variable saying that the network is broken and retry at the very beginning of CompuAsync()?",
+        "createdAt" : "2018-07-24T22:28:11Z",
+        "updatedAt" : "2018-07-24T22:28:11Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6de72a32056c68da3736e232ff3ba3fec390d81b",
+    "line" : 167,
+    "diffHunk" : "@@ -1,1 +358,362 @@      trt_shape[0] = num_batch;\n      for (int j = 0; j < dims.nbDims; j++) trt_shape[j + 1] = dims.d[j];\n      auto status = TensorShapeUtils::MakeShape(\n          trt_shape.data(), trt_shape.size(), &output_shape);\n      if (!status.ok()) {"
+  },
+  {
+    "id" : "b13d7aae-5ca7-4f72-92b8-fab94157c97c",
+    "prId" : 16253,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/16253#pullrequestreview-91604708",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1f4dc257-5397-406c-8795-275f4d8a8c7b",
+        "parentId" : null,
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "Yes, I think we need one runtime per device? And is deserializeCudaEngine() thread-safe? If yes, you may see https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/kernels/conv_ops_using_gemm.cc#L314 for an example, and we can get the device from the context and use the gpu id as the key: https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/common_runtime/gpu/gpu_device.h#L91. ",
+        "createdAt" : "2018-01-24T18:39:30Z",
+        "updatedAt" : "2018-02-12T23:36:57Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95f7a7ac-a03a-4d8a-9066-6126533d26f9",
+        "parentId" : "1f4dc257-5397-406c-8795-275f4d8a8c7b",
+        "authorId" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "body" : "Working on this right now but will probably come with another PR if you don't mind.",
+        "createdAt" : "2018-01-24T21:43:22Z",
+        "updatedAt" : "2018-02-12T23:36:57Z",
+        "lastEditedBy" : "8f9cf5d6-8597-4d0e-8a0a-4fec1fb0f577",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08e279a2-89a5-483d-9bb2-433b8a3153eb",
+        "parentId" : "1f4dc257-5397-406c-8795-275f4d8a8c7b",
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "SG",
+        "createdAt" : "2018-01-25T17:28:09Z",
+        "updatedAt" : "2018-02-12T23:36:57Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1e4b5b8c0cc1675b9ecac3569c91563a2a4f9984",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +38,42 @@  OP_REQUIRES_OK(context, context->GetAttr(\"output_nodes\", &output_nodes_));\n\n  // TODO(samikama) runtime should be taken from a resourcemanager as well.\n  // Only engine should be in the op and context and runtime should be taken\n  // from resourcemanager"
+  }
+]

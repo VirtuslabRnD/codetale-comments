@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "01e59dc2-67af-40fd-8492-7953cde26826",
+    "prId" : 22989,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/22989#pullrequestreview-166399804",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ea4622f1-77ab-422b-8abb-cb87e4602b2a",
+        "parentId" : null,
+        "authorId" : "6f904d11-bed6-4022-8971-4dbfb55561c0",
+        "body" : "This should be moved out of the above `if (IsGDRAvailable())`, as the host memory should be registered regardless. Otherwise, it fails for GDR incapable GPUs, such as those GTX cards.",
+        "createdAt" : "2018-10-18T09:29:24Z",
+        "updatedAt" : "2018-10-22T17:56:52Z",
+        "lastEditedBy" : "6f904d11-bed6-4022-8971-4dbfb55561c0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01d1428a-316c-4063-9117-efe45b303e1e",
+        "parentId" : "ea4622f1-77ab-422b-8abb-cb87e4602b2a",
+        "authorId" : "6f904d11-bed6-4022-8971-4dbfb55561c0",
+        "body" : "Probably should change the name of `IsGDRAvailable` to `P2PKernelModuleEnabled` to avoid confusion.\r\n\r\nAny suggestions?",
+        "createdAt" : "2018-10-18T09:32:10Z",
+        "updatedAt" : "2018-10-22T17:56:52Z",
+        "lastEditedBy" : "6f904d11-bed6-4022-8971-4dbfb55561c0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56f958c0-85c8-47f4-95bb-7ee906b0c9f3",
+        "parentId" : "ea4622f1-77ab-422b-8abb-cb87e4602b2a",
+        "authorId" : "fcd059ec-dad3-416f-9f01-ca897401f8da",
+        "body" : "GDR is the correct name here. Transporting between GPU's host pinned memory is technically just \"GD\".\r\n\r\nI would like to eventually add the possibility to selectively avoid GPU-direct on slow PCie routes (Like QPI), but I prefer to just focus on hotfixes for now, till the upcoming changes regarding the transport contributions.",
+        "createdAt" : "2018-10-19T07:06:12Z",
+        "updatedAt" : "2018-10-22T17:56:52Z",
+        "lastEditedBy" : "fcd059ec-dad3-416f-9f01-ca897401f8da",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c750c20a43148dc02b1677885d950e7e005a0a2",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +279,283 @@      InsertMemoryRegion(ptr, num_bytes, strings::StrCat(\"GPU:\", gpu_id));\n    };\n    for (int numa_idx = 0; numa_idx < port::NUMANumNodes(); ++numa_idx) {\n      GPUProcessState::singleton()->AddGPUAllocVisitor(numa_idx,\n                                                       cuda_alloc_visitor);"
+  },
+  {
+    "id" : "b6eb91d7-58b1-42fe-ba51-493319b5b57e",
+    "prId" : 11392,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/11392#pullrequestreview-54266077",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5f12cb2d-a27f-4a45-bf70-2f60aef5bef1",
+        "parentId" : null,
+        "authorId" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "body" : "There's no deregistration, right?  In practice we never shrink our memory pools until process termination, so this is probably ok, but might be better to clean up properly.",
+        "createdAt" : "2017-08-03T18:13:53Z",
+        "updatedAt" : "2017-08-08T01:02:01Z",
+        "lastEditedBy" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b00fa9ab-452c-45b5-aca6-0e6fe6a575c0",
+        "parentId" : "5f12cb2d-a27f-4a45-bf70-2f60aef5bef1",
+        "authorId" : "6f904d11-bed6-4022-8971-4dbfb55561c0",
+        "body" : "The deregistration logic is handled by [`EvictMemoryRegion`](https://github.com/red-bird/tensorflow/blob/955764316dd9c796db874ae2034e336a48b1fb46/tensorflow/contrib/gdr/gdr_memory_manager.cc#L593), which calls `rdma_dereg_mr` in [`MRDeleter`](https://github.com/red-bird/tensorflow/blob/955764316dd9c796db874ae2034e336a48b1fb46/tensorflow/contrib/gdr/gdr_memory_manager.cc#L83). \r\n\r\n`EvictMemoryRegion` is registered as a [free visitor](https://github.com/red-bird/tensorflow/blob/955764316dd9c796db874ae2034e336a48b1fb46/tensorflow/contrib/gdr/gdr_memory_manager.cc#L250) for host allocators, and I explained why it is not handled for GPU device allocator [in the comment](https://github.com/red-bird/tensorflow/blob/955764316dd9c796db874ae2034e336a48b1fb46/tensorflow/contrib/gdr/gdr_memory_manager.cc#L270).",
+        "createdAt" : "2017-08-04T02:08:35Z",
+        "updatedAt" : "2017-08-08T01:02:01Z",
+        "lastEditedBy" : "6f904d11-bed6-4022-8971-4dbfb55561c0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "241c020c64410ca16683a7a7f42b223f422e5dae",
+    "line" : 674,
+    "diffHunk" : "@@ -1,1 +672,676 @@  auto iter = std::upper_bound(mrs_.begin(), mrs_.end(), addr, &Comparator);\n  if (iter != std::end(mrs_) && iter->get()->addr == addr) {\n    mrs_.erase(iter);\n  } else {\n    LOG(WARNING) << \"Failed to de-register memory region\";"
+  }
+]

@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "286b652c-ec1d-4ba8-b46d-e7dfa6c00ddf",
+    "prId" : 31557,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/31557#pullrequestreview-275011624",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6d434571-9f94-4d74-8533-13dcdb180576",
+        "parentId" : null,
+        "authorId" : "d9857ae4-1f12-46ba-8f0b-0bc35ebb4bfa",
+        "body" : "self.axis is possible to be a int, which will fail with sorted() and for loop below.",
+        "createdAt" : "2019-08-14T16:40:02Z",
+        "updatedAt" : "2019-10-16T06:34:29Z",
+        "lastEditedBy" : "d9857ae4-1f12-46ba-8f0b-0bc35ebb4bfa",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5fd07c2c34647e61e5c6d4a2167b516661b1e21c",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +993,997 @@    The self.axis is assumed to have no duplicates.\n    \"\"\"\n    axis = sorted(self.axis)\n    can_use_fused = False\n"
+  },
+  {
+    "id" : "24f885a8-dd75-444b-8a1c-719381e39413",
+    "prId" : 31557,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/31557#pullrequestreview-275011624",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6ee9cfcd-4e1f-41de-981e-f22ee609bfdb",
+        "parentId" : null,
+        "authorId" : "d9857ae4-1f12-46ba-8f0b-0bc35ebb4bfa",
+        "body" : "Can u add some comment here to explain the details? If I understand it correctly, any dim before axis is compressed to N, any dim within axis is compressed to C, and dim after axis is compressed H, and W is not used?",
+        "createdAt" : "2019-08-14T17:16:45Z",
+        "updatedAt" : "2019-10-16T06:34:29Z",
+        "lastEditedBy" : "d9857ae4-1f12-46ba-8f0b-0bc35ebb4bfa",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5fd07c2c34647e61e5c6d4a2167b516661b1e21c",
+    "line" : 92,
+    "diffHunk" : "@@ -1,1 +1093,1097 @@      axis = sorted(self.axis)\n      tensor_shape = array_ops.shape(inputs)\n      for dim in range(0, ndims):\n        dim_tensor = tensor_shape[dim]\n        if dim < axis[0]:"
+  },
+  {
+    "id" : "30213881-32df-4834-b98b-80d8cc67e412",
+    "prId" : 31557,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/31557#pullrequestreview-275011624",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "786f3bdd-d309-430f-b2d2-aeb4d663b77d",
+        "parentId" : null,
+        "authorId" : "d9857ae4-1f12-46ba-8f0b-0bc35ebb4bfa",
+        "body" : "For reshape, I think at most of the dim can be -1. What if both N and H are -1 here? Will to cause any issue?",
+        "createdAt" : "2019-08-14T17:19:00Z",
+        "updatedAt" : "2019-10-16T06:34:29Z",
+        "lastEditedBy" : "d9857ae4-1f12-46ba-8f0b-0bc35ebb4bfa",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5fd07c2c34647e61e5c6d4a2167b516661b1e21c",
+    "line" : 104,
+    "diffHunk" : "@@ -1,1 +1105,1109 @@      data_format = 'NCHW'\n\n      inputs = array_ops.reshape(inputs, squeezed_shape)\n\n      def _set_const_tensor(val, dtype, shape):"
+  },
+  {
+    "id" : "78285ace-03ad-45d6-b224-4b5e3e029b72",
+    "prId" : 31557,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/31557#pullrequestreview-283305719",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6fe2dadc-9ee7-4b42-b78f-932e99a5c479",
+        "parentId" : null,
+        "authorId" : "05c2b6c1-8a55-4dc9-ae76-02172416ea90",
+        "body" : "Can you reshape self.gamma and self.beta and pass the results to fused_batch_norm, instead of having to manually multiply by self.gama and self.beta later?",
+        "createdAt" : "2019-09-03T18:48:57Z",
+        "updatedAt" : "2019-10-16T06:34:29Z",
+        "lastEditedBy" : "05c2b6c1-8a55-4dc9-ae76-02172416ea90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1e48b29c-c773-430f-8b6e-b5dd09e1247f",
+        "parentId" : "6fe2dadc-9ee7-4b42-b78f-932e99a5c479",
+        "authorId" : "8df6b2a7-a5b8-4771-8241-49fd7ff5a2aa",
+        "body" : "I don't think we can reshape gamma and beta as input to the fused_batch_norm. Basically, batch norm requires mean/var has the same shape with gamma/beta. Suppose the input the NxD and the batch norm is over N, both mean/var and gamma/beta are 1xD. However, by definition, the layer norm is over D and the mean/var is Nx1 but gamma/beta is 1xD. To utilize the fused batch norm in the layer norm, we let the fused batch norm to normalize over D (instead of N), which will require mean/var and gamma/beta in shape of Nx1. However, our gamma/beta is 1xD and we cannot reshape it to Nx1. So, our strategy is to give a Nx1 const gamma/beta (1, 0) to do a \"redundant\" scale and offset. And then separately, we handle the meaningful scale and offset using the real 1xD gamma/beta. ",
+        "createdAt" : "2019-09-03T22:00:39Z",
+        "updatedAt" : "2019-10-16T06:34:29Z",
+        "lastEditedBy" : "8df6b2a7-a5b8-4771-8241-49fd7ff5a2aa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08189e1f-1177-4fed-b29f-e4630bdcee56",
+        "parentId" : "6fe2dadc-9ee7-4b42-b78f-932e99a5c479",
+        "authorId" : "05c2b6c1-8a55-4dc9-ae76-02172416ea90",
+        "body" : "Can you add a comment? Something like \"self.gamma and self.beta have the wrong shape for fused_batch_norm, so we cannot pass them as the scale and offset parameters.\"",
+        "createdAt" : "2019-09-03T23:07:30Z",
+        "updatedAt" : "2019-10-16T06:34:29Z",
+        "lastEditedBy" : "05c2b6c1-8a55-4dc9-ae76-02172416ea90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5fd07c2c34647e61e5c6d4a2167b516661b1e21c",
+    "line" : 119,
+    "diffHunk" : "@@ -1,1 +1120,1124 @@      outputs, _, _ = nn.fused_batch_norm(\n          inputs,\n          scale=scale,\n          offset=offset,\n          epsilon=self.epsilon,"
+  },
+  {
+    "id" : "ac487ea6-9fce-4f13-b283-10d63fac16f6",
+    "prId" : 31557,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/31557#pullrequestreview-290253852",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d6664b10-0cef-4796-92fe-e18a18c69a9d",
+        "parentId" : null,
+        "authorId" : "05c2b6c1-8a55-4dc9-ae76-02172416ea90",
+        "body" : "Currently, all the tests will run with the fused implementation, as they all have the axis(es) being the last index(es). Please add a test that uses the non fused implementation.\r\n\r\nAlso, add a test that asserts the `_fused` attribute is True if the conditions are met",
+        "createdAt" : "2019-09-18T23:35:09Z",
+        "updatedAt" : "2019-10-16T06:34:29Z",
+        "lastEditedBy" : "05c2b6c1-8a55-4dc9-ae76-02172416ea90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5fd07c2c34647e61e5c6d4a2167b516661b1e21c",
+    "line" : 87,
+    "diffHunk" : "@@ -1,1 +1088,1092 @@          scale=scale,\n          variance_epsilon=self.epsilon)\n    else:\n      # Collapse dims before self.axis, and dims in self.axis\n      pre_dim, in_dim = (1, 1)"
+  }
+]

@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "e1b88f74-c018-4027-b71e-52c6042ae912",
+    "prId" : 41214,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/41214#pullrequestreview-463252724",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d81c1e8a-7c21-470a-acd1-899c73000439",
+        "parentId" : null,
+        "authorId" : "05c2b6c1-8a55-4dc9-ae76-02172416ea90",
+        "body" : "I think this will still fail the case at the bottom of [this comment](https://github.com/tensorflow/tensorflow/pull/40564#issuecomment-651408361):\r\n\r\n```python\r\ntf.keras.mixed_precision.experimental.set_policy('mixed_float16')\r\nlayer = tf.keras.layers.Dense(10,)\r\nlayer.build((10, 10))\r\nprint(layer.kernel.assign_add(tf.ones((10, 10))).op)\r\n```\r\n\r\nI think the best way to fix is to have an `op` attribute that delegates to `self._op` if set and otherwise raises the original error message. Then you can set `_op` on the returned AutoCastVariable before returning it. Alternatively you can create a subclass of AutoCastVariable that overrides `op`. \r\n\r\nAlso add a test case for this.\r\n\r\nI think this will allow you to remove the `resource_variable_ops.is_resource_variable(c)` check in `func_graph.py`, as well as `ops.py` for consistency. Note RMSProp also relies on the return value of `assign` having an `op` attribute.\r\n\r\nhttps://github.com/tensorflow/tensorflow/blob/6c292dc103a0867bc78d26be282dfcd769757520/tensorflow/python/keras/optimizer_v2/rmsprop.py#L219\r\n\r\nWe could alternatively fix RMSProp, but it's possible other code accesses the `op` attribute, so we should fix this so the behavior of AutoCastVariable is consistent with the behavior of the inner variable.",
+        "createdAt" : "2020-07-10T00:55:34Z",
+        "updatedAt" : "2020-08-10T21:41:30Z",
+        "lastEditedBy" : "05c2b6c1-8a55-4dc9-ae76-02172416ea90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "852c4588-073e-4bb0-a759-5fbe6954d396",
+        "parentId" : "d81c1e8a-7c21-470a-acd1-899c73000439",
+        "authorId" : "c0e6af67-982a-4e5a-980e-4580b05253a0",
+        "body" : "Good point, and sorry for the late reply. I changed it to the assign `self._op` before returning `self` which seems to work well.",
+        "createdAt" : "2020-08-07T11:56:41Z",
+        "updatedAt" : "2020-08-10T21:41:30Z",
+        "lastEditedBy" : "c0e6af67-982a-4e5a-980e-4580b05253a0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354722afd88e95971ec3cb5f2f6ed01e7f538557",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +206,210 @@    assign_var = update_fn(value, use_locking, name, read_value)\n    if read_value and resource_variable_ops.is_resource_variable(assign_var):\n      return create_autocast_variable(assign_var)\n    return assign_var\n"
+  },
+  {
+    "id" : "658825a6-e394-4162-8ca5-e366b9dac252",
+    "prId" : 41214,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/41214#pullrequestreview-463253972",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b9559908-b166-49ab-b228-dd950c1a1eca",
+        "parentId" : null,
+        "authorId" : "c0e6af67-982a-4e5a-980e-4580b05253a0",
+        "body" : "This seems to be required to support `tf.control_dependencies` in `tf.function`, not sure if there is a better way to do this.",
+        "createdAt" : "2020-08-07T11:59:58Z",
+        "updatedAt" : "2020-08-10T21:41:30Z",
+        "lastEditedBy" : "c0e6af67-982a-4e5a-980e-4580b05253a0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354722afd88e95971ec3cb5f2f6ed01e7f538557",
+    "line" : 151,
+    "diffHunk" : "@@ -1,1 +303,307 @@    graph_element = self._variable._as_graph_element()  # pylint:disable=protected-access\n    if graph_element is None:\n      return self._op\n    return graph_element\n"
+  }
+]

@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "7aa91e5c-4228-407e-b90c-ba8e511d9082",
+    "prId" : 30827,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/30827#pullrequestreview-263951201",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1ce4b416-0052-4803-ae5a-ec397022e887",
+        "parentId" : null,
+        "authorId" : "d84c70ee-9642-48ed-b986-972375ea37f0",
+        "body" : "Calling ChunkFromHandle() requires holding mutex lock_",
+        "createdAt" : "2019-07-18T20:22:40Z",
+        "updatedAt" : "2019-07-19T21:34:13Z",
+        "lastEditedBy" : "d84c70ee-9642-48ed-b986-972375ea37f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "98f4d7ba-7531-4ee0-8eb7-84819f011ba5",
+        "parentId" : "1ce4b416-0052-4803-ae5a-ec397022e887",
+        "authorId" : "d84c70ee-9642-48ed-b986-972375ea37f0",
+        "body" : "Also true throughout this function.  Actually this may be best solved by taking the lock at the beginning of this function.",
+        "createdAt" : "2019-07-18T20:26:01Z",
+        "updatedAt" : "2019-07-19T21:34:13Z",
+        "lastEditedBy" : "d84c70ee-9642-48ed-b986-972375ea37f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7620b427-9e8b-476a-a291-8eb4c754c5ee",
+        "parentId" : "1ce4b416-0052-4803-ae5a-ec397022e887",
+        "authorId" : "04e5d7bd-a136-4f0a-9cb0-0e56fd16cec3",
+        "body" : "The lock has already been hold in `AllocateRawInternal` before entering `DeallocateFreeRegions`.",
+        "createdAt" : "2019-07-18T21:54:10Z",
+        "updatedAt" : "2019-07-19T21:34:13Z",
+        "lastEditedBy" : "04e5d7bd-a136-4f0a-9cb0-0e56fd16cec3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3b1898b2-a491-4963-b5fa-e8675c600073",
+        "parentId" : "1ce4b416-0052-4803-ae5a-ec397022e887",
+        "authorId" : "d84c70ee-9642-48ed-b986-972375ea37f0",
+        "body" : "Agreed.",
+        "createdAt" : "2019-07-18T23:13:49Z",
+        "updatedAt" : "2019-07-19T21:34:13Z",
+        "lastEditedBy" : "d84c70ee-9642-48ed-b986-972375ea37f0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c93807a7a4a8c2c8207efcf5de36bee28f8407e5",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +276,280 @@    bool any_use = false;\n    while (h != kInvalidChunkHandle) {\n      const Chunk* c = ChunkFromHandle(h);\n      if (c->in_use()) {\n        any_use = true;"
+  },
+  {
+    "id" : "b01cd308-be83-4fb6-bdb6-8fc8856ef169",
+    "prId" : 30827,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/30827#pullrequestreview-264450123",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bbb46d61-f457-4cd0-8b6f-d914767ccb04",
+        "parentId" : null,
+        "authorId" : "d84c70ee-9642-48ed-b986-972375ea37f0",
+        "body" : "I believe this returns the handle at the beginning of the region. Regions are further divided into bins.\r\n\r\nThe while loop then iterates over all the chunks in its bin.  If I read this correctly, it does not iterate over all the chunks in the region.  Is this an issue?",
+        "createdAt" : "2019-07-19T21:19:53Z",
+        "updatedAt" : "2019-07-19T21:50:36Z",
+        "lastEditedBy" : "d84c70ee-9642-48ed-b986-972375ea37f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f31b201b-741d-4f7d-b331-f1a7301b69a5",
+        "parentId" : "bbb46d61-f457-4cd0-8b6f-d914767ccb04",
+        "authorId" : "04e5d7bd-a136-4f0a-9cb0-0e56fd16cec3",
+        "body" : "A `region` contains a linked list of chunks. `Bin` is another data structure recording a set of chunk handles (see `FreeChunkSet`) that have similar sizes to assist search for best fit. So, for each `region`, we can visit all the chunks (owned by the region) through the linked list.\r\n\r\nThe for loop at line 274 iterates through all the `regions`. For each `region`, we then iterate through all the `chunks` in the `region` following the linked list (i.e., the while loop at line 277).\r\n\r\nChecking all the chunks in a region is enough to verify whether the region is free or in use. When we de-allocate the region, we have to remove all its chunks from Bins (line 340.) This makes sure no dangling chunk handles in Bins.",
+        "createdAt" : "2019-07-19T22:08:20Z",
+        "updatedAt" : "2019-07-19T22:08:48Z",
+        "lastEditedBy" : "04e5d7bd-a136-4f0a-9cb0-0e56fd16cec3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c93807a7a4a8c2c8207efcf5de36bee28f8407e5",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +273,277 @@  size_t total_free_bytes = 0;\n  for (const AllocationRegion& region : region_manager_.regions()) {\n    ChunkHandle h = region_manager_.get_handle(region.ptr());\n    bool any_use = false;\n    while (h != kInvalidChunkHandle) {"
+  }
+]

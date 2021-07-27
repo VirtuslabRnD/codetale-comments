@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "7a9f2aad-bab9-4fb6-b509-361f1c4ca6f4",
+    "prId" : 36496,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/36496#pullrequestreview-357679434",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b743ea18-2222-4d0d-ae75-3a262ce79475",
+        "parentId" : null,
+        "authorId" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "body" : "Seems like this (lines 132-138) is used in many ops. Maybe refactor it into `mkl_util` or something? Please also use this for `bwd_primitives`.",
+        "createdAt" : "2020-02-10T23:14:23Z",
+        "updatedAt" : "2020-02-13T04:55:55Z",
+        "lastEditedBy" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "296ed2fc-0f3f-4948-af3b-f067f2e02b7d",
+        "parentId" : "b743ea18-2222-4d0d-ae75-3a262ce79475",
+        "authorId" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "body" : "This hasn't been addressed yet. (If it's not worth doing, please explain why. Otherwise, please add a TODO or make modifications.)",
+        "createdAt" : "2020-02-12T00:10:30Z",
+        "updatedAt" : "2020-02-13T04:55:55Z",
+        "lastEditedBy" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b4b9fdef-3e46-4199-b88c-d8ab33a40364",
+        "parentId" : "b743ea18-2222-4d0d-ae75-3a262ce79475",
+        "authorId" : "3cbb7033-4fd4-4c54-9671-d4408e7451f4",
+        "body" : "@penpornk This is what I was looking into if at all it is possible to do this in a simple way. I think you might have misunderstood mkl op context_ to be a generic class as such as the Eigen OpKernelContext. unfortunately, the mkl op context_ is specific to each op and specific to fwd and bwd prop within each of those op. Going through the MklPrimitive also did not seem like a simple fix and needs a decent redesign. ",
+        "createdAt" : "2020-02-12T01:10:55Z",
+        "updatedAt" : "2020-02-13T04:55:55Z",
+        "lastEditedBy" : "3cbb7033-4fd4-4c54-9671-d4408e7451f4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "000068f3-a692-471a-b30d-60d18dfc10f4",
+        "parentId" : "b743ea18-2222-4d0d-ae75-3a262ce79475",
+        "authorId" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "body" : "But the primitives and streams in each context are of the same type, right? In here (and `mkl_conv_grad_filter_ops.cc` and `mkl_softmax_op.cc`) `fwd_primitives` `bwd_primitives` are always of type `mkldnn:primitive` and `fwd_stream` is of type `mkldnn::stream`. I'm thinking of something along the line of \r\n```c++\r\n// In mkl_utils.h or some other common file.\r\n#ifdef ENABLE_MKLDNN_V1\r\nvoid execute_primitives(std::vector<mkldnn::primitive>& primitives, \r\n                        std::shared_ptr<stream> stream, \r\n                        std::vector<std::unordered_map<int, memory>>& net_args) {\r\n  DCHECK_EQ(primitives.size(), net_args.size();\r\n  for (size_t i = 0; i < primitives.size(); ++i) {\r\n    primitives.at(i).execute(*stream, net_args.at(i));\r\n  }\r\n}\r\n#endif  // ENABLE_MKLDNN_V1\r\n\r\n// In this file.\r\n#ifdef ENABLE_MKLDNN_V1\r\n  execute_primitives(context_.fwd_primitives, context_.fwd_stream, context_.net_args);\r\n#else \r\n  context_.fwd_stream->submit(context_.fwd_primitives);\r\n#endif  // ENABLE_MKLDNN_V1\r\n```\r\n\r\nI think this is trivial enough to do in this PR. But if you strongly prefer doing it in a later PR, I'm okay with that too.",
+        "createdAt" : "2020-02-12T18:40:46Z",
+        "updatedAt" : "2020-02-13T04:55:55Z",
+        "lastEditedBy" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e76ed9856303eba25830373e88b889e6b1cea87b",
+    "line" : 143,
+    "diffHunk" : "@@ -1,1 +126,130 @@  }\n\n#ifdef ENABLE_MKLDNN_V1\n  execute_primitives(context_.fwd_primitives, context_.fwd_stream,\n                     context_.net_args);"
+  }
+]

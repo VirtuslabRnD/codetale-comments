@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "925f51c8-78ec-4505-a964-5c56a916d59b",
+    "prId" : 46166,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/46166#pullrequestreview-609914839",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2b78a1d0-7d91-417d-9a92-303eb6b10015",
+        "parentId" : null,
+        "authorId" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "body" : "@jianlijianli do you know why we do not include quint16 and qint16 in `TF_CALL_QUANTIZED_TYPES`?",
+        "createdAt" : "2021-03-08T20:48:38Z",
+        "updatedAt" : "2021-03-08T20:48:38Z",
+        "lastEditedBy" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fc0fd7ea-f93b-48c6-92e7-eca1bcd1c174",
+        "parentId" : "2b78a1d0-7d91-417d-9a92-303eb6b10015",
+        "authorId" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "body" : "That macro was added quite a while ago and I don't have much context but it seems quint16 and qint16 was not needed in the original use case but there is a [TODO](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/register_types.h#L205-L207) to include those types.",
+        "createdAt" : "2021-03-10T23:54:47Z",
+        "updatedAt" : "2021-03-10T23:54:48Z",
+        "lastEditedBy" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8b8d970-9744-47c0-a79e-9013b3977d30",
+        "parentId" : "2b78a1d0-7d91-417d-9a92-303eb6b10015",
+        "authorId" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "body" : "Ok, thanks for clarifying. I guess this could be cleaned up separately.",
+        "createdAt" : "2021-03-11T15:49:08Z",
+        "updatedAt" : "2021-03-11T15:49:08Z",
+        "lastEditedBy" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ea54d83b9b113c0072b73ffa55fc459403b11ba3",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +83,87 @@    TF_CALL_ALL_TYPES(CASE);\n    TF_CALL_QUANTIZED_TYPES(CASE);\n    TF_CALL_quint16(CASE);\n    TF_CALL_qint16(CASE);\n    default:"
+  },
+  {
+    "id" : "a1d88a0c-5ed4-4454-9377-d1349e925121",
+    "prId" : 44017,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/44017#pullrequestreview-512061045",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "648753cb-f40e-4fa0-97f4-a275df7147f4",
+        "parentId" : null,
+        "authorId" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "body" : "I'm thinking if it is better to return a `TF_StringView`: https://cs.opensource.google/tensorflow/tensorflow/+/master:tensorflow/c/c_api.h;l=131?q=tf_stringview\r\nThis probably requires calling https://cs.opensource.google/tensorflow/tensorflow/+/master:tensorflow/core/framework/node_def_util.h;l=313?q=GetNodeAttrString.\r\n\r\nOtherwise, it seems tricky to guess `max_length`. Unless you have a usecase that makes `max_length` approach better.",
+        "createdAt" : "2020-10-18T06:05:27Z",
+        "updatedAt" : "2020-12-08T01:30:29Z",
+        "lastEditedBy" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1dd14786-827d-4c18-8634-55a484f3af32",
+        "parentId" : "648753cb-f40e-4fa0-97f4-a275df7147f4",
+        "authorId" : "0fa85d2b-d37c-423a-902d-562beed7cb04",
+        "body" : "the max_length will be retrieved from  TF_OpKernelConstruction_GetAttrMetadata(simlilar as [ TF_OperationGetAttrStringList](https://github.com/tensorflow/tensorflow/blob/a038cf2695852a649474af55a3ed49f6a72e3965/tensorflow/c/c_api.cc#L1355)),  In our case, we need to malloc an max_length of memory for the string, and pass it to the C API to fill it. TF_StringView is not this use case, from the [comment](https://github.com/tensorflow/tensorflow/blob/a038cf2695852a649474af55a3ed49f6a72e3965/tensorflow/c/c_api.h#L130), the caller does not take the ownership, and not responsible for feeing it, so I thinks it is intend to get from a global object or something like, such as TF_StringView TF_OpKernelConstruction_GetName().\r\n```\r\n// Used to return strings across the C API. The caller does not take ownership\r\n// of the underlying data pointer and is not responsible for freeing it.\r\ntypedef struct TF_StringView {\r\n  const char* data;\r\n  size_t len;\r\n} TF_StringView;\r\n```",
+        "createdAt" : "2020-10-18T06:54:22Z",
+        "updatedAt" : "2020-12-08T01:30:29Z",
+        "lastEditedBy" : "0fa85d2b-d37c-423a-902d-562beed7cb04",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e136784-de3f-423f-8835-01b38371662e",
+        "parentId" : "648753cb-f40e-4fa0-97f4-a275df7147f4",
+        "authorId" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "body" : "I don't really have a strong opinion on this. So, getting length and passing it in here sounds good the way you have it.\r\n\r\nI think `TF_StringView` would work too. Attributes are stored in NodeDef proto: https://cs.opensource.google/tensorflow/tensorflow/+/master:tensorflow/core/framework/node_def.proto;l=64?q=node_def.proto\r\nAnd this function just gets a reference to it without taking ownership:\r\nhttps://cs.opensource.google/tensorflow/tensorflow/+/master:tensorflow/core/framework/node_def_util.h;l=313?q=GetNodeAttrString.\r\nThe caller can then copy over to memory they own if needed.\r\n",
+        "createdAt" : "2020-10-19T18:47:00Z",
+        "updatedAt" : "2020-12-08T01:30:29Z",
+        "lastEditedBy" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9fbce01739f313c91015b97a7788db1c549c0338",
+    "line" : 164,
+    "diffHunk" : "@@ -1,1 +402,406 @@    return;\n  }\n  std::memcpy(value, v.data(), std::min<size_t>(v.length(), max_length));\n}\n"
+  },
+  {
+    "id" : "960a3971-a543-4c99-aa91-752ce140ecf5",
+    "prId" : 44017,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/44017#pullrequestreview-523343980",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f81e348d-262f-496c-9d35-744f655842fc",
+        "parentId" : null,
+        "authorId" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "body" : "Can you add type validation, similar to the way it is done here: https://cs.opensource.google/tensorflow/tensorflow/+/master:tensorflow/core/framework/node_def_util.cc;l=223?q=define_get_attr",
+        "createdAt" : "2020-11-03T06:46:23Z",
+        "updatedAt" : "2020-12-08T01:30:29Z",
+        "lastEditedBy" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "59d5db6a-2143-476e-a94b-9d53826dcee7",
+        "parentId" : "f81e348d-262f-496c-9d35-744f655842fc",
+        "authorId" : "0fa85d2b-d37c-423a-902d-562beed7cb04",
+        "body" : "done",
+        "createdAt" : "2020-11-04T13:10:38Z",
+        "updatedAt" : "2020-12-08T01:30:29Z",
+        "lastEditedBy" : "0fa85d2b-d37c-423a-902d-562beed7cb04",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9fbce01739f313c91015b97a7788db1c549c0338",
+    "line" : 132,
+    "diffHunk" : "@@ -1,1 +372,376 @@          InvalidArgument(\"Value for '\", attr_name, \"' is not a list.\");       \\\n      return;                                                                  \\\n    }                                                                          \\\n    status->status =                                                           \\\n        tensorflow::AttrValueHasType(*attr, \"list(\" attr_type \")\");            \\"
+  },
+  {
+    "id" : "618785d1-470f-45e2-bb25-635358aeeb00",
+    "prId" : 41713,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/41713#pullrequestreview-465316069",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "00ce371e-260a-4380-a0d8-9559a8691f6c",
+        "parentId" : null,
+        "authorId" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "body" : "Comment from @yisitu : Checking: Can this be a static_cast?\r\n\r\nnm. I just tried it out and `static_cast` doesn't work here.",
+        "createdAt" : "2020-08-11T18:19:15Z",
+        "updatedAt" : "2020-08-11T23:11:53Z",
+        "lastEditedBy" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a7e4df924652a151677b3e0b95609db27cb04631",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +285,289 @@                           TF_AllocatorAttributes* attributes,\n                           TF_Status* status) {\n  auto* cc_ctx = reinterpret_cast<::tensorflow::OpKernelContext*>(context);\n  TF_SetStatus(status, TF_OK, \"\");\n  static_assert(sizeof(int64_t) == sizeof(tensorflow::int64),"
+  },
+  {
+    "id" : "fdf5bd8a-a5b2-410d-9707-420df70e8988",
+    "prId" : 41713,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/41713#pullrequestreview-465339103",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bf22004c-463f-4eb5-a7e6-9a6afd88c154",
+        "parentId" : null,
+        "authorId" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "body" : "Can you add this assert above this line:\r\n```cpp\r\nstatic_assert(sizeof(int64_t) == sizeof(tensorflow::int64), \"64-bit int types should match in size\");\r\n```",
+        "createdAt" : "2020-08-11T18:49:49Z",
+        "updatedAt" : "2020-08-11T23:11:53Z",
+        "lastEditedBy" : "348d02e7-fb87-40d6-9079-97142b662dc4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a7e4df924652a151677b3e0b95609db27cb04631",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +289,293 @@  static_assert(sizeof(int64_t) == sizeof(tensorflow::int64),\n                \"64-bit int types should match in size\");\n  tensorflow::gtl::ArraySlice<tensorflow::int64> dimarray(\n      reinterpret_cast<tensorflow::int64*>(dims), num_dims);\n  if (attributes && !attributes->struct_size) {"
+  }
+]

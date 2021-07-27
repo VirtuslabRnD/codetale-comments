@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "ee28523e-c2eb-4422-87e3-d55b3c3606b6",
+    "prId" : 20147,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/20147#pullrequestreview-133333226",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c81aa098-031c-476e-b983-a34578677ae3",
+        "parentId" : null,
+        "authorId" : "845afb08-ba85-462c-92e8-305877b05a5d",
+        "body" : "What problem is this new build rule solving?  I thought this was the purpose of //tensorflow/core:stream_executor_headers_lib.",
+        "createdAt" : "2018-06-29T00:42:40Z",
+        "updatedAt" : "2018-06-29T00:42:45Z",
+        "lastEditedBy" : "845afb08-ba85-462c-92e8-305877b05a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "132f4fee-ada5-4196-8e72-886896237d07",
+        "parentId" : "c81aa098-031c-476e-b983-a34578677ae3",
+        "authorId" : "04d6768a-662f-42f5-9152-0bb9c7d64855",
+        "body" : "@jlebar Without the headers_lib, the following error will show up:\r\n```\r\nERROR: /home/ubuntu/tensorflow/tensorflow/contrib/mpi_collectives/BUILD:40:1: undeclared inclusion(s) in rule '//tensorflow/contrib/mpi_collectives:python/ops/_mpi_ops.so':\r\nthis rule is missing dependency declarations for the following files included by 'tensorflow/contrib/mpi_collectives/kernels/mpi_ops.cc':\r\n  'tensorflow/stream_executor/lib/statusor.h'\r\n  'tensorflow/stream_executor/lib/status.h'\r\n  'tensorflow/stream_executor/lib/error.h'\r\n  'tensorflow/stream_executor/lib/stringpiece.h'\r\n  'tensorflow/stream_executor/platform/port.h'\r\n  'tensorflow/stream_executor/platform/logging.h'\r\n  'tensorflow/stream_executor/lib/statusor_internals.h'\r\nTarget //tensorflow/tools/pip_package:build_pip_package failed to build\r\n```\r\n\r\nSo I added the `stream_executor_headers_lib` to address the above `undeclared inclusion(s)` issue.",
+        "createdAt" : "2018-06-29T03:33:48Z",
+        "updatedAt" : "2018-06-29T03:33:49Z",
+        "lastEditedBy" : "04d6768a-662f-42f5-9152-0bb9c7d64855",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d778f6d8-bdcb-4111-a1d8-81e1d908054f",
+        "parentId" : "c81aa098-031c-476e-b983-a34578677ae3",
+        "authorId" : "845afb08-ba85-462c-92e8-305877b05a5d",
+        "body" : "> Without the headers_lib, the following error will show up:\r\n\r\nThat explains why you need to add a new dependency to `tensorflow/contrib/mpi_collectives/BUILD`.\r\n\r\nMy question is, can that dependency be `//tensorflow/core:stream_executor_headers_lib` instead of this new rule?  If not, why not?",
+        "createdAt" : "2018-06-29T06:22:09Z",
+        "updatedAt" : "2018-06-29T06:22:09Z",
+        "lastEditedBy" : "845afb08-ba85-462c-92e8-305877b05a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ead6bd42-5726-44b3-9a72-b2d6f1a67508",
+        "parentId" : "c81aa098-031c-476e-b983-a34578677ae3",
+        "authorId" : "04d6768a-662f-42f5-9152-0bb9c7d64855",
+        "body" : "@jlebar With `//tensorflow/core:stream_executor_headers_lib` the following error will show up:\r\n```\r\nERROR: /home/ubuntu/tensorflow/tensorflow/contrib/mpi_collectives/BUILD:40:1: Label '//tensorflow/core:stream_executor_headers_lib' is duplicated in the 'deps' attribute of rule 'python/ops/_mpi_ops_gpu'\r\nERROR: /home/ubuntu/tensorflow/tensorflow/contrib/mpi_collectives/BUILD:40:1: Label '//tensorflow/core:stream_executor_headers_lib' is duplicated in the 'deps' attribute of rule 'python/ops/_mpi_ops.so_check_deps'\r\nERROR: /home/ubuntu/tensorflow/tensorflow/contrib/mpi_collectives/BUILD:40:1: Label '//tensorflow/core:stream_executor_headers_lib' is duplicated in the 'deps' attribute of rule 'python/ops/_mpi_ops.so'\r\n```\r\n\r\nI am not sure about the error, though from `_mpi_ops_gpu` I guess `stream_executor` may have gpu and no-gpu version and that might be the conflict?",
+        "createdAt" : "2018-06-29T15:40:58Z",
+        "updatedAt" : "2018-06-29T15:40:58Z",
+        "lastEditedBy" : "04d6768a-662f-42f5-9152-0bb9c7d64855",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fcd5c214-4d24-42e6-bf00-daeec6a5858e",
+        "parentId" : "c81aa098-031c-476e-b983-a34578677ae3",
+        "authorId" : "845afb08-ba85-462c-92e8-305877b05a5d",
+        "body" : "Ah, indeed, tensorflow/core:stream_executor_headers_lib depends on CUDA stuff.  So the new build rule you added is different in this important way.\r\n\r\nThese build rules are extremely messed up.\r\n\r\nI'm happy to take this for now, with the caveat that if and when we clean up the SE build rules, we may break you again.  I don't like that, but apparently we have no continuous builds for MPI.  :-/",
+        "createdAt" : "2018-06-29T18:29:58Z",
+        "updatedAt" : "2018-06-29T18:29:58Z",
+        "lastEditedBy" : "845afb08-ba85-462c-92e8-305877b05a5d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "83aa3f08966226ac74df5eafb76abb47190b6573",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +59,63 @@        \":stream_executor\",\n    ],\n)\n\ncc_library("
+  }
+]

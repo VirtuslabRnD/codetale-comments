@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "aeff6ca9-a9d2-416e-bed4-b43102088c7c",
+    "prId" : 40552,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/40552#pullrequestreview-663070559",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e9727af2-5dbe-40f4-82e4-c661fcd7493d",
+        "parentId" : null,
+        "authorId" : "68fac570-a499-4a66-bf20-f8f2cbebf597",
+        "body" : "When using multiplication with the mask, in case the result is 0, the sign is copied from gradient_h2[i]. This makes the results inconsistent with what is computed in line 150. Usually, -0 compares equal to 0, so you would not notice, but for Eigen::half, -0 == 0 doesn't return true.\r\nI am not sure whether those edge cases are important, but wanted to bring this up anyway (I am currently working on adding the MLIR generated ReluGrad kernel, and noticed this mismatch in the test expectations).",
+        "createdAt" : "2021-05-19T11:24:04Z",
+        "updatedAt" : "2021-05-19T11:24:04Z",
+        "lastEditedBy" : "68fac570-a499-4a66-bf20-f8f2cbebf597",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "97afd248868c7f28c197abde87cf610b550bdef9",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +122,126 @@      half2 mask_h2 = __hgt2(feature_h2[i], kZeroH2);\n      // backprop = mask * gradient\n      half2 backprop_h2 = __hmul2(mask_h2, gradient_h2[i]);\n#else\n      // Fall back: convert half2 to float2 for processing."
+  },
+  {
+    "id" : "36e68fcc-1b2a-4d0b-8006-1276be66d215",
+    "prId" : 39767,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/39767#pullrequestreview-430977474",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "81226cdf-06e3-4705-b270-faf170285f8d",
+        "parentId" : null,
+        "authorId" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "body" : "Can we do a single cast instead, from `Eigen::half` to `half2`?  Even better: can we use `half2` in the function signature?",
+        "createdAt" : "2020-06-11T00:30:05Z",
+        "updatedAt" : "2020-06-11T18:13:39Z",
+        "lastEditedBy" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a249fcc-797f-48f4-868c-26847cf6f826",
+        "parentId" : "81226cdf-06e3-4705-b270-faf170285f8d",
+        "authorId" : "8df6b2a7-a5b8-4771-8241-49fd7ff5a2aa",
+        "body" : "I think we need to first cast `half` to `float4` for vector load and store. Then cast it to `half2` for actual computation.",
+        "createdAt" : "2020-06-11T18:14:53Z",
+        "updatedAt" : "2020-06-11T18:14:53Z",
+        "lastEditedBy" : "8df6b2a7-a5b8-4771-8241-49fd7ff5a2aa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ac5116b-7a18-4414-91d0-b7c11315486b",
+        "parentId" : "81226cdf-06e3-4705-b270-faf170285f8d",
+        "authorId" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "body" : "Ah, you're right, though I would have done this as:\r\n\r\n```\r\nhalf2 gradient_h2[4];\r\nmemcpy(&gradient_h2[0], &gradient[index], 8);\r\n```\r\n\r\nsince as written I think the program has undefined behavior.  @timshen91 WDYT?",
+        "createdAt" : "2020-06-11T20:07:06Z",
+        "updatedAt" : "2020-06-13T05:18:34Z",
+        "lastEditedBy" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d2391a27-21e9-4ebe-a180-070de5c893bd",
+        "parentId" : "81226cdf-06e3-4705-b270-faf170285f8d",
+        "authorId" : "8df6b2a7-a5b8-4771-8241-49fd7ff5a2aa",
+        "body" : "I think this should be legit and valid. We did the same thing in the eigen library, like https://gitlab.com/libeigen/eigen/-/blob/master/Eigen/src/Core/arch/GPU/PacketMath.h#L533",
+        "createdAt" : "2020-06-15T17:10:24Z",
+        "updatedAt" : "2020-06-15T17:10:24Z",
+        "lastEditedBy" : "8df6b2a7-a5b8-4771-8241-49fd7ff5a2aa",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bce8cb82-95e8-4b77-8e1c-c03ac41c343a",
+        "parentId" : "81226cdf-06e3-4705-b270-faf170285f8d",
+        "authorId" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "body" : "But the Eigen code doesn't use float4. Does float4 require 128-bit alignment? Can you add an `assert()` check for the pointer alignment?",
+        "createdAt" : "2020-06-15T20:35:35Z",
+        "updatedAt" : "2020-06-15T20:35:35Z",
+        "lastEditedBy" : "db119d71-0485-413b-9ea8-fd044b814e31",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c26ea37-c46d-4452-a259-ab32c6cb349c",
+        "parentId" : "81226cdf-06e3-4705-b270-faf170285f8d",
+        "authorId" : "8df6b2a7-a5b8-4771-8241-49fd7ff5a2aa",
+        "body" : "Yes, it requires 128-bit alignment. And we already have the checking code in the PR.\r\n\r\nEigen uses ulonglong2 as Packet4h2 which has the same length of float4.",
+        "createdAt" : "2020-06-15T20:41:14Z",
+        "updatedAt" : "2020-06-15T20:41:15Z",
+        "lastEditedBy" : "8df6b2a7-a5b8-4771-8241-49fd7ff5a2aa",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ceed71957998d0d69c1a47e21647461282b60b48",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +109,113 @@\n    half2 *gradient_h2 = reinterpret_cast<half2*>(&gradient_h8);\n    half2 *feature_h2 = reinterpret_cast<half2*>(&feature_h8);\n    float4 backprop_h8;\n    half2* p_backprop_h2 = reinterpret_cast<half2*>(&backprop_h8);"
+  }
+]

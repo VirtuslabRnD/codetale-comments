@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "e0647930-aa59-4aef-bf63-684717cc6229",
+    "prId" : 21122,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/21122#pullrequestreview-147028242",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "parentId" : null,
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "Thanks for the fixes. There is one more request from our build team: could you make this a `cc_binary` with `linkshared=1` and test if it works? This aligns with TF's roadmap about tf.contrib and will help to make future integration/migration easier.\r\n\r\nOther than that, this PR looks good to me.",
+        "createdAt" : "2018-08-13T04:55:47Z",
+        "updatedAt" : "2018-08-16T00:00:51Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3500f0a4-355e-4697-96e1-5b91c387b0a3",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "body" : "Thanks @aaroey for the feedback. I am going to try this an report back.",
+        "createdAt" : "2018-08-13T15:32:50Z",
+        "updatedAt" : "2018-08-16T00:00:51Z",
+        "lastEditedBy" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ee56cf6-7590-4bcf-8045-11fec3f2a045",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "body" : "@aaroey I was able to use `linkshared=1` a shared library for the unit tests (i.e., `ngraph_tf_tests`) but for the TF python module (i.e., `pywrap_tensorflow_internal`) I don't know how to link it. If you can provide some help that I can try that as well. ",
+        "createdAt" : "2018-08-13T19:45:34Z",
+        "updatedAt" : "2018-08-16T00:00:51Z",
+        "lastEditedBy" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4d4622a9-2252-45bf-82b0-8162791fe7ea",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "@avijit-nervana Do you mean there were errors when linking it with `pywrap_tensorflow_internal`, or it can dynamically linked but not be able to be loaded when user `import tensorflow`?",
+        "createdAt" : "2018-08-14T14:00:26Z",
+        "updatedAt" : "2018-08-16T00:00:51Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e979981d-3f10-46c6-ad64-b18a48465028",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "body" : "@aaroey I am seeing `bazel` errors. I was able to add the `@ngraph_tf//:libngraph_tf.so` to the `//tensorflow:libtensorflow_cc.so` target by adding the following line:\r\n```\r\ntf_cc_shared_object(\r\n    name = \"libtensorflow_cc.so\",\r\n    srcs = if_ngraph([\"@ngraph_tf//:libngraph_tf.so\"]), <-- new line added\r\n    linkopts = select({\r\n        \"//tensorflow:darwin\": [\r\n            \"-Wl,-exported_symbols_list\",  # This line must be directly followed by the exported_symbols.lds file\r\n            \"$(location //tensorflow:tf_exported_symbols.lds)\",\r\n        ],\r\n```\r\nHowever, don't know how to add this dependency to the `pywrap_tensorflow_internal` as this is a `tf_py_wrap_cc(...)` and looks like `srcs` takes only a swig input file.\r\n\r\nWhat's the recommended way to add the .so to the python wrapper? \r\n\r\nAlso - if an external application uses the TensorFlow C++ API (e.g., a TensorFlow serving container) - then does the external application also need to link with `@ngraph_tf//:libngraph_tf.so`? ",
+        "createdAt" : "2018-08-14T21:25:46Z",
+        "updatedAt" : "2018-08-16T00:00:51Z",
+        "lastEditedBy" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "700b379e-b08c-40d9-9eb9-5b90b196e233",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "28fabc34-a1ac-4aba-988b-9c9e03232122",
+        "body" : "So what we had in mind is, rather than explicit dynamic linking in tensorflow, ngraph build and users use this mechanism.\r\n\r\n1 - When building, core TF only needs to expose the registration mechanism for optimizers.\r\n2 - We build TF without ngraph\r\n3 - You build ngraph to your specifications.\r\n4 - Users load TF.\r\n5 - Users dlopen ngraph library. This triggers a static initializer that registers ngraph optimizer with the core TF optimizer registry.\r\n6 - Users then use ngraph code.\r\n\r\nSo following the above model:\r\n- TF should not explicitly link against ngraph\r\n- ngraph should explicitly link against libtensorflow_framework.so\r\n- no explicit bazel dependency should be needed\r\n- external applications can choose to explicitly link against ngraph, or they can simply dlopen ngraph. Either should just work.",
+        "createdAt" : "2018-08-15T06:45:02Z",
+        "updatedAt" : "2018-08-16T00:00:51Z",
+        "lastEditedBy" : "28fabc34-a1ac-4aba-988b-9c9e03232122",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25ce2c42-0c26-40e9-87e0-4fdc36906470",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "Thanks @avijit-nervana for the explanation and @gunan for the suggestions. I also tested the approach about `cc_binary` with `linkshared=1`, and it turns out it's not working since `cc_binary` is not expected in `tf_py_wrap_cc`, and we'll need to implement what @gunan says when the mechanism is ready.\r\n\r\nAt this moment, since the mechanism mentioned is not fully implemented/tested yet, I think we can keep the current approach and do the migration later which will make things easier and less error-prone.",
+        "createdAt" : "2018-08-15T16:18:10Z",
+        "updatedAt" : "2018-08-16T00:00:51Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5a6c61b8-02ee-4dd3-9a22-009d6b79b66d",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "body" : "@aaroey Thanks for the approval. Since there is now a conflict with master - do you want me to resolve this?",
+        "createdAt" : "2018-08-15T19:36:04Z",
+        "updatedAt" : "2018-08-16T00:00:51Z",
+        "lastEditedBy" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "31c0a544-f8eb-474f-aa9d-aa7b89ed0e13",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "@avijit-nervana yes, please help to resolve it.",
+        "createdAt" : "2018-08-15T19:45:15Z",
+        "updatedAt" : "2018-08-16T00:00:51Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09a8482d-c5d3-4e8d-b5cc-27bac1988d51",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "body" : "@aaroey Done.\r\n",
+        "createdAt" : "2018-08-16T00:03:44Z",
+        "updatedAt" : "2018-08-16T00:03:44Z",
+        "lastEditedBy" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c8e9972-8abe-42d2-b580-6b22b65af1fc",
+        "parentId" : "9a0e1a13-77df-4fd3-b446-67c2fa2c8dd2",
+        "authorId" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "body" : "@aaroey The status below indicates that my push (to resolve the conflict with master) invalidated your approval. Is this expected or do I need to revert it? Please advise. Thanks.",
+        "createdAt" : "2018-08-16T21:19:41Z",
+        "updatedAt" : "2018-08-16T21:19:41Z",
+        "lastEditedBy" : "d1935eab-6063-475d-b4a1-e26eeeb4a2df",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bc6be507c71046dfc889a90e3949a903d5d1e6eb",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +25,29 @@)\n\ncc_library(\n    name = \"ngraph_tf\",\n    srcs = ["
+  }
+]

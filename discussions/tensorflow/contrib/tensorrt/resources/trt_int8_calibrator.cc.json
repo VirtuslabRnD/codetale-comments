@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "390b773a-5479-45c4-b4b8-c9bb0073e094",
+    "prId" : 19871,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/19871#pullrequestreview-128899486",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8423072f-5d8f-4d6a-aa7c-eb96e8523130",
+        "parentId" : null,
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "Why setting it to true? Do you want to make sure the first batch is not set until the the dedicated thread is started? Please comment.",
+        "createdAt" : "2018-06-15T15:08:07Z",
+        "updatedAt" : "2018-06-21T22:23:15Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4631936e61651101932073197c08b600006530a3",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +37,41 @@      done_(false),\n      dev_buffers_(dev_buffers),\n      calib_running_(true),\n      batch_is_set_(false),\n      engine_name_(engine_name) {}"
+  },
+  {
+    "id" : "43b60c60-e436-4829-b056-c9315a0b53f8",
+    "prId" : 17309,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/17309#pullrequestreview-100499654",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "91f93ac0-338c-4767-abf2-dd8ec0bac3c4",
+        "parentId" : null,
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "Will this become obsolete in future PRs? If not, I think there are a few improvements we can make to make the logic clear, less error-prone, and easier to maintain in the future:\r\n\r\n1. we only need a wait() in setBatch\r\n2. the mutex_lock should be outside of the loop, as otherwise the logic is identical (as safe as) without the mutex (see below)\r\n3. done_ needs to be protected by the mutex\r\n4. we should not miss the first batch, even though this may be statistically ok, but it's functionally incorrect. I think we can use this condition_variable to fix that.\r\n\r\nMy another argument is that using atomic words (aka lock-free) instead of mutex is error-prone and make the code harder to maintain. I think the current approach is identical to the code snippet below which doesn't use mutex/condition-var:\r\n```\r\nconstructor() {\r\n  calib_running_ = false;\r\n  done_ = false;\r\n}\r\nsetBatch() {\r\n  if (done_) return false;\r\n  while (calib_running_.load(acquire)) {\r\n    sleep(50ms);\r\n    if (done_) return false;\r\n  }\r\n  // set the batch\r\n  calib_running_.store(true, release);\r\n}\r\ngetBatch() {\r\n  calib_running_.store(false, release);\r\n  while (!calib_running_.load(acquire)) {\r\n    sleep(50ms);\r\n    if (done_) return false;\r\n  }\r\n  if (done_) return false;\r\n  // get the batch\r\n}\r\nsetDone() {\r\n  done_ = true;\r\n}\r\n```\r\nI think we can fix all the issues mentioned above by doing:\r\n```\r\nconstructor() {\r\n  // All these variables are protected by the same mutex.\r\n  batch_is_set_ = false;\r\n  calib_running_ = false;\r\n  done_ = false;\r\n}\r\nsetBatch() {\r\n  mutex_lock l(cond_mtx_);\r\n  while ((calib_running_ || batch_is_set_) && !done_) {\r\n    cond_.wait(l);\r\n  }\r\n  if (done_) return false;\r\n  CHECK(!calib_running_ && !batch_is_set_);\r\n  // set the batch\r\n  batch_is_set_ = true;\r\n  cond_.notify_all();\r\n}\r\ngetBatch() {\r\n  mutex_lock l(cond_mtx_);\r\n  calib_running_ = false;\r\n  cond_.notify_all();  // Set the batch if !batch_is_set_\r\n  while (!batch_is_set_ && !done_) {\r\n    cond_.wait(l);\r\n  }\r\n  if (done_) return false;\r\n  CHECK(!calib_running_ && batch_is_set_);\r\n  // get the batch\r\n  batch_is_set_ = false;\r\n  calib_running_ = true;\r\n}\r\nsetDone() {\r\n  mutex_lock l(cond_mtx_);\r\n  done_ = true;\r\n  cond_.notify_all();\r\n}\r\n```\r\nPlease take a look @samikama. Thanks :)",
+        "createdAt" : "2018-03-01T18:44:31Z",
+        "updatedAt" : "2018-03-01T22:59:18Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5e5671e692db0533dfec66d63b8e7c8d06bc4942",
+    "line" : 54,
+    "diffHunk" : "@@ -1,1 +52,56 @@      std::memory_order_acquire)) {  // wait while calibration is running\n    tensorflow::mutex_lock l(cond_mtx_);\n    cond_.wait_for(l, std::chrono::milliseconds(50));\n    if (done_) return false;\n  }"
+  },
+  {
+    "id" : "f58b9345-8da3-42a1-ba66-f0624fb5aa90",
+    "prId" : 17309,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/17309#pullrequestreview-100553281",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0edf1ed7-2588-42c3-b62a-f9ea470102e1",
+        "parentId" : null,
+        "authorId" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "body" : "Hi @samikama, not sure if you saw my comments in an old version of this file. I'm copying it here:\r\n\r\nThe mem copy has to happen on the stream, as otherwise source of the copy may not be available yet. This is because, for the predecessor op of TRTCalibOp, its Compute() can return immediately after it launches the kernel, so when this cudaMemcpy happens the previous kernel may be still running or even not started. \r\n\r\nI'm curious, how making the op an async op can solve this? Anyway I'm putting a TODO for myself to double check in future PRs.",
+        "createdAt" : "2018-03-01T19:03:35Z",
+        "updatedAt" : "2018-03-01T22:59:18Z",
+        "lastEditedBy" : "1c0d3996-f30e-4521-a42e-7a5cdc08f5b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5e5671e692db0533dfec66d63b8e7c8d06bc4942",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +67,71 @@    // stream->ThenMemcpy() is used in future PRs.\n    auto status =\n        cudaMemcpy(d.first, it.second, d.second, cudaMemcpyDeviceToDevice);\n    if (status != cudaSuccess) {\n      LOG(FATAL) << \"cudaMemcpy \" << engine_name_ << \" for '\" << it.first"
+  }
+]

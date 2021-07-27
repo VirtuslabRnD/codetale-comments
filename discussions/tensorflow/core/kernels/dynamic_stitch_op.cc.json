@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "29b25e26-8f3f-4e65-9170-78b12ec7a9b9",
+    "prId" : 11940,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/11940#pullrequestreview-53704511",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fc2b8185-80c8-46b5-a0bf-55090b9ede7c",
+        "parentId" : null,
+        "authorId" : "e0c73848-497b-4162-afc3-88791d085557",
+        "body" : "Rather than doing a serial scan on the cpu over all elements of the output, it could be much faster to do a binary search on the GPU to find the appropriate originating pointer.  It would greatly reduce the cpu work and the amount of data transferred to the GPU.\r\n\r\nSo you would have the outer loop only, compute the offsets and then binary search into this list to find the appropriate index.  You can look at the split and concat kernels which do something similar.",
+        "createdAt" : "2017-08-02T01:40:20Z",
+        "updatedAt" : "2017-08-09T03:37:07Z",
+        "lastEditedBy" : "e0c73848-497b-4162-afc3-88791d085557",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a40de57-c5b7-473c-b245-f33621b07447",
+        "parentId" : "fc2b8185-80c8-46b5-a0bf-55090b9ede7c",
+        "authorId" : "933f1903-83f5-4a6d-99bb-2e9fae4b4beb",
+        "body" : "@ekelsen I don't think we can do it just with one loop. because we have to check the indices' collision before sending data to gpu, so we have to scan all of the indices on cpu.",
+        "createdAt" : "2017-08-02T03:38:55Z",
+        "updatedAt" : "2017-08-09T03:37:07Z",
+        "lastEditedBy" : "933f1903-83f5-4a6d-99bb-2e9fae4b4beb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ab787897-4990-493e-9a4d-00cb05f5b501",
+        "parentId" : "fc2b8185-80c8-46b5-a0bf-55090b9ede7c",
+        "authorId" : "e0c73848-497b-4162-afc3-88791d085557",
+        "body" : "Hmmm...to match the CPU always choosing the last index in the case of a collision.  Too bad this can't be changed now.",
+        "createdAt" : "2017-08-02T04:10:20Z",
+        "updatedAt" : "2017-08-09T03:37:07Z",
+        "lastEditedBy" : "e0c73848-497b-4162-afc3-88791d085557",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "92150dd6-4bfb-474c-a7cf-ee861d20328a",
+        "parentId" : "fc2b8185-80c8-46b5-a0bf-55090b9ede7c",
+        "authorId" : "e0c73848-497b-4162-afc3-88791d085557",
+        "body" : "Well it could still be done actually, when doing the write you'd have to keep track of the index it came from as well and atomically update it if the index was > than the existing index.  We can leave that as a TODO for more speed later.  Please add a comment in the code mentioning that this could be done for more speed.",
+        "createdAt" : "2017-08-02T04:12:40Z",
+        "updatedAt" : "2017-08-09T03:37:07Z",
+        "lastEditedBy" : "e0c73848-497b-4162-afc3-88791d085557",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0e56da4-b620-4c20-a544-e1a4318d59f1",
+        "parentId" : "fc2b8185-80c8-46b5-a0bf-55090b9ede7c",
+        "authorId" : "933f1903-83f5-4a6d-99bb-2e9fae4b4beb",
+        "body" : "Sorry, i don't get you. where the write occur you mean?",
+        "createdAt" : "2017-08-02T05:02:12Z",
+        "updatedAt" : "2017-08-09T03:37:07Z",
+        "lastEditedBy" : "933f1903-83f5-4a6d-99bb-2e9fae4b4beb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "267d3a9a-f8b4-4641-b4bc-4a7560bc35f8",
+        "parentId" : "fc2b8185-80c8-46b5-a0bf-55090b9ede7c",
+        "authorId" : "e0c73848-497b-4162-afc3-88791d085557",
+        "body" : "You can add the TODO at the top of the DynamicStitchGPU",
+        "createdAt" : "2017-08-02T05:12:06Z",
+        "updatedAt" : "2017-08-09T03:37:07Z",
+        "lastEditedBy" : "e0c73848-497b-4162-afc3-88791d085557",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a8326d11-9f28-4d8e-88f8-69048e9d66f8",
+        "parentId" : "fc2b8185-80c8-46b5-a0bf-55090b9ede7c",
+        "authorId" : "933f1903-83f5-4a6d-99bb-2e9fae4b4beb",
+        "body" : "done",
+        "createdAt" : "2017-08-02T05:58:49Z",
+        "updatedAt" : "2017-08-09T03:37:07Z",
+        "lastEditedBy" : "933f1903-83f5-4a6d-99bb-2e9fae4b4beb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3e79f9a7da7ec1fb0ae86a7cb317ab8ed544dd6",
+    "line" : 96,
+    "diffHunk" : "@@ -1,1 +112,116 @@  //sum of indices_inputs[i].NumElements() for compute indicies_flat value.\n  int32 base_size = 0;\n  for (int i = 0; i < indices_inputs.size(); ++i) {\n    auto indices_vec = indices_inputs[i].flat<int32>();\n    auto data_ptr_base = data_inputs[i].template flat<T>().data();"
+  }
+]

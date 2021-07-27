@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "7798f596-a284-4199-9d10-39d2786f7db4",
+    "prId" : 26427,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/26427#pullrequestreview-231089283",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "baede196-86b4-4bb6-a2f1-49cc82d0a0fb",
+        "parentId" : null,
+        "authorId" : "cc3a9462-2410-463b-a9e3-7b2b39d1f5bd",
+        "body" : "Can it lead to data races with writing to `output.template chip<0>(j)` if the same segment will be assigned to different block ranges/tasks?\r\n\r\nIt seems that you can parallelize only by num_reductions, and each `reductionWorker` can safely reduce only one segment.\r\n\r\n```\r\nauto reductionWorker = [&](int64 begin, int64 end) -> void {\r\n      // traversal all inputs.\r\n      for (int64 i = 0; i < N; i++) {\r\n        // Get the corresponding output index j of input i.\r\n        Index j = internal::SubtleMustCopy(segment_ids(i));\r\n\r\n        if (j >= begin && j < end)\r\n          reduce(i -> j);\r\n...\r\n\r\ncpu_device.parallelFor(num_reductions (aka num_segments), cost, reductionWorker);\r\n```\r\n",
+        "createdAt" : "2019-04-24T19:06:05Z",
+        "updatedAt" : "2019-04-26T10:25:22Z",
+        "lastEditedBy" : "cc3a9462-2410-463b-a9e3-7b2b39d1f5bd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed1ef4f3-c0da-44a4-a593-3a4795d558e0",
+        "parentId" : "baede196-86b4-4bb6-a2f1-49cc82d0a0fb",
+        "authorId" : "e8354fab-5d0f-42e9-8505-c920c048702a",
+        "body" : "I think it will lead data racing if write 1 segment from different workers just like BiasAddGrad.\r\nIn fact to handle data safely without extra buffer, each segment can only be updated in a worker, and each worker can handle more segments if it has enough block size.\r\nI'm not sure if it's worthy to build output buffer to avoid data racing because workload in UnsortedSegmentReduction is imbalance, it may not bring much improvement. \r\n\r\nThis solution may lead poor performance if segment is small(1 of the new benchmark), a possible way is to parallel the task with `inner_dim`, then it become tile more than row or column, this is also what SortedSegmentReduction did.",
+        "createdAt" : "2019-04-25T03:42:02Z",
+        "updatedAt" : "2019-04-26T10:25:22Z",
+        "lastEditedBy" : "e8354fab-5d0f-42e9-8505-c920c048702a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "881b12c8-6216-40b8-93d3-cc935a44788d",
+        "parentId" : "baede196-86b4-4bb6-a2f1-49cc82d0a0fb",
+        "authorId" : "e8354fab-5d0f-42e9-8505-c920c048702a",
+        "body" : "Should I test tile optimization in this PR? Or submit it first, then do tile in another PR?",
+        "createdAt" : "2019-04-25T08:59:36Z",
+        "updatedAt" : "2019-04-26T10:25:22Z",
+        "lastEditedBy" : "e8354fab-5d0f-42e9-8505-c920c048702a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d441b9f4-5dc0-4557-ab64-fb5abaf01844",
+        "parentId" : "baede196-86b4-4bb6-a2f1-49cc82d0a0fb",
+        "authorId" : "cc3a9462-2410-463b-a9e3-7b2b39d1f5bd",
+        "body" : "I incorrectly interpreted block_range assignment code, it is indeed guarantees that single output row  will be always reduced from a single task... though it took me some mental energy to understand it\r\n\r\nI tried to run this PR with thread sanitizer, and it failed:\r\n\r\n`\r\nWARNING: ThreadSanitizer: heap-use-after-free third_party/tensorflow/core/kernels/segment_reduction_ops.cc:451:33 in\r\ntensorflow::functor::UnsortedSegmentFunctor<Eigen::ThreadPoolDevice, double, long long, tensorflow::functor::One<double>, tensorflow::functor::ProdOp<double> >::operator()(tensorflow::OpKernelContext*, long long, tensorflow::TensorShape const&, Eigen::TensorMap<Eigen::Tensor<long long const, 1, 1, long>, 16, Eigen::MakePointer>, long long, double const*, Eigen::TensorMap<Eigen::Tensor<double, 2, 1, long>, 16, Eigen::MakePointer>) (blaze-out/k8-tsan-fastbuild/bin/third_party/tensorflow/python/kernel_tests/segment_reduction_ops_test);\r\n`\r\n\r\nLine numbers are off by one, this error is coming from\r\n\r\n```block_range[next_block_idx] = num_segments;```\r\n\r\n`next_block_idx` accessing beyond the size of the `block_range`.",
+        "createdAt" : "2019-04-25T21:44:19Z",
+        "updatedAt" : "2019-04-26T10:25:22Z",
+        "lastEditedBy" : "cc3a9462-2410-463b-a9e3-7b2b39d1f5bd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a3d9447-6971-49ac-bbae-fcbbb58af037",
+        "parentId" : "baede196-86b4-4bb6-a2f1-49cc82d0a0fb",
+        "authorId" : "e8354fab-5d0f-42e9-8505-c920c048702a",
+        "body" : "Thanks for pointing out this bug, I've reproduced it and found the reason now:\r\n- When compute the estimated `block_size`, the 2 consecutive divisions may cause loss of accuracy if not divisible. Then it would get a small `block_size` and need more `block_range` than its length `block_num + 1`. To fix it, only do division once and round up the result to get a larger `block_size`.\r\n\r\nIt works for my own test now, please check the new code with your test, thanks!",
+        "createdAt" : "2019-04-26T10:37:13Z",
+        "updatedAt" : "2019-04-26T10:37:14Z",
+        "lastEditedBy" : "e8354fab-5d0f-42e9-8505-c920c048702a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "52a6cfddef9b51b608b4a554b77a10e1522d56ec",
+    "line" : 113,
+    "diffHunk" : "@@ -1,1 +457,461 @@        // If j is in work scope of this worker, do the reduction.\n        if (j >= block_range[begin] && j < block_range[end]) {\n          reduction(data_flat.template chip<0>(i), output.template chip<0>(j));\n        }\n      }"
+  },
+  {
+    "id" : "93b1de64-e2a8-4737-af77-4448d3258f78",
+    "prId" : 6975,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/6975#pullrequestreview-19904117",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "da3df9ea-be60-47e8-a8c1-04c14e5ef0ae",
+        "parentId" : null,
+        "authorId" : "711b9ad2-1118-41b4-bbcb-e363bd57c690",
+        "body" : "This doesn't share any code with UnsortedSegmentSumFunctor, yet there is lots of code copied between the two (I think the only differences are the initializer on line 256 and the output update on line 268).\r\n\r\nIs it possible to have the base UnsortedSegmentBaseFunctor contain this shared code, and pass in \"initializer\" and \"reducer\" functors into the base implementation which can be called at these two call sites? ",
+        "createdAt" : "2017-01-23T18:06:37Z",
+        "updatedAt" : "2017-02-02T22:06:57Z",
+        "lastEditedBy" : "711b9ad2-1118-41b4-bbcb-e363bd57c690",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c0a6d4f1-e4a1-4067-b454-45a9e8307b7d",
+        "parentId" : "da3df9ea-be60-47e8-a8c1-04c14e5ef0ae",
+        "authorId" : "c22d8f45-ce0f-4366-911d-dfbc1b311b80",
+        "body" : "So I've been looking at this problem for a while now and I don't really see any straight forward solution to this.\r\nOne thing that makes it tricky is the GPU implementation of UnsortedSegmentSum, which does not share the code of the CPU implementation.\r\nSo that would be different from baseFunctor, but would need the same signature, since its used as well in BaseOp.\r\nThus would contain the init functors and reduction functors but would not use them.\r\n\r\nSecond I can't seem to initialize a functor as a member in e.g. UnsortedSegmentSumOp with member init functors and reduction functors as arguments.\r\nIf you see another way I'd be happy if you let me know.",
+        "createdAt" : "2017-01-27T15:28:50Z",
+        "updatedAt" : "2017-02-02T22:06:57Z",
+        "lastEditedBy" : "c22d8f45-ce0f-4366-911d-dfbc1b311b80",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df3fd447-8914-402a-adc1-7ce7c45829e5",
+        "parentId" : "da3df9ea-be60-47e8-a8c1-04c14e5ef0ae",
+        "authorId" : "711b9ad2-1118-41b4-bbcb-e363bd57c690",
+        "body" : "I wouldn't expect the GPU and CPU to share implementations, I would expect the CPU implementations of UnsortedSegmentSum/Max to (possibly) share code. Maybe this could be captured as a TODO? (I realize this PR has been pending for quite some time).",
+        "createdAt" : "2017-01-30T19:50:47Z",
+        "updatedAt" : "2017-02-02T22:06:57Z",
+        "lastEditedBy" : "711b9ad2-1118-41b4-bbcb-e363bd57c690",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "355ddb67-defb-4241-8dda-58e9c94243f5",
+        "parentId" : "da3df9ea-be60-47e8-a8c1-04c14e5ef0ae",
+        "authorId" : "c22d8f45-ce0f-4366-911d-dfbc1b311b80",
+        "body" : "Yes, I've understood the concern :) I don't see a straight forward solution to it, though.\r\nAdded a todo comment now, however.",
+        "createdAt" : "2017-02-02T22:10:57Z",
+        "updatedAt" : "2017-02-02T22:10:57Z",
+        "lastEditedBy" : "c22d8f45-ce0f-4366-911d-dfbc1b311b80",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e03e7ed1ed520f6f70d92614c7f91d7d9bedb761",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +255,259 @@                  const Index data_size, const T* data,\n                  typename TTypes<T, 2>::Tensor output) override {\n    output.setConstant(std::numeric_limits<T>::min());\n    if (data_size == 0) {\n      return;"
+  }
+]

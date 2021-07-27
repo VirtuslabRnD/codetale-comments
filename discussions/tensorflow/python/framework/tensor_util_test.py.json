@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "d1bfb6a8-96b2-45fb-a30c-cd55fc928b4d",
+    "prId" : 38258,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/38258#pullrequestreview-390377592",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c616da8c-48fd-4ef3-ae00-1ceed4f17287",
+        "parentId" : null,
+        "authorId" : "9f15379f-126a-430d-93cb-7cc21488adf2",
+        "body" : "I don't like the change here. Can we keep the original? If not, why? Can we document what the binary data is supposed to be?",
+        "createdAt" : "2020-04-06T16:58:46Z",
+        "updatedAt" : "2020-04-09T05:37:32Z",
+        "lastEditedBy" : "9f15379f-126a-430d-93cb-7cc21488adf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8ab40b6d-3f04-45c1-a60e-0bd399da3d46",
+        "parentId" : "c616da8c-48fd-4ef3-ae00-1ceed4f17287",
+        "authorId" : "63662974-f689-45c6-9d8d-673ee54a9995",
+        "body" : "Hi, @mihaimaruseac .\r\n\r\nThis is not an issue about correctness. It is an issue about performance. \r\n\r\nIn tensorflow we have 2 ways to serialize tensor data in [protobuf](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/tensor.proto). \r\n\r\n- The first one is `repeated`. This method is to serialize data as many typed individual values. And it requires complex sterilization computation in dense tensor scenario.\r\n- The second one is `tensor_content` which stores dense tensor data as unserialized binary. As the document says, \"The purpose of this representation is to reduce serialization overhead during RPC call by avoiding serialization of many repeated small items.\"\r\n\r\nIn short, to achieve good performance, we should store dense tensor data in `tensor_content` in protobuf. However, the current API of `tf.make_tensor_proto` only store some very common types of data into `tensor_content`(not including `float16`).\r\n\r\nIn my case, I used the official ResNet50 model which uses `float16` tensors as input. And I got very expensive performance overhead in serialization(as what I said [here](https://github.com/tensorflow/tensorflow/pull/38258#issue-399389454)).\r\n\r\nI think we'd better let `tf.make_tensor_proto` to store `float16` data in `tensor_content` rather than `repeated int32 half_val`. \r\n\r\nBecause:\r\n1. **Performance**. By using `tensor_content`, we can reduce 75% serialization overhead in RPC. In my case, from 280ms to 60ms, which is a very great performance improvement.\r\n2. What's more. The origin `half_val` is also unreadable because it will regard the `float16` as `int`.\r\n3. **Memory efficient**. `repeated int32 half_val` stores `float16` with 16 bits padding, while `tensor_content` just stores the raw layout.\r\n\r\nHence, I think this PR can bring better performance by default in the RPC scenario and won't cause any drawbacks.\r\n\r\nI'm looking forward to your opinions.\r\n\r\n",
+        "createdAt" : "2020-04-06T17:39:12Z",
+        "updatedAt" : "2020-04-09T05:37:32Z",
+        "lastEditedBy" : "63662974-f689-45c6-9d8d-673ee54a9995",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6fb2939f-d215-4de4-b75d-4c005ed163c1",
+        "parentId" : "c616da8c-48fd-4ef3-ae00-1ceed4f17287",
+        "authorId" : "9f15379f-126a-430d-93cb-7cc21488adf2",
+        "body" : "But this is only a test and we're changing the test from checking behavior when `repeated half_val` values are used to checking behavior when `float16` is used.\r\n\r\nI think we should create a separate PR for the performance and enhancement of the proto and get that through a larger review, since it will need input from more people and multiple teams as well as changes throughout the base.",
+        "createdAt" : "2020-04-07T17:31:25Z",
+        "updatedAt" : "2020-04-09T05:37:32Z",
+        "lastEditedBy" : "9f15379f-126a-430d-93cb-7cc21488adf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5730bc69-e3d5-438c-91a2-f902787afd1f",
+        "parentId" : "c616da8c-48fd-4ef3-ae00-1ceed4f17287",
+        "authorId" : "63662974-f689-45c6-9d8d-673ee54a9995",
+        "body" : "Thanks for your reply. \r\n\r\nI modified the content of `_TENSOR_CONTENT_TYPES` and append it with `float16`. So I think it's not \"only a test\". And this will make `tf.make_tensor_proto` to store `float16` data in `tensor_content` rather than `repeated half_val`. As I changed the content of `_TENSOR_CONTENT_TYPES`, I also need to modify the test file, as the test result of `tf.make_tensor_proto` for `float16` was originally designed for `repeated half_val` other than `tensor_content`.\r\n\r\nIf you do not like this PR(though I think it only brings benefits), I'd like to recommend the users who met problems with serious serialization overhead to have a look at this PR. They can manually set the tensor buffer like `numpy.array.tostring()` into the `tensor_content` of tensor proto rather than using `tf.make_tensor_proto` who only set some common types into `tensor_content`. And be aware that the [official TensorFlow resnet50 NHWC model](https://github.com/tensorflow/models/tree/master/official/r1/resnet#pre-trained-model) used `float16` as input types and it will trigger the performance punishment if they use it with `tf.make_tensor_proto`.",
+        "createdAt" : "2020-04-08T02:48:38Z",
+        "updatedAt" : "2020-04-09T05:37:32Z",
+        "lastEditedBy" : "63662974-f689-45c6-9d8d-673ee54a9995",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ecccfc26-4df8-40c2-be79-8537fc96ea72",
+        "parentId" : "c616da8c-48fd-4ef3-ae00-1ceed4f17287",
+        "authorId" : "9f15379f-126a-430d-93cb-7cc21488adf2",
+        "body" : "This is `testHalf`, it should test that `make_tensor_proto` works with a `np.float16`\r\n\r\nThere was a miscomunication here. Once you added the `float16` support the output of this test changed. Now it makes more sense.\r\n\r\nThank you for the patience",
+        "createdAt" : "2020-04-08T22:34:30Z",
+        "updatedAt" : "2020-04-09T05:37:32Z",
+        "lastEditedBy" : "9f15379f-126a-430d-93cb-7cc21488adf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "78793f73dfb8c5e81e5f5565103f3f47d2eae9f0",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +231,235 @@      dtype: DT_HALF\n      tensor_shape { dim { size: 2 } }\n      tensor_content: \"\\000I\\000M\"\n      \"\"\", t)\n"
+  },
+  {
+    "id" : "ed2c662a-6d13-4e09-a2b3-1d8e894b11e0",
+    "prId" : 6681,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/6681#pullrequestreview-15852066",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "328e8b83-0816-4e48-b952-dbd4a4496ccc",
+        "parentId" : null,
+        "authorId" : "c8f2b008-60f4-4709-b654-47bc9a7795a2",
+        "body" : "Do you need this?",
+        "createdAt" : "2017-01-09T18:29:30Z",
+        "updatedAt" : "2017-01-11T17:32:56Z",
+        "lastEditedBy" : "c8f2b008-60f4-4709-b654-47bc9a7795a2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7bd60bb2-84fa-4b2c-9811-03414e6738f1",
+        "parentId" : "328e8b83-0816-4e48-b952-dbd4a4496ccc",
+        "authorId" : "bd62c557-d5e3-4524-9702-7c411df1564e",
+        "body" : "We need to import sys as we are using 'sys.byteorder' to detect endianness of underlying platform.",
+        "createdAt" : "2017-01-10T05:37:17Z",
+        "updatedAt" : "2017-01-11T17:32:56Z",
+        "lastEditedBy" : "bd62c557-d5e3-4524-9702-7c411df1564e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "427fc228fe7628e819f62e43ebe86818c48ffff6",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +20,24 @@\nimport numpy as np\nimport sys\n\nfrom tensorflow.python.framework import constant_op"
+  }
+]

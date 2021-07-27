@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "d2f86820-a81b-4825-88d2-f0f5c44a6476",
+    "prId" : 5813,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/5813#pullrequestreview-10106828",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9fb0033a-57cd-4be1-89af-6a6093af9bec",
+        "parentId" : null,
+        "authorId" : "d73554f3-2bf7-40ff-aaa3-bf5fc17bcf26",
+        "body" : "After reading the explanation above, I have some worries that some people will be hit by this change, e.g., they will not be able to create 2 optimizers of the same kind because they'll get reuse errors.\r\n\r\nThat's an edge case, but I think it could be avoided by putting a variable scope with default name around this get_variable call. Is this called only from the method below? If so, then let's replace the current\r\n\"ops.name_scope(socpe_name + \"/\")\" with \"variable_scope.variable_scope(None, primary.op.name)\"\r\nand then use name instead of the joint scope_name.\r\n\r\nDoes this sound reasonable?",
+        "createdAt" : "2016-11-24T05:30:34Z",
+        "updatedAt" : "2016-12-01T03:46:45Z",
+        "lastEditedBy" : "d73554f3-2bf7-40ff-aaa3-bf5fc17bcf26",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62167254-f8b3-4d76-9ec3-d19502ad5537",
+        "parentId" : "9fb0033a-57cd-4be1-89af-6a6093af9bec",
+        "authorId" : "c7fbe97a-a2c5-4555-9371-967d34454334",
+        "body" : "Great! I think it's a good idea.\r\nAnd I hope to make a small change to your example code. \r\n```python\r\ndef create_slot(primary, val, name, colocate_with_primary=True):\r\n  with variable_scope.variable_scope(None, primary.op.name):\r\n    return _create_slot_var(primary, val, name)\r\n```\r\nWhen I use `two adam optimizers` with the same kind, it will create:\r\n```\r\nRNN/GRUCell/Gates/Linear/Matrix/Adam/m:0 (150, 200)\r\nRNN/GRUCell/Gates/Linear/Matrix_1/Adam/v:0 (150, 200)\r\nRNN/GRUCell/Gates/Linear/Matrix_2/Adam/m:0 (150, 200)\r\nRNN/GRUCell/Gates/Linear/Matrix_3/Adam/v:0 (150, 200)\r\n```\r\nOf course, it works. But I think `Matrix_N` is not good enough for understanding.\r\nSo I hope to change like below:\r\n```python\r\ndef create_slot(primary, val, name, colocate_with_primary=True):\r\n  with variable_scope.variable_scope(None, primary.op.name + '/' + name)\r\n    return _create_slot_var(primary, val, '')\r\n```\r\nAnd now it will create like below:\r\n```\r\nRNN/GRUCell/Gates/Linear/Matrix/Adam/m:0 (150, 200)\r\nRNN/GRUCell/Gates/Linear/Matrix/Adam/v:0 (150, 200)\r\nRNN/GRUCell/Gates/Linear/Matrix/Adam/m_1:0 (150, 200)\r\nRNN/GRUCell/Gates/Linear/Matrix/Adam/v_1:0 (150, 200)\r\n```\r\nMaybe `Matrix/Adam/v_1` is better than `Matrix_3/Adam/v`, do you think so?",
+        "createdAt" : "2016-11-24T06:58:37Z",
+        "updatedAt" : "2016-12-01T03:46:45Z",
+        "lastEditedBy" : "c7fbe97a-a2c5-4555-9371-967d34454334",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49a0d69e-455f-4d0f-b2bf-aadfc8f928c7",
+        "parentId" : "9fb0033a-57cd-4be1-89af-6a6093af9bec",
+        "authorId" : "c7fbe97a-a2c5-4555-9371-967d34454334",
+        "body" : "And I review this code again. If we think `RNN/GRUCell/Gates/Linear/Matrix_N/Adam:0 (150, 200)` is suitable for understanding, we can remove this [change](https://github.com/Syndrome777/tensorflow/blob/06b751fd7c5dbf5ae359156c6bbaf4c78881d72e/tensorflow/python/training/optimizer.py#L592) which add slot_name as suffix (`Adam/m` and `Adam/v`) for better understanding mentioned above. Could you give me some advice?",
+        "createdAt" : "2016-11-25T03:32:10Z",
+        "updatedAt" : "2016-12-01T03:46:45Z",
+        "lastEditedBy" : "c7fbe97a-a2c5-4555-9371-967d34454334",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3cb6d632f5585e0ab093d4c2a0b3695f32c15557",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +49,53 @@  \"\"\"Helper function for creating a slot variable.\"\"\"\n\n  slot = variable_scope.get_variable(scope, initializer=val, trainable=False)\n  # pylint: disable=protected-access\n  if isinstance(primary, variables.Variable) and primary._save_slice_info:"
+  },
+  {
+    "id" : "48c6469d-2d69-4f40-9b1a-849319d85664",
+    "prId" : 5813,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/5813#pullrequestreview-10897821",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5db96e44-1f9a-4321-91d8-e36987c0fdd2",
+        "parentId" : null,
+        "authorId" : "d73554f3-2bf7-40ff-aaa3-bf5fc17bcf26",
+        "body" : "Please add a comment explaining why -2 is here.",
+        "createdAt" : "2016-11-30T17:56:38Z",
+        "updatedAt" : "2016-12-01T03:46:45Z",
+        "lastEditedBy" : "d73554f3-2bf7-40ff-aaa3-bf5fc17bcf26",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ee515e80-c9c0-4a61-9ae7-1997ce39202f",
+        "parentId" : "5db96e44-1f9a-4321-91d8-e36987c0fdd2",
+        "authorId" : "c7fbe97a-a2c5-4555-9371-967d34454334",
+        "body" : "Because `scope` is ended with` linear//weight/Adam/`, so remove `linear//weight/` and `/`. But for `slot.name`, it's ended with `linear//weight/Adam:0,` so remove `linear//weight/` and `:0`.",
+        "createdAt" : "2016-11-30T18:01:17Z",
+        "updatedAt" : "2016-12-01T03:46:45Z",
+        "lastEditedBy" : "c7fbe97a-a2c5-4555-9371-967d34454334",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f0c201d-9a75-4186-98c6-440182692c4e",
+        "parentId" : "5db96e44-1f9a-4321-91d8-e36987c0fdd2",
+        "authorId" : "d73554f3-2bf7-40ff-aaa3-bf5fc17bcf26",
+        "body" : "Yes. Please add a comment in code, so it's clear later; e.g. something like this:\r\n\r\n# For example, slot.name here can be \"linear//weight/Adam:0\", while primary.op.name is ...\r\n# We want to remove ....",
+        "createdAt" : "2016-11-30T18:07:02Z",
+        "updatedAt" : "2016-12-01T03:46:45Z",
+        "lastEditedBy" : "d73554f3-2bf7-40ff-aaa3-bf5fc17bcf26",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b430d00d-a962-4654-abfe-1f07fd781c55",
+        "parentId" : "5db96e44-1f9a-4321-91d8-e36987c0fdd2",
+        "authorId" : "c7fbe97a-a2c5-4555-9371-967d34454334",
+        "body" : "Okay, I have pushed a new commit to add comments for our previous modification.",
+        "createdAt" : "2016-12-01T03:49:31Z",
+        "updatedAt" : "2016-12-01T03:49:31Z",
+        "lastEditedBy" : "c7fbe97a-a2c5-4555-9371-967d34454334",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3cb6d632f5585e0ab093d4c2a0b3695f32c15557",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +59,63 @@    # \"linear//weight\". We want to get 'Adam' as real_slot_name, so we\n    # remove \"'linear//weight' + '/'\" and ':0'.\n    real_slot_name = slot.name[len(primary.op.name + \"/\"):-2]\n    slice_info = primary._save_slice_info\n    slot._set_save_slice_info(variables.Variable.SaveSliceInfo("
+  }
+]

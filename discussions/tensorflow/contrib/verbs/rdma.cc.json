@@ -1,0 +1,321 @@
+[
+  {
+    "id" : "e293370a-56d7-467f-ac9a-81f9318a5ba7",
+    "prId" : 28641,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/28641#pullrequestreview-236426250",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "667eccb0-9cdc-44e0-a524-937742e72812",
+        "parentId" : null,
+        "authorId" : "b8abac33-5e86-4b26-8cb5-3b2cb0605588",
+        "body" : "nit: `/*sync_dst_compute=*/true` is more readable",
+        "createdAt" : "2019-05-12T16:21:35Z",
+        "updatedAt" : "2019-05-12T16:22:16Z",
+        "lastEditedBy" : "b8abac33-5e86-4b26-8cb5-3b2cb0605588",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16caedcc746867e26258fde0a018445e1423c5ca",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +1635,1639 @@                                  CHECK(s.ok()) << \"copy tensor to gpu sync\";\n                                  Done(s);\n                                }, true /*sync_dst_compute*/);\n    return;\n  }"
+  },
+  {
+    "id" : "27bfca26-8f1c-4a65-9733-8f509a1681ef",
+    "prId" : 16005,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/16005#pullrequestreview-99975211",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "49ea3f51-3be5-43fa-ba8d-5191818d5a0f",
+        "parentId" : null,
+        "authorId" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "body" : "I assume that this call is in the chain initiated by a Rendezvous::RecvAsync callback.  The Tensor returned holds a Ref on its backing TensorBuffer, so that buffer should not deallocate and the memory should not change until the returned Tensor value is itself deleted.  I'm surprised you find it necessary to deep copy the tensor.  It should be sufficient just to do\r\n     tensor_ = in;\r\nWhich will create a new Ref held by tensor_, before in goes out of scope.\r\nIt's okay to submit this way now, since I agree it's not a significant performance hit, but it would be worthwhile understanding why it's necessary, if it is.\r\n\r\nOh, tensor_ is a ptr.   Maybe make it a std::unique_ptr?",
+        "createdAt" : "2018-01-12T20:00:37Z",
+        "updatedAt" : "2018-01-17T14:03:09Z",
+        "lastEditedBy" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fd65d887-983a-4c5b-883a-9133bf68e888",
+        "parentId" : "49ea3f51-3be5-43fa-ba8d-5191818d5a0f",
+        "authorId" : "592f96b1-2a34-4369-8d13-faf056f8a339",
+        "body" : "@poxvoculi @shamoya @yanivbl6 Yes, we were also surprised. I mentioned this in the comment - assuming I'm not wrong, what I saw is that some tensors share their buffer between step-ids, and that the tensor's content changes even though its ref-count never goes to 0. This makes some sense if the tensor's buffer is not deallocated, but kept alive and shared between step-ids. We noticed that issue by getting checksum differences between source and destination tensors.\r\n\r\nIn order to investigate the issue I conducted a simple experiment - while still inside the callback to **RecvLocalAsync()** I would: \r\n1. calculate checksum. \r\n2. usleep some. \r\n3. calculate checksum again and compare it. Got differences here as well.\r\n\r\nFor that experiment I would get the same errors for the previous verbs implementation and  GRPC as well. \r\n\r\nhttps://stackoverflow.com/questions/47961352/how-does-tensorflow-sync-tensors-which-share-a-buffer-between-different-step-ids\r\nhttps://stackoverflow.com/questions/47980283/distributed-tensorflow-tensor-content-changes-while-sending\r\n\r\nAgain I can be wrong, but I did do double and triple check on this. It is also possible that I'm completely missing something out. Our team's work plan for the next few weeks does include further debugging this issue as well a opening an issue request about it.\r\n\r\nIf it is in fact an issue, saving a shallow copy of the tensor while still exchanging messages would make it surface, which is something we don't want. Saving a deep copy instead would make our solution resemble GRPC in that aspect. So it's a safer approach.\r\n\r\n\r\n\r\n\r\n\r\n\r\n",
+        "createdAt" : "2018-01-14T10:23:31Z",
+        "updatedAt" : "2018-01-17T14:03:09Z",
+        "lastEditedBy" : "592f96b1-2a34-4369-8d13-faf056f8a339",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc0326ef-762b-4fbd-b043-76ac454930af",
+        "parentId" : "49ea3f51-3be5-43fa-ba8d-5191818d5a0f",
+        "authorId" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "body" : "In the experiment where this occurs, are you going GPU to GPU?   Does it (also) occur going CPU to CPU?",
+        "createdAt" : "2018-01-15T19:36:08Z",
+        "updatedAt" : "2018-01-17T14:03:09Z",
+        "lastEditedBy" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4577ca28-cd77-4843-8e64-c7409179dccc",
+        "parentId" : "49ea3f51-3be5-43fa-ba8d-5191818d5a0f",
+        "authorId" : "fcd059ec-dad3-416f-9f01-ca897401f8da",
+        "body" : "CPU was always the source in the cases I saw. The destination can be either.",
+        "createdAt" : "2018-01-15T20:56:44Z",
+        "updatedAt" : "2018-01-17T14:03:09Z",
+        "lastEditedBy" : "fcd059ec-dad3-416f-9f01-ca897401f8da",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38905d52-db48-4efb-bf41-68bb1bcd058f",
+        "parentId" : "49ea3f51-3be5-43fa-ba8d-5191818d5a0f",
+        "authorId" : "b8abac33-5e86-4b26-8cb5-3b2cb0605588",
+        "body" : "Hi @eladweiss @yanivbl6 - I tried to reproduce this scenario following your instructions on the [Stack Overflow page](https://stackoverflow.com/questions/47980283/distributed-tensorflow-tensor-content-changes-while-sending) but I was not successful.  Some of the code has changed so I couldn't directly apply your patch but I tried to get as close as I could.  Can you provide an updated patch that reproduces the bug?",
+        "createdAt" : "2018-02-27T19:31:28Z",
+        "updatedAt" : "2018-02-27T19:31:29Z",
+        "lastEditedBy" : "b8abac33-5e86-4b26-8cb5-3b2cb0605588",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4c4a5cc-14f3-4ced-b598-6874463d2798",
+        "parentId" : "49ea3f51-3be5-43fa-ba8d-5191818d5a0f",
+        "authorId" : "592f96b1-2a34-4369-8d13-faf056f8a339",
+        "body" : "@dubey Try this one: https://github.com/Mellanox/tensorflow/tree/1.5/checksum_bug. It is based on tag v1.5.0 which is the last GA, plus the error reproducing commit. Feel free to contact me if there are any problems.",
+        "createdAt" : "2018-02-28T08:29:07Z",
+        "updatedAt" : "2018-02-28T08:29:07Z",
+        "lastEditedBy" : "592f96b1-2a34-4369-8d13-faf056f8a339",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9189ae40f9860f77fe6a3741d287b049184d5f2",
+    "line" : 938,
+    "diffHunk" : "@@ -1,1 +1133,1137 @@  // Clone the data to be sent later. For simplicity, we clone the tensor's\n  // data even if it is already a copy. Performance is less of a concern here\n  // since the meta-data hardly ever changes. The reason we create a copy, is\n  // that some tensors share their buffer between different step-ids, so the\n  // tensor content may change before re-request was completed."
+  },
+  {
+    "id" : "454bee3e-0749-4905-8ef8-0a00d4c1e574",
+    "prId" : 16005,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/16005#pullrequestreview-91449931",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6b58168a-613f-4a46-a150-ef6566d236d7",
+        "parentId" : null,
+        "authorId" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "body" : "Sorry I haven't had time to look into this yet.   OK to submit as is, and fix later if we find a way to do that.",
+        "createdAt" : "2018-01-18T01:49:45Z",
+        "updatedAt" : "2018-01-18T01:52:36Z",
+        "lastEditedBy" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dac7e181-674c-4c38-99c7-708f1f1b946f",
+        "parentId" : "6b58168a-613f-4a46-a150-ef6566d236d7",
+        "authorId" : "aa585da7-3668-4a43-a0f4-40e3370f347e",
+        "body" : "Thanks @poxvoculi !\r\nCan we merge/cherry-pick this into r1.5 branch as well ?\r\nIn terms of the binary release, it doesn't affect anything, as this code is compiled out of the binary anyway. So users needs to clone the repo and recompile this with VERBs support anyway.\r\nHowever, it's much easier for users to work with a specific branch version instead of working with master (which can bring a lot of API changes and stability) or a sporadic HASH.\r\n",
+        "createdAt" : "2018-01-18T10:04:54Z",
+        "updatedAt" : "2018-01-18T10:04:54Z",
+        "lastEditedBy" : "aa585da7-3668-4a43-a0f4-40e3370f347e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e9e72087-16b8-4647-ab19-ceea4af32e8e",
+        "parentId" : "6b58168a-613f-4a46-a150-ef6566d236d7",
+        "authorId" : "28fabc34-a1ac-4aba-988b-9c9e03232122",
+        "body" : "Unfortunately,  as a policy we do not accept any features as cherrypicks, only fixes. So this wont make it into 1.5 release. However, this change will definitely make it into the 1.6 branch.",
+        "createdAt" : "2018-01-19T09:25:20Z",
+        "updatedAt" : "2018-01-19T09:25:20Z",
+        "lastEditedBy" : "28fabc34-a1ac-4aba-988b-9c9e03232122",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d93ce9d5-4730-41c7-80d8-db941264129b",
+        "parentId" : "6b58168a-613f-4a46-a150-ef6566d236d7",
+        "authorId" : "aa585da7-3668-4a43-a0f4-40e3370f347e",
+        "body" : "Thanks @gunan, and I agree with the policy of course, but I really feel this is an exceptional case since this code is compiled out anyway on the binary distribution.\r\nAnyway, thanks for the fast review team.",
+        "createdAt" : "2018-01-25T09:04:37Z",
+        "updatedAt" : "2018-01-25T09:04:37Z",
+        "lastEditedBy" : "aa585da7-3668-4a43-a0f4-40e3370f347e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9189ae40f9860f77fe6a3741d287b049184d5f2",
+    "line" : 862,
+    "diffHunk" : "@@ -1,1 +1066,1070 @@      // point in time Clone() is changed to only save a shallow copy, we can\n      // skip the copy here as well.\n      if ((in.TotalBytes() > 0) && !meta_data_changed_ &&\n          (RdmaMemoryMgr::Singleton().FindMemoryRegion(\n              (void*)DMAHelper::base(&in), in.TotalBytes()) != nullptr)) {"
+  },
+  {
+    "id" : "74a0285a-33f4-49c7-8423-d1c51a0dd044",
+    "prId" : 12361,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/12361#pullrequestreview-57869206",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0ed9890f-ce23-4719-9279-d7e1ddeb9181",
+        "parentId" : null,
+        "authorId" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "body" : "Someday you should return an error status instead of check failing, especially if there's a chance this is a transient error.  (Applies to the CHECK a couple lines below.)",
+        "createdAt" : "2017-08-22T18:00:59Z",
+        "updatedAt" : "2017-08-22T18:05:16Z",
+        "lastEditedBy" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4783d8a5-9861-483a-8fba-a50a369411c5",
+        "parentId" : "0ed9890f-ce23-4719-9279-d7e1ddeb9181",
+        "authorId" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "body" : "Agreed. The error handling can be improved. Maybe we should send error status back to the caller (like [here](https://github.com/petewarden/tensorflow_makefile/blob/49c08e4d4ff3b6e7d99374dc2fbf8b358150ef9c/tensorflow/core/distributed_runtime/rpc/grpc_worker_service.cc#L410-L413)) and let the caller decide what to do, either re-try or abort. \r\n\r\nHowever, for this patch, let's not address it as returning the error status to the caller/requester may require an extra signal path.\r\n\r\nThis patch looks good to me otherwise.\r\n\r\n",
+        "createdAt" : "2017-08-22T18:23:30Z",
+        "updatedAt" : "2017-08-22T18:23:30Z",
+        "lastEditedBy" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3488f9c1b68da6302d4ade9007d9826b0adaff64",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +738,742 @@          // aync instead\n          GPUUtil::SetProtoFromGPU(\n              in, src_dev, send_args.device_context, &proto, is_dead,\n              [this, proto, buffer_size, key, in, step_id, key_with_step_id,\n               is_dead](const Status& s) mutable {"
+  },
+  {
+    "id" : "177fc9ba-1224-424a-b95e-1abde1c77b00",
+    "prId" : 9432,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/9432#pullrequestreview-34677516",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "36980b12-6d5e-4997-a1ea-951b31ee0c0e",
+        "parentId" : null,
+        "authorId" : "aa585da7-3668-4a43-a0f4-40e3370f347e",
+        "body" : "I think we must have a configurable (user) port number (instead of static 1).\r\nThere are a lot of rdma devices with 2 ports and we can't assume the first is the one configured.\r\nWe can (optionally) get the port number from the user in server creation and expose it here.\r\n@junshi15 - We need it also for the device selection (today it take ibv_devices_list[0]). \r\nI can do that tomorrow with pleasure, unless you already have something.",
+        "createdAt" : "2017-04-25T20:04:14Z",
+        "updatedAt" : "2017-04-26T10:07:53Z",
+        "lastEditedBy" : "aa585da7-3668-4a43-a0f4-40e3370f347e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2943d7ba-21d4-4eae-ac13-868cc68004ca",
+        "parentId" : "36980b12-6d5e-4997-a1ea-951b31ee0c0e",
+        "authorId" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "body" : "@shamoya - Thanks for taking a look at this patch. \r\nRegarding device selection, @bkovalev raised this issue to me. However, I have not had time to work on it. Feel free to send a PR.",
+        "createdAt" : "2017-04-25T20:26:09Z",
+        "updatedAt" : "2017-04-26T10:07:53Z",
+        "lastEditedBy" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b108ccfdb6e47883bec13eac1f409ee0b9a1d9a7",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +273,277 @@    self_.psn = static_cast<uint32_t>(random::New64()) & 0xffffff;\n    union ibv_gid gid;\n    CHECK(!ibv_query_gid(adapter_->context_, (uint8_t) 1, 0, &gid)) << \"Query gid\";\n    self_.snp = gid.global.subnet_prefix;\n    self_.iid = gid.global.interface_id;"
+  },
+  {
+    "id" : "d9fb6963-6551-4873-8193-e8ce57bd9d66",
+    "prId" : 8943,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/8943#pullrequestreview-31505065",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e67343c3-43c7-487f-8e0f-fec7563faa6f",
+        "parentId" : null,
+        "authorId" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "body" : "I suppose eventually this should be some kind of config option.",
+        "createdAt" : "2017-04-05T19:22:34Z",
+        "updatedAt" : "2017-04-10T19:22:04Z",
+        "lastEditedBy" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c443bc2f-0a3c-4953-968a-70c8da76e88d",
+        "parentId" : "e67343c3-43c7-487f-8e0f-fec7563faa6f",
+        "authorId" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "body" : "yes, in the future revision.",
+        "createdAt" : "2017-04-07T08:19:41Z",
+        "updatedAt" : "2017-04-10T19:22:04Z",
+        "lastEditedBy" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b5581b2ffb75b98561f64fc6d0a72d40680d8723",
+    "line" : 308,
+    "diffHunk" : "@@ -1,1 +306,310 @@    \n    // Initiate recv\n    for (int i = 0; i < 100; i++) {\n      Recv();\n    }"
+  },
+  {
+    "id" : "13c9ead3-716a-41a1-8a46-0022bd575bb5",
+    "prId" : 8943,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/8943#pullrequestreview-31505113",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3403600e-a7ca-45e1-98f3-0a317f9c94cc",
+        "parentId" : null,
+        "authorId" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "body" : "CHECK(!rb) ?",
+        "createdAt" : "2017-04-05T19:25:06Z",
+        "updatedAt" : "2017-04-10T19:22:04Z",
+        "lastEditedBy" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8aeda726-1cce-477c-893a-65ae98829553",
+        "parentId" : "3403600e-a7ca-45e1-98f3-0a317f9c94cc",
+        "authorId" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "body" : "added CHECK(rb)",
+        "createdAt" : "2017-04-07T08:20:00Z",
+        "updatedAt" : "2017-04-10T19:22:04Z",
+        "lastEditedBy" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b5581b2ffb75b98561f64fc6d0a72d40680d8723",
+    "line" : 409,
+    "diffHunk" : "@@ -1,1 +407,411 @@    } else if (buffer_type == ACK) {\n      rb = new RdmaAckBuffer(this, name); \n    }\n    buffer_name_index_table_.insert({name, index});\n    buffer_index_name_table_.insert({index, name});"
+  },
+  {
+    "id" : "a1ffd9dd-e580-4fe9-8530-72ac1eb485f0",
+    "prId" : 8943,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/8943#pullrequestreview-31505215",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "03807fc2-2807-4e71-9388-1a709d2de5c9",
+        "parentId" : null,
+        "authorId" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "body" : "Can this stall the CQ processing thread?",
+        "createdAt" : "2017-04-05T19:53:07Z",
+        "updatedAt" : "2017-04-10T19:22:04Z",
+        "lastEditedBy" : "c58d0887-9ab4-4777-b96b-33561a3bb573",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f43990ab-430e-4fde-8028-d576202508ba",
+        "parentId" : "03807fc2-2807-4e71-9388-1a709d2de5c9",
+        "authorId" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "body" : "In theory, it can. will optimize in a future revision.",
+        "createdAt" : "2017-04-07T08:20:36Z",
+        "updatedAt" : "2017-04-10T19:22:04Z",
+        "lastEditedBy" : "1f91e1ca-cefb-4416-8a41-76785bbd0b7f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b5581b2ffb75b98561f64fc6d0a72d40680d8723",
+    "line" : 715,
+    "diffHunk" : "@@ -1,1 +713,717 @@            << \" gpu_info: \" << src_dev->tensorflow_gpu_device_info();\n        // \"val\" is on a GPU. Uses GPUUtil to fill the proto.\n        s = VerbsUtil::SetProtoFromGPUSync(in, src_dev, \n                         send_args.device_context, \n                         &proto, is_dead);"
+  }
+]

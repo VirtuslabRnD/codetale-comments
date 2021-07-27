@@ -1,0 +1,35 @@
+[
+  {
+    "id" : "a3e4ca7a-7aa9-4723-b00c-af790009c2d3",
+    "prId" : 48381,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/48381#pullrequestreview-632456993",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e5a773bc-1091-4455-9eaf-0a43523a5ef6",
+        "parentId" : null,
+        "authorId" : "46fa9a61-9f6f-4ecb-a276-f19713d630df",
+        "body" : "\"delinearized\"?\r\n\r\nCould you expand what `multidim` is doing? Is it technically redundant since we already have `shape` and `linear` but there for performance?",
+        "createdAt" : "2021-04-09T00:18:53Z",
+        "updatedAt" : "2021-04-09T19:12:28Z",
+        "lastEditedBy" : "46fa9a61-9f6f-4ecb-a276-f19713d630df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd37ad6a-1527-4ab2-94f2-120ef93a28c3",
+        "parentId" : "e5a773bc-1091-4455-9eaf-0a43523a5ef6",
+        "authorId" : "f5c553cb-d123-4eb4-9f6d-9a715871f6eb",
+        "body" : "This constructor is a mix of the constructor at those two:\r\nhttps://github.com/tensorflow/tensorflow/pull/48381/files/fc5d57766d3b546709d4e6c3e2bdf75f78f2973c#diff-4e1e35c17e8305e625368867ce8e627ace19a9a06bbbf59bdaa96070533e237bR67 (line 67)\r\nhttps://github.com/tensorflow/tensorflow/pull/48381/files/fc5d57766d3b546709d4e6c3e2bdf75f78f2973c#diff-4e1e35c17e8305e625368867ce8e627ace19a9a06bbbf59bdaa96070533e237bR86 (line 86)\r\n\r\nAn Index object always have the multidim member. The linear member is optional (see line 199) and is an optimization. I do not want to remove the existing optimization, so I keep linear present.\r\nBut I need a simpler multidim value, otherwise LLVM isn't able to simplify the indexing and infer the vectorization.\r\nSo I manually changes the inner most multidim value to a simple indexing.\r\n\r\nIn theory, we could modify LLVM to be smarter about doing the indexing simplification. I did it once in a simple case where I just changed the optimization order. But doing so is time consuming and relying on LLVM to do complex math simplification is a brittle strategy. In this case, I think changing LLVM would request a great changes to its math simplification algo that seems to work well on power of 2, but not on others numbers. And this is what we need, something reliable to vectorize for any shapes values. So I prefer to generates simple indexing. LLVM will be happy. No need for complex changes to LLVM. So it get done faster and is reliable.",
+        "createdAt" : "2021-04-09T14:10:33Z",
+        "updatedAt" : "2021-04-09T19:12:28Z",
+        "lastEditedBy" : "f5c553cb-d123-4eb4-9f6d-9a715871f6eb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b96cbc778afb98d8b6fcf44b22f28fbc67dc5267",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +70,74 @@    // == shape.rank() must be true.  If some of the multidim element\n    // are null we will use the value that would be used if\n    // deliearized from linear.\n    Index(llvm::Value* linear, absl::Span<llvm::Value* const> multidim,\n          const Shape& shape, llvm::IRBuilder<>* b);"
+  }
+]

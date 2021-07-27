@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "ef0c7e4e-18c1-4512-acc5-88bb4c26f683",
+    "prId" : 46381,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/46381#pullrequestreview-567129424",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9673a1ea-f48c-4e7c-8393-13f9e49f1d99",
+        "parentId" : null,
+        "authorId" : "90c49754-7917-45e3-8dd2-8e09527f3d4c",
+        "body" : "I understand that we can't allow two threads to \"use\" the same execution context concurrently. What I don't understand here is that the mutex doesn't seem to protect each context, but rather protect accessing the vector of contexts. Is the following scenario possible?\r\nTime-1: Thread-A retrieves Context-1 from the vector (through [here](https://github.com/tensorflow/tensorflow/blob/0a3ce8d533dc86ea2453017dbac915ab5d88e79e/tensorflow/compiler/tf2tensorrt/utils/trt_lru_cache.h#L137) )\r\nTime-2: Thread-B retrieves Context-1 from the vector\r\nTime-3: both Thread-A and Thread-B are using Context-1 for inference",
+        "createdAt" : "2021-01-13T00:09:48Z",
+        "updatedAt" : "2021-01-13T12:34:04Z",
+        "lastEditedBy" : "90c49754-7917-45e3-8dd2-8e09527f3d4c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "19f6abab-a616-474c-ab30-2c1320b05904",
+        "parentId" : "9673a1ea-f48c-4e7c-8393-13f9e49f1d99",
+        "authorId" : "c5cb8841-0e3d-4435-b088-7d6beb78afd5",
+        "body" : "The way we are using it is IExecutionContext is correct: we [hold the lock](https://github.com/tensorflow/tensorflow/blob/15e0f259b119f53b90fc1698f7abd9b739df3b6c/tensorflow/compiler/tf2tensorrt/kernels/trt_engine_op.cc#L757-L783) until we use the IExecutionContext object. After the inference jobs are enqued, the single CUDA compute stream ensures that there could be no concurrent inferences running in the same context (#36959). \r\n\r\nI do not know what is the best way to express this with thread safety annotations. The scenario that you write would be problematic. But looking at the definition of the [annotation macros](https://github.com/tensorflow/tensorflow/blob/15e0f259b119f53b90fc1698f7abd9b739df3b6c/tensorflow/core/platform/thread_annotations.h#L47-L64), I do not know what would be the correct way to express that the elements inside a container should be guarded.",
+        "createdAt" : "2021-01-13T12:28:50Z",
+        "updatedAt" : "2021-01-13T12:35:42Z",
+        "lastEditedBy" : "c5cb8841-0e3d-4435-b088-7d6beb78afd5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cd2acbec460cb71db11b4e1798c073f9addc38e8",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +162,166 @@  // at https://github.com/tensorflow/tensorflow/issues/36959\n  std::vector<TrtUniquePtrType<nvinfer1::IExecutionContext>> execution_context\n      TF_GUARDED_BY(mu);\n};\n"
+  },
+  {
+    "id" : "d87fdf76-1301-4af7-9af8-c6f642495478",
+    "prId" : 36664,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/36664#pullrequestreview-362282509",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "020f34e9-5b79-4193-b708-e022eeba9a32",
+        "parentId" : null,
+        "authorId" : "90c49754-7917-45e3-8dd2-8e09527f3d4c",
+        "body" : "I understand that this is not new in this PR, but do you know why we guard this field with a mutex?\r\nSomewhere in routine TRTEngineOp::ExecuteTrtEngine, there is this comment \"nvinfer1::IExecutionContext::enqueue is not thread safe and we need a mutex\".\r\nCan we document the reason for GUARDED_BY(mu) here?",
+        "createdAt" : "2020-02-20T17:28:18Z",
+        "updatedAt" : "2020-02-21T19:09:59Z",
+        "lastEditedBy" : "90c49754-7917-45e3-8dd2-8e09527f3d4c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6103bcd0-9c05-47ce-8f2c-9f7ef8b23e06",
+        "parentId" : "020f34e9-5b79-4193-b708-e022eeba9a32",
+        "authorId" : "c5cb8841-0e3d-4435-b088-7d6beb78afd5",
+        "body" : "I have added more documentation. I see a potential problem here, I opened a separate issue (#36959) to discuss it since it is not related to the current PR.",
+        "createdAt" : "2020-02-20T23:56:22Z",
+        "updatedAt" : "2020-02-21T19:09:59Z",
+        "lastEditedBy" : "c5cb8841-0e3d-4435-b088-7d6beb78afd5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4c01652457e19b39693c861e94c82d106a1957c7",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +152,156 @@  // for inference at a time therefore we need a mutex. More details at\n  // https://docs.nvidia.com/deeplearning/sdk/tensorrt-best-practices/index.html#thread-safety\n  std::vector<TrtUniquePtrType<nvinfer1::IExecutionContext>> execution_context\n      GUARDED_BY(mu);\n};"
+  }
+]

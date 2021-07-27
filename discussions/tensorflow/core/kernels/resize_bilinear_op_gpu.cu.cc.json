@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "fef70d74-ee21-4b68-a9c0-eb4a39502776",
+    "prId" : 28758,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/28758#pullrequestreview-241206567",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d64d0152-57be-43dc-805e-771626194a52",
+        "parentId" : null,
+        "authorId" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "body" : "Could you use float4 instead?",
+        "createdAt" : "2019-05-16T14:07:05Z",
+        "updatedAt" : "2019-05-27T09:48:03Z",
+        "lastEditedBy" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a6e05a5-78ab-4b9c-b206-ead2a8c2f38b",
+        "parentId" : "d64d0152-57be-43dc-805e-771626194a52",
+        "authorId" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "body" : "you are referring to the built-in type `float4` right?\r\n\r\nAn interesting thing: when I replaced `four_floats` with `float4`, the speed about doubled.\r\nFor comparison, with batch = 1, channel = 64, input height = 128, input width = 128, height scale 1/16, width scale = 1/16, the speed is ( on my GTX 1080 ):\r\nref = 13188ms\r\nfour_floats (the older version which I PR-ed) = 9149ms\r\nfloat4 (replaced `four_floats` with `float4` ) = 5166ms \r\n\r\nso compared to the original, the speed nearly tripled :) HUGE Thanks to your suggestion!!\r\n\r\n\r\nEDIT:\r\nThis is pretty interesting. After looking at the SASS code, I found out: when loading a single `four_floats` item from global memory, although the structure is 16 bytes in total and is aligned, the compiler splits this up into 4 4-byte loads --`LDG`. However, when loading a single value of `float4` item from global memory, the compiler does this in a single `LDG` requesting 16 bytes -- `LDG.128`. So the global load using `four_floats` is not coalesced where as `float4` is. This seems to be the reason why the throughput is so much faster.",
+        "createdAt" : "2019-05-23T09:17:18Z",
+        "updatedAt" : "2019-05-27T09:48:03Z",
+        "lastEditedBy" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2b13092-895c-49c0-b8c2-94a8ebb73ef7",
+        "parentId" : "d64d0152-57be-43dc-805e-771626194a52",
+        "authorId" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "body" : "I think by default this structure is only 4 bytes aligned. But I'm not sure if aligning it is sufficient. The float4 also uses 'builtin': `struct __device_builtin__ __builtin_align__(16) float4`",
+        "createdAt" : "2019-05-23T13:36:19Z",
+        "updatedAt" : "2019-05-27T09:48:03Z",
+        "lastEditedBy" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "33dffe53fb2a2f6f90f6a0a610f308f218070424",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +29,33 @@// the fields are not important. The only purpose of this is to read 16 bytes\n// from GPU gloal memory\nstruct four_floats{\n  float a;\n  float b;"
+  },
+  {
+    "id" : "1cf71c28-2e74-4224-b2bb-9f1a046795c9",
+    "prId" : 28758,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/28758#pullrequestreview-241168947",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9c4cd960-2e04-4934-8a2b-b992a7a51db9",
+        "parentId" : null,
+        "authorId" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "body" : "How about calling this ResizeBilinearKernelUnrolled or something like that?",
+        "createdAt" : "2019-05-16T14:23:37Z",
+        "updatedAt" : "2019-05-27T09:48:03Z",
+        "lastEditedBy" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "adeebc57-d251-47e9-91f5-7c3e753df60d",
+        "parentId" : "9c4cd960-2e04-4934-8a2b-b992a7a51db9",
+        "authorId" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "body" : "Done",
+        "createdAt" : "2019-05-23T12:29:23Z",
+        "updatedAt" : "2019-05-27T09:48:03Z",
+        "lastEditedBy" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "33dffe53fb2a2f6f90f6a0a610f308f218070424",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +43,47 @@\ntemplate <typename T, int C_UNROLL>\n__global__ void ResizeBilinearKernel_faster(const int num_channel_thread, const T* __restrict__ images,\n                                     float height_scale, float width_scale,\n                                     int batch, int in_height, int in_width,"
+  },
+  {
+    "id" : "490a5b9b-c41c-4d4f-bd29-65f4fb37e499",
+    "prId" : 28758,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/28758#pullrequestreview-244609826",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7f4f6240-ac31-4bd1-b7f9-3409ca571103",
+        "parentId" : null,
+        "authorId" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "body" : "If you are not planning to implement this kernel for anything but float, you should remove the template parameter T. If you are planning to support other types as well, add a static_assert for now.\r\n\r\nIt also looks like you use a fixed number for C_UNROLL. I would just use a constexpr in the implementation.\r\n\r\n",
+        "createdAt" : "2019-05-16T14:25:42Z",
+        "updatedAt" : "2019-05-27T09:48:03Z",
+        "lastEditedBy" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8b603fc-efdb-45c1-97fc-bf5c0fb8a193",
+        "parentId" : "7f4f6240-ac31-4bd1-b7f9-3409ca571103",
+        "authorId" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "body" : "so instead of the template argument `C_UNROLL`, you are recommending using `constexpr c_unroll = ...`? Sure, but just out of curiosity, is there a reason you prefer the latter over the former?\r\n\r\nEDIT:\r\nsince the speed-up seems dramatic, I am planning on implementing it for other types. What are some major types that it should work with? I am assuming: `float`, `half`, `double`. ",
+        "createdAt" : "2019-05-23T12:41:42Z",
+        "updatedAt" : "2019-05-27T09:48:03Z",
+        "lastEditedBy" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5ddd1337-ee27-4e07-b665-45a62a415478",
+        "parentId" : "7f4f6240-ac31-4bd1-b7f9-3409ca571103",
+        "authorId" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "body" : "A template argument which is instantiated for a single value seems unnecessary.\r\n\r\nYes: half, float, and double are the most interesting ones. ",
+        "createdAt" : "2019-05-23T13:32:35Z",
+        "updatedAt" : "2019-05-27T09:48:03Z",
+        "lastEditedBy" : "1223b96d-efd5-4254-9e4f-f359308f8df2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ac5c3a9-d902-4d39-9da4-d8f4f8a4ec9f",
+        "parentId" : "7f4f6240-ac31-4bd1-b7f9-3409ca571103",
+        "authorId" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "body" : "> A template argument which is instantiated for a single value seems unnecessary.\r\n\r\nOkay, will use `const expr c_unroll = ...` over the template.\r\n\r\n> If you are planning to support other types as well, add a static_assert for now.\r\n\r\nshouldn't we use regular `assert` over `static_assert` since we want the assertion to evaluate at runtime not at compile time? Let me know what you think since I'm not an expert on asserts.\r\n\r\nEDIT:\r\n> Yes: half, float, and double are the most interesting ones.\r\n\r\nthe output global array -- `output` -- is fixed to be `float*` in the original kernel. Is there a reason why this is fixed? Must I also follow this and make the output array's type `float*` for `double` and `half`, or can I change the output array's type respectively?",
+        "createdAt" : "2019-05-24T01:24:55Z",
+        "updatedAt" : "2019-05-27T09:48:03Z",
+        "lastEditedBy" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7c7ffe8a-624b-4b19-bd0f-5561bd12d04f",
+        "parentId" : "7f4f6240-ac31-4bd1-b7f9-3409ca571103",
+        "authorId" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "body" : "@chsigg ping!",
+        "createdAt" : "2019-06-02T05:01:28Z",
+        "updatedAt" : "2019-06-02T05:01:29Z",
+        "lastEditedBy" : "59c836c9-108a-4cad-9e1d-af20b004bcea",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "33dffe53fb2a2f6f90f6a0a610f308f218070424",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +42,46 @@namespace {\n\ntemplate <typename T, int C_UNROLL>\n__global__ void ResizeBilinearKernel_faster(const int num_channel_thread, const T* __restrict__ images,\n                                     float height_scale, float width_scale,"
+  }
+]

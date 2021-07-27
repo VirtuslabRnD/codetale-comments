@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "896b99ea-e178-4266-84b2-47c76affe4f7",
+    "prId" : 45118,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/45118#pullrequestreview-562065422",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f345547a-6b46-4dbc-8cea-6a7376170fb1",
+        "parentId" : null,
+        "authorId" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "body" : "We should avoid having duplicate code. I normally don't want MKL code (`#ifdef INTEL_MKL`) interspersed with vanilla TF code, but I think I'm willing to trade that with having just one copy of code. Asking @ezhulenev for second opinion.\r\n\r\n@ezhulenev This PR adds an MKL Einsum op. \r\n\r\nThe op kernel is the same as the normal Einsum, except that it [calls MKLContractOperands](https://github.com/tensorflow/tensorflow/blob/8ab17489a4d4936404381b97b5c8135b7f20a9b3/tensorflow/core/kernels/mkl/mkl_einsum_op.cc#L182-L184) instead of [ContractOperands](https://github.com/tensorflow/tensorflow/blob/8ea9e8cfab457e73056347aa2366d748448a5745/tensorflow/core/kernels/linalg/einsum_op_impl.h#L639-L641). [MKLContractOperands](https://github.com/tensorflow/tensorflow/blob/8ab17489a4d4936404381b97b5c8135b7f20a9b3/tensorflow/core/kernels/mkl/mkl_einsum_op.cc#L39-L127) is also largely similar to [ContractOperands](https://github.com/tensorflow/tensorflow/blob/8ea9e8cfab457e73056347aa2366d748448a5745/tensorflow/core/kernels/linalg/einsum_op_impl.h#L546-L586), apart from the part that it calls DNNL batch matmul primitive.\r\n\r\nI'm thinking we should just have one Einsum op, refactor the DNNL batch matmul part to a function, and call that function in `ContractOperands` under `#ifdef INTEL_MKL`. What do you think?",
+        "createdAt" : "2020-12-30T00:29:30Z",
+        "updatedAt" : "2021-04-29T15:17:24Z",
+        "lastEditedBy" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "893bd0bf-ddb7-4238-a8ae-35991da28a22",
+        "parentId" : "f345547a-6b46-4dbc-8cea-6a7376170fb1",
+        "authorId" : "cc3a9462-2410-463b-a9e3-7b2b39d1f5bd",
+        "body" : "I'd say it depends on the path of integrating mkl/oneDnn into TF that we'll choose. If we'll go with integrating MKL into \"default\" kernels, then it makes sense to provide different implementations of \"helpers\" and \"functors\" based on the compile flags (Eigen or MKL) and keep a single \"Op\" implementation.\r\n\r\nAlthough current approach leads to a lot of code duplication I like that it's consistent with other MKL ops and that the code is completely separate.\r\n\r\nI'd ask TF-Core owners what they think, maybe @rjpower can chime in.",
+        "createdAt" : "2020-12-30T09:20:27Z",
+        "updatedAt" : "2021-04-29T15:17:24Z",
+        "lastEditedBy" : "cc3a9462-2410-463b-a9e3-7b2b39d1f5bd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a951d8d9-01f6-4877-b1f9-e06551714e3f",
+        "parentId" : "f345547a-6b46-4dbc-8cea-6a7376170fb1",
+        "authorId" : "21264f0d-8606-4b88-b6ce-8c3d30e171e9",
+        "body" : "@rjpower  Any update on this PR? Please. Thanks!",
+        "createdAt" : "2021-01-05T16:52:13Z",
+        "updatedAt" : "2021-04-29T15:17:24Z",
+        "lastEditedBy" : "21264f0d-8606-4b88-b6ce-8c3d30e171e9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4e05472-831a-4f9b-b80d-650a24a96705",
+        "parentId" : "f345547a-6b46-4dbc-8cea-6a7376170fb1",
+        "authorId" : "496d707b-df2e-455d-9105-6defe69a670e",
+        "body" : "Having consistency with the other MKL ops seems appropriate, even if there's some extra duplication.\r\n\r\n@penpornk / @ezhulenev if you feel it's appropriate, should we factor out the \"helper\" code for einsum into einsum-lib.h/cc and reuse it here?",
+        "createdAt" : "2021-01-05T18:10:41Z",
+        "updatedAt" : "2021-04-29T15:17:24Z",
+        "lastEditedBy" : "496d707b-df2e-455d-9105-6defe69a670e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7328eb2f-b134-4927-b4d8-bae485a84cc9",
+        "parentId" : "f345547a-6b46-4dbc-8cea-6a7376170fb1",
+        "authorId" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "body" : "Thank you, Russell! Refactoring the helper code out sounds good to me. I want both ops to get the same fixes and optimizations.",
+        "createdAt" : "2021-01-05T19:22:08Z",
+        "updatedAt" : "2021-04-29T15:17:24Z",
+        "lastEditedBy" : "72acf7f0-6473-4b57-a71f-2a44410818c5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9d9c5fc48890a6986541c8378025b37a9b84667b",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +26,30 @@// it calls MKL's BatchMatMul implementation instead of Eigen implementation\n// for now, We are going to replace other Eigen Ops used here, with their\n// equivalent MKL ops for better performance.\n\nstruct MklEinsumHelper {"
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "cfd65fd9-2758-4d8f-a78f-1e89ff8e6e4f",
+    "prId" : 40851,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/40851#pullrequestreview-440950128",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c3d283af-0d74-4705-8f39-d1a45b2c3e85",
+        "parentId" : null,
+        "authorId" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "body" : "This is probably leaking both here and in `TestBasicGraph`. I just realized we did not test this with asan so this test has existing leaks. I have a change out for review to fix the existing leaks. For this one you should add `TF_DeleteAbstractTensor(placeholder_t)`. You can test for leaks by using:\r\n\r\nbazel test --config asan tensorflow/c/eager/c_api_unified_experimental_test --test_filter=* TestBasicGraphMatMul*\r\n\r\nYou may see a couple existing leaks 1) `GraphOperation` from `GraphContext::AddParameter` 2) `FunctionDef` from `MlirFunction::GetFunctionDef`. Those should be fixed after my change lands.",
+        "createdAt" : "2020-07-01T14:57:54Z",
+        "updatedAt" : "2020-07-13T20:19:59Z",
+        "lastEditedBy" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2097af066ce2706a8a25b0506e878098fb2b5d0b",
+    "line" : 279,
+    "diffHunk" : "@@ -1,1 +439,443 @@  ASSERT_EQ(TF_OK, TF_GetCode(status.get())) << TF_Message(status.get());\n\n  auto* placeholder_t =\n      TF_AddFunctionParameter(graph_ctx, TF_FLOAT, status.get());\n  ASSERT_EQ(TF_OK, TF_GetCode(status.get())) << TF_Message(status.get());"
+  },
+  {
+    "id" : "13eaa3c2-e29c-4127-ab9f-e46fc706e472",
+    "prId" : 40851,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/40851#pullrequestreview-441020194",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "363b5f9e-7ca2-48da-bc10-8e0f7d27af76",
+        "parentId" : null,
+        "authorId" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "body" : "TF_OutputList does not own the underlying abstract tensors. You would need to delete the underlying tensors in `mm_outputs`. \r\n\r\n`TF_DeleteAbstractTensor(TF_OutputListGet(mm_outputs, 0));`",
+        "createdAt" : "2020-07-01T15:01:11Z",
+        "updatedAt" : "2020-07-13T20:19:59Z",
+        "lastEditedBy" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "713451c9-a989-4334-992c-16e22c8b4c25",
+        "parentId" : "363b5f9e-7ca2-48da-bc10-8e0f7d27af76",
+        "authorId" : "60cd5514-d955-45fe-ac1d-07afc371ac19",
+        "body" : "Actually, the result tensor is stored in `final_result` which is freed after `mm_outputs`. Just confirmed this was the case by trying to call both `TF_DeleteAbstractTensor(TF_OutputListGet(mm_outputs, 0));` and `TF_DeleteAbstractTensor(final_result);`, which results in an error. I'll move the `TF_DeleteAbstractTensor(final_result);` a few lines up so it's clearer.",
+        "createdAt" : "2020-07-01T15:46:55Z",
+        "updatedAt" : "2020-07-13T20:19:59Z",
+        "lastEditedBy" : "60cd5514-d955-45fe-ac1d-07afc371ac19",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "371791e5-4f00-438e-925e-0370356da631",
+        "parentId" : "363b5f9e-7ca2-48da-bc10-8e0f7d27af76",
+        "authorId" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "body" : "We reuse `mm_outputs` for storing both the function outputs (here) and for storing the outputs of executing the function below. `TF_OutputListSetNumOutputs(mm_outputs, 1, status.get())` resets the underlying vector of graph tensors but does not actually delete them so those are the ones that would would leak. \r\n\r\nWe should probably think about how to better manage the ownerships of pointers here. The current setup, although very explicit, may be prone to errors..",
+        "createdAt" : "2020-07-01T16:22:17Z",
+        "updatedAt" : "2020-07-13T20:19:59Z",
+        "lastEditedBy" : "e3ded934-167f-4260-a0ce-d4d2e9a707c9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2097af066ce2706a8a25b0506e878098fb2b5d0b",
+    "line" : 304,
+    "diffHunk" : "@@ -1,1 +464,468 @@\n  TF_AbstractFunction* func =\n      TF_FinalizeFunction(graph_ctx, mm_outputs, status.get());\n  ASSERT_EQ(TF_OK, TF_GetCode(status.get())) << TF_Message(status.get());\n"
+  }
+]

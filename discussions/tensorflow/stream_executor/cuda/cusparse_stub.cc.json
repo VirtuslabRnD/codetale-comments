@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "df52cd5c-ab7f-4e29-a262-bbd90c1d485b",
+    "prId" : 40393,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/40393#pullrequestreview-432068627",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e40541fb-6964-4f6b-9156-887eaa9634a2",
+        "parentId" : null,
+        "authorId" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "body" : "The bit I didn't understand (from the PR and from our in person conversation) is why should this not be:\r\n\r\n```\r\n#if CUDA_VERSION < 10000\r\n...\r\n#elif CUDA_VERSION < 11000\r\n...\r\n#elif CUDA_VERSION < 12000\r\n#include \"tensorflow/stream_executor/cuda/cusparse_11_0.inc\"\r\n#else\r\n#error\r\n#endif\r\n```\r\n\r\nWhy do we care about using CUDA 11 headers for CUDA 12?",
+        "createdAt" : "2020-06-11T21:17:48Z",
+        "updatedAt" : "2020-06-17T15:07:15Z",
+        "lastEditedBy" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f54cfb0b-96b9-4944-8e30-1349554a904f",
+        "parentId" : "e40541fb-6964-4f6b-9156-887eaa9634a2",
+        "authorId" : "8ff4e099-8cf6-4348-9db7-45b9bc9150c1",
+        "body" : "That would be OK too. My change keeps the pattern a bit more consistent across all stubs, because a few ([cufft](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/stream_executor/cuda/cufft_stub.cc), [curand](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/stream_executor/cuda/curand_stub.cc), and [cupti](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/stream_executor/cuda/cupti_stub.cc)) continue to use the cuda 10 inc files even in cuda 11. In general assuming that a major version change will break APIs seems unnecessary.\r\n\r\n\r\n",
+        "createdAt" : "2020-06-12T14:30:01Z",
+        "updatedAt" : "2020-06-17T15:07:15Z",
+        "lastEditedBy" : "8ff4e099-8cf6-4348-9db7-45b9bc9150c1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "773e08da-4e85-4018-b889-3beaaa3a53e2",
+        "parentId" : "e40541fb-6964-4f6b-9156-887eaa9634a2",
+        "authorId" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "body" : "If using CUDA 11 inc files in CUDA 12 cannot result in a silent breakage then I'm ok with this pattern.  Otherwise I'd prefer keeping the explicit `#error` where possible.",
+        "createdAt" : "2020-06-13T20:55:36Z",
+        "updatedAt" : "2020-06-17T15:07:15Z",
+        "lastEditedBy" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ab49f0d7-4a1e-4c78-9be7-0dc759f0b0a7",
+        "parentId" : "e40541fb-6964-4f6b-9156-887eaa9634a2",
+        "authorId" : "8ff4e099-8cf6-4348-9db7-45b9bc9150c1",
+        "body" : "I don't think silent breakage is possible.\r\n\r\nCase 1: Altered APIs (change arg ordering, etc.)\r\nBecause the toolkit headers are included in the stub modules (for example, [cusuparse](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/stream_executor/cuda/cusparse_stub.cc#L16) and [cublas](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/stream_executor/cuda/cublas_stub.cc#L16-L18)) and overloading is not possible since the interfaces are declared `extern \"C\"`, any API changes will result in redefinition errors when the stubs are compiled.\r\n\r\nCase 2: Removed APIs\r\nOther modules using cuda lib APIs also include the original toolkit headers (rather than the generated `*.inc` files). So uses of removed APIs will result in undefined symbol errors when those modules are compiled.\r\n\r\nCase 3: Use of newly added APIs\r\nUsers may add calls to new APIs introduced in CUDA 12 but forget to create an updated `*.inc` file. In this case, the code will compile fine, since the toolkit header includes the new API, but linking will fail, since the module is linked against the stub which does not yet expose this new API.",
+        "createdAt" : "2020-06-15T15:36:56Z",
+        "updatedAt" : "2020-06-17T15:07:15Z",
+        "lastEditedBy" : "8ff4e099-8cf6-4348-9db7-45b9bc9150c1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "84ab5be8-7589-418b-ae0c-c6600d161ea8",
+        "parentId" : "e40541fb-6964-4f6b-9156-887eaa9634a2",
+        "authorId" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "body" : "> any API changes will result in redefinition errors when the stubs are compiled\r\n\r\nI'm missing something here.  Let's say hypothetically cuDNN 9 swaps the two parameters to `cudnnGetTensorSizeInBytes`.  Won't we cast the function pointer to the wrong type [here](https://github.com/tensorflow/tensorflow/blob/c118bc4b5e1bb3a2760a026621d7a19053b0626c/tensorflow/stream_executor/cuda/cudnn_8_0.inc#L167)?",
+        "createdAt" : "2020-06-16T04:38:26Z",
+        "updatedAt" : "2020-06-17T15:07:15Z",
+        "lastEditedBy" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73ec8f38-c03d-4f8e-8498-d1192826f4c0",
+        "parentId" : "e40541fb-6964-4f6b-9156-887eaa9634a2",
+        "authorId" : "8ff4e099-8cf6-4348-9db7-45b9bc9150c1",
+        "body" : "If the arguments of `cudnnGetTensorSizeInBytes` were reversed, the cudnn v9 headers would forward declare the following. \r\n```\r\ncudnnStatus_t CUDNNWINAPI cudnnGetTensorSizeInBytes(\r\n    size_t *size, const cudnnTensorDescriptor_t tensorDesc);\r\n```\r\nNow building with this PR as it stands, `cudnn_stub.cc` would include that cudnn header and then the cudnn_8_0.inc file with this out of date function definition.\r\n``` \r\n  cudnnStatus_t CUDNNWINAPI cudnnGetTensorSizeInBytes(\r\n    const cudnnTensorDescriptor_t tensorDesc, size_t *size) {\r\n  using FuncPtr =\r\n      cudnnStatus_t(CUDNNWINAPI *)(const cudnnTensorDescriptor_t, size_t *);\r\n  static auto func_ptr = LoadSymbol<FuncPtr>(\"cudnnGetTensorSizeInBytes\");\r\n  if (!func_ptr) return GetSymbolNotFoundError();\r\n  return func_ptr(tensorDesc, size);\r\n}\r\n```\r\nThese functions are both declared `extern \"C\"`, so overloading the symbol `cudnnGetTensorSizeInBytes` is not allowed. The compiler will thus error out when it sees the same symbol with different argument lists.\r\n",
+        "createdAt" : "2020-06-16T14:41:01Z",
+        "updatedAt" : "2020-06-17T15:07:15Z",
+        "lastEditedBy" : "8ff4e099-8cf6-4348-9db7-45b9bc9150c1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56ef363b-f49f-4033-8364-dd7ab83003e2",
+        "parentId" : "e40541fb-6964-4f6b-9156-887eaa9634a2",
+        "authorId" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "body" : "Ah, I missed the `extern \"C\"` at the top of the `.inc` file.  Thanks, LGTM then!",
+        "createdAt" : "2020-06-17T05:29:22Z",
+        "updatedAt" : "2020-06-17T15:07:15Z",
+        "lastEditedBy" : "2861a495-42d5-4ac3-b543-23cf14c0a980",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3ebc53c394e34dfd780e6bf59ad3c96bd9b3fa79",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +61,65 @@#include \"tensorflow/stream_executor/cuda/cusparse_10_2.inc\"\n#else\n#include \"tensorflow/stream_executor/cuda/cusparse_11_0.inc\"\n#endif"
+  }
+]

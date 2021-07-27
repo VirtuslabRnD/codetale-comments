@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "771b638d-9106-4ac0-b415-3d7aaf0f2531",
+    "prId" : 21092,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/21092#pullrequestreview-142360404",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6bcb738c-58b5-4519-91c2-3a04627af6d5",
+        "parentId" : null,
+        "authorId" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "body" : "This is a bit different from say [`tf.zeros`](https://www.tensorflow.org/api_docs/python/tf/zeros) in Python, where the shape can be a tensor (i.e., something that isn't fully known at graph construction time).\r\n\r\nFor example:\r\n\r\n```python\r\nimport tensorflow as tf\r\n\r\nshape = tf.random_uniform([2], minval=1, maxval=5, dtype=tf.int32)\r\nzeros = tf.zeros(shape)\r\n\r\nwith tf.Session() as sess:\r\n  for _ in range(5): print sess.run(zeros.shape)\r\n```\r\n\r\nYou'll see different shapes of the zeros on each call to `sess.run` - it isn't a graph construction time constant.\r\nWouldn't we want the same for the Java zeros?",
+        "createdAt" : "2018-07-25T18:21:14Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "baa198d1-4658-47e8-b6e3-a6d9e44b65fa",
+        "parentId" : "6bcb738c-58b5-4519-91c2-3a04627af6d5",
+        "authorId" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "body" : "I would need to see how it is done in Python but yeah, could be an idea! Can we support it in a second phase? (i.e. create a second `create` factory method that accepts an `Operand` )?",
+        "createdAt" : "2018-07-27T22:28:24Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ed94b32-b627-4ea2-b768-90b0f2fd6469",
+        "parentId" : "6bcb738c-58b5-4519-91c2-3a04627af6d5",
+        "authorId" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "body" : "Would it make sense to split out the `Zeros.java` file out of this PR and then have a separate PR  that adds a fully functional `Zeros`? Or is there some more immediate need for graph-construction-time-constant-zeros that you have in mind?",
+        "createdAt" : "2018-07-29T22:10:35Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a6de5d7-84ec-4518-946a-97d697da01ae",
+        "parentId" : "6bcb738c-58b5-4519-91c2-3a04627af6d5",
+        "authorId" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "body" : "I would like to have this `Zeros` implementation because I started to write some examples on how to build a graph in Java and without it, I found that initializing variables to zero was not as convenient as it should be.\r\n\r\nBy the way, about your previous comment where we should be able to initialize a zeroed tensor out of another tensor type and shape, I think that's what `ZerosLike` operator is already doing, right? ",
+        "createdAt" : "2018-07-31T13:19:23Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b6572f2e-52e5-4c64-873a-ea0f0f5d355a",
+        "parentId" : "6bcb738c-58b5-4519-91c2-3a04627af6d5",
+        "authorId" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "body" : "I meant that both `Zeros` and `ZerosLike` take (as input) tensors computed at graph execution time. The former uses the input as the shape of the output, the latter uses the shape of the input tensor as the shape of the output tensor. For example, in:\r\n\r\n```python\r\nimport tensorflow as tf\r\n\r\nx = tf.placeholder(tf.int32)\r\nz0 = tf.zeros(x)\r\nz1 = tf.zeros_like(x)\r\n\r\nwith tf.Session() as sess:\r\n  print(sess.run([z0, z1], feed_dict={x: [1, 1]}))\r\n```\r\n`z0` will evaluate to `[[0.]]`, while `z1` will evaluate to `[0., 0.]`.\r\nNote that `tf.zeros` in a [pretty trivial wrapper](https://github.com/tensorflow/tensorflow/blob/25c197e02393bd44f50079945409009dd4d434f8/tensorflow/python/ops/array_ops.py#L1550) over [`tf.fill`](https://www.tensorflow.org/api_docs/python/tf/fill).\r\n\r\nAlso, the shape is known only at graph execution time. And when it is known, it is fully specified.\r\nWhich is why I think having `Zeros.create()` use a `Shape` argument isn't quite right. The type of the `shape` argument should be `Output<Integer>` or `Output<Float>`.\r\n\r\nSomething like:\r\n\r\n```java\r\npublic class Zeros<T> implements Op, Operand<T> {\r\n  public static <T> Zeros<T> create(Scope scope, Class<T> type, Output<Integer> shape) {\r\n    return create(scope, type, shape);\r\n  }\r\n\r\n  public static <T> Zeros<T> create(Scope scope, Class<T> type, Output<Long> shape) {\r\n    return create(scope, type, shape);\r\n  }\r\n\r\n  private static <T, U> Zeros<T> create(Scope scope, Class<T> type, Output<U> shape) {\r\n    Output<T> zero = Constant.create(scope, type, new long[]{}, ByteBuffer.allocate(DataType.fromClass(type).byteSize());\r\n     return Fill<T>(scope, type, shape, zero);\r\n   }\r\n}    \r\n```\r\n\r\nAnd callers would do something like:\r\n\r\n```java\r\nOutput<Float> zeroMatrix = ops.zeros(ops.constant(new long[]{2, 2}));\r\n```\r\n\r\nLet me know if that makes sense, or if I'm misunderstanding.\r\n",
+        "createdAt" : "2018-07-31T21:44:46Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5103247-796e-45c6-b355-a2d84fa879e5",
+        "parentId" : "6bcb738c-58b5-4519-91c2-3a04627af6d5",
+        "authorId" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "body" : "Interesting... So when calling `tf.zeros([2, 2])` in python, it creates a shape tensor out of the array parameter? \r\n\r\nSo to resume. without the `Zeros` operator, we could achieve the same operation doing\r\n\r\n```ops.fill(Float.class, ops.constant(new long[]{2, 2}, Long.class), ops.constant(0.0f));```\r\n\r\nAnd with `Zeros`, it would be\r\n\r\n```ops.zeros(Float.class, ops.constant(new long[]{2, 2}, Long.class))```\r\n\r\nIt’s still very verbose, that is why I liked the way Python does it, by passing a simple array. Or at least not passing the `Long.class` here would make it more succinct... is it frequent to create shape tensors out of an array like this? If so, maybe we could have special factory in `Constant` (or another operator) that takes only a `long[]` as parameter?\r\n",
+        "createdAt" : "2018-08-01T02:45:48Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6182d193-1c21-4ef5-b415-370ee9b03493",
+        "parentId" : "6bcb738c-58b5-4519-91c2-3a04627af6d5",
+        "authorId" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "body" : "Yes, `tf.zeros([2, 2])` creates a shape tensor out of the array parameter. In fact, _all_ Python APIs create tensors where appropriate out of the arguments. For example, `tf.matmul([[1]], [[2]])` will result in the exact same graph as `tf.matmul(tf.constant([[1]]), tf.constant([[2]]))`, since the Python APIs convert the arguments to `tf.Tensor` objects wherever possible. To do the same in Java would be something like using `Object` for all arguments :):\r\n\r\n```java\r\npublic Tensor<T> matmul(Object a, Object b) throws Exception {\r\n  Output<T> aTensor = convertToOutputOrRaiseException(a);\r\n  Output<T> bTensor = convertToOutputOrRaiseException(b);\r\n  ...\r\n}\r\n```\r\n\r\nSo, in that sense `Zeros` is no more special than any of the other existing ops - `Add`, `MatMul` etc. \r\n\r\nAdding overrides in the `Constant` operator that parallel the ones in [`Tensors.create`](https://www.tensorflow.org/api_docs/java/reference/org/tensorflow/Tensors) seems fine to me.\r\n\r\n",
+        "createdAt" : "2018-08-01T04:49:42Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "03913e47-3bab-4e61-9076-243219ed80e5",
+        "parentId" : "6bcb738c-58b5-4519-91c2-3a04627af6d5",
+        "authorId" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "body" : "All right, let's to this then! And `ops.fill()` won't have the same overflow issue that I had with the previous implementation, so that's good",
+        "createdAt" : "2018-08-01T12:52:58Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e3bc2b0e764cacafb1156bc84299790fd9e60b89",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +35,39 @@ */\n@Operator\npublic class Zeros<T> implements Op, Operand<T> {\n\n  /**"
+  },
+  {
+    "id" : "dd78b625-dad9-434e-938e-a68414fcf18d",
+    "prId" : 21092,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/21092#pullrequestreview-142907323",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6cd83a32-04b1-4033-a0ae-791672e810ea",
+        "parentId" : null,
+        "authorId" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "body" : "Do we want `U` to extend from `Number` or we we specifically want only `Integer` and `Long`?\r\nI think the latter. In which case, let's make this a private method and have two public ones that fix dims to be `Operand<Integer>` and `Operand<Long>`?",
+        "createdAt" : "2018-08-02T13:59:24Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "958c8b28-a99b-449e-a5ab-dcd25b0b6773",
+        "parentId" : "6cd83a32-04b1-4033-a0ae-791672e810ea",
+        "authorId" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "body" : "You can't, because of type-erasure, you'll end up with two methods `create` with the same signature.\r\n\r\nThat is why when Andrew added generic support, we discussed about using TF types instead of Java ones so we can gain flexibility on the granularity of the operand types (e.g. `TFInt` and `TFLong` would both extends from `TFNonDecimalNumber` so we could accept only `Operand<T extends TFNonDecimalNumber`, something like that).\r\n\r\nI can't use a different method name neither otherwise it won't be part of the `Ops` aggregator.",
+        "createdAt" : "2018-08-02T16:23:11Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "44bac885-95e2-45aa-ac3f-da1e724327a4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af7543e9-a5e9-46cd-a5c9-cfd2a5b37900",
+        "parentId" : "6cd83a32-04b1-4033-a0ae-791672e810ea",
+        "authorId" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "body" : "Ah! Righto. Sigh. Okay then :)",
+        "createdAt" : "2018-08-02T17:55:13Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e3bc2b0e764cacafb1156bc84299790fd9e60b89",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +46,50 @@   * @throws IllegalArgumentException if the tensor type or shape cannot be initialized with zeros.\n   */\n  public static <T, U extends Number> Zeros<T> create(Scope scope, Operand<U> dims, Class<T> type) {\n    Scope childScope = scope.withSubScope(\"Zeros\"); // If scope had an op name set, it will prevail on \"Zeros\"\n    int zeroSize = DataType.fromClass(type).byteSize();"
+  },
+  {
+    "id" : "b97e86e7-6c6e-467e-aea4-1dca5c02e8c1",
+    "prId" : 21092,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/21092#pullrequestreview-143283000",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "49cad5c2-8ef9-41bf-a571-c64f3c233b59",
+        "parentId" : null,
+        "authorId" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "body" : "@karllessard : Could you add the Copyright notice header to this file (and other new files)?",
+        "createdAt" : "2018-08-03T18:12:44Z",
+        "updatedAt" : "2018-08-03T19:04:27Z",
+        "lastEditedBy" : "ff531721-78ce-45aa-b6a0-b9f2e664f0c2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e3bc2b0e764cacafb1156bc84299790fd9e60b89",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +13,17 @@limitations under the License.\n==============================================================================*/\npackage org.tensorflow.op.core;\n\nimport java.nio.ByteBuffer;"
+  }
+]
