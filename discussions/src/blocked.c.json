@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "e0d08cd8-66b0-415d-aad6-93e38dc30273",
+    "prId" : 8520,
+    "prUrl" : "https://github.com/redis/redis/pull/8520#pullrequestreview-595759254",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1dedf2bf-3074-4357-9ca9-28a42960f6cd",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "this call includes a loop on all clients inside it (in certain condition).\r\ndoes it really need to be inside the `while` loop?\r\nI suppose the state can change due to the call to `processInputBuffer` in this loop.\r\nthis nested loop is very unlikely to happen, right, and even if it does it is likely to happen just once (not on every iteration of the outer loop). right?",
+        "createdAt" : "2021-02-22T18:58:03Z",
+        "updatedAt" : "2021-02-22T20:16:12Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a5753252-7e84-4b99-ab32-5cbd0f539622",
+        "parentId" : "1dedf2bf-3074-4357-9ca9-28a42960f6cd",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "BTW, why don't i see a similar break in unstable?",
+        "createdAt" : "2021-02-22T18:59:36Z",
+        "updatedAt" : "2021-02-22T20:16:12Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6502992d-336e-40c2-b089-8e6c0cb04f4a",
+        "parentId" : "1dedf2bf-3074-4357-9ca9-28a42960f6cd",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "BTW, we're returning here so the worst case is we loop over the clients once. More generally, we should only loop over all the clients once when the clients become unpaused. If someone sent a bunch of `client pause 0` we might do a bunch of recursive loops, but that is not really a correct usage pattern.\r\n\r\nFor why it's not in unstable, this check is down in processCommand() so unstable won't execute write commands during pause. ",
+        "createdAt" : "2021-02-22T20:36:17Z",
+        "updatedAt" : "2021-02-22T20:36:18Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5ab06fd89d5e5a15733021eaad168f200793cb09",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +101,105 @@        /* If clients are paused we yield for now, since\n         * we don't want to process any commands later. */\n        if (clientsArePaused()) return;\n        ln = listFirst(server.unblocked_clients);\n        serverAssert(ln != NULL);"
+  },
+  {
+    "id" : "98de0f03-f269-48f9-8aa7-8f5c52aa2093",
+    "prId" : 8170,
+    "prUrl" : "https://github.com/redis/redis/pull/8170#pullrequestreview-557424593",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6fef736e-b62e-4612-931f-568550c4c9ce",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "maybe you better nullify paused_list_node after doing that.",
+        "createdAt" : "2020-12-22T09:04:56Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07c91ee0-eda1-4843-940b-42534ae4fc42",
+        "parentId" : "6fef736e-b62e-4612-931f-568550c4c9ce",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Good point.",
+        "createdAt" : "2020-12-22T23:29:16Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "776c26e8349c4f2a590c1218ce31e73dee4df909",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +167,171 @@        unblockClientFromModule(c);\n    } else if (c->btype == BLOCKED_PAUSE) {\n        listDelNode(server.paused_clients,c->paused_list_node);\n        c->paused_list_node = NULL;\n    } else {"
+  },
+  {
+    "id" : "cd1b5544-f3fb-4f0a-8b38-3017e738be75",
+    "prId" : 8170,
+    "prUrl" : "https://github.com/redis/redis/pull/8170#pullrequestreview-562271103",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "00d90073-a7f4-4a08-817f-4a9861757ef1",
+        "parentId" : null,
+        "authorId" : "b80d1b62-d71e-412b-8ac1-75ca11c2ea56",
+        "body" : "After a client is unblocked (put into the unblocked list), how can a client get reblocked before leaving the unblock queue? I'm thinking that this flag should always be clear here. Maybe add an assertion to ensure/document?\r\n\r\nI'm thinking that once a client is unblocked, we would call `processCommandAndResetClient()` (always) and then check CLIENT_BLOCKED before calling `processInputBuffer()`.  (But as mentioned in the comment, `processInputBuffer` must check that anyway, so the additional check is not needed here.)\r\n\r\nIf this code is extracted and moved to `networking.c` it would reduce the logic bleed between modules.",
+        "createdAt" : "2021-01-05T19:58:54Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "b80d1b62-d71e-412b-8ac1-75ca11c2ea56",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cfbe2227-24d7-444f-b3c8-1eb66559c65d",
+        "parentId" : "00d90073-a7f4-4a08-817f-4a9861757ef1",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I don't really follow this comment.",
+        "createdAt" : "2021-01-05T21:42:34Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be21900c-0960-4553-b37c-3292e50662f1",
+        "parentId" : "00d90073-a7f4-4a08-817f-4a9861757ef1",
+        "authorId" : "b80d1b62-d71e-412b-8ac1-75ca11c2ea56",
+        "body" : "The client was blocked.  It was then unblocked and put onto the unblocked list.  Now we are processing that list...\r\n\r\nAt this point, how can CLIENT_BLOCKED be set?  If it's set, we shouldn't have moved it to the unblocked list, right?\r\n\r\nI agree that the client can be re-blocked AFTER calling `processCommandAndResetClient`, but I'm not sure how the client can be blocked at this line.",
+        "createdAt" : "2021-01-06T01:10:41Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "b80d1b62-d71e-412b-8ac1-75ca11c2ea56",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "46467963-82de-4701-8d96-eacca5d5d9e1",
+        "parentId" : "00d90073-a7f4-4a08-817f-4a9861757ef1",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Oh, I think the comment \"the code is conceptually more correct this way\" is the only reason this is there.",
+        "createdAt" : "2021-01-06T01:44:16Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "776c26e8349c4f2a590c1218ce31e73dee4df909",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +116,120 @@         * client is not blocked before to proceed, but things may change and\n         * the code is conceptually more correct this way. */\n        if (!(c->flags & CLIENT_BLOCKED)) {\n            /* If we have a queued command, execute it now. */\n            if (processPendingCommandsAndResetClient(c) == C_ERR) {"
+  }
+]

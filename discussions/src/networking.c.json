@@ -1,0 +1,827 @@
+[
+  {
+    "id" : "1d1bb060-a761-498a-9a68-1e62c203d90d",
+    "prId" : 9167,
+    "prUrl" : "https://github.com/redis/redis/pull/9167#pullrequestreview-696279612",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "edd577dc-bf56-41f0-8c2f-8550e2da0c4d",
+        "parentId" : null,
+        "authorId" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "body" : "what happens if `moduleBlockedClientMayTimeout` returns 0 but `unblock_error` is 1? shouldn't we still reply to the blocked client with -UNBLOCKED?",
+        "createdAt" : "2021-06-29T11:58:59Z",
+        "updatedAt" : "2021-06-29T11:58:59Z",
+        "lastEditedBy" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "19ec92a4-07d8-402b-9889-d3f8fe4d2aaf",
+        "parentId" : "edd577dc-bf56-41f0-8c2f-8550e2da0c4d",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "@guybe7 I think not, the way I see it a module that doesn't set a timeout callback doesn't expect spontaneous unblocking of clients.",
+        "createdAt" : "2021-06-29T12:11:39Z",
+        "updatedAt" : "2021-06-29T12:11:39Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a6c0fe57-3cc6-463c-9b43-cc41f4e09b43",
+        "parentId" : "edd577dc-bf56-41f0-8c2f-8550e2da0c4d",
+        "authorId" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "body" : "ok so you basically disabled CLIENT UNBLOCK for clients that don't expect a spontaneous unblock.. which means the only possibility to unblock the client is in the hands of the module.. but, isn't that the purpose of CLIENT UNBLOCK? shouldn't it do the best it can (even if the blocked client isn't \"expecting\" to be unblocked) in order to unblock a client?",
+        "createdAt" : "2021-06-29T12:21:52Z",
+        "updatedAt" : "2021-06-29T12:21:52Z",
+        "lastEditedBy" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61c70c97-86da-4449-ad24-adf2edd69a35",
+        "parentId" : "edd577dc-bf56-41f0-8c2f-8550e2da0c4d",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "@guybe7 My POV is that referring to a command is blocking is mostly relevant for Redis built-in commands. Modules can use the blocking API to implement commands that run in background threads, and will use the blocking API, but from a user's perspective this is not really a blocking command.",
+        "createdAt" : "2021-06-29T13:16:29Z",
+        "updatedAt" : "2021-06-29T13:16:29Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "06785cba-7b1a-4f8d-85ab-6585f2ef6b4a",
+        "parentId" : "edd577dc-bf56-41f0-8c2f-8550e2da0c4d",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i think the important distinction is that the client side can expect to get unblocked with error, we care less about that. but we're afraid to throw the module off balance and into a problematic state, right?\r\n\r\nso i agree we don't wanna corrupt the state for modules, but what if a certain module wants to support CLIENT unblock, but doesn't want timeout? i.e. what if he didn't define a timeout callback since it has nothing to do there, but will in some way gracefully handle a disconnected client? (they should expect client disconnection anyway, right?)",
+        "createdAt" : "2021-06-29T14:14:32Z",
+        "updatedAt" : "2021-06-29T14:14:33Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d24f213c-4a71-4b68-b87d-4a5f596ac08e",
+        "parentId" : "edd577dc-bf56-41f0-8c2f-8550e2da0c4d",
+        "authorId" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "body" : "@yossigo what about Oran's question?\r\n\r\nmaybe what we're saying is: if you want to be CLIENT UNBLOCKed you must define a timeout_callback. if you don't actually want a timeout, just pass `timeout=0`\r\n\r\nbtw what if i pass `timeout!=0` without a timeout callback? what happens it's timedout?",
+        "createdAt" : "2021-06-30T14:21:22Z",
+        "updatedAt" : "2021-06-30T14:21:23Z",
+        "lastEditedBy" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c28272a9-e0dd-4fd8-aa76-90e18294693f",
+        "parentId" : "edd577dc-bf56-41f0-8c2f-8550e2da0c4d",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "Exactly that, if you want `CLIENT UNBLOCK` you need a timeout function - essentially preserving the current behavior. BTW going there is not very comfortable because you can't pass private data to the timeout function - but that was already discussed in the past and is a known shortcoming of the API.\r\n\r\nPassing a non-zero timeout and a `NULL` callback will crash. Ways to address that:\r\n1. Refuse the blocking call and return a `NULL` `RedisModuleBlockedClient`. That could potentially lead to other kinds of crashes because until now a `NULL` was never returned.\r\n2. Silently skip the call. This would leave the client without a reply causing command/reply de-sync.\r\n3. Produce our own custom error reply in this case. I think that makes most sense. WDUT?",
+        "createdAt" : "2021-06-30T15:00:27Z",
+        "updatedAt" : "2021-06-30T15:00:27Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "71f715c6b5e8cc378dfb9a84a67fade4d2f8ee40",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +2679,2683 @@            != C_OK) return;\n        struct client *target = lookupClientByID(id);\n        if (target && target->flags & CLIENT_BLOCKED && moduleBlockedClientMayTimeout(target)) {\n            if (unblock_error)\n                addReplyError(target,"
+  },
+  {
+    "id" : "488a42a7-7df1-4ff5-840b-30211b801d47",
+    "prId" : 9003,
+    "prUrl" : "https://github.com/redis/redis/pull/9003#pullrequestreview-683688557",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "de3c0d3f-0dde-4200-ad7a-6dc288312520",
+        "parentId" : null,
+        "authorId" : "f8924c9c-b0b5-4c00-9cb1-95a042d1c159",
+        "body" : "@sundb also note that in case `greedy` is 1 it means that we hope to read as much as possible from the socket. In that case, I think, we should pass `sdsavail` and not `readlen` to the socket read:\r\n```suggestion\r\n        c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);\r\n        readlen = sdsavail(c->querybuf);\r\n```",
+        "createdAt" : "2021-06-08T13:13:33Z",
+        "updatedAt" : "2021-06-08T13:14:13Z",
+        "lastEditedBy" : "f8924c9c-b0b5-4c00-9cb1-95a042d1c159",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20cc9044-a7bd-4545-be8a-74895ec501b1",
+        "parentId" : "de3c0d3f-0dde-4200-ad7a-6dc288312520",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "@yoav-steinberg I'm not sure greed is about reading as much data as possible, the query buffer has already broken 20k (under jemalloc) and since it's already over 20k, let it be greedy.\r\n@oranagra WDYT?",
+        "createdAt" : "2021-06-08T13:25:44Z",
+        "updatedAt" : "2021-06-08T13:26:20Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c7772a12-ae66-405a-bb54-0ea33a8e1731",
+        "parentId" : "de3c0d3f-0dde-4200-ad7a-6dc288312520",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i agree with Yoav.\r\nwe need to realize that we have two different things that we can be greedy or non-greedy about:\r\n1. memory allocations to avoid repeated reallocs of gradual, incremental growth.\r\n2. read system calls. we normally wanna ask to read for as much as we can (all the memory we allocated), so that in total we'll have less system calls (each one will just return what the OS already has, it's non-blocking anyway).\r\n\r\nthe case were we don't wanna be greedy (in **both** malloc and read aspects) is the case of the a BIG_ARG, which we later wanna copy (re-purpose) as is into argv, instead of doing a memcpy.\r\n\r\nanother place were we don't wanna be greedy, is the initial allocation of the default query buffer, we want to start the greediness only above a certain size, in order to avoid the conflict with the resizing cron.",
+        "createdAt" : "2021-06-10T09:23:25Z",
+        "updatedAt" : "2021-06-10T09:23:25Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8da6dbc-7568-46a8-8662-f85d8dc65f68",
+        "parentId" : "de3c0d3f-0dde-4200-ad7a-6dc288312520",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "I was thinking that if use sdsavalid to read, a connection expanded to 64k would handle a lot more commands than an unexpanded one, but the connection is not fair.",
+        "createdAt" : "2021-06-11T02:34:52Z",
+        "updatedAt" : "2021-06-11T02:34:52Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "02cb1e87-4e42-46ba-9c94-208a25a0b05d",
+        "parentId" : "de3c0d3f-0dde-4200-ad7a-6dc288312520",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "yeah, we're not trying to be fair anyway.. so we rather issue less system calls and overall process more commands per second.",
+        "createdAt" : "2021-06-13T06:44:53Z",
+        "updatedAt" : "2021-06-13T06:44:53Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2bccdd73-4d3a-4d66-9751-3d5272a4f17e",
+        "parentId" : "de3c0d3f-0dde-4200-ad7a-6dc288312520",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "@oranagra @yoav-steinberg It's dangerous to use ```sdsavail``` to read.\r\n32bit\r\n1) Expand querybuf to over 2.1g.\r\n2) returns of ```connRead``` will likely overflow. The return value of ```connRead``` should be ```ssize_t```, not the current ```int```.",
+        "createdAt" : "2021-06-15T02:00:33Z",
+        "updatedAt" : "2021-06-15T02:08:43Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5db0f86f-adc4-436c-ba5d-48d320b1e179",
+        "parentId" : "de3c0d3f-0dde-4200-ad7a-6dc288312520",
+        "authorId" : "f8924c9c-b0b5-4c00-9cb1-95a042d1c159",
+        "body" : ">     1. Expand querybuf to over 2.1g.\r\n@sundb I can't see why this change has more of a potential of causing an issue on 32bit than the original code. In both cases we keep expanding the query buff by calling `sdsMakeRoomFor` so it might eventually overflow on a 32bit machine.\r\n> \r\n>     2. returns of `connRead` will likely overflow. The return value of `connRead` should be `ssize_t`, not the current `int`.\r\nThis is a bug in any case. We should change fix connRead to return `ssize_t`.\r\n",
+        "createdAt" : "2021-06-15T06:47:03Z",
+        "updatedAt" : "2021-06-15T06:47:39Z",
+        "lastEditedBy" : "f8924c9c-b0b5-4c00-9cb1-95a042d1c159",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0301400-4779-4733-8c21-3fd7abc87844",
+        "parentId" : "de3c0d3f-0dde-4200-ad7a-6dc288312520",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "@yoav-steinberg Yes, sdsMakeRoomFor will overflow and trigger the assertion in case of constant expansion.\r\nBut before it overflows, ```connRead``` will cause truncation.\r\nIn any case, fix ```connRead``` to return ssize_t.",
+        "createdAt" : "2021-06-15T07:06:04Z",
+        "updatedAt" : "2021-06-15T07:06:05Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80d09ea8-2c7f-41f2-ab07-8292c068fedd",
+        "parentId" : "de3c0d3f-0dde-4200-ad7a-6dc288312520",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "`connRead` can be fixed, but note that this is a theoretical issue that can never really happen.\r\nthis method reads from a socket or a pipe, it reads what's available in the OS buffers, it'll never be more than a few megs.\r\n@sundb i think your last push should be reverted, i think readlen is better be size_t, and i do think we wanna use sdsavail",
+        "createdAt" : "2021-06-15T08:06:49Z",
+        "updatedAt" : "2021-06-15T08:06:49Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17d18557dff7d77130fa97493d2a0b3e89a4805b",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +2171,2175 @@        c->querybuf = sdsMakeRoomForNonGreedy(c->querybuf, readlen);\n    } else {\n        c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);\n\n        /* Read as much as possible from the socket to save read(2) system calls. */"
+  },
+  {
+    "id" : "e20d64be-3d57-481f-b8fa-e06a75e76dd7",
+    "prId" : 8968,
+    "prUrl" : "https://github.com/redis/redis/pull/8968#pullrequestreview-678292257",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e39b0933-63ed-4dc0-8232-cbc43f6edd3a",
+        "parentId" : null,
+        "authorId" : "f8924c9c-b0b5-4c00-9cb1-95a042d1c159",
+        "body" : "Note that this change: always using some of `c->buf`, can potentially more `write` system calls. In the past trying to write a 100k output would never split, but now it will and a small portion (16k) will be written with one `write` call and the rest with another. This can have performance implications.\r\n@oranagra suggested moving this to a seperate PR since it's not directly related, and have the discussion whether it's a good idea or not there.",
+        "createdAt" : "2021-05-20T09:28:20Z",
+        "updatedAt" : "2021-05-20T09:31:07Z",
+        "lastEditedBy" : "f8924c9c-b0b5-4c00-9cb1-95a042d1c159",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "77f1eb06-fe9e-4e0e-bb65-a6c380490dde",
+        "parentId" : "e39b0933-63ed-4dc0-8232-cbc43f6edd3a",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Wow, i am sure what you said is right, in redis protocol, we need to send `*\\r\\n`,`$\\r\\n` firstly even if we reply a big bulk. Initially, i want to make full use of `buf`, so i did that. \r\nneed i open a new PR for this change( change 3 as you said above) @oranagra ",
+        "createdAt" : "2021-05-20T10:10:21Z",
+        "updatedAt" : "2021-05-20T10:10:21Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3427c8f1-79f6-4499-bec5-7087d99dfefe",
+        "parentId" : "e39b0933-63ed-4dc0-8232-cbc43f6edd3a",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "following up on this topic in this thread (responding to later comments)\r\nif we want, we can try to resolve that concern and have an efficient code in both scenarios.\r\nif the `buf` is completely empty (and maybe also the new payload to add is bigger than `PROTO_REPLY_CHUNK_BYTES`), we create a new node, and leave `buf` completely unused. but if `buf` is not empty (it'll have a `write` call anyway), we can utilize it's space.\r\n\r\ni'm not certain this complication is worth it, although that's probably just 2 lines of code, and another 2 lines of comment.",
+        "createdAt" : "2021-05-26T18:56:55Z",
+        "updatedAt" : "2021-05-26T18:56:55Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "21224e29-516f-44d9-ad7e-4f6f46eaaa32",
+        "parentId" : "e39b0933-63ed-4dc0-8232-cbc43f6edd3a",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@ShooterIT do you wanna have a go at my above suggestion?\r\nif not, do we have any other pending issues or can this be merged?\r\ni may have lost track of what's left to do\r\n@yoav-steinberg ^^",
+        "createdAt" : "2021-06-07T11:36:10Z",
+        "updatedAt" : "2021-06-07T11:36:11Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76911885-c2f0-4098-8fb2-689a71ca62c1",
+        "parentId" : "e39b0933-63ed-4dc0-8232-cbc43f6edd3a",
+        "authorId" : "f8924c9c-b0b5-4c00-9cb1-95a042d1c159",
+        "body" : "@ShooterIT convinced my that there's no point in having such an optimization (In implementing your suggestion). This is because `buf` will never be empty, there's always someone that already wrote some '$' or '*' into it. So we're better off using whatever space is available. I'm approving the current PR.",
+        "createdAt" : "2021-06-08T09:19:20Z",
+        "updatedAt" : "2021-06-08T09:19:37Z",
+        "lastEditedBy" : "f8924c9c-b0b5-4c00-9cb1-95a042d1c159",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8921919b65fbb73e973b674e9340b044d5de2863",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +282,286 @@/* Attempts to add the reply to the static buffer in the client struct.\n * Returns the length of data that is added to the reply buffer. */\nsize_t _addReplyToBuffer(client *c, const char *s, size_t len) {\n    size_t available = c->buf_usable_size - c->bufpos;\n"
+  },
+  {
+    "id" : "a7fb7b62-468c-404d-9a9e-d26fca0b1793",
+    "prId" : 8520,
+    "prUrl" : "https://github.com/redis/redis/pull/8520#pullrequestreview-595066784",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1f85b11b-a9c8-4583-87f7-c5c74b0a0230",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "does this mean we risk violating the pause in order to avoid violating the thread safety?\r\nmaybe we cam drain the IO thread assigned clients before we start the pause?",
+        "createdAt" : "2021-02-22T06:55:46Z",
+        "updatedAt" : "2021-02-22T18:15:33Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66c890cf-60fd-48f9-b036-c7127677b8c9",
+        "parentId" : "1f85b11b-a9c8-4583-87f7-c5c74b0a0230",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Technically this PR doesn't change that guarantee. However, the current code does allow mutative commands to be executed after pause.  It queues up fully formed commands during the fan out, and then executes them regardless of the client pause state since there is no pause check in processCommand(). Looks like pause never fundamentally worked with threaded reads, so we'll need to do some draining/re-queueing.",
+        "createdAt" : "2021-02-22T07:30:38Z",
+        "updatedAt" : "2021-02-22T18:15:33Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5ab06fd89d5e5a15733021eaad168f200793cb09",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +1926,1930 @@        /* Return if clients are paused. */\n        if (!(c->flags & CLIENT_SLAVE) && \n            !(c->flags & CLIENT_PENDING_READ) && \n            clientsArePaused()) break;\n"
+  },
+  {
+    "id" : "3f885694-bc81-48a3-a997-bdf3a2346a0d",
+    "prId" : 8520,
+    "prUrl" : "https://github.com/redis/redis/pull/8520#pullrequestreview-595755433",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c23ac477-a45e-4677-9cb4-8238b2963807",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i see this check doesn't exist in unstable. can you explain why?",
+        "createdAt" : "2021-02-22T19:11:46Z",
+        "updatedAt" : "2021-02-22T20:16:12Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9cec2075-db46-4a04-99f8-eb930340eb17",
+        "parentId" : "c23ac477-a45e-4677-9cb4-8238b2963807",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "In unstable, clientsArePaused() is executed in processCommand, which is not executed in the IO thread. So we don't need to avoid it here. We could probably dump this check if we wanted to now, it's not needed for correctness.",
+        "createdAt" : "2021-02-22T20:30:59Z",
+        "updatedAt" : "2021-02-22T20:31:31Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5ab06fd89d5e5a15733021eaad168f200793cb09",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +3285,3289 @@    if (server.io_threads_active &&\n        server.io_threads_do_reads &&\n        !clientsArePaused() &&\n        !ProcessingEventsWhileBlocked &&\n        !(c->flags & (CLIENT_MASTER|CLIENT_SLAVE|CLIENT_PENDING_READ)))"
+  },
+  {
+    "id" : "86f0f866-dbe3-4a5f-bdb3-4278418d24f1",
+    "prId" : 8520,
+    "prUrl" : "https://github.com/redis/redis/pull/8520#pullrequestreview-595752221",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d5005a29-b517-4a2a-af5a-df7d683b188a",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i see this check doesn't exist in unstable, can you explain why?",
+        "createdAt" : "2021-02-22T19:17:50Z",
+        "updatedAt" : "2021-02-22T20:16:12Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3fdc7356-df28-46bf-97e2-3cc60d1f2afa",
+        "parentId" : "d5005a29-b517-4a2a-af5a-df7d683b188a",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "p.s. another case of nested loop, but again, is unlikely to happen, and if it does, it'll only happen once, right?",
+        "createdAt" : "2021-02-22T19:48:27Z",
+        "updatedAt" : "2021-02-22T20:16:12Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f877d0c-1cee-4540-8747-6954269ed842",
+        "parentId" : "d5005a29-b517-4a2a-af5a-df7d683b188a",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "In unstable, the clientsArePaused() check is in processCommand instead of processInputBuffer. So in unstable, this check will be handled gracefully as a blocked command instead of this hack.",
+        "createdAt" : "2021-02-22T20:26:41Z",
+        "updatedAt" : "2021-02-22T20:26:42Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5ab06fd89d5e5a15733021eaad168f200793cb09",
+    "line" : 56,
+    "diffHunk" : "@@ -1,1 +3357,3361 @@         * executed, we still remove the command and it will get picked up\n         * later when clients are unpaused and we re-queue all clients. */\n        if (clientsArePaused()) continue;\n\n        if (processPendingCommandsAndResetClient(c) == C_ERR) {"
+  },
+  {
+    "id" : "159ee1ea-d2fa-4a1d-b9f6-e10e594b7e07",
+    "prId" : 8217,
+    "prUrl" : "https://github.com/redis/redis/pull/8217#pullrequestreview-558011388",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3ca91fad-4e7a-4120-836f-2e600830d9a5",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i suppose we need to have an `else`, either an assertion, or falling back to add `ERR` type error.\r\ni think I would have been ok with an assertion, but then if i think of modules, maybe that's not wise.",
+        "createdAt" : "2020-12-23T06:44:41Z",
+        "updatedAt" : "2020-12-31T14:24:37Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e8ac7e64-2b22-4aa7-b098-951731df8002",
+        "parentId" : "3ca91fad-4e7a-4120-836f-2e600830d9a5",
+        "authorId" : "178b77ef-4974-4854-afae-4e18f5dd998f",
+        "body" : "agree. fixed in the last commit",
+        "createdAt" : "2020-12-23T15:57:05Z",
+        "updatedAt" : "2020-12-31T14:24:37Z",
+        "lastEditedBy" : "178b77ef-4974-4854-afae-4e18f5dd998f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5876578eae847f5b6a6cc938c2e3e818cbb92fc5",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +415,419 @@    } else {\n        char *spaceloc = memchr(s, ' ', len < 32 ? len : 32);\n        if (spaceloc) {\n            const size_t errEndPos = (size_t)(spaceloc - s);\n            incrementErrorCount(s+1, errEndPos-1);"
+  },
+  {
+    "id" : "bb4c1e5b-5402-4e26-8e7b-0c052bcca099",
+    "prId" : 8170,
+    "prUrl" : "https://github.com/redis/redis/pull/8170#pullrequestreview-562352839",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "87ebedda-b9b7-4f50-be43-315a78a8d3e6",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "it just occurred to me that maybe it would be nice to also have a READ pause feature.\r\ni.e. one that will still allow PING, INFO, CLIENT, SHUTDOWN, but will refuse GET, DBSIZE and any access to the keyspace.\r\nwhat do you think? (should be very easy to implement now)",
+        "createdAt" : "2021-01-05T13:05:50Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e53fcefd-1d0f-4900-b6ec-2aec33241a18",
+        "parentId" : "87ebedda-b9b7-4f50-be43-315a78a8d3e6",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I'm not convinced it's useful. If there is a usecase you think makes sense, I agree it'll be straightforward to implement. ",
+        "createdAt" : "2021-01-05T21:58:56Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b0eed11-fa9a-41b1-845c-513051e5337b",
+        "parentId" : "87ebedda-b9b7-4f50-be43-315a78a8d3e6",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "one usecase would have been during loading, and busy scripts.\r\ninstead of responding with error to all requests, we can just postpone them.\r\nthis can make the life of users much easier (kinda like the annoying EAGAIN retry that's needed just because the process got and handled a signal).\r\nbut i agree we can leave this for a later stage.",
+        "createdAt" : "2021-01-06T06:28:09Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "776c26e8349c4f2a590c1218ce31e73dee4df909",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +2679,2683 @@        int type = CLIENT_PAUSE_ALL;\n        if (c->argc == 4) {\n            if (!strcasecmp(c->argv[3]->ptr,\"write\")) {\n                type = CLIENT_PAUSE_WRITE;\n            } else if (!strcasecmp(c->argv[3]->ptr,\"all\")) {"
+  },
+  {
+    "id" : "d74af580-982c-48b4-b6a2-f3fb48011eb8",
+    "prId" : 8170,
+    "prUrl" : "https://github.com/redis/redis/pull/8170#pullrequestreview-562371575",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7c179411-db09-4898-bbfe-7bd38eb64baa",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "we normally don't add an explicit option which is the same as the default.\r\ni.e. `CLIENT PAUSE` and `CLIENT PAUSE ALL` are the same.\r\ni admit it has its pros, but i still wonder why you did that?",
+        "createdAt" : "2021-01-06T07:12:04Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a7dea94-4c20-48f2-a253-469a892b9bf1",
+        "parentId" : "7c179411-db09-4898-bbfe-7bd38eb64baa",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "This was based on your comment we might add more types. They will all be mutually exclusive, so it's more that this an enum type. ",
+        "createdAt" : "2021-01-06T07:20:04Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "776c26e8349c4f2a590c1218ce31e73dee4df909",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +2681,2685 @@            if (!strcasecmp(c->argv[3]->ptr,\"write\")) {\n                type = CLIENT_PAUSE_WRITE;\n            } else if (!strcasecmp(c->argv[3]->ptr,\"all\")) {\n                type = CLIENT_PAUSE_ALL;\n            } else {"
+  },
+  {
+    "id" : "6a746cc0-9dc6-4b8f-8341-72b4194a6fad",
+    "prId" : 8141,
+    "prUrl" : "https://github.com/redis/redis/pull/8141#pullrequestreview-546014290",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "61f3f10c-f370-4da0-8508-1ff3b4e78260",
+        "parentId" : null,
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Hi @oranagra Why we add this check, `prepareClientToWrite` will do such check.",
+        "createdAt" : "2020-12-07T08:19:48Z",
+        "updatedAt" : "2020-12-08T14:29:43Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "983b4bd9-8e66-417b-b146-6ae601a69859",
+        "parentId" : "61f3f10c-f370-4da0-8508-1ff3b4e78260",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i've put it here because it's related to the code below (which corresponds to _addReplyProtoToList), but actually moving the check to the top (or counting on the one that's already in prepareClientToWrite) is not enough.\r\nsince the flag can be set from within addReplyProto.\r\ni.e. addReplyProto will abort (not adding src->buf to the reply), and then we'll be unaware of this and add  src->reply to the reply anyway.\r\n\r\ni'll fix the comment to describe that.",
+        "createdAt" : "2020-12-07T09:08:46Z",
+        "updatedAt" : "2020-12-08T14:29:43Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4fb3d521-e3db-48b2-a68f-e6d51f5e7a55",
+        "parentId" : "61f3f10c-f370-4da0-8508-1ff3b4e78260",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "CLIENT_CLOSE_AFTER_REPLY or  CLIENT_CLOSE_ASAP?\r\ncan we call `prepareClientToWrite` again?  there may be some other flags we need to check.",
+        "createdAt" : "2020-12-07T09:35:10Z",
+        "updatedAt" : "2020-12-08T14:29:43Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d46a2392-385a-42e8-b4bd-222afac981f8",
+        "parentId" : "61f3f10c-f370-4da0-8508-1ff3b4e78260",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i'm sorry, i mixed up these flags (this is confusing).\r\nnow i think we need to check both.\r\nwe're bypassing _addReplyProtoToList, so we need to replicate the check that it has (CLIENT_CLOSE_AFTER_REPLY), but we indeed need to re-call prepareClientToWrite (since CLIENT_CLOSE_AFTER_REPLY might have changed).\r\n\r\n@ShooterIT shall i push a fix for that, or do you see other issues?",
+        "createdAt" : "2020-12-07T09:48:29Z",
+        "updatedAt" : "2020-12-08T14:29:43Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd986a38-1242-427f-9d41-a0ec89d3481a",
+        "parentId" : "61f3f10c-f370-4da0-8508-1ff3b4e78260",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Oh, i also miss somethings, i initially think `prepareClientToWrite` will reject clients with CLIENT_CLOSE_AFTER_REPLY  flag. \r\n\r\nYes, I think we should check both.\r\n\r\n- We shouldn't write anything if `prepareClientToWrite` returns error because of last `addReplyProto`\r\n- listJoin just like _addReplyProtoToList, we should check CLIENT_CLOSE_AFTER_REPLY.",
+        "createdAt" : "2020-12-07T10:27:47Z",
+        "updatedAt" : "2020-12-08T14:29:43Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ce741a383ac6db73acbb2e17e11656cbd3e17a09",
+    "line" : 47,
+    "diffHunk" : "@@ -1,1 +876,880 @@    /* We're bypassing _addReplyProtoToList, so we need to add the pre/post\n     * checks in it. */\n    if (dst->flags & CLIENT_CLOSE_AFTER_REPLY) return;\n\n    /* Concatenate the reply list into the dest */"
+  },
+  {
+    "id" : "84c01af9-1918-4040-955c-1fc454f74265",
+    "prId" : 8113,
+    "prUrl" : "https://github.com/redis/redis/pull/8113#pullrequestreview-544805006",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c2efa2de-0447-4d98-aa83-a905b627cd4e",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "are you sure that newline is needed? did you add it for the benefit of redis-cli?\r\nor maybe redis-cli needs special handling for that (same as it does for CLIENT LIST).",
+        "createdAt" : "2020-11-30T16:57:49Z",
+        "updatedAt" : "2020-12-07T11:59:45Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "830b0c5d-a4f3-40cb-a048-f80d9840fd84",
+        "parentId" : "c2efa2de-0447-4d98-aa83-a905b627cd4e",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "Both are true, `redis-cli` does need special handling to display this the same as `CLIENT LIST`. As for other clients, the newline is there to make parsing identical to `CLIENT LIST` which was the original intent.\r\n\r\nI believe this represents a tradeoff between better structuring of the data vs. compatibility with existing `CLIENT LIST` parsers.",
+        "createdAt" : "2020-11-30T17:53:27Z",
+        "updatedAt" : "2020-12-07T11:59:45Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e11cc116-f270-4a9b-9368-3db9aa0f48c5",
+        "parentId" : "c2efa2de-0447-4d98-aa83-a905b627cd4e",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "so please add redis-cli handling",
+        "createdAt" : "2020-11-30T19:13:13Z",
+        "updatedAt" : "2020-12-07T11:59:45Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0d342b87-08c3-4cd2-99eb-6e15ba866ef6",
+        "parentId" : "c2efa2de-0447-4d98-aa83-a905b627cd4e",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@yossigo are you gonna fix redis-cli?",
+        "createdAt" : "2020-12-04T09:49:06Z",
+        "updatedAt" : "2020-12-07T11:59:45Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "86e8a829924f141614ee44e7e51e53035b216c57",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +2359,2363 @@        /* CLIENT INFO */\n        sds o = catClientInfoString(sdsempty(), c);\n        o = sdscatlen(o,\"\\n\",1);\n        addReplyVerbatim(c,o,sdslen(o),\"txt\");\n        sdsfree(o);"
+  },
+  {
+    "id" : "9ba46e6f-0150-4893-9024-73bc627dd83c",
+    "prId" : 8113,
+    "prUrl" : "https://github.com/redis/redis/pull/8113#pullrequestreview-541213166",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7066f031-dc2b-4b45-af14-e719f901e783",
+        "parentId" : null,
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Should we also throw the invalid client ID on the else here instead of silently failing?",
+        "createdAt" : "2020-12-02T01:10:20Z",
+        "updatedAt" : "2020-12-07T11:59:45Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a8659215-4f9f-4e9a-9b23-c588fba69fd3",
+        "parentId" : "7066f031-dc2b-4b45-af14-e719f901e783",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "Considered that, but that would mean failing the entire operation and returning an error instead of a verbatim text. To me that would make sense if we only handle a single ID at a time, but I don't feel too strongly about that.",
+        "createdAt" : "2020-12-02T18:36:49Z",
+        "updatedAt" : "2020-12-07T11:59:45Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db8f38bd-76aa-4fee-a19e-9616da94ba16",
+        "parentId" : "7066f031-dc2b-4b45-af14-e719f901e783",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I was on the fence about this, I would be inclined to throw an error, but am fine either way. I would like to have some indication that an ID was requested but nothing was found, like a NULL response, but we can't do that here since it's trying to stay compatible with CLIENT list. It also seems annoying to have the request fail because a client was disconnected for some reason.",
+        "createdAt" : "2020-12-03T17:13:47Z",
+        "updatedAt" : "2020-12-07T11:59:45Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80e93d16-dca6-4573-a880-0e3f8afee566",
+        "parentId" : "7066f031-dc2b-4b45-af14-e719f901e783",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "unlike HMGET etc, where the index of the request has to match the index of the response. this one is a verbatim string, and each line has the ID which the user can match to the ones he requested.\r\nit's not ideal, but considering the alternatives i think that's the right thing to do (current code).",
+        "createdAt" : "2020-12-03T19:29:39Z",
+        "updatedAt" : "2020-12-07T11:59:45Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "86e8a829924f141614ee44e7e51e53035b216c57",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +2387,2391 @@                    o = catClientInfoString(o, cl);\n                    o = sdscatlen(o, \"\\n\", 1);\n                }\n            }\n        } else if (c->argc != 2) {"
+  },
+  {
+    "id" : "c9e14ee4-389b-426c-92b0-075c61a3c399",
+    "prId" : 7982,
+    "prUrl" : "https://github.com/redis/redis/pull/7982#pullrequestreview-520154471",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "08cb274f-effe-4e94-9108-75b2f0f9fb5c",
+        "parentId" : null,
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "This drops the CLIENT_UNIX_SOCKET flag, which should probably be retained. ",
+        "createdAt" : "2020-10-28T17:16:13Z",
+        "updatedAt" : "2020-11-01T18:34:59Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb15da5f-26ec-4ccf-870f-dea0d6c92c70",
+        "parentId" : "08cb274f-effe-4e94-9108-75b2f0f9fb5c",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "@madolson Good catch, thanks! It's actually more than just `CLIENT_UNIX_SOCKET` that should be retained, so it looks safer to only clear specific flags.",
+        "createdAt" : "2020-10-29T07:48:09Z",
+        "updatedAt" : "2020-11-01T18:34:59Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0f666c4-d60a-4fd3-a9f0-76aa4d784027",
+        "parentId" : "08cb274f-effe-4e94-9108-75b2f0f9fb5c",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "New approach looks better.",
+        "createdAt" : "2020-10-29T23:19:33Z",
+        "updatedAt" : "2020-11-01T18:34:59Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5bcf2fdabfb76b6c85a2248a5336b1e3d432c3ce",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +2249,2253 @@/* Reset the client state to resemble a newly connected client.\n */\nvoid resetCommand(client *c) {\n    listNode *ln;\n"
+  },
+  {
+    "id" : "8abc5703-e228-43fe-8910-0fa78fe058af",
+    "prId" : 7707,
+    "prUrl" : "https://github.com/redis/redis/pull/7707#pullrequestreview-490297603",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "92f15a1a-b448-478f-9f51-77ffe457b75f",
+        "parentId" : null,
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "Looks like there's an off-by-one here, `atomicGetIncr()` seems to implement `val++` rather than `++val`.\r\n",
+        "createdAt" : "2020-09-16T07:13:42Z",
+        "updatedAt" : "2020-09-16T07:14:59Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e86ec3c1-9f94-4721-bb3b-1c33b12db9b9",
+        "parentId" : "92f15a1a-b448-478f-9f51-77ffe457b75f",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Yes, `server.next_client_id` starts from 1, is there a problem? and It was like this before C11 _Atomic",
+        "createdAt" : "2020-09-16T09:47:01Z",
+        "updatedAt" : "2020-09-16T09:47:01Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc5e60a1-69fc-485b-9cbf-0c0a3f8ccbde",
+        "parentId" : "92f15a1a-b448-478f-9f51-77ffe457b75f",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "The first initialized client (`server.lua_client`) would be assigned with `client_id` of `1` instead of `2` which was the case until now (because `next_client_id` is initialized to `1` and not `0`).\r\n\r\nI can't think of a problem this would introduce (maybe it would if `next_client_id` was initialized to zero), but wanted to point out and be aware of this side effect.",
+        "createdAt" : "2020-09-16T09:51:37Z",
+        "updatedAt" : "2020-09-16T09:51:38Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90871192-28dc-4f16-8e26-954c40b17881",
+        "parentId" : "92f15a1a-b448-478f-9f51-77ffe457b75f",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Yes, `next_client_id` is initialized to 1, just as the name means, it represents the \"next\" id. ",
+        "createdAt" : "2020-09-16T10:41:13Z",
+        "updatedAt" : "2020-09-16T10:41:14Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "65c41c61-c764-48c8-a364-942d59688314",
+        "parentId" : "92f15a1a-b448-478f-9f51-77ffe457b75f",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "the original code actually look like an unintended bug (they client IDs started from 2).\r\n```c\r\n    server.next_client_id = 1; /* Client IDs, start from 1 .*/\r\n...\r\n    uint64_t client_id = ++server.next_client_id;\r\n```\r\nand i agree that the name suggests this is the **next** client id, so although this may be an unintended side effect, it's actually somewhat of a bugfix.",
+        "createdAt" : "2020-09-17T07:03:45Z",
+        "updatedAt" : "2020-09-17T07:03:46Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "37546c456485380d1d0697113357a2f731a35101",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +105,109 @@    selectDb(c,0);\n    uint64_t client_id;\n    atomicGetIncr(server.next_client_id, client_id, 1);\n    c->id = client_id;\n    c->resp = 2;"
+  },
+  {
+    "id" : "632eae40-1fb2-4232-a979-72e0f3d86cb1",
+    "prId" : 7377,
+    "prUrl" : "https://github.com/redis/redis/pull/7377#pullrequestreview-558417043",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2eb664e-d7b3-4998-9272-c5ac0b520244",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "```suggestion\r\n    long long ver = 0;\r\n    int next_arg = 1;\r\n```",
+        "createdAt" : "2020-12-24T08:59:06Z",
+        "updatedAt" : "2020-12-25T02:18:15Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e6c1aeaf08b14076ccdf26aaef65b76b1597ee77",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +2761,2765 @@/* HELLO [<protocol-version> [AUTH <user> <password>] [SETNAME <name>] ] */\nvoid helloCommand(client *c) {\n    long long ver = 0;\n    int next_arg = 1;\n"
+  },
+  {
+    "id" : "60c057c1-2534-43e4-b8e6-21d288c3939a",
+    "prId" : 7309,
+    "prUrl" : "https://github.com/redis/redis/pull/7309#pullrequestreview-526754144",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cc270f26-4fce-462b-baff-ba0efc4804f1",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i would have considered creating a short macro.\r\none line create the macro, use it 6 time, and undef it. (total of 8 lines).\r\nmaybe it'll look better..\r\n\r\nnot a deal breaker of course...",
+        "createdAt" : "2020-11-05T09:15:01Z",
+        "updatedAt" : "2020-12-24T08:49:39Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9dcc336f-16a4-4101-b84a-f41e8f0d294c",
+        "parentId" : "cc270f26-4fce-462b-baff-ba0efc4804f1",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I think local macros to save number of lines generally end up distracting me when reading, but also seem nicer when I'm writing them. ",
+        "createdAt" : "2020-11-10T00:11:46Z",
+        "updatedAt" : "2020-12-24T08:49:39Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7f1cd0c8295482000198092002b3930a282e7b0a",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +2702,2706 @@            addReplyBulkCString(c,\"bcast\");\n            numflags++;\n        }\n        if (c->flags & CLIENT_TRACKING_OPTIN) {\n            addReplyBulkCString(c,\"optin\");"
+  }
+]

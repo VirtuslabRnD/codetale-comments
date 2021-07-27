@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "38458099-1014-4d69-b354-a6e9ab1d59d4",
+    "prId" : 8474,
+    "prUrl" : "https://github.com/redis/redis/pull/8474#pullrequestreview-616630100",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9b4e6487-5d28-4e3d-bd0a-cf3b257c3e6e",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "technically, EXPIREAT doesn't block negative expire times (times before 1/1/1970), so I don't think EXPIRETIME should do that either.\r\nThis could mean that the check for `output_abs` should be moved to be with `expire != -1`, so that we skip the truncation of negative values below.\r\n\r\nhowever, then we have a problem with the semantics of the command, returning -2 on non-existing keys and -1 on non-volatile keys.\r\nmaybe wanna give this new command different semantics, like returning an error in those cases, and a raw unixtime on success which could in theory be negative?\r\n\r\np.s. in theory negative values are non-observable since lookupKey will return NULL, in theory there could be a case where a propagated script that is received from the master, is executed on the replica and lookupKey returns an expired key, but even that can't happen since this command is marked with the `random` flag.\r\n\r\ni'm not entirely sure what's the right thing to do here yet... waiting to hear other opinions and suggestions.",
+        "createdAt" : "2021-03-17T10:18:22Z",
+        "updatedAt" : "2021-03-22T20:44:08Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "05924894-8861-4fea-bc28-8518a277bda2",
+        "parentId" : "9b4e6487-5d28-4e3d-bd0a-cf3b257c3e6e",
+        "authorId" : "a7523b65-8529-42c4-98e3-0da55c83b66a",
+        "body" : "I'm not entirely understanding the problem here.\r\n\r\nMy assumption is that Redis never stores a negative absolute timestamp into the expire dictionary. If `EXPIREAT/PEXPIREAT` is executed with a negative Unix timestamp, it will [result in the key being deleted](https://github.com/redis/redis/blob/92bde124caaedef0e1572765854b2deb9aa22a35/src/expire.c#L524), therefore not stored into the expire dictionary.\r\n\r\nAnd since `EXPIRETIME` just simply returns what is stored in the expire dictionary, there is no legitimate case where it would return a negative value. Therefore it's safe to reserve `-1` and `-2` for error responses.\r\n\r\nWhat am I missing?",
+        "createdAt" : "2021-03-17T22:34:57Z",
+        "updatedAt" : "2021-03-22T20:44:08Z",
+        "lastEditedBy" : "a7523b65-8529-42c4-98e3-0da55c83b66a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db8167b1-3df3-4378-a258-e98447b5dd8e",
+        "parentId" : "9b4e6487-5d28-4e3d-bd0a-cf3b257c3e6e",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i guess it's just me.. being obsessed with the fact that negative unix times are valid values.\r\nin redis, we don't store arbitrary dates in the past, just the future, so a valid negative timestamp would only happen if the machine's wall-clock is set to before 1/1/1970, in which case the key won't deleted on the spot by `checkAlreadyExpired`.\r\ni guess this is not a valid use case for redis.\r\n\r\nTill now in the API (commands) we mainly abused the values -1 and -2 for relative times, so that's ok either way (even if your clock is before 1970).\r\nWe do have that issue in `getExpire` too, work works with absolute times, but this is internal and can in theory be fixed one day.\r\n\r\nSo we need to realize that the semantics of this new command carves that in stone (API).\r\n@yossigo @madolson WDYT?",
+        "createdAt" : "2021-03-18T11:28:45Z",
+        "updatedAt" : "2021-03-22T20:44:08Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f490e96-fa88-401c-a3ed-dae99dc055e8",
+        "parentId" : "9b4e6487-5d28-4e3d-bd0a-cf3b257c3e6e",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I'm okay with blocking negative expires in Redis, I can't see a world where we would want to store them and return them.",
+        "createdAt" : "2021-03-18T16:51:11Z",
+        "updatedAt" : "2021-03-22T20:44:08Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e6f33224-8263-4fd3-978a-36f21ff3d59b",
+        "parentId" : "9b4e6487-5d28-4e3d-bd0a-cf3b257c3e6e",
+        "authorId" : "a7523b65-8529-42c4-98e3-0da55c83b66a",
+        "body" : "+1 for disallowing setting negative Unix timestamps with `EXPIRE/EXPIREAT/PEXPIRE/PEXPIREAT` altogether. ",
+        "createdAt" : "2021-03-18T17:04:05Z",
+        "updatedAt" : "2021-03-22T20:44:08Z",
+        "lastEditedBy" : "a7523b65-8529-42c4-98e3-0da55c83b66a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "00a14be9-1f69-4295-aaad-d4f7e0f9e00d",
+        "parentId" : "9b4e6487-5d28-4e3d-bd0a-cf3b257c3e6e",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "I don't think we wanna change the behavior of existing commands in that case (return an error), but as we concluded above, we can assume negative values will never find their way into the expires dict. \r\nSo I think the current code in this PR is fine in that regard. ",
+        "createdAt" : "2021-03-19T17:16:34Z",
+        "updatedAt" : "2021-03-22T20:44:08Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f9b8f3af0c6718bb9ae7efb3835d41511c3cbb0e",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +585,589 @@    expire = getExpire(c->db,c->argv[1]);\n    if (expire != -1) {\n        ttl = output_abs ? expire : expire-mstime();\n        if (ttl < 0) ttl = 0;\n    }"
+  }
+]

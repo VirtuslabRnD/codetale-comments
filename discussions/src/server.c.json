@@ -1,0 +1,1531 @@
+[
+  {
+    "id" : "ae4d94bd-8b64-4812-8752-96ce368cde92",
+    "prId" : 9194,
+    "prUrl" : "https://github.com/redis/redis/pull/9194#pullrequestreview-699247370",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "93417cc2-07bd-40cc-ae32-18a7f36322d9",
+        "parentId" : null,
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I think this is pretty fragile, since we might add this function call elsewhere, if we want to stop the world, we might want to place the check for the fixed time within the udpateCachedTime().",
+        "createdAt" : "2021-07-04T15:59:05Z",
+        "updatedAt" : "2021-07-04T16:21:12Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "771c13d4-0427-4626-a2ee-c198a7c0ddcf",
+        "parentId" : "93417cc2-07bd-40cc-ae32-18a7f36322d9",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@madolson not sure i understand your concern.\r\nhow about removing the `++` we have a few lines above and change this one to\r\n`if (server.fixed_time_expire++ == 1) {`\r\n?",
+        "createdAt" : "2021-07-05T08:34:03Z",
+        "updatedAt" : "2021-07-05T08:34:03Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dcd854d4-9273-4756-b4d2-6f107492d653",
+        "parentId" : "93417cc2-07bd-40cc-ae32-18a7f36322d9",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Yeah, the relying on a bunch of spread out globals makes it easy to miss one. Doing server.fixed_time_expire++ would help quite a bit.",
+        "createdAt" : "2021-07-05T14:43:19Z",
+        "updatedAt" : "2021-07-05T14:43:19Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f023e9201251e5784ddecfee3c57bb10ae7d4ba2",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +3719,3723 @@     * update only on the first call*/\n    if (server.fixed_time_expire++ == 0) {\n        updateCachedTime(0);\n    }\n"
+  },
+  {
+    "id" : "eb12196b-7bbb-4c10-8d36-31cb7ea81c99",
+    "prId" : 9003,
+    "prUrl" : "https://github.com/redis/redis/pull/9003#pullrequestreview-676847801",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "sorry for dragging this further. i feel a bit uncomfortable.\r\nbefore #7875, this code thought a newly born client's query buffer is small (32k), and didn't consider releasing it.\r\n#7875 didn't actually increase memory consumption (used_memory or RSS, since we use SDS_NOINIT), but it caused this code to release the buffer quickly.\r\n\r\nin this PR, we wanna introduce a change that will retain bigger allocation and avoid releasing them.\r\ni.e. in redis 6.0 we should have released an allocation as soon if it's bigger than 32k, and now we'll avoid releasing it unless it's bigger than 64k.\r\nmaybe instead, we need to change the code that allocates the query buffer to avoid the greediness of sdsMakeRoomFor?\r\n\r\n@yoav-steinberg @sundb WDYT?",
+        "createdAt" : "2021-06-02T15:07:01Z",
+        "updatedAt" : "2021-06-02T15:18:53Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2576c303-d26f-4fec-9839-fe0aef397662",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "This should be the most appropriate, I wanted to do this at first, but sds cannot do this directly.\r\nIt needs to be something like the following, but I always find it a bit odd\r\n```\r\nif (sdsalloc(c->querybuf) == 0) {\r\n    c->querybuf = sdsnewlen(c->querybuf, PROTO_IOBUF_LEN);\r\n    sdssetlen(c->querybuf, 0);\r\n} else {\r\n    c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);\r\n}\r\n```",
+        "createdAt" : "2021-06-02T15:57:49Z",
+        "updatedAt" : "2021-06-02T15:57:49Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3c0515c3-8caf-4ac8-9f27-26bb29b88be0",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "Take back the above comment. Too sleepy.\r\nI can't think of a way to allocate a fixed 32k size sds.",
+        "createdAt" : "2021-06-02T16:06:34Z",
+        "updatedAt" : "2021-06-02T16:06:55Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e6bfd4a0-924c-4e4a-a55c-bc0e0d10022a",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i attempted to add a non-greedy version of sdsMakeRoomFor in the past, it didn't eventually make it in since i found another solution to the problem i was dealing with. but maybe it's time to do that now.\r\ni.e. to be used for the initial size, not for the later growing.",
+        "createdAt" : "2021-06-03T06:46:54Z",
+        "updatedAt" : "2021-06-03T06:46:55Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1408761b-352e-438a-aa85-d0ca676526a1",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "Curious to know how you achieved this.",
+        "createdAt" : "2021-06-03T07:29:23Z",
+        "updatedAt" : "2021-06-03T07:29:23Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f34a47b7-076b-4949-9cff-6b676b045c9a",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "maybe i'm missing something...\r\n\r\nIIRC i renamed sdsMakeRoomFor to _sdsMakeRoomFor and made it take an `exact` argument.\r\nthen i wrapped it with two functions sdsMakeRoomFor that has the original signature, and sdsMakeRoomForExact (which has the same interface, but passes 1 to the `exact` argument.\r\nthen the _sdsMakeRoomFor function avoid adding the extra 1mb or *2 when the exact flag is on.",
+        "createdAt" : "2021-06-03T07:46:57Z",
+        "updatedAt" : "2021-06-03T07:46:57Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f9eebac6-12c5-4bb6-9b89-8b0bea19cd2e",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i wouldn't get the exact amount i asked for since the internal fragmentation is added (up to 30%), but at least i turn off the 200% extra that the greediness mechanism adds..",
+        "createdAt" : "2021-06-03T07:48:20Z",
+        "updatedAt" : "2021-06-03T07:48:21Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "926961ac-fad1-4b0c-8b65-d123ff524d54",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "But there is a problem, like ```sdsMakeRoomFor(s, 16*1024, 1)```, although I want to allocate 32k, but because the hdr of sds is 1 byte more, so the final memory will be 40k, want to allocate 32k need  ```sdsMakeRoomFor(s, 16*1024 - 1, 1)```.",
+        "createdAt" : "2021-06-03T08:01:26Z",
+        "updatedAt" : "2021-06-03T08:03:45Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bec9d96a-333a-4617-a66d-1a9a48e33d92",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "You mean ignore the extra memory?\r\n```\r\nusable = usable-hdrlen-1;\r\nif (usable > add_len)\r\n    usable = add_len;\r\n```",
+        "createdAt" : "2021-06-03T08:06:28Z",
+        "updatedAt" : "2021-06-03T08:06:29Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "690b0361-3e4c-4e44-8767-d8b2492fc2a0",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "no, i just mean the greediness of:\r\n```c\r\n    if (newlen < SDS_MAX_PREALLOC)\r\n        newlen *= 2;\r\n    else\r\n        newlen += SDS_MAX_PREALLOC;\r\n```\r\n\r\nnote that we actually really intended to allocate 16k (`PROTO_IOBUF_LEN`), but because of the greediness we attempt to allocate 32k, which then grows to 40k due to sds header and internal frag.\r\ninstead, if we'll really ask to allocate 16k, it'll grow to some 20k with sds header and internal frag.\r\nthis will let us bring back PROTO_RESIZE_THRESHOLD to 32k as it was in the past.",
+        "createdAt" : "2021-06-03T08:16:01Z",
+        "updatedAt" : "2021-06-03T08:16:01Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48b76be6-cae1-4780-8307-b6172eb5d321",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : " ohh, this is indeed a good idea, querybuf will be larger than 32k in the second expansion, let me make the change.",
+        "createdAt" : "2021-06-03T08:20:12Z",
+        "updatedAt" : "2021-06-03T08:20:12Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d0c1e0c4-69a2-4deb-8b23-3e01946bf80f",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "https://github.com/redis/redis/blob/65851e4562b2ec3da86d0bdd9e5bd5306d28595a/src/networking.c#L1920\r\nI did not modify this expansion, I think since it has been expanded to PROTO_MBULK_BIG_ARG(32k), then let it be bigger to avoid realloc next time.",
+        "createdAt" : "2021-06-04T06:28:22Z",
+        "updatedAt" : "2021-06-04T06:28:22Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba3337c9-03ff-4d04-b0c9-67ef135ba5b5",
+        "parentId" : "330fc95d-f2a4-4ed2-b59b-0ab218bf22b7",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i think i spoke about that in this [comment](https://github.com/redis/redis/pull/9003#discussion_r646103828).\r\nwhen we detect BIG_ARG, we're gonna copy (re-purpose) that sds to the argv array, and create a new query buffer.\r\nwe have no use for the extra space in there. i think that line should be modified to the non-greedy.\r\nam i missing anything?",
+        "createdAt" : "2021-06-06T09:54:41Z",
+        "updatedAt" : "2021-06-06T09:54:41Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17d18557dff7d77130fa97493d2a0b3e89a4805b",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +1696,1700 @@     * 1) Query buffer is > PROTO_RESIZE_THRESHOLD and too big for latest peak.\n     * 2) Query buffer is > PROTO_RESIZE_THRESHOLD and client is idle. */\n    if (querybuf_size > PROTO_RESIZE_THRESHOLD &&\n         ((querybuf_size/(c->querybuf_peak+1)) > 2 ||\n          idletime > 2))"
+  },
+  {
+    "id" : "0f0c3a42-1f7f-4787-bbdb-f34b67ebc180",
+    "prId" : 8890,
+    "prUrl" : "https://github.com/redis/redis/pull/8890#pullrequestreview-669675755",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3b74983-4d7a-476e-b32f-3251afe15642",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "manual fix? how does the spell checker handle such things? does it recognize it refers to a variable name?",
+        "createdAt" : "2021-05-26T13:03:18Z",
+        "updatedAt" : "2021-05-26T13:14:25Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c41695c5-baf7-4084-872c-75ad89874b32",
+        "parentId" : "b3b74983-4d7a-476e-b32f-3251afe15642",
+        "authorId" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "body" : "manual fix. Also when i read the code. saw it and changed it...",
+        "createdAt" : "2021-05-26T13:34:42Z",
+        "updatedAt" : "2021-05-26T13:34:42Z",
+        "lastEditedBy" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d165435-d006-4221-bebf-50dd0bb53347",
+        "parentId" : "b3b74983-4d7a-476e-b32f-3251afe15642",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "but i see your other branch, doesn't have `maxstrings` in the wordlist.\r\nso does the spell checker know to ignore variable names in comments?\r\ndoes it warn about `maxstrings`? would it have warned about the one with the typo? (i.e. no variable with that name)",
+        "createdAt" : "2021-05-26T19:19:39Z",
+        "updatedAt" : "2021-05-26T19:19:39Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f265f253-1672-4f84-8898-468df1261b4a",
+        "parentId" : "b3b74983-4d7a-476e-b32f-3251afe15642",
+        "authorId" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "body" : "It will not warn about `maxstrings`\r\n\r\nI don't think it is smart enough to check variable names....\r\n In fact codespell maintain a dict that use to correct the words. \r\n https://github.com/codespell-project/codespell/tree/master/codespell_lib/data",
+        "createdAt" : "2021-05-27T02:30:07Z",
+        "updatedAt" : "2021-05-27T02:30:42Z",
+        "lastEditedBy" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cd0656f660857a4edc32042921465cf8e530a0dd",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +2638,2642 @@            sdscatprintf(sdsempty(),\"$%d\\r\\n\",j));\n    }\n    /* The following two shared objects, minstring and maxstring, are not\n     * actually used for their value but as a special object meaning\n     * respectively the minimum possible string and the maximum possible"
+  },
+  {
+    "id" : "9ebfdc15-ba50-479c-b726-5987a8a96b07",
+    "prId" : 8890,
+    "prUrl" : "https://github.com/redis/redis/pull/8890#pullrequestreview-669030780",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fe2f1cca-72e7-44a7-b556-b80e8a4c0087",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "what was wrong with the old text?\r\nis it the fact users can distinguish between this one and the next one?",
+        "createdAt" : "2021-05-26T13:05:17Z",
+        "updatedAt" : "2021-05-26T13:14:25Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5c1f8026-4eaf-4084-b81d-8349d3cb03c2",
+        "parentId" : "fe2f1cca-72e7-44a7-b556-b80e8a4c0087",
+        "authorId" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "body" : "There is nothing wrong with the old text. \r\n`is it the fact users can distinguish between this one and the next one?`  yes..",
+        "createdAt" : "2021-05-26T13:37:43Z",
+        "updatedAt" : "2021-05-26T13:37:43Z",
+        "lastEditedBy" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cd0656f660857a4edc32042921465cf8e530a0dd",
+    "line" : 86,
+    "diffHunk" : "@@ -1,1 +5692,5696 @@        server.ipfd.count = 0;\n        if (server.port != 0 && listenToPort(server.port, &server.ipfd) != C_OK) {\n            serverPanic(\"Failed to restore old listening TCP socket.\");\n        }\n"
+  },
+  {
+    "id" : "01e80673-6323-44b0-9347-2553afdb5cd8",
+    "prId" : 8859,
+    "prUrl" : "https://github.com/redis/redis/pull/8859#pullrequestreview-659007780",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9734b530-9d43-4cce-af1f-9d197c89cd26",
+        "parentId" : null,
+        "authorId" : "992af734-3eac-4159-b634-0625f275b1a6",
+        "body" : "I think we should also remove `no-monitor` and `no-slowlog` from `HELLO` and `AUTH` command.\r\n\r\nAnd use `redactClientCommandArgument` in authCommand.",
+        "createdAt" : "2021-05-13T06:12:09Z",
+        "updatedAt" : "2021-05-13T06:12:09Z",
+        "lastEditedBy" : "992af734-3eac-4159-b634-0625f275b1a6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c42f5cac-7ebc-4e03-b1dd-b859165e152f",
+        "parentId" : "9734b530-9d43-4cce-af1f-9d197c89cd26",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Alright, also verified the performance drop was actually really small compared to the SHA execution.",
+        "createdAt" : "2021-05-13T15:11:02Z",
+        "updatedAt" : "2021-05-13T15:11:02Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "301a629dcab75c1b23ac5c762f719697ccdeed73",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +750,754 @@\n    {\"exec\",execCommand,1,\n     \"no-script no-slowlog ok-loading ok-stale @transaction\",\n     0,NULL,0,0,0,0,0,0},\n"
+  },
+  {
+    "id" : "5832b32c-8ab9-455c-9ad2-0512020604dd",
+    "prId" : 8859,
+    "prUrl" : "https://github.com/redis/redis/pull/8859#pullrequestreview-659003685",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "72c49bd2-080a-4f39-acb9-42be264f3fd5",
+        "parentId" : null,
+        "authorId" : "992af734-3eac-4159-b634-0625f275b1a6",
+        "body" : "maybe `******` is more appropriate? just like the password box in web page, not sure.",
+        "createdAt" : "2021-05-13T06:13:45Z",
+        "updatedAt" : "2021-05-13T06:13:45Z",
+        "lastEditedBy" : "992af734-3eac-4159-b634-0625f275b1a6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f59f686-e229-441e-849d-576241f7e325",
+        "parentId" : "72c49bd2-080a-4f39-acb9-42be264f3fd5",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i don't care too much, but i think \"(redacted)\" is slightly better (can be used to grep, and won't hit some lines with ***), i think it makes it clearer that it was done on purpose by redis and not something else.\r\n",
+        "createdAt" : "2021-05-13T11:00:34Z",
+        "updatedAt" : "2021-05-13T11:00:34Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cbacef3e-89b8-471d-9424-ce5765a9f725",
+        "parentId" : "72c49bd2-080a-4f39-acb9-42be264f3fd5",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I agree with Oran, without context ***** is more ambiguous.",
+        "createdAt" : "2021-05-13T15:06:55Z",
+        "updatedAt" : "2021-05-13T15:06:56Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "301a629dcab75c1b23ac5c762f719697ccdeed73",
+    "line" : 58,
+    "diffHunk" : "@@ -1,1 +2617,2621 @@    shared.special_asterick = createStringObject(\"*\",1);\n    shared.special_equals = createStringObject(\"=\",1);\n    shared.redacted = makeObjectShared(createStringObject(\"(redacted)\",10));\n\n    for (j = 0; j < OBJ_SHARED_INTEGERS; j++) {"
+  },
+  {
+    "id" : "5ea49112-ffa8-4853-b51f-5b719e5aa724",
+    "prId" : 8751,
+    "prUrl" : "https://github.com/redis/redis/pull/8751#pullrequestreview-629669814",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2395afe9-928f-4e8c-8d17-6ff717dfe0a6",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "why do we need that variable? we're not using it (no sense in showing it in INFO). the errno is already logged to the logfile.",
+        "createdAt" : "2021-04-07T07:06:46Z",
+        "updatedAt" : "2021-04-07T13:39:36Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f0325e6d-99e8-4800-a264-8663b190559a",
+        "parentId" : "2395afe9-928f-4e8c-8d17-6ff717dfe0a6",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "we need to show the error info for users'  requests\r\nhttps://github.com/redis/redis/blob/e138698e54e97bfaababf56507026bf92dd4deb4/src/scripting.c#L652\r\nhttps://github.com/redis/redis/blob/1eb85249e7e9dafe4fbd023771e53c9a804c0a2f/src/server.c#L4122",
+        "createdAt" : "2021-04-07T07:17:44Z",
+        "updatedAt" : "2021-04-07T13:39:36Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cbd9f033-f849-43f8-9f4f-02ea339d2872",
+        "parentId" : "2395afe9-928f-4e8c-8d17-6ff717dfe0a6",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "ohh, i missed the fact you read from one server variable, and write into the other.",
+        "createdAt" : "2021-04-07T07:20:31Z",
+        "updatedAt" : "2021-04-07T13:39:36Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7b041ea709f4e80acab3eb9eb3486625cf81f2c9",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +4398,4402 @@        atomicGet(server.aof_bio_fsync_status,aof_bio_fsync_status);\n        if (aof_bio_fsync_status == C_ERR) {\n            atomicGet(server.aof_bio_fsync_errno,server.aof_last_write_errno);\n            return DISK_ERROR_TYPE_AOF;\n        }"
+  },
+  {
+    "id" : "2c12e4de-cc6c-4f88-8262-68e645a66899",
+    "prId" : 8666,
+    "prUrl" : "https://github.com/redis/redis/pull/8666#pullrequestreview-617155550",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8a0a8ae5-c8ff-459f-a4a4-a91dbdd196b1",
+        "parentId" : null,
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "Why set the exitcode to 0 when WIFEXITED returns 0(process exit success)?\r\nThis may cause the `exitcode == 0` judgment to not even be valid later.",
+        "createdAt" : "2021-03-22T01:30:30Z",
+        "updatedAt" : "2021-03-22T01:30:34Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7dcc2f74-656a-4a79-862c-f6db7645e07b",
+        "parentId" : "8a0a8ae5-c8ff-459f-a4a4-a91dbdd196b1",
+        "authorId" : "923f0482-b8b2-486e-aea3-d56720913631",
+        "body" : "Sorry I don't quite understand the comment here. I am setting `exitcode` to `-1` here if `WIFEXITED` returns 0. ",
+        "createdAt" : "2021-03-22T04:35:54Z",
+        "updatedAt" : "2021-03-22T04:35:54Z",
+        "lastEditedBy" : "923f0482-b8b2-486e-aea3-d56720913631",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9cd2993c-ffb3-4b8c-b96b-bcfffb86c12e",
+        "parentId" : "8a0a8ae5-c8ff-459f-a4a4-a91dbdd196b1",
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "Sorry, I misunderstood, and you were right.",
+        "createdAt" : "2021-03-22T05:17:18Z",
+        "updatedAt" : "2021-03-22T05:17:18Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cb9218cecd669b858c26100e6da1c7ec2a47bd70",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +1934,1938 @@\n    if ((pid = waitpid(-1, &statloc, WNOHANG)) != 0) {\n        int exitcode = WIFEXITED(statloc) ? WEXITSTATUS(statloc) : -1;\n        int bysignal = 0;\n"
+  },
+  {
+    "id" : "b15edb56-e489-4666-827e-9b360967278d",
+    "prId" : 8584,
+    "prUrl" : "https://github.com/redis/redis/pull/8584#pullrequestreview-608155121",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3c4981e7-bdb5-4a4c-aee0-2e6a5d9336f8",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "https://youtu.be/o7v0PePgVIs?t=9\r\nin which case, i wonder how the tests passed?",
+        "createdAt" : "2021-03-09T20:34:52Z",
+        "updatedAt" : "2021-03-11T05:34:51Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67eaa9e0-f34c-4827-aa16-af723013b266",
+        "parentId" : "3c4981e7-bdb5-4a4c-aee0-2e6a5d9336f8",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Isn't this right? If the prevent logging flag is on the client, we strip it off. We also strip off the CALL slowlog flag?",
+        "createdAt" : "2021-03-09T21:46:42Z",
+        "updatedAt" : "2021-03-11T05:34:51Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d325c44-145a-4508-b4e7-a299ea1622ec",
+        "parentId" : "3c4981e7-bdb5-4a4c-aee0-2e6a5d9336f8",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "ohh, sorry, for some reason i thought CMD_CALL_SLOWLOG means not to log it, so i though we want to turn on the flag.",
+        "createdAt" : "2021-03-09T22:19:30Z",
+        "updatedAt" : "2021-03-11T05:34:51Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5fe29ffa4e41447ab2ec11fe4e4568ef9c436213",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +3742,3746 @@    if ((c->flags & CLIENT_PREVENT_LOGGING) && !(c->flags & CLIENT_BLOCKED)) {\n        c->flags &= ~CLIENT_PREVENT_LOGGING;\n        flags &= ~CMD_CALL_SLOWLOG;\n    }\n"
+  },
+  {
+    "id" : "88177311-efbb-419e-8dc6-744aa6694385",
+    "prId" : 8584,
+    "prUrl" : "https://github.com/redis/redis/pull/8584#pullrequestreview-612068917",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3f0d5fe0-0e5d-4459-9d54-fae9c494bfd7",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "I think it looks a bit odd that we check the BLOCKED flag here, but if we don't then we must not clear the PREVENT flag here. \r\nI think it it be less fragile to clear the PREVENT flag right after logging, so we can then remove the BLOCKED flag here. ",
+        "createdAt" : "2021-03-11T06:00:16Z",
+        "updatedAt" : "2021-03-11T06:00:16Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04dc8805-247b-4bdb-847d-9e36a72b900d",
+        "parentId" : "3f0d5fe0-0e5d-4459-9d54-fae9c494bfd7",
+        "authorId" : "992af734-3eac-4159-b634-0625f275b1a6",
+        "body" : "an easy way to fix it I think, we can use the `client_old_flags`",
+        "createdAt" : "2021-03-11T06:26:52Z",
+        "updatedAt" : "2021-03-11T06:27:12Z",
+        "lastEditedBy" : "992af734-3eac-4159-b634-0625f275b1a6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9ea1712-4c98-410d-8d43-dd734ed71510",
+        "parentId" : "3f0d5fe0-0e5d-4459-9d54-fae9c494bfd7",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I like soloestoy's suggestion",
+        "createdAt" : "2021-03-11T06:33:19Z",
+        "updatedAt" : "2021-03-11T06:33:19Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c67721b1-1e07-42c9-a728-49e79fe2bae4",
+        "parentId" : "3f0d5fe0-0e5d-4459-9d54-fae9c494bfd7",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I'm not sure either of these really make it clearer or less fragile. If the prevent flag is removed right after logging, we're relying on CMD_CALL_SLOWLOG and to always be set so that we go through that code path. ",
+        "createdAt" : "2021-03-11T06:44:43Z",
+        "updatedAt" : "2021-03-11T06:44:43Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e716c95-d32a-4689-bfe2-c3c4f2349f40",
+        "parentId" : "3f0d5fe0-0e5d-4459-9d54-fae9c494bfd7",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "We need to re factor the code doing the slowlog into one function that will be called from both place. Otherwise we have a risk of missing one of them when we update the other. \r\nI was planning to do that in https://github.com/redis/redis/pull/8632  (after this PR is merged). \r\nWe can maybe do that refactoring here, but the Other PR also moves resetClient around, so maybe we should leave this cleanup to be reconsidered there.. ",
+        "createdAt" : "2021-03-11T07:17:56Z",
+        "updatedAt" : "2021-03-11T07:17:57Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "28ba2ddb-4b39-4abf-b75a-2851e1c8b54b",
+        "parentId" : "3f0d5fe0-0e5d-4459-9d54-fae9c494bfd7",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Since you already plan on doing refactoring, do you want to just do it in your PR then?",
+        "createdAt" : "2021-03-11T17:30:31Z",
+        "updatedAt" : "2021-03-11T17:30:31Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "30a4215e-a2de-4a5a-bb9e-35cfa737fbfb",
+        "parentId" : "3f0d5fe0-0e5d-4459-9d54-fae9c494bfd7",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "sorry for the delay, yes. let's merge this as is, and consider further cleanup in the other PR.",
+        "createdAt" : "2021-03-15T11:07:36Z",
+        "updatedAt" : "2021-03-15T11:07:37Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5fe29ffa4e41447ab2ec11fe4e4568ef9c436213",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +3740,3744 @@    /* Some commands may contain sensitive data that should\n     * not be available in the slowlog. */\n    if ((c->flags & CLIENT_PREVENT_LOGGING) && !(c->flags & CLIENT_BLOCKED)) {\n        c->flags &= ~CLIENT_PREVENT_LOGGING;\n        flags &= ~CMD_CALL_SLOWLOG;"
+  },
+  {
+    "id" : "e6587915-4589-4f28-970e-b2fbf433f466",
+    "prId" : 8510,
+    "prUrl" : "https://github.com/redis/redis/pull/8510#pullrequestreview-595796183",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b8c11cbf-837b-4fdd-a9f0-9ad6f46d6471",
+        "parentId" : null,
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "Shouldn't calls to `listenToPort()` be conditional when `port` or `tls_port` is non-zero?",
+        "createdAt" : "2021-02-21T12:43:55Z",
+        "updatedAt" : "2021-03-01T06:46:26Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e974df9-b770-4648-992d-9efd9683fde9",
+        "parentId" : "b8c11cbf-837b-4fdd-a9f0-9ad6f46d6471",
+        "authorId" : "7771fdb3-77a5-4020-a4d6-c5f249a2184d",
+        "body" : "thanks.. added",
+        "createdAt" : "2021-02-22T21:24:52Z",
+        "updatedAt" : "2021-03-01T06:46:26Z",
+        "lastEditedBy" : "7771fdb3-77a5-4020-a4d6-c5f249a2184d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5f17e465b712a417c87fbe2fb3e93b4900eb6334",
+    "line" : 190,
+    "diffHunk" : "@@ -1,1 +5592,5596 @@        server.bindaddr_count = prev_bindaddr_count;\n\n        /* Re-Listen TCP and TLS */\n        server.ipfd.count = 0;\n        if (server.port != 0 && listenToPort(server.port, &server.ipfd) != C_OK) {"
+  },
+  {
+    "id" : "be461c5e-265f-4011-84c9-ef9002e0e153",
+    "prId" : 8315,
+    "prUrl" : "https://github.com/redis/redis/pull/8315#pullrequestreview-570085856",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b157f1dd-5265-4ed3-afb5-75ca6627ded6",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i suppose you meant to delete the other call above to \r\n```c\r\nrun_with_period(1000) replicationCron();\r\n```",
+        "createdAt" : "2021-01-18T09:08:15Z",
+        "updatedAt" : "2021-01-27T20:54:13Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ff8253bccae36513f26eee426a0fef214bcd7f40",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +2187,2191 @@    } else {\n        run_with_period(1000) replicationCron();\n    }\n\n    /* Run the Redis Cluster cron. */"
+  },
+  {
+    "id" : "fe9c0e1a-685e-4226-aaa7-2daefff602f1",
+    "prId" : 8224,
+    "prUrl" : "https://github.com/redis/redis/pull/8224#pullrequestreview-556490933",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b1ea5791-050e-4b1c-80cc-f664a9fe45b3",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "let's put all this code inside an ifdef that'll include it only on arm64 build (and linux, which it already is).",
+        "createdAt" : "2020-12-21T16:25:53Z",
+        "updatedAt" : "2021-01-07T07:30:23Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "926c28b6ba75e674444539de68dcfa11aa50f847",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +5097,5101 @@    }\n}\n\n#ifdef __arm64__\n"
+  },
+  {
+    "id" : "ec57929e-c5c0-4e17-9a2f-8a89ce2004aa",
+    "prId" : 8217,
+    "prUrl" : "https://github.com/redis/redis/pull/8217#pullrequestreview-558104381",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b2d9d088-f240-4590-affe-cbdb23c8436d",
+        "parentId" : null,
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "This is slightly weird user behavior, since reset doesn't actually reset the table back to what it looked like at the start. I would free the table and create a new one, and set the explicit expectation that if an element is missing, it's never been seen. ",
+        "createdAt" : "2020-12-23T17:00:10Z",
+        "updatedAt" : "2020-12-31T14:24:37Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5876578eae847f5b6a6cc938c2e3e818cbb92fc5",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +3301,3305 @@}\n\nvoid resetErrorTableStats(void) {\n    raxFree(server.errors);\n    server.errors = raxNew();"
+  },
+  {
+    "id" : "1275a7b8-fdbb-46c3-8820-8ac482614888",
+    "prId" : 8217,
+    "prUrl" : "https://github.com/redis/redis/pull/8217#pullrequestreview-561032650",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2f6a0c6c-451e-485d-890f-31ac6cc3145e",
+        "parentId" : null,
+        "authorId" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "body" : "I have a question, why reset prev_err_count here.",
+        "createdAt" : "2021-01-04T12:58:52Z",
+        "updatedAt" : "2021-01-04T12:58:56Z",
+        "lastEditedBy" : "4c4e22a4-3f0d-4f25-9809-81320210dfb6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d2ef1aa4-4a0a-48d3-a4fb-1ac8244124b3",
+        "parentId" : "2f6a0c6c-451e-485d-890f-31ac6cc3145e",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "this is why this variable exists:\r\n```c\r\n    /* Update failed command calls if required.\r\n     * We leverage a static variable (prev_err_count) to retain\r\n     * the counter across nested function calls and avoid logging\r\n     * the same error twice. */\r\n```\r\n\r\nmaybe it would have been nicer to move that reset line to right next to the place it is used (incrementing `failed_calls`)",
+        "createdAt" : "2021-01-04T13:35:45Z",
+        "updatedAt" : "2021-01-04T13:35:46Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5876578eae847f5b6a6cc938c2e3e818cbb92fc5",
+    "line" : 70,
+    "diffHunk" : "@@ -1,1 +3675,3679 @@    server.fixed_time_expire--;\n    server.stat_numcommands++;\n    prev_err_count = server.stat_total_error_replies;\n\n    /* Record peak memory after each command and before the eviction that runs"
+  },
+  {
+    "id" : "d120b966-d575-4407-a16f-132535536710",
+    "prId" : 8170,
+    "prUrl" : "https://github.com/redis/redis/pull/8170#pullrequestreview-562166313",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d5f350ed-1e86-40d3-9e78-1713799d2d37",
+        "parentId" : null,
+        "authorId" : "b80d1b62-d71e-412b-8ac1-75ca11c2ea56",
+        "body" : "2 things:\r\n* Maybe use \"may-replicate\" or \"might-replicate\" - because \"may\" conveys that there is a *possibility* that the command might generate replication.  \"can\" doesn't generally imply \"possibility\".  (It implies permission or ability.)\r\n* I don't like having the comment say \"only used for client pause\".  These flags provide information about the command.  We should be thinking about the meaning of the flag in relation to the command, not in relation to how we think that flag would be used.\r\n\r\nSo, instead say something like:\r\n`might-replicate:  Command is not formally a \"write\" command, but may still produce replication.  This applies to non-keyspace commands like PUBLISH and also commands like EVAL which are not formally \"write\" commands, but may generate replicated writes.`",
+        "createdAt" : "2021-01-05T19:15:10Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "b80d1b62-d71e-412b-8ac1-75ca11c2ea56",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b8bed2a1-2764-4a21-9446-c91dad326f47",
+        "parentId" : "d5f350ed-1e86-40d3-9e78-1713799d2d37",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I'm pretty sure the meaning of can/may has degraded in the US language, but I like the sound of may more anyways. Might is also the future tense, so that doesn't feel right. \r\n\r\nI'm going to intentionally not conflate it with write commands, since this is any commands that replicate data over the replication stream. We've talked about pulling out a separate channel for non-writes, and at that time we might revisit this. ",
+        "createdAt" : "2021-01-05T21:56:52Z",
+        "updatedAt" : "2021-01-08T06:46:42Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "776c26e8349c4f2a590c1218ce31e73dee4df909",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +171,175 @@ *                or may just execute read commands. A command can not be marked \n *                both \"write\" and \"may-replicate\"\n *\n * The following additional flags are only used in order to put commands\n * in a specific ACL category. Commands can have multiple ACL categories."
+  },
+  {
+    "id" : "0caa34b4-182d-4948-bd60-6c7791ae034e",
+    "prId" : 8036,
+    "prUrl" : "https://github.com/redis/redis/pull/8036#pullrequestreview-526034785",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fb27a85e-984a-4f99-9c0a-efc1c2850472",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "do you want to log here?",
+        "createdAt" : "2020-11-09T08:33:38Z",
+        "updatedAt" : "2020-11-10T19:53:52Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be5a75ce-2735-4ab7-b0de-b10b4e34b0e8",
+        "parentId" : "fb27a85e-984a-4f99-9c0a-efc1c2850472",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "`redisCommunicateSystemd()` itself logs. Do you think an additional more explicit log is needed?",
+        "createdAt" : "2020-11-09T08:48:29Z",
+        "updatedAt" : "2020-11-10T19:53:52Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7360b34-5d71-4692-87ac-e22fc4f01471",
+        "parentId" : "fb27a85e-984a-4f99-9c0a-efc1c2850472",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "sorry, missed it.",
+        "createdAt" : "2020-11-09T08:50:15Z",
+        "updatedAt" : "2020-11-10T19:53:52Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6fb0ea15d6be4d29564efabafc7e685de4763290",
+    "line" : 100,
+    "diffHunk" : "@@ -1,1 +5258,5262 @@#else\n    if (redisCommunicateSystemd(\"STATUS=Redis is loading...\\n\") <= 0)\n        return 0;\n    serverLog(LL_NOTICE,\n        \"Supervised by systemd. Please make sure you set appropriate values for TimeoutStartSec and TimeoutStopSec in your service unit.\");"
+  },
+  {
+    "id" : "0af7c230-4d67-48c3-bc30-d27d7acbe5cb",
+    "prId" : 8006,
+    "prUrl" : "https://github.com/redis/redis/pull/8006#pullrequestreview-527492406",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "78ebac40-7c81-43da-9335-9115bfa2ee42",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "maybe this better be moved into `freeClientArgv`?",
+        "createdAt" : "2020-11-03T09:32:56Z",
+        "updatedAt" : "2020-11-10T19:19:40Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2cdeedd-b4eb-46df-87cb-25d8b8e46971",
+        "parentId" : "78ebac40-7c81-43da-9335-9115bfa2ee42",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "This doesn't work in replaceClientCommandVector since we both free the original arguments and retain them. ",
+        "createdAt" : "2020-11-10T18:04:42Z",
+        "updatedAt" : "2020-11-10T19:19:40Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3b61d09-3e49-4713-aafe-fc80815c6f50",
+        "parentId" : "78ebac40-7c81-43da-9335-9115bfa2ee42",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "It also interacts a little weirdly with multi-exec, since freeClientArgv isn't called in the multi flow, so it would require an explicit call there. That might be worth refactoring, but would rather split this effort from that. ",
+        "createdAt" : "2020-11-10T18:35:05Z",
+        "updatedAt" : "2020-11-10T19:19:40Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "06c30567033a1f846bd81919e10fb21479ad3352",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +3474,3478 @@        slowlogPushEntryIfNeeded(c,argv,argc,duration);\n    }\n    freeClientOriginalArgv(c);\n\n    if (flags & CMD_CALL_STATS) {"
+  },
+  {
+    "id" : "9b9e72d3-e684-4740-8b54-511f7d3d1e62",
+    "prId" : 7982,
+    "prUrl" : "https://github.com/redis/redis/pull/7982#pullrequestreview-518904406",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5095a3a9-c9d2-4667-8719-6b5b47a8361a",
+        "parentId" : null,
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Love this",
+        "createdAt" : "2020-10-28T17:16:10Z",
+        "updatedAt" : "2020-11-01T18:34:59Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5bcf2fdabfb76b6c85a2248a5336b1e3d432c3ce",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +3887,3891 @@        c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&\n        c->cmd->proc != multiCommand && c->cmd->proc != watchCommand &&\n        c->cmd->proc != resetCommand)\n    {\n        queueMultiCommand(c);"
+  },
+  {
+    "id" : "40db6e8b-a8d8-4ad6-b20e-bdbf426cfab3",
+    "prId" : 7981,
+    "prUrl" : "https://github.com/redis/redis/pull/7981#pullrequestreview-520380109",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "77d0ab74-d112-410b-8cee-62ec51f489bb",
+        "parentId" : null,
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "I'm not sure if this is a problem, the result will be negative if master enable diskless replication(not your PR,), and `master_sync_total_bytes ` will be zero.",
+        "createdAt" : "2020-10-28T15:07:28Z",
+        "updatedAt" : "2020-10-28T15:07:28Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff1b0bd6-9be3-4ec6-a409-9ed42d3f51f0",
+        "parentId" : "77d0ab74-d112-410b-8cee-62ec51f489bb",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "yes, i know, this was already broken, but i also consider that entire field to be a bad idea, so i don't think i wanna fix it (just hope people will not/stop use it).\r\nAt least with the new fields, the caller can notice the size is zero and reach whatever conclusion he needs from that fact.\r\n\r\nNote that in this case (master is diskless, and the repliac is disk-based) none of these fields are gonna provide any indication of progress (since we don't even have loading_rdb_used_mem). the only way around that is maybe have the replica send INFO MEMORY before it sends PSYNC.",
+        "createdAt" : "2020-10-28T15:31:20Z",
+        "updatedAt" : "2020-10-28T15:31:20Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c33f9c72-e737-49cb-8e33-7529538eaf32",
+        "parentId" : "77d0ab74-d112-410b-8cee-62ec51f489bb",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Your PR provides `master_sync_total_bytes` and `master_sync_read_bytes`, these are enough for users to judge even if `master_sync_left_bytes` is negative.\r\n\r\n For me, I think it is a good idea to show approximate progress without much complexity when diskless load",
+        "createdAt" : "2020-10-30T01:49:35Z",
+        "updatedAt" : "2020-10-30T02:51:47Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b66a47d2-18e6-4630-99d3-6495ef3ce57c",
+        "parentId" : "77d0ab74-d112-410b-8cee-62ec51f489bb",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "Did you mean to suggest any change? \nI think I already show an approximate easy to use progress (best I can, \nAnd I can't trim master_sync_left_bytes. ",
+        "createdAt" : "2020-10-30T05:02:00Z",
+        "updatedAt" : "2020-10-30T05:02:01Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "221cdd24-16f5-484b-a76b-20f3cc84ba70",
+        "parentId" : "77d0ab74-d112-410b-8cee-62ec51f489bb",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "No suggestion, it is ok now.",
+        "createdAt" : "2020-10-30T05:09:28Z",
+        "updatedAt" : "2020-10-30T05:09:28Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aed38efed0071a46bd54380be9ae951eb9b3613d",
+    "line" : 68,
+    "diffHunk" : "@@ -1,1 +4680,4684 @@                    (long long) server.repl_transfer_size,\n                    (long long) server.repl_transfer_read,\n                    (long long) (server.repl_transfer_size - server.repl_transfer_read),\n                    perc,\n                    (int)(server.unixtime-server.repl_transfer_lastio)"
+  },
+  {
+    "id" : "d23a2603-787b-47a4-8c81-d7322517dabd",
+    "prId" : 7981,
+    "prUrl" : "https://github.com/redis/redis/pull/7981#pullrequestreview-523374147",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "parentId" : null,
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "how about `zmalloc_used_memory()` instead of `server.loading_loaded_bytes`",
+        "createdAt" : "2020-10-30T02:55:20Z",
+        "updatedAt" : "2020-10-30T02:55:21Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76cf8535-486e-4899-bf13-c11eccb25369",
+        "parentId" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Please ignore, `zmalloc_used_memory` will include last db size if `repl-diskless-load` type is swapdb",
+        "createdAt" : "2020-10-30T04:59:14Z",
+        "updatedAt" : "2020-10-30T04:59:14Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f6cca668-860e-4e04-a7e3-8ff13cd64d86",
+        "parentId" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "My logic is that rdb is roughly the same size of the used memory. (one is encoded more efficiently, but has some encoding overheads, the other has structs and pointers) \n\nBut I like your idea. \nfor swapdb, maybe we can make a snapshot of  the used memory at the beginning of loading, and use the delta from the current? ",
+        "createdAt" : "2020-10-30T05:09:05Z",
+        "updatedAt" : "2020-10-30T05:09:05Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57c6a57e-c26e-41de-9592-0ca3e021f6d3",
+        "parentId" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "But we also need to consider `lazy flush`, that brings much complexity",
+        "createdAt" : "2020-10-30T05:22:38Z",
+        "updatedAt" : "2020-10-30T05:22:39Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0d8bdcf-5b97-43b9-9821-1c9226ca3cd9",
+        "parentId" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "forgot about that, that's really nearly impossible.\r\nonly thing we can do, which is ugly, is use used_memory in some cases, and loaded_bytes in other cases.\r\nit'll make the estimated progress more accurate on many cases, but code would be ugly",
+        "createdAt" : "2020-10-30T05:31:34Z",
+        "updatedAt" : "2020-10-30T05:31:34Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b08148bb-09f5-4f98-8633-8155de4794bc",
+        "parentId" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i'd like another opinion. @guybe7 ?",
+        "createdAt" : "2020-10-30T05:32:55Z",
+        "updatedAt" : "2020-10-30T05:32:55Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "796ca90e-6c68-46ea-abb1-fea357e62222",
+        "parentId" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "authorId" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "body" : "i feel that in this case we should compromise on the accuracy in order to keep the code simple.. i.e. use `loading_loaded_bytes`",
+        "createdAt" : "2020-10-30T14:50:23Z",
+        "updatedAt" : "2020-10-30T14:50:23Z",
+        "lastEditedBy" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b1a1144a-4a02-4bb9-98a2-73529339c086",
+        "parentId" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "I agree with @guybe7. I would even argue that we shouldn't present heuristics as metrics - just tell what we know (i.e. `loading_rdb_used_mem`) and leave it to users to apply heuristics.",
+        "createdAt" : "2020-11-03T13:13:24Z",
+        "updatedAt" : "2020-11-03T13:13:31Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4d77a9a4-d8ca-4fb8-9869-1bc1a811e7a8",
+        "parentId" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@yossigo if i understand Guy's comment he meant that he's ok with the current code and the inaccurate heuristics (keeping the code simple).\r\n\r\nthe way i see it the `loading_loaded_perc` and `loading_eta_seconds` are not real metrics that can be trusted, but rather just a nice thing for humans to look at when using redis-cli.\r\n\r\nalso, if someone needs these heuristics (again for human eyes) i think it's slightly better to have them in redis rather than for example document this (a bit complicated formula) so that someone can do that outside (handling both disk-based and diskless in an inaccurate / best effort way).",
+        "createdAt" : "2020-11-03T13:35:53Z",
+        "updatedAt" : "2020-11-03T13:35:54Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8fa43c2-fb4c-4212-b2b1-7fd27dc24d38",
+        "parentId" : "3ff1e7bb-93df-4945-be8e-eff2b81c2a8a",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "@oranagra That's exactly what I meant. I'm OK with less accurate heuristics but simpler code. I'm even MORE OK with no heuristics, although I agree with your point of human users. The problem here is to properly communicate what is a hard metric (to be consumed by monitoring systems) and what is not. We could do that through explicit naming but that's water under the bridge now...",
+        "createdAt" : "2020-11-04T13:47:31Z",
+        "updatedAt" : "2020-11-04T13:47:31Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aed38efed0071a46bd54380be9ae951eb9b3613d",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +4519,4523 @@                remaining_bytes = server.loading_total_bytes - server.loading_loaded_bytes;\n            } else if(server.loading_rdb_used_mem) {\n                perc = ((double)server.loading_loaded_bytes / server.loading_rdb_used_mem) * 100;\n                remaining_bytes = server.loading_rdb_used_mem - server.loading_loaded_bytes;\n                /* used mem is only a (bad) estimation of the rdb file size, avoid going over 100% */"
+  },
+  {
+    "id" : "d88b58b1-7b6e-4941-afe1-28936cd1543e",
+    "prId" : 7981,
+    "prUrl" : "https://github.com/redis/redis/pull/7981#pullrequestreview-520839686",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce47a7c9-ef90-4459-bddb-e10abe184d34",
+        "parentId" : null,
+        "authorId" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "body" : "@oranagra the original code handled the case of `loading_total_bytes == 0`, how come the new code doesn't?",
+        "createdAt" : "2020-10-30T14:51:24Z",
+        "updatedAt" : "2020-10-30T14:53:16Z",
+        "lastEditedBy" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d4be313-b59c-4dc6-8a8b-f8c1342fc866",
+        "parentId" : "ce47a7c9-ef90-4459-bddb-e10abe184d34",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@guybe7 you mean the `+1` to avoid division by zero?\r\nthis is no longer needed, since we're inside an `if` that checks that it's not zero.",
+        "createdAt" : "2020-10-30T15:45:24Z",
+        "updatedAt" : "2020-10-30T15:45:24Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ad1c3708-b7f5-4381-b437-85e78f11f3dd",
+        "parentId" : "ce47a7c9-ef90-4459-bddb-e10abe184d34",
+        "authorId" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "body" : "oh ok, missed that",
+        "createdAt" : "2020-10-30T16:34:26Z",
+        "updatedAt" : "2020-10-30T16:34:26Z",
+        "lastEditedBy" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aed38efed0071a46bd54380be9ae951eb9b3613d",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +4516,4520 @@\n            if (server.loading_total_bytes) {\n                perc = ((double)server.loading_loaded_bytes / server.loading_total_bytes) * 100;\n                remaining_bytes = server.loading_total_bytes - server.loading_loaded_bytes;\n            } else if(server.loading_rdb_used_mem) {"
+  },
+  {
+    "id" : "d57b87a4-ef93-4ded-a506-7e0eeb3d85cf",
+    "prId" : 7979,
+    "prUrl" : "https://github.com/redis/redis/pull/7979#pullrequestreview-520152827",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "parentId" : null,
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "This is a little bit misleading because the actual check for max clients includes cluster connections and doesn't remove slaves. I assume someone will look at this to see how many free clients they have, but they will hit it sooner than expected. I would propose also adding \"internal_clients\" with the slaves + clusterbus count.  ",
+        "createdAt" : "2020-10-28T18:55:59Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c288d8f9-aab8-4aec-8b83-e07d9347df32",
+        "parentId" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@madolson good point. also raised by @ShooterIT in the related issue. so now i can't ignore it 8-).\r\nhow about `connected_other`? ",
+        "createdAt" : "2020-10-28T19:05:47Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "febccd9b-1e7a-40b9-ac3d-b05270f1d2d6",
+        "parentId" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Sure, it's weird that we call it maxclients when it's not just clients, but the name sounds good to me. ",
+        "createdAt" : "2020-10-28T20:01:22Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0fbc4ad-00b6-479f-903e-74b1bc6c85c8",
+        "parentId" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "the reason i thought `internal_clients` wasn't good was that i wanted it to start with `connected_` like `connected_clients`.\r\nso maybe `connected_internal_clients`? (sounds too long)",
+        "createdAt" : "2020-10-29T12:37:10Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b15f256-1c63-4b18-aaa6-6a2ca26fbf4b",
+        "parentId" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "maybe the right thing would be to expose `connected_cluster_clients` and document that, `connected_slaves` (comes from a different info section) should be accounted for separately?",
+        "createdAt" : "2020-10-29T12:39:24Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c76f2a4-1026-4fcf-a901-2a7b76be8e23",
+        "parentId" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@madolson @ShooterIT i ended up adding `connected_clusters` to the INFO CLUSTER section.\r\n\r\nuser that wants to match the `connected_clients` to the `maxclients` need to include it, as well as `connected_salves`.\r\n\r\nit's true that all of these are coming from different sections (which makes it difficult for a terminal user of redis-cli), but for monitoring software it's trivial, since the sections don't really matter, all of that is pushed into one dict, and these 3 metrics are all prefixed with the same `connected_` prefix (so it's kinda intuitive)\r\n\r\nlet me know if that seems good.",
+        "createdAt" : "2020-10-29T12:51:40Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "462190d8-9fce-43bf-9f79-8de09d24314f",
+        "parentId" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "ohh boy, `connected_clusters` only now it occurred to me that that's a really bad name (there are no multiple clusters).\r\n\r\nother alternatives:\r\n- connected_cluster_nodes\r\n- connected_cluster_clients\r\n- connected_nodes\r\n- cluster_nodes\r\n- cluster_connected_nodes\r\n\r\nplease vote.\r\nfirst one seems best to me (although too long)",
+        "createdAt" : "2020-10-29T14:16:34Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c7c6933-b0fc-4d00-b4f8-e33c84a68453",
+        "parentId" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "I like to add `connected_clusters` to the INFO CLUSTER section. \r\nbut for the name, i am confused at first glance. We want to show the number of connection used for communicating with other cluster node,`getClusterConnectionsCount` includes sending and receiving connections. So how about `cluster_connections` just alike function name.",
+        "createdAt" : "2020-10-29T14:30:08Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "31fa84cb-81dd-40bc-b953-235fc3adef0f",
+        "parentId" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "`cluster_connections` sounds good to me, but i kinda liked the fact that all the metrics that should be matched against `maxclients` are all starting with a `connected_` prefix.\r\nbut you're right, `connected_cluster_nodes` would technically be wrong.\r\nlet's see if someone has a better idea, if not, we'll go with `cluster_connections`",
+        "createdAt" : "2020-10-29T14:45:04Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c5d24b9b-4648-4ce0-a0d2-4af3989c1a03",
+        "parentId" : "dea2b3e1-20ed-4e10-9834-703e43f1e432",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "cluster_connections sounds good to me. \r\n\r\nI still think cluster_connections should go next to max clients, so that it's easier to make the connection between the two. There is already \"cluster info\" which contains \"cluster_known_nodes\". ",
+        "createdAt" : "2020-10-29T23:14:53Z",
+        "updatedAt" : "2020-10-30T05:39:49Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bc5eb0eb40777d9bba09a887607bd7ca28f097fe",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +4316,4320 @@            \"connected_clients:%lu\\r\\n\"\n            \"cluster_connections:%lu\\r\\n\"\n            \"maxclients:%u\\r\\n\"\n            \"client_recent_max_input_buffer:%zu\\r\\n\"\n            \"client_recent_max_output_buffer:%zu\\r\\n\""
+  },
+  {
+    "id" : "2aad9f9e-2402-4dc7-83e3-1c2b2e49aaf1",
+    "prId" : 7954,
+    "prUrl" : "https://github.com/redis/redis/pull/7954#pullrequestreview-542535834",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "405c4766-a810-4bfa-a0d1-dedfffed08a2",
+        "parentId" : null,
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "We should probably benchmark the performance impact here when in low memory condition and repeatedly going through `overMaxmemoryAfterAlloc()`, may need some simple caching here if it's big.",
+        "createdAt" : "2020-12-01T20:07:38Z",
+        "updatedAt" : "2020-12-06T09:33:53Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5eb57310-1517-48f7-92a2-ee17dce15089",
+        "parentId" : "405c4766-a810-4bfa-a0d1-dedfffed08a2",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "good idea, but i think it is tricky, i.e. if we allow it to rehash the benchmark will show the impact of rehashing.\r\nmaybe to benchmark it we need to create a dummy version with a static response and compare it to the real one.\r\nin the same benchmark maybe it would also be interesting to see the performance implications of an overly populated dict (one that reaches near to the new 1.6 threshold).\r\n@ShooterIT can you please prepare some benchmarks that can measure these concerns (especially the one about repeated calls to overMaxmemoryAfterAlloc?",
+        "createdAt" : "2020-12-01T20:43:44Z",
+        "updatedAt" : "2020-12-06T09:33:53Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dac0edaf-f922-4e46-b104-e8907ea3139b",
+        "parentId" : "405c4766-a810-4bfa-a0d1-dedfffed08a2",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Actually I also ever worried about this question, but i think it doesn't much matter. We need to expand dict only when we add keys. Firstly if redis has child process, we needn't call this function because we disable dict resize. Secondly, let's see the  cost of `overMaxmemoryAfterAlloc`, it will be quick to only call `zmalloc_used_memory` once if memory is sufficient. If memory is not enough, we need to call `freeMemoryGetNotCountedMemory`, we only need to calculate the slaves' output buffer, needn't care about aof rewrite buffer because there is no child process as said above, moreover, `getClientOutputBufferMemoryUsage` is quick, actually we still call many times if we have many replicas, but i think that cost less compared with adding write commands to all replicas' output buffer. To sum up, i don't think `overMaxmemoryAfterAlloc` can bring obvious performance damage. Despite the theory, we still need test data to illustrate, and then decide whether to cache.",
+        "createdAt" : "2020-12-02T06:40:14Z",
+        "updatedAt" : "2020-12-06T09:33:53Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "20d8a8e678e802cd8f14a4bd44e8540531bd46f7",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +1307,1311 @@int dictExpandAllowed(size_t moreMem, double usedRatio) {\n    if (usedRatio <= HASHTABLE_MAX_LOAD_FACTOR) {\n        return !overMaxmemoryAfterAlloc(moreMem);\n    } else {\n        return 1;"
+  },
+  {
+    "id" : "686d3d51-0010-44f5-936a-352d932b7f84",
+    "prId" : 7893,
+    "prUrl" : "https://github.com/redis/redis/pull/7893#pullrequestreview-504295046",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "79504db1-4b7a-4fd3-a6ba-60e55c189ee3",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "isn't that a documentation of allowing `-` as a first argument to load from stdin?\r\ni guess you meant that it wasn't listed in the above \"Usage\" line, only in the examples.\r\nbut i'd say that seeing this example and the other examples, as a user i would have concluded i can pass additional options after it.\r\n\r\nmaybe we are allowed to break this argument syntax, but probably only in a major version.\r\ni suppose we should avoid it, and it doesn't look very ugly to me (i.e. the first argument can either be a config file, a `--` option or a `-` indicating stdin instead of a config file)",
+        "createdAt" : "2020-10-07T13:14:15Z",
+        "updatedAt" : "2020-10-07T21:53:38Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "72785d35-25d5-4ed7-b8da-c99413457be7",
+        "parentId" : "79504db1-4b7a-4fd3-a6ba-60e55c189ee3",
+        "authorId" : "42355b05-6d27-48a8-8dec-4ebfa0c25ee7",
+        "body" : "To me it implies it's only supported as a standalone arg, without additional options.\r\n- Allowing '-' as a first argument means we'll need to support config file name as second arg\r\n- I think in most command lines tools STDIN input is usually signified using the last argument\r\n\r\nIt's very doable (was the initial approach I had), but I'm not sure it's worth the extra couple of code lines.\r\nIf you think it is / this is too breaking for minor version I'll add it back to the PR.",
+        "createdAt" : "2020-10-07T14:52:15Z",
+        "updatedAt" : "2020-10-07T21:53:38Z",
+        "lastEditedBy" : "42355b05-6d27-48a8-8dec-4ebfa0c25ee7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "039370b9-0e47-4f2a-b575-45694b518ed9",
+        "parentId" : "79504db1-4b7a-4fd3-a6ba-60e55c189ee3",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "to me this text seems to suggest that the first argument can either be a config file or a `-`.\r\ni don't think it means that if the first argument is `-` then the second argument can be a config file.\r\n\r\nconsidering that, i think that it's enough to just check if the first argument is a `-` then there's no config file, and we set the flag for stdin to true and resume parsing normally.\r\nfor all i care the `-` can be also added as a last argument too (the stdin flag would already be true)\r\n\r\ni'd rather do that than try to consider if / when we can break old syntax.",
+        "createdAt" : "2020-10-07T15:36:13Z",
+        "updatedAt" : "2020-10-07T21:53:38Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5311e9ba-6379-48d3-a2eb-6cb94e9e1a13",
+        "parentId" : "79504db1-4b7a-4fd3-a6ba-60e55c189ee3",
+        "authorId" : "42355b05-6d27-48a8-8dec-4ebfa0c25ee7",
+        "body" : "Ok - So:\r\nIf '-' is first argument --> no config file - only stdin, options can be provided after\r\nIf someone wants both stdin & config file, then '-' has to be last\r\n\r\nwill update.",
+        "createdAt" : "2020-10-07T17:39:38Z",
+        "updatedAt" : "2020-10-07T21:53:38Z",
+        "lastEditedBy" : "42355b05-6d27-48a8-8dec-4ebfa0c25ee7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d46a8376-8745-4995-8fb6-2add41c4cbe2",
+        "parentId" : "79504db1-4b7a-4fd3-a6ba-60e55c189ee3",
+        "authorId" : "42355b05-6d27-48a8-8dec-4ebfa0c25ee7",
+        "body" : "@oranagra updated.",
+        "createdAt" : "2020-10-07T21:54:44Z",
+        "updatedAt" : "2020-10-07T21:54:44Z",
+        "lastEditedBy" : "42355b05-6d27-48a8-8dec-4ebfa0c25ee7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1892c7ec7b86ed3ef23cc5ed5608d04033eddb20",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +4893,4897 @@void usage(void) {\n    fprintf(stderr,\"Usage: ./redis-server [/path/to/redis.conf] [options] [-]\\n\");\n    fprintf(stderr,\"       ./redis-server - (read config from stdin)\\n\");\n    fprintf(stderr,\"       ./redis-server -v or --version\\n\");\n    fprintf(stderr,\"       ./redis-server -h or --help\\n\");"
+  },
+  {
+    "id" : "3ea642ef-5dc8-48d3-bcb5-b49be0a19f5d",
+    "prId" : 7893,
+    "prUrl" : "https://github.com/redis/redis/pull/7893#pullrequestreview-506160349",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "431074f4-d52a-44dd-ac6d-a2754f58de16",
+        "parentId" : null,
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "I have some concerns about the user experience here. If only the filename is specified, it is used for input+rewrite. If stdin+filename are specified, the filename is used for output only which can be a bit confusing.\r\n\r\nMaybe we should consider being more explicit about it, i.e. add a 'config-file-name' configuration directive which is used for rewriting and is by default the name of the input file (and none if we read stdin / command line args only). That directive could be used on the command line or inside the stdin stream of course.\r\n\r\n@ushachar  Does that make sense?",
+        "createdAt" : "2020-10-11T08:45:49Z",
+        "updatedAt" : "2020-10-11T08:46:06Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e73ec1ca-8d22-4e62-a44c-8129d40fb55c",
+        "parentId" : "431074f4-d52a-44dd-ac6d-a2754f58de16",
+        "authorId" : "42355b05-6d27-48a8-8dec-4ebfa0c25ee7",
+        "body" : "The config file is always used for input+rewrite --- if stdin is provided as well then the content of stdin is appended to the string handed off to the parsing function.",
+        "createdAt" : "2020-10-11T09:19:37Z",
+        "updatedAt" : "2020-10-11T09:19:38Z",
+        "lastEditedBy" : "42355b05-6d27-48a8-8dec-4ebfa0c25ee7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1892c7ec7b86ed3ef23cc5ed5608d04033eddb20",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +4892,4896 @@\nvoid usage(void) {\n    fprintf(stderr,\"Usage: ./redis-server [/path/to/redis.conf] [options] [-]\\n\");\n    fprintf(stderr,\"       ./redis-server - (read config from stdin)\\n\");\n    fprintf(stderr,\"       ./redis-server -v or --version\\n\");"
+  },
+  {
+    "id" : "7fedbfc2-9c80-4a1b-8c46-5dad5a80213c",
+    "prId" : 7726,
+    "prUrl" : "https://github.com/redis/redis/pull/7726#pullrequestreview-479721493",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a23ebad1-726b-49e1-85ad-aba18e0b1bb1",
+        "parentId" : null,
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Should we merge this with loadingCron? It looks like you took the code from there anyways. I guess we don't care about updating memory, but it would be nice to consolidate it in one function.",
+        "createdAt" : "2020-09-01T00:46:42Z",
+        "updatedAt" : "2020-09-01T15:46:38Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3d0c87d0-f5a6-4096-b647-aba8abc2ceb0",
+        "parentId" : "a23ebad1-726b-49e1-85ad-aba18e0b1bb1",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "I thought about that too and decided against it, but i'm not certain.\r\nthe loadingCron currently has an `if` rather than a `while`, so if we integrate them, come portions of this function need to run only once (if the loop run at least one cycle).\r\n\r\nHowever, the other difference is that although both functions are called during loading, one is also called during busy scripts (indicated by their names), so if we merge them, we might want to add some conditions to avoid certain parts when `!server.loading`.\r\nwhat do you think? should i still merge them?\r\n\r\n@guybe7 would like to hear your opinion too.",
+        "createdAt" : "2020-09-01T05:17:30Z",
+        "updatedAt" : "2020-09-01T15:46:38Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f185065-5fa3-4cf1-ae99-312656c562b8",
+        "parentId" : "a23ebad1-726b-49e1-85ad-aba18e0b1bb1",
+        "authorId" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "body" : "@oranagra i vote for merging them",
+        "createdAt" : "2020-09-01T13:07:00Z",
+        "updatedAt" : "2020-09-01T15:46:38Z",
+        "lastEditedBy" : "7402f6bd-2c90-4674-a864-35e134c36574",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "002c881fe3fe6d0f67cfa886415877dd5f7325fa",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +2125,2129 @@ * and updates cronloops variable so that similarly to serverCron, the\n * run_with_period can be used. */\nvoid whileBlockedCron() {\n    /* Here we may want to perform some cron jobs (normally done server.hz times\n     * per second). */"
+  },
+  {
+    "id" : "4f69f6d5-8f6d-4327-8f7d-0b8b183f4ae2",
+    "prId" : 7491,
+    "prUrl" : "https://github.com/redis/redis/pull/7491#pullrequestreview-573731748",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c34df6b6-4233-42b1-a0f9-e376938be48e",
+        "parentId" : null,
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "If a client is unblocked from timeout, doesn't seem like the code ever passes through a slowlogPush. \r\n\r\nsee: replyToBlockedClientTimedOut",
+        "createdAt" : "2021-01-19T00:51:21Z",
+        "updatedAt" : "2021-01-28T08:28:59Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d581bbc3-34e6-43d0-b867-e7081b7018b9",
+        "parentId" : "c34df6b6-4233-42b1-a0f9-e376938be48e",
+        "authorId" : "178b77ef-4974-4854-afae-4e18f5dd998f",
+        "body" : "will fix and include that in the test as well :+1: ",
+        "createdAt" : "2021-01-19T17:22:18Z",
+        "updatedAt" : "2021-01-28T08:28:59Z",
+        "lastEditedBy" : "178b77ef-4974-4854-afae-4e18f5dd998f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf1ba249-d0cf-4584-b1f8-c45c79b79455",
+        "parentId" : "c34df6b6-4233-42b1-a0f9-e376938be48e",
+        "authorId" : "178b77ef-4974-4854-afae-4e18f5dd998f",
+        "body" : "@madolson please see https://github.com/redis/redis/pull/7491/files#r562193682",
+        "createdAt" : "2021-01-21T21:00:33Z",
+        "updatedAt" : "2021-01-28T08:28:59Z",
+        "lastEditedBy" : "178b77ef-4974-4854-afae-4e18f5dd998f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "73da9d8482cee9d13d6fa8a49eaffc273dca6172",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +3633,3637 @@        /* If the client is blocked we will handle slowlog when it is unblocked . */\n        if (!(c->flags & CLIENT_BLOCKED)) {\n            slowlogPushEntryIfNeeded(c,argv,argc,duration);\n        }\n    }"
+  },
+  {
+    "id" : "d9fbe2d9-b97f-46e6-989e-b50a47e3a5da",
+    "prId" : 7390,
+    "prUrl" : "https://github.com/redis/redis/pull/7390#pullrequestreview-433116061",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5d74aa67-d1f2-45d4-abe3-cef76d76ea92",
+        "parentId" : null,
+        "authorId" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "body" : "This functions are non obvious in what they are useful for, yet they lack a top comment.",
+        "createdAt" : "2020-06-18T09:43:38Z",
+        "updatedAt" : "2020-06-23T09:02:23Z",
+        "lastEditedBy" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65a3307bc95aadbc91d85cdf9dfbe1b3493222ca",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +3403,3407 @@ * If there's a transaction is flags it as dirty, and if the command is EXEC,\n * it aborts the transaction. */\nvoid rejectCommand(client *c, robj *reply) {\n    flagTransaction(c);\n    if (c->cmd && c->cmd->proc == execCommand) {"
+  },
+  {
+    "id" : "05f12cdc-1014-4693-a9d0-789f9b0344ac",
+    "prId" : 7390,
+    "prUrl" : "https://github.com/redis/redis/pull/7390#pullrequestreview-433117681",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "06c25b67-cfe2-4125-a92b-b8af0d873339",
+        "parentId" : null,
+        "authorId" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "body" : "It should be something like: this command is called by processCommand() every time we can't execute a command that is otherwise ready to be executed. The function will flag the transaction if any, so that EXEC fail, and report the error to the client. Or something alone these lines.",
+        "createdAt" : "2020-06-18T09:45:48Z",
+        "updatedAt" : "2020-06-23T09:02:23Z",
+        "lastEditedBy" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65a3307bc95aadbc91d85cdf9dfbe1b3493222ca",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +3413,3417 @@}\n\nvoid rejectCommandFormat(client *c, const char *fmt, ...) {\n    flagTransaction(c);\n    va_list ap;"
+  },
+  {
+    "id" : "06aa485e-38fb-48d6-be9b-3751cc51d5a3",
+    "prId" : 6052,
+    "prUrl" : "https://github.com/redis/redis/pull/6052#pullrequestreview-244024665",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "20966968-34a8-4e28-9fdd-e68b0b7a74aa",
+        "parentId" : null,
+        "authorId" : "394776a2-3a92-468a-9263-42d294d796ca",
+        "body" : "From your comment in the PR, I think I have to agree that the option does not seem to make much sense anymore? I'd personally just call this function unconditionally, and deprecate the config option. If the caller, be that systemd or start-stop-daemon, sets the `NOTIFY_SOCKET` environment variable, then `sd_notify()` will send the notification, otherwise not. This looks like the most common behavior used everywhere else.\r\n\r\nBut perhaps that should be in another commit, if the change is desired.",
+        "createdAt" : "2019-05-30T21:05:01Z",
+        "updatedAt" : "2019-11-21T20:20:03Z",
+        "lastEditedBy" : "394776a2-3a92-468a-9263-42d294d796ca",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c7b68d10ea6137305715d2660897237a864c552e",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +4875,4879 @@\nint redisCommunicateSystemd(const char *sd_notify_msg) {\n    const char *notify_socket = getenv(\"NOTIFY_SOCKET\");\n    if (!notify_socket) {\n        serverLog(LL_WARNING,"
+  },
+  {
+    "id" : "147e26f3-4c80-4c8b-929c-d4898415a25a",
+    "prId" : 1690,
+    "prUrl" : "https://github.com/redis/redis/pull/1690#pullrequestreview-465627960",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b211b788-287b-4996-8a9c-d6de20edd103",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "should we have `#ifdef __linux__` here too?",
+        "createdAt" : "2020-08-12T06:44:09Z",
+        "updatedAt" : "2020-08-12T11:12:36Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "15cb2f97300518c803c18343882ada3c64ab132f",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +2531,2535 @@#ifdef HAVE_PROC_OOM_SCORE_ADJ\n    char buf[64];\n    int fd = open(\"/proc/self/oom_score_adj\", O_RDONLY);\n\n    if (fd < 0) return;"
+  }
+]

@@ -1,0 +1,222 @@
+[
+  {
+    "id" : "401dfa99-25ce-4046-ac95-faf1c5d26323",
+    "prId" : 8258,
+    "prUrl" : "https://github.com/redis/redis/pull/8258#pullrequestreview-664091190",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i don't think this condition is sufficient.\r\n\r\nin all other places a lazy free is dependent on a user input or a config, and this threshold just defines if it worth while to send the job to the other thread or keep it in the main thread just because the list is short.\r\n\r\ni.e the user first needs to decide if he's willing to accept the async freeing side effects (not atomic), or not.\r\n\r\nso to be consistent with that, we should either add a check for `lazyfree_lazy_server_del` or add an `ASYNC` argument for `SCRIPT FLUSH`",
+        "createdAt" : "2020-12-29T09:16:03Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc2500ca-b6f1-46ab-8077-1063d22074ac",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "body" : "Agree with you, I think both of your suggestions should be taken:\r\n1. Provide `SCRIPT FLUSH ASYNC` for users to actively trigger.\r\n2. `SCRIPT FLUSH` judges whether to release asynchronously according to `lazyfree_lazy_server_del`.",
+        "createdAt" : "2020-12-29T15:34:38Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b925ba2a-1850-4c98-bb59-b025ff591c8f",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "on a second thought, i'm actually not sure `lazyfree-lazy-server-del` is the right config, maybe it should be `lazyfree-lazy-user-del` or neither.\r\nlooking at what FLUSHB does, it should be neither.",
+        "createdAt" : "2020-12-29T16:17:23Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb269ee9-8991-4d52-8160-87b2ec3c14f0",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I don't think we should use lazyfree-lazy-server-del or lazyfree-lazy-user-del, since they are already defined and don't mean this. \r\n\r\nI also don't think we should be adding ASYNC into command arguments. It's not really something you should be deciding on a case by case basis, and it adds overhead to client developers to support and us to document.\r\n\r\nI think we should introduce a general new flag for lazyfree-policy, that covers every other lazy free usage not covered by an existing flag. I think it would even be nice to update the default value for the other lazy-free configs to add a third option, use-default, which would use the lazyfree-policy value unless an explicit value was set.",
+        "createdAt" : "2020-12-29T18:14:55Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "967f9c20-6b33-423c-8eda-f3de03f1ac30",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "body" : "> I think we should introduce a general new flag for lazyfree-policy, that covers every other lazy free usage not covered by an existing flag.\r\n\r\nI agree with your suggestion of adding a new flag, for example: `lazyfree-lazy-server-free`. However, it is more difficult for us to find the remaining code that is not covered by lazyfree. The problem of `scriptingRelease` is encountered in our production environment, but there are many places where `dictRelease` is called, see [here](https:// github.com/redis/redis/search?q=dictRelease)  . In addition to `dictRelease`, there are `listRelease`, `raxFree`, etc.\r\n\r\n> I think it would even be nice to update the default value for the other lazy-free configs to add a third option, use-default, which would use the lazyfree-policy value unless an explicit value was set.\r\n\r\nHere I have a little doubt, for example: you mean that `lazyfree-lazy-eviction` will have three optional values: `yes`,`no`,`use-default`?   If use-default is set, then the rest of the lazyfree configuration is this value?\r\n",
+        "createdAt" : "2020-12-30T13:33:06Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8fa39be1-9025-4a54-a8d6-d3334329629f",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "Should we just use \"lazyfree-lazy-server-free\" and have it cover everything else? I just don't want us to keep adding individual flags for every little thing.",
+        "createdAt" : "2021-01-05T00:58:00Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "525ca40a-139d-4c56-ae8e-de8aa3cb08b5",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "body" : "@madolson @oranagra Because `lazyfree-lazy-server-del` or `lazyfree-lazy-user-del` already has its own meaning.\r\n\r\nDo you agree with me to introduce a new configuration `lazyfree-lazy-server-free` to control the remaining places that are not lazyfree? For example, we mentioned `scriptRelease()` above, but there may be other free areas that need to be controlled in the future.\r\n\r\nThe default value of `lazyfree-lazy-server-free` is no.",
+        "createdAt" : "2021-01-05T07:36:37Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2b44c27-cf14-467d-a458-4778f69957a7",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "@yangbodong22011 Hey, the redis maintainers synced offline and have a concrete recommendation. Sorry for the bit of churn. \r\n\r\nWe decided we're fine just adding more flags as we go along, so just have a new flag called something like ```lazyfree-lazy-scriptcache-flush``` that controls the behavior of calling \"SCRIPT FLUSH\" with no arguments.\r\n\r\nWe also suggest that we support both \"SCRIPT FLUSH [ASYNC|SYNC]\" to force it one way or another. So, to summarize:\r\n1. \"SCRIPT FLUSH\": Uses the value from from the config\r\n2. \"SCRIPT FLUSH ASYNC\": Always flushes the config in an async manner.\r\n3. \"SCRIPT FLUSH SYNC\": Always flushes the config in a sync manner. ",
+        "createdAt" : "2021-01-05T08:22:38Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7613efec-f152-445a-b187-a0a68c5509a4",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "body" : "@madolson Thank you for your reply, and sorry to disturb you if you are on vacation. I agree and will implement it in accordance with your comments.",
+        "createdAt" : "2021-01-05T08:51:19Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f6101bbb-8648-4cf0-8ae8-1f4015edda1b",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@madolson maybe we have a misunderstanding or my memory misleads me, i'm not sure that's what i understood we decided.\r\nI was under the impression that we're gonna put SCRIPT FLUSH and FLUSHDB in the same bucket.\r\ngive both a SYNC and ASYNC argument, and have some global config that sets the default behavior when neither argument is provided.\r\n\r\nLet me try to think this over, i'll split the configs to 3 groups\r\n1. `lazyfree-lazy-eviction`, `lazyfree-lazy-expire`, `lazyfree-lazy-server-del`, `replica-lazy-flush`:\r\nthese are all about deletions that the server does implicitly, not as a result of a specific command.\r\n2. `lazyfree-lazy-user-del` and DEL / UNLINK:\r\nin this case there's a specific command for async, but since it's widely used we added a server config to change the legacy command behavior.\r\n3. FLUSHDB / FLUSHALL / SCRIPT FLUSH: \r\nThese have (or should have) an ASYNC and SYNC arguments, and a single config defining the default behavior when no argument is specified. i.e. `lazyfree-lazy-user-flush` which has a default of `no` for backwards compatibility.\r\n\r\nlooking at the delta between your last post and mine, i guess the differences are:\r\n1. in mine there's a single config that controls both SCRIPT FLUSH and FLUSHALL.\r\n2. in yours you only listed a new config that's specific for SCRIPT FLUSH.\r\n\r\nso i'm also ok with taking the one you suggested `lazy-scriptcache-flush`, but for symmetry i think we should then also add `lazy-db-flush` config, and i think we were trying to come up with a single config that controls several aspects rather than add one for each.",
+        "createdAt" : "2021-01-05T09:47:03Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e1a3cdf-c739-46ce-bb82-e5e405ef92dc",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "body" : "@oranagra The reason why you provide the `lazy-db-flush` parameter for flushall/flushdb is to be compatible with the user's old code only to call flushall/flushdb, but still control lazyfree through the server, right?\r\n\r\n>  i think we were trying to come up with a single config that controls several aspects rather than add one for each.\r\n\r\nHow about `lazyfree-lazy-user-flush`?\r\n\r\n```\r\n# When FLUSHDB,FLUSHALL,SCRIPT FLUSH with no arguments, it will decide whether\r\n# lazyfree is required according to the following configuration.\r\nlazyfree-lazy-user-flush no\r\n```",
+        "createdAt" : "2021-01-05T12:29:06Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1c797801-bb33-43d5-9107-3672a7176450",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "body" : "update code, PR title and PR comments.\r\n\r\nthe current behavior is as follows:\r\n\r\n- FLUSH[ALL|DB],SCRIPT FLUSH: Determine sync or async according to the value of lazyfree-lazy-user-flush.\r\n- FLUSH[ALL|DB],SCRIPT FLUSH ASYNC: Always flushes the cache in an async manner.\r\n- FLUSH[ALL|DB],SCRIPT FLUSH SYNC: Always flushes the config in a sync manner.",
+        "createdAt" : "2021-01-05T12:39:59Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7903d7f3-9359-4c6d-8ed2-1e6a802296e6",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "other than some wording that needs to be improved (which i'll avoid mentioning now so that i don't distract the important discussion), this approach looks good to me.\r\nlet's see what @madolson thinks and if it indeed matches what was discussed or not.",
+        "createdAt" : "2021-01-05T14:06:35Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26fb25b1-d17e-4433-8267-a9a663a06a2e",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "@oranagra I remember saying we thought of flushdb and script flush in the same bucket, but I didn't think we were going to go back update flush/db. I don't have any concern with doing that though.",
+        "createdAt" : "2021-01-05T19:06:00Z",
+        "updatedAt" : "2021-01-08T01:45:53Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f295b3ba-57c9-4d68-8e23-2cfaa73396f2",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "body" : "Hi guys. I have some questions: \r\n- `freeLuaScriptsAsync` This function name metions the behavior will be a async way. But we still calculate the dict size. And if dictsize not reach `LAZYFREE_THRESHOLD 64` . It will become a sync way. In other ways, `scriptingRelease` require a `async` arg to call `freeLuaScriptsAsync`. But inside `freeLuaScriptsAsync`, it could be a sync way\r\n- so do `freeObjAsync` function\r\n- and also the comment of  `freeTrackingRadixTreeAsync` seems wrong\r\n\r\nThere is not problem with those questions. Just my thinking",
+        "createdAt" : "2021-05-20T02:05:26Z",
+        "updatedAt" : "2021-05-20T02:05:26Z",
+        "lastEditedBy" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6727434d-dc1f-4105-b434-a70af2115ce5",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "body" : "@enjoy-binbin Yes, `LAZYFREE_THRESHOLD` controls whether it is really async free.\r\n\r\nAbout `freeTrackingRadixTreeAsync` comment, it's wrong, it will direct async free and do not judge object's size.\r\n```\r\n/* Free an object, if the object is huge enough, free it in async way. */\r\nvoid freeTrackingRadixTreeAsync(rax *tracking) {\r\n    atomicIncr(lazyfree_objects,tracking->numele);\r\n    bioCreateLazyFreeJob(lazyFreeTrackingTable,1,tracking);\r\n}\r\n```\r\nand another problem is we should use `tracking->numnodes`(Every macro node in the Stream is one allocation) instead of `tracking->numele`.\r\n\r\nNow we have two points to fix:\r\n1, use `tracking->numnodes` instead of `tracking->numele`\r\n2. Judge size to async free or fix comments.\r\n@oranagra @madolson WDYT?",
+        "createdAt" : "2021-05-20T03:06:55Z",
+        "updatedAt" : "2021-05-20T03:06:55Z",
+        "lastEditedBy" : "ad1e7044-3785-4002-a4a5-9bf9117dfa24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a80c3b4c-eddd-4f62-a093-6de4950d648e",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "body" : "Received a reply so soon. cool. I am willing to correct it if needed\r\n\r\nAnd the mean time. Do we need to be consistent before and after method behavior?",
+        "createdAt" : "2021-05-20T03:13:39Z",
+        "updatedAt" : "2021-05-20T03:13:39Z",
+        "lastEditedBy" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2ea33012-3fd5-4e28-80b0-ea19f9314ab6",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "freeXxxxAsync doesn't necessarily means it'll be released by the thread.\r\nit means it will be potentially async (which has implication on memory being reclaimed in time or not), but it doesn't mean it'll always be done by the thread.\r\neven the UNLINK function doesn't always release asynchronously, it considers that and makes a efficiency decision (it will be inefficient to do it async if you just need to release a few pointers).\r\nso i don't see a problem about the initial complain on `freeLuaScriptsAsync`, or maybe i didn't understand it.\r\n\r\ni agree that `freeTrackingRadixTreeAsync` and also `freeSlotsToKeysMapAsync` need to be extended with a check for LAZYFREE_THRESHOLD (against `numnodes`, not `numele`).\r\nplease note that not every rax structure that we release this way needs to look at `numnodes`. if the rax was holding any points in it's elements that need to be released too, then we should look at `numele` or `nuele+numnodes`, but in this case but these rax structures are holding only keys (no values), so it only needs to release the nodes.\r\n\r\nregarding `lazyfree_objects`, it is a statistics metric, not a real counter of released allocations. it seems to denote the number of objects / elements released, not actual allocations.\r\nHowever, when we release a list object (composed of a linked list of ziplists), we increment it only by one (not the number of elements in the list, and not the number of linked-list nodes), so for from that point of view, we can increment it only by one here too. (if we do that, we need to update the call to `atomicDecr` too).\r\nAgain, just a metric, and i don't have any major argument for incrementing by either [1, numele, numnodes].",
+        "createdAt" : "2021-05-20T06:58:06Z",
+        "updatedAt" : "2021-05-20T06:58:06Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9dd86803-4c75-4101-8ceb-db2abf9824c7",
+        "parentId" : "6c6c4020-41e3-4f8e-8f41-848256c0e25d",
+        "authorId" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "body" : "`freeXxxxAsync doesn't necessarily means it'll be released by the thread.`\r\nI misunderstood....\r\nI make pr https://github.com/redis/redis/pull/8969 to extend `freeTrackingRadixTreeAsync` and `freeSlotsToKeysMapAsync `\r\nAbout `lazyfree_objects`, according your says. I did not change it \r\n\r\nThanks a lot for your reply. Very detailed. @oranagra \r\n",
+        "createdAt" : "2021-05-20T08:27:47Z",
+        "updatedAt" : "2021-05-20T08:27:47Z",
+        "lastEditedBy" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3bfc88bf9b9bd861de38132ef2c382fdaeae1351",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +224,228 @@/* Free lua_scripts dict, if the dict is huge enough, free it in async way. */\nvoid freeLuaScriptsAsync(dict *lua_scripts) {\n    if (dictSize(lua_scripts) > LAZYFREE_THRESHOLD) {\n        atomicIncr(lazyfree_objects,dictSize(lua_scripts));\n        bioCreateLazyFreeJob(lazyFreeLuaScripts,1,lua_scripts);"
+  }
+]

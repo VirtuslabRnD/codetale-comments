@@ -1,0 +1,35 @@
+[
+  {
+    "id" : "6c944bc6-ff6f-4d2d-8af7-6f23d92d5f39",
+    "prId" : 8039,
+    "prUrl" : "https://github.com/redis/redis/pull/8039#pullrequestreview-537893076",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cd0a8d80-4f12-4cb4-b36a-e310018643cb",
+        "parentId" : null,
+        "authorId" : "b80d1b62-d71e-412b-8ac1-75ca11c2ea56",
+        "body" : "Not a fan of this implementation.  The original BIO implementation is a mess, and this doesn't improve it much.\r\n\r\nConceptually, BIO shouldn't care about the jobs.  It should simply service a queue of jobs using a callback.\r\n\r\nI recommend something like this:\r\n\r\n```C\r\ntypedef void (*bioCallbackFunc)(void *data);\r\n\r\nvoid bioCreateBackgroundJob(bioCallbackFunc callback, void *data);\r\n```\r\n\r\nThis function would (internally) create a struct to hold the function pointer and callback data.  It would enqueue the item to be serviced by a background thread.  The background thread would simply call the callback function, and pass the (opaque) data.\r\n\r\nThe current BIO code is bad in that it's has to know about (and call) functions in the caller's space.  Rather than being a pure utility, a circular dependency is created.  The caller has to know about BIO - and BIO has to know about the caller.\r\n\r\nEnhancements:\r\n* The current code sets the thread title.  If that's desired, an additional parameter should be passed by the caller.\r\n* The current code has the capability to return a count based on \"type\".  Instead, this should be based on the callback pointer. `long bioPendingJobsForCallback(bioCallbackFunc callback)`.\r\n* It is possible, if desired, to internally break the requests into multiple queues so that different callbacks could be processed in parallel.  Example, having one queue that processes the CLOSE callback and another that processes the LAZYFREE callback.  (Of course BIO would only know that they are different callbacks, and have no idea what they actually do.)\r\n",
+        "createdAt" : "2020-11-24T19:10:23Z",
+        "updatedAt" : "2020-12-15T05:12:09Z",
+        "lastEditedBy" : "b80d1b62-d71e-412b-8ac1-75ca11c2ea56",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6472338e-007a-46e2-8911-88258b2d305a",
+        "parentId" : "cd0a8d80-4f12-4cb4-b36a-e310018643cb",
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "I disagree that this adds little value, your proposal doesn't add any other benefit besides being more general. The refactoring here does 2 main things:\r\n1. More readable since now we don't have weird arguments in BIO jobs. \r\n2. It removes the need to extern lazy-free jobs, since those aren't generic.\r\n\r\nIt would still be net easier to decouple this one more step and move the lazyfree code into lazy free, and the aof/fsync code to their own files. ",
+        "createdAt" : "2020-11-24T20:50:48Z",
+        "updatedAt" : "2020-12-15T05:12:09Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3e3ef833a36a67d4b5c686019ff1e9e5a941a84b",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +39,43 @@time_t bioOlderJobOfType(int type);\nvoid bioKillThreads(void);\nvoid bioCreateCloseJob(int fd);\nvoid bioCreateFsyncJob(int fd);\nvoid bioCreateLazyFreeJob(lazy_free_fn free_fn, int arg_count, ...);"
+  }
+]

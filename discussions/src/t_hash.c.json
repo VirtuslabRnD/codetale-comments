@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "8fc34579-d996-462b-96ed-05f02111d1fa",
+    "prId" : 9178,
+    "prUrl" : "https://github.com/redis/redis/pull/9178#pullrequestreview-698656600",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bad8f143-cc09-49b4-ae21-2cd807235b0e",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "seems like a copy paste bug.\r\nmodeled after SRANDMEMBER, which indeed returns a `shared.emptyarray` in that case.\r\n\r\ni see this is documented for both [sets](https://redis.io/commands/srandmember), and [hashes](https://redis.io/commands/hrandfield) / zsets",
+        "createdAt" : "2021-07-04T09:05:27Z",
+        "updatedAt" : "2021-07-04T09:25:14Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c51dffa8-9a71-456b-8fee-c0e9292393ec",
+        "parentId" : "bad8f143-cc09-49b4-ae21-2cd807235b0e",
+        "authorId" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "body" : "Yes. I found this problem in the process of using HRANDFIELD. So i also check for others, and found the same problem in ZRANDMEMBER",
+        "createdAt" : "2021-07-04T09:43:17Z",
+        "updatedAt" : "2021-07-04T09:43:17Z",
+        "lastEditedBy" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "006742a3-dd50-497f-82f4-61bc7d0db4fe",
+        "parentId" : "bad8f143-cc09-49b4-ae21-2cd807235b0e",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "yes, ZRAND* and HRAND* were added together and modeled after SRAND*, so it's no surprise they both have the same bugs.",
+        "createdAt" : "2021-07-04T09:46:59Z",
+        "updatedAt" : "2021-07-04T09:46:59Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ee8d8d51be9d56d2fff19128beceb755938a2d53",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +990,994 @@    robj *hash;\n\n    if ((hash = lookupKeyReadOrReply(c,c->argv[1],shared.emptyarray))\n        == NULL || checkType(c,hash,OBJ_HASH)) return;\n    size = hashTypeLength(hash);"
+  },
+  {
+    "id" : "4076f9dd-4066-487f-861a-1a882904d1dc",
+    "prId" : 8429,
+    "prUrl" : "https://github.com/redis/redis/pull/8429#pullrequestreview-583095125",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c28ef7fa-66d9-43a8-b994-29cf4d7ac39f",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "interesting how this happened...\r\nthis code is copied from set, and was also copied into zset, but only hash used the wrong method for case1.",
+        "createdAt" : "2021-02-04T07:21:43Z",
+        "updatedAt" : "2021-02-05T13:49:21Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "709e24694abe55ac8d499add955d0b4f335ee35d",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +1005,1009 @@            sds key, value;\n            while (count--) {\n                dictEntry *de = dictGetFairRandomKey(hash->ptr);\n                key = dictGetKey(de);\n                value = dictGetVal(de);"
+  },
+  {
+    "id" : "0798285b-9cbe-4f68-a177-34e0ee0f4919",
+    "prId" : 8297,
+    "prUrl" : "https://github.com/redis/redis/pull/8297#pullrequestreview-574943077",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f16d1a8d-2ca2-4da5-9558-44f25ce6010f",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "this doesn't handle random order for the elements, but neither does SRANDMEMBER for that case, so i guess we're good.\r\n\r\n@itamarhaber do you have anything to contribute?",
+        "createdAt" : "2021-01-21T14:55:55Z",
+        "updatedAt" : "2021-01-29T08:33:17Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e33f25f-791d-4ea5-89aa-029b38319e2b",
+        "parentId" : "f16d1a8d-2ca2-4da5-9558-44f25ce6010f",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "after discussing this with Itamar, we concluded that only the negative count (non-unique) mode should retain random order (same as SRANDMEMBER does), and the other modes (positive count) don't have to do it.\r\n\r\nit makes some sense that when the user wants random picking of possibly more than the size of the collection, he wants them to be randomly ordered (you don't want to see `a, b, c, c, d, e, e, f`, but in the other modes it's not as important.\r\nin theory redis could have do better, but that comes with an extra performance price, so it should not be done by default. we should document that fact, and we can one day add a RANDORDER argument for that.",
+        "createdAt" : "2021-01-24T15:54:18Z",
+        "updatedAt" : "2021-01-29T08:33:17Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c456e035bea6605b76f09769a331653a83496ffa",
+    "line" : 135,
+    "diffHunk" : "@@ -1,1 +1047,1051 @@    if(count >= size) {\n        hashTypeIterator *hi = hashTypeInitIterator(hash);\n        while (hashTypeNext(hi) != C_ERR) {\n            if (withvalues && c->resp > 2)\n                addReplyArrayLen(c,2);"
+  },
+  {
+    "id" : "bb6c9760-4fe8-44cd-b2e9-855e8f449267",
+    "prId" : 8297,
+    "prUrl" : "https://github.com/redis/redis/pull/8297#pullrequestreview-578686795",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ff67a99b-064b-414d-8ac5-a5a40851d545",
+        "parentId" : null,
+        "authorId" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "body" : "From the original request, I would guess that the author would be using HRANDFIELD 1 WITHVALUES, since they want to process the record they pull. So unlike SRANDMEMBER, where count is unlikely to be 1, I think it's very likely someone will call HRANDFIELD with count of 1. So, I think the optimized n=1 case should also be handled hrandfieldWithCountCommand and the code always flows into that function.",
+        "createdAt" : "2021-01-28T18:26:51Z",
+        "updatedAt" : "2021-01-29T08:33:17Z",
+        "lastEditedBy" : "3ca74ed4-ec73-427d-88cb-0c084b679a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a5e7490-13f1-4a54-a83e-2a6941b06168",
+        "parentId" : "ff67a99b-064b-414d-8ac5-a5a40851d545",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "i'll do some optimization to CASE4 for that.",
+        "createdAt" : "2021-01-28T19:50:44Z",
+        "updatedAt" : "2021-01-29T08:33:17Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c456e035bea6605b76f09769a331653a83496ffa",
+    "line" : 237,
+    "diffHunk" : "@@ -1,1 +1149,1153 @@}\n\n/* HRANDFIELD [<count> WITHVALUES] */\nvoid hrandfieldCommand(client *c) {\n    long l;"
+  },
+  {
+    "id" : "02d9b14a-7b5f-484e-8e64-3bcc95d76166",
+    "prId" : 8297,
+    "prUrl" : "https://github.com/redis/redis/pull/8297#pullrequestreview-582753618",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ced227ed-1c97-47c0-b269-f8d3c0f587b9",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@dewxin it just occurred to me that what we implemented here is inefficient. scanning the ziplist for a single random pick every time.\r\nand that the algorithm you implemented in #8219 is suitable here.\r\n\r\ni.e. in that other PR you used that algorithm always when the hash is ziplist encoded, and i complained that it wasn't able to provide random order and also not able to provide more picks than the number of items in the ziplist.\r\neventually @yangbodong22011 and I implemented what's in this PR with the 4 distinct cases, and only the first of which (`CASE 1` aka the non-unique picks) requires random order and being able to generate more results than the count of items.\r\nHowever, only now i realize that what we ended up implementing in `CASE 4` is inefficient when ziplist is used, and the algorithm you implemented can be a good fit here (since it doesn't require repetition or random order)\r\n\r\nso i thought maybe you wanna make a new PR? to optimize `CASE 4` of ZRANDMEMBER and HRANDFIELD?",
+        "createdAt" : "2021-02-01T15:08:53Z",
+        "updatedAt" : "2021-02-01T15:08:53Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4bede471-e024-48df-af78-9753d6628669",
+        "parentId" : "ced227ed-1c97-47c0-b269-f8d3c0f587b9",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "done in https://github.com/redis/redis/pull/8444",
+        "createdAt" : "2021-02-03T20:04:01Z",
+        "updatedAt" : "2021-02-03T20:04:01Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c456e035bea6605b76f09769a331653a83496ffa",
+    "line" : 212,
+    "diffHunk" : "@@ -1,1 +1124,1128 @@        dict *d = dictCreate(&hashDictType, NULL);\n        while(added < count) {\n            hashTypeRandomElement(hash, size, &key, withvalues? &value : NULL);\n\n            /* Try to add the object to the dictionary. If it already exists"
+  }
+]

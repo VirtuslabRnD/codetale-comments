@@ -1,0 +1,321 @@
+[
+  {
+    "id" : "f01a4f03-61dc-42ea-965f-009fdcd17fd3",
+    "prId" : 8890,
+    "prUrl" : "https://github.com/redis/redis/pull/8890#pullrequestreview-669026287",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fa6a66b6-4551-4c59-84da-7170adfdd6bc",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "was this one manual? or by the spell checker?",
+        "createdAt" : "2021-05-26T13:01:08Z",
+        "updatedAt" : "2021-05-26T13:14:25Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16ed57fd-e1b4-4bff-bf57-3f9f50c551e0",
+        "parentId" : "fa6a66b6-4551-4c59-84da-7170adfdd6bc",
+        "authorId" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "body" : "manual....I believe it was just changed when I read the code at some point. very beginning",
+        "createdAt" : "2021-05-26T13:34:06Z",
+        "updatedAt" : "2021-05-26T13:34:07Z",
+        "lastEditedBy" : "c54e672f-7b5e-4402-bd8f-fcb255f27420",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cd0656f660857a4edc32042921465cf8e530a0dd",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +1447,1451 @@/* Note that we may call this function in signal handle 'sigShutdownHandler',\n * so we need guarantee all functions we call are async-signal-safe.\n * If we call this function from signal handle, we won't call bg_unlink that\n * is not async-signal-safe. */\nvoid rdbRemoveTempFile(pid_t childpid, int from_signal) {"
+  },
+  {
+    "id" : "9608bda8-979e-4b43-b3c6-82b5375e4d3d",
+    "prId" : 8264,
+    "prUrl" : "https://github.com/redis/redis/pull/8264#pullrequestreview-563503352",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "67e7c23e-0425-48ca-ba71-fd4836dd6780",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "how come killRDBChild doesn't call resetChildState like the killer of AOF and modules?",
+        "createdAt" : "2021-01-07T06:35:17Z",
+        "updatedAt" : "2021-01-07T14:03:52Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d6667854-c876-400f-b843-0cd574e4932e",
+        "parentId" : "67e7c23e-0425-48ca-ba71-fd4836dd6780",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "ok, i realized that unlike killAppendOnlyChild and TerminateModuleForkChild, the killRDBChild doesn't call `wait4`.\r\nso the fact it doesn't clear the pid variable, is desired, and that later on checkChildrenDone will find it and do proper cleanup.\r\n\r\nlooking at redis 6.0.9, i see that same as here, it does do rdbRemoveTempFile, closeChildInfoPipe, and updateDictResizePolicy.\r\nall of which are unnecessary, but also don't cause any harm.\r\ncloseChildInfoPipe, and updateDictResizePolicy will by done by checkChildrenDone.\r\nand rdbRemoveTempFile will be done by backgroundSaveDoneHandlerDisk (only in case of `bysignal`) which is the case discussed here (killRDBChild).\r\n\r\nall of these 3 do no harm when called excessively (so there's no bug in 6.0.9).\r\n- closeChildInfoPipe has built in protection against being called twice.\r\n- updateDictResizePolicy has no effect.\r\n- rdbRemoveTempFile will call bg_unlink, and ignore the error it returns.\r\n\r\nso my advise is:\r\n1. no bug in 6.0, let's leave it as is.\r\n2. in this PR, we'll remove these 3 lines from killAppendOnlyChild and add a big comment explaining that they'll be done by checkChildrenDone later on.",
+        "createdAt" : "2021-01-07T08:01:56Z",
+        "updatedAt" : "2021-01-07T14:03:52Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b9b030d-ea84-45a1-878f-fdd463f685b3",
+        "parentId" : "67e7c23e-0425-48ca-ba71-fd4836dd6780",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Hi @oranagra `killRDBChild` also be called when redis shutdown. so we should call `rdbRemoveTempFile` when `killRDBChild`. Tcl regression tests failed in shutdown.tcl.\r\nIf call `rdbRemoveTempFile` in `killRDBChild`, as you said, we may call `rdbRemoveTempFile` twice, but it does no obvious harm. (`opne` and `link` fail in `bg_unlink`). Of course, we can call extra `rdbRemoveTempFile` when redis shutdown. Both are ok",
+        "createdAt" : "2021-01-07T12:15:09Z",
+        "updatedAt" : "2021-01-07T14:03:52Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07de9f2a-7671-4829-9e75-220c51c14d8f",
+        "parentId" : "67e7c23e-0425-48ca-ba71-fd4836dd6780",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@ShooterIT considering there's already a big comment in prepareForShutdown talking about a call to rdbRemoveTempFile and how it behaves, i think it should be there now.",
+        "createdAt" : "2021-01-07T13:56:35Z",
+        "updatedAt" : "2021-01-07T14:03:52Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3c2eff0282e4c760da64f520d95fcd41bc44eefa",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +2734,2738 @@ * the cleanup needed. */\nvoid killRDBChild(void) {\n    kill(server.child_pid, SIGUSR1);\n    /* Because we are not using here wait4 (like we have in killAppendOnlyChild\n     * and TerminateModuleForkChild), all the cleanup operations is done by"
+  },
+  {
+    "id" : "1387c7fc-4925-479d-9522-2296f9594aa0",
+    "prId" : 7826,
+    "prUrl" : "https://github.com/redis/redis/pull/7826#pullrequestreview-492812893",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bf47b29d-fd6f-4b74-86ab-8686f6f01eb5",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "just want to confirm that this fix is just something you noticed, right?\r\ndidn't cause any real harm?\r\n\r\ni.e. the wrongly counted io.bytes doesn't have a real implication, and the next attempt to save something a few lines below would fail too exit with -1",
+        "createdAt" : "2020-09-21T14:47:43Z",
+        "updatedAt" : "2020-09-22T07:10:20Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8929248d-4e73-4383-b11a-87e4331490f8",
+        "parentId" : "bf47b29d-fd6f-4b74-86ab-8686f6f01eb5",
+        "authorId" : "2d1ddc4f-3bf1-4d20-9f80-d775ee7b1828",
+        "body" : "Exactly",
+        "createdAt" : "2020-09-21T17:02:53Z",
+        "updatedAt" : "2020-09-22T07:10:20Z",
+        "lastEditedBy" : "2d1ddc4f-3bf1-4d20-9f80-d775ee7b1828",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e24e6f9bc0bab227eb8575523ed416573359c751",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +1147,1151 @@    int retval = rdbSaveType(rdb, RDB_OPCODE_MODULE_AUX);\n    if (retval == -1) return -1;\n    io.bytes += retval;\n\n    /* Write the \"module\" identifier as prefix, so that we'll be able"
+  },
+  {
+    "id" : "62512fbc-cd1c-4f60-860e-283ee77c20e5",
+    "prId" : 7762,
+    "prUrl" : "https://github.com/redis/redis/pull/7762#pullrequestreview-490547299",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "parentId" : null,
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "how about renaming `force` to `from_signal`?\r\nand how about using the following:\r\n```c\r\nif (from_signal) {\r\n    /* bg_unlink is not async-signal-safe, but in this case we don't really\r\n     * need to close the fd, it'll be released when the process exists. */\r\n    int fd = open(tmpfile);\r\n    UNUSED(fd);\r\n    unlink(tmpfile);\r\n} else {\r\n    bg_unlink(tmpfile);\r\n}\r\n```",
+        "createdAt" : "2020-09-17T06:07:56Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d1a87943-c56c-440a-94b0-68ef57d1b3aa",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "For rename `force` to `from_signal`, I think it is OK.\r\n\r\nBut we leave a non-closed fd deliberately,  release it depend on OS, I  truly don't think it is a good idea.  What's more, if users want to quick ASAP, the second 'kill -SIGINT $pid'  is short from the first, so temp rdb will not be very big, so we needn't do that.",
+        "createdAt" : "2020-09-17T06:22:48Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "942b9804-172d-4354-a05c-b490da0bd0aa",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "don't we already have the situation of exiting with a pending bg_unlink? (after removing the loop you wanted to add in prepareForShutdown)? if we do have that situation in one place i don't see why we don't want it in another.\r\n\r\nalso, if the OS doesn't clean a stale inode from the disk in that case, isn't that a serious (possibly rare) bug in the OS?\r\n\r\ni didn't understand your argument about the second kill and file not being very big.\r\n\r\ni don't object to merge the current version of the PR (maybe with the small rename i added). but i think that since we already have that case of an exit with an incomplete bg_unlink, why not add another one, and possibly exit a bit faster in some scenario.",
+        "createdAt" : "2020-09-17T06:33:24Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed148d14-2ef2-46c9-9880-607e01ccfd85",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "There is a comment https://github.com/redis/redis/blob/unstable/src/server.c#L4915\r\nWe kill child process and persist rdb in main thread when we receive the signal at first time, we remove main thread dumping RDB at the second time.  So i think the second signal arriving is short from the first if user want to quit urgently, temp rdb will not be too big, right?\r\n\r\nYes, i also think it is a OS bug if OS can't release all things. In `prepareForShutdown`, we exactly may have a pending non-closed fd when exits, but i think main thread also need to do somethings such as dumping a new rdb, the fd will be closed by bio thread in most cases. Your suggestion also is ok theoretically, but i just feel it is not nice.",
+        "createdAt" : "2020-09-17T07:06:48Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b86d2ba4-4a55-44bc-8fd7-410dcce4bb31",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "And just as you said, we shouldn't block server to quit because of waiting file closed in `prepareForShutdown`, I think it make much sense. Compared with some program practice, keeping it exit safely is more important.",
+        "createdAt" : "2020-09-17T07:31:39Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ddce12ba-5878-4a4f-9465-0c94b185ce86",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "let's see what @yossigo thinks and decide.",
+        "createdAt" : "2020-09-17T07:33:52Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6500bc89-dae5-415a-a518-81bde75c62e7",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "body" : "I am less concerned with the case that involves `redis-server` running interactively and killed with `SIGINT`, because the worst thing that happens is that users wait a bit.\r\n\r\nI am more more concerned about cases involving Redis running as a service and being terminated or restarted. Blocking for a long time in this case may have bigger undesired effects (potentially due to bugs or false assumptions elsewhere).\r\n\r\nThe thing is, at this point I'm not sure leaving the file open when exiting really solves this issue because as I mentioned earlier it's possible for the process to remain defunct until the filesystem operation is completed, so from the POV of anyone waiting on it could be the same. And worse, this could be OS/kernel version/filesystem dependent.\r\n\r\nSo I'm OK either way, and suggest to be aware and on the watch about this.",
+        "createdAt" : "2020-09-17T11:33:58Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "b35f6f04-eae9-4f88-8265-08b19050f11b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a5bc419e-4122-4192-8ad7-17e07075003f",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "So maybe we should add a comment in prepareShutdown that mentions that we exit without waiting for a possibly pending `bg_unlink`?\r\n\r\nAnd if we do that, i'd suggest to do the same in SIGINT, mainly for consistency.\r\nSo i would vote for the patch i posted. arguing that it's more explicit and consistent with what happens in the other flow.\r\n\r\nIn theory this can smoke out problem if there are any (since that behavior will be more common)",
+        "createdAt" : "2020-09-17T11:41:12Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc03a402-c71b-446a-b925-e1cc6b030315",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "Everyone has their own programming taste, in my team, we also have this problem. For me, I‘m willing to respect the decision of the code repo owner after enough discussions since the owner finally is responsible for code repo. If not, things won't move forward.\r\n\r\nSo, if you (coreteam) reach an agreement, I will do it, after all, these solutions are not wrong in our perception.",
+        "createdAt" : "2020-09-17T12:04:00Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cdc32676-5531-463c-a5ae-a043afb69366",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@ShooterIT we don't need core team consensus for this, it's enough that one of us approves it.\r\nWe have Yossi saying that he's ok with both options, and i prefer one because of what i listed in my last post.\r\nSo you can proceed and implement it if you ok with that decision.\r\n\r\nPlease don't give in to our judgement if you feel they're wrong, there's always a chance that we're missing something.\r\nWe appreciate your opinion and the hard work you're putting in improving redis!",
+        "createdAt" : "2020-09-17T12:21:49Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d0c04070-e349-4ca8-af23-f15fc2783995",
+        "parentId" : "2ef07428-e3dd-4602-ae9e-260b388fda11",
+        "authorId" : "98e31153-705f-4299-a152-78c428055d23",
+        "body" : "@oranagra  OK, let me do next job. There is no error on my opinion, your patch can let problem appear ASAP if has.\r\n \r\nI have benefited a lot from Redis, I should also contribute to it :)",
+        "createdAt" : "2020-09-17T12:38:22Z",
+        "updatedAt" : "2020-09-17T13:44:04Z",
+        "lastEditedBy" : "98e31153-705f-4299-a152-78c428055d23",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1fd24e867ce65a3213c1acb40d9be68912f6744b",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +1431,1435 @@        int fd = open(tmpfile, O_RDONLY|O_NONBLOCK);\n        UNUSED(fd);\n        unlink(tmpfile);\n    } else {\n        bg_unlink(tmpfile);"
+  },
+  {
+    "id" : "6e4a0baf-2df4-4c9d-bf17-9338e65bdfeb",
+    "prId" : 6236,
+    "prUrl" : "https://github.com/redis/redis/pull/6236#pullrequestreview-302680794",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bbd074b1-ae1c-4195-bc41-7da8c3e2af2e",
+        "parentId" : null,
+        "authorId" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "body" : "At this point the replicas connections have two owners, the list itself, and the pipe connections. This is in theory a potential source of problems in case the replica is removed from one place but remains in the piped connection. I guess this is not possible with the current code, but just wanted to warn about making sure the code is structured to guarantee this property.",
+        "createdAt" : "2019-10-15T08:43:08Z",
+        "updatedAt" : "2019-10-16T14:31:35Z",
+        "lastEditedBy" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d46e7262-78c0-4d6d-a789-48fc1b14f8a8",
+        "parentId" : "bbd074b1-ae1c-4195-bc41-7da8c3e2af2e",
+        "authorId" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "body" : "@antirez sorry for the late response.\r\nI did nullify these in unlinkClient in case a replica disconnects while rdb fork is still active. And I did add a test for coverage in which some/all replicas drop during transfer. \r\nI know it's not great, but I think we can live with it, if you have a better idea let me know. ",
+        "createdAt" : "2019-10-16T15:34:01Z",
+        "updatedAt" : "2019-10-16T15:34:01Z",
+        "lastEditedBy" : "02e243fa-aeed-4b15-9e9e-405ca1702d7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "03fbff9b-f06f-4d9f-86dd-fdb46ccd1c56",
+        "parentId" : "bbd074b1-ae1c-4195-bc41-7da8c3e2af2e",
+        "authorId" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "body" : "Hello Oran, yes, this makes sense indeed. I guess that the only thing we can do better than that is to use some kind of flag and asserts() in freeClient(), but it's a small detail that we can fix later. Thank you.",
+        "createdAt" : "2019-10-16T15:42:30Z",
+        "updatedAt" : "2019-10-16T15:42:30Z",
+        "lastEditedBy" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8e29b0b22b02cd5d5e9a5f51e7c60fa745254578",
+    "line" : 140,
+    "diffHunk" : "@@ -1,1 +2359,2363 @@    /* Collect the connections of the replicas we want to transfer\n     * the RDB to, which are i WAIT_BGSAVE_START state. */\n    server.rdb_pipe_conns = zmalloc(sizeof(connection *)*listLength(server.slaves));\n    server.rdb_pipe_numconns = 0;\n    server.rdb_pipe_numconns_writing = 0;"
+  },
+  {
+    "id" : "deeb871d-bfb8-4fad-ab5c-5943b61c14d2",
+    "prId" : 5045,
+    "prUrl" : "https://github.com/redis/redis/pull/5045#pullrequestreview-214582780",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6eb026b3-beb3-4be2-a6cd-ef085a2ec6f8",
+        "parentId" : null,
+        "authorId" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "body" : "Good catch 👍 ",
+        "createdAt" : "2019-03-14T15:25:14Z",
+        "updatedAt" : "2019-03-14T15:25:14Z",
+        "lastEditedBy" : "e0863aff-4317-496e-aaec-69c95f9a197a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b5197f1fc9d6fde776168951094e44d5e8742a89",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +1903,1907 @@            /* IDLE: LRU idle time. */\n            uint64_t qword;\n            if ((qword = rdbLoadLen(rdb,NULL)) == RDB_LENERR) goto eoferr;\n            lru_idle = qword;\n            continue; /* Read next opcode. */"
+  }
+]
