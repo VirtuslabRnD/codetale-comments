@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "6f1e20db-a52f-4811-a5c0-ef2f2ba2e447",
+    "prId" : 30,
+    "prUrl" : "https://github.com/Rahix/avr-hal/pull/30#pullrequestreview-460641631",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "61526ac7-905f-45c1-b7f2-491777c99324",
+        "parentId" : null,
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "There's a hidden issue here ... the `ADMUX[MUX]` field is only 5 bits wide; the 6th bit is `ADCSRB[MUX5]`.  However, the enumerated values for for `ADMUX[MUX]` contain _all_ 6bit values valid for the combination of the two.  The problem is than when writing here, the uppermost bit will get cut off and ignored.  Leading to the wrong channels being read for MUX values >31.  E.g. `ADC8` will actually read `ADC0`, `ADC9` will read `ADC10`, etc.\r\n\r\nThis is obviously a problem and the most correct way to deal with this would be to remove all enumerated values >31 with an SVD patch so you can't accidentally do this in the first place.  This would then mean you'll have to approach this similar to what I did in [`atmega32u4_hal::adc`](https://github.com/Rahix/avr-hal/blob/e3a39bf14f349cc13b916ac6910330cdc38e268a/chips/atmega32u4-hal/src/adc.rs#L7-L29) where I redefined the enumerated values on my own.\r\n\r\nHowever, this is a lot of unnecessary work IMO when we can do a quicker fix here by just extracting the uppermost bit and setting that separately:\r\n\r\n```suggestion\r\n            peripheral.admux.modify(|_, w| w.mux().variant(id));\r\n            // Maybe add a comment why this is necessary ...\r\n            peripheral.adcsrb.modify(|_, w| w.mux5().bit((id as u8) & 0b100000 != 0));\r\n```",
+        "createdAt" : "2020-08-01T07:35:20Z",
+        "updatedAt" : "2020-08-03T17:48:41Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bbd42984-2587-4e93-b57d-8d0e7c47b066",
+        "parentId" : "61526ac7-905f-45c1-b7f2-491777c99324",
+        "authorId" : "1f1653ec-b1fc-427e-b169-b0660232a849",
+        "body" : "Indeed!  That's a pretty clever way to address the issue.\r\n\r\nI confirmed that without this change, attempts to read single-ended ADC8-15 results in reads of ADC0-7, and that with the fix in place the reads are correct.  I made no attempts to test differential reads.",
+        "createdAt" : "2020-08-03T17:50:58Z",
+        "updatedAt" : "2020-08-03T17:50:59Z",
+        "lastEditedBy" : "1f1653ec-b1fc-427e-b169-b0660232a849",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f09d36e6-12f1-4bc3-988d-d6a12628686e",
+        "parentId" : "61526ac7-905f-45c1-b7f2-491777c99324",
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "Sounds good!",
+        "createdAt" : "2020-08-04T09:19:07Z",
+        "updatedAt" : "2020-08-04T09:19:07Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cae9bca8c800f7372ab975ed1bdc0a9511a6ad",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +11,15 @@        peripheral: crate::atmega2560::ADC,\n        set_mux: |peripheral, id| {\n            peripheral.admux.modify(|_, w| w.mux().variant(id));\n            // n.b. the high bit of ADMUX[MUX] is in the ADCSRB register\n            peripheral.adcsrb.modify(|_, w| w.mux5().bit((id as u8) & 0b100000 != 0));"
+  }
+]

@@ -1,0 +1,211 @@
+[
+  {
+    "id" : "10d07fec-769d-42d5-9b7d-e9c4a2ee728e",
+    "prId" : 88,
+    "prUrl" : "https://github.com/Rahix/avr-hal/pull/88#pullrequestreview-509200135",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27c45801-ce6a-4900-afc4-4d87c14c4a79",
+        "parentId" : null,
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "All the other traits should also be implemented: `PartialEq`, `Eq`, `PartialOrd`, `Ord`, ...\r\n\r\nNote that you'll have to implement this manually and calculate which one is bigger because `u2x` doubles the baudrate and this should be taken into account.",
+        "createdAt" : "2020-10-13T12:29:49Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a36e8296-7dbb-4f22-bec7-b74a91404313",
+        "parentId" : "27c45801-ce6a-4900-afc4-4d87c14c4a79",
+        "authorId" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "body" : "Some of them implemented. I'm new to rust so please review and list other required. ",
+        "createdAt" : "2020-10-13T20:34:55Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d710b6b7-34d0-4dd4-808d-8c5eaa19058e",
+        "parentId" : "27c45801-ce6a-4900-afc4-4d87c14c4a79",
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "The right place to look for is the API guidelines:  It has a point [`C-COMMON-TRAITS`](https://rust-lang.github.io/api-guidelines/interoperability.html#types-eagerly-implement-common-traits-c-common-traits) which lists all the important ones.\r\n\r\nLooking at your implementation, I have a few notes:\r\n\r\n1. I think you can remove the trait bound on `CLOCK` as you're not touching the type parameter anywhere.  It's only allowed to compare two `Baudrate`s if they have the same `CLOCK` anyway. So this is sufficient:\r\n\r\n    ```rust\r\n    impl<CLOCK> PartialEq for Baudrate<CLOCK> {\r\n        fn eq(&self, other: &Self) -> bool {\r\n            self.value() == other.value()\r\n        }\r\n    }\r\n    ```\r\n\r\n2. I think larger `ubrr` means smaller baudrate, but we need to recheck the datasheet on that ... If true, you got it the wrong way around (and also `u2x` should then mean _divide by 2_).\r\n\r\n3. When `Ord` is implemented, you'd usually write `PartialOrd` like this:\r\n\r\n    ```rust\r\n    impl<CLOCK> PartialOrd for Baudrate<CLOCK> {\r\n        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {\r\n            Some(self.cmp(other))\r\n        }\r\n    }\r\n    ```",
+        "createdAt" : "2020-10-14T09:06:50Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e45dc505-f5ae-49d0-85fb-77b029fbd82b",
+        "parentId" : "27c45801-ce6a-4900-afc4-4d87c14c4a79",
+        "authorId" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "body" : "1. Without bound I'm not able to use `value()` fn\r\n1.\r\n![32u4br](https://user-images.githubusercontent.com/1093324/96038314-3d6e6f00-0e67-11eb-8814-248199fdb301.png)\r\nLooks like u2x decrease divider and increase baudrate.\r\n1. Done\r\n1. What abut asynchronous and synchronous difference? u2x works only on async. On sync always should be 0\r\n\r\n",
+        "createdAt" : "2020-10-14T19:58:14Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c72c2033-1e56-4511-908c-ae59949a11bd",
+        "parentId" : "27c45801-ce6a-4900-afc4-4d87c14c4a79",
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "> Without bound I'm not able to use value() fn\r\n\r\nYou have to put `value()` into an impl block without the bound as well, then it'll work.  But honestly, it doesn't matter much ...\r\n\r\n>  Looks like u2x decrease divider and increase baudrate.\r\n\r\nYes!  As per the formulas in the picture, _baudrate_ is inversely proportional to UBRR, so you need to swap operands in the `fn cmp()` impl (i.e. bigger UBRR then means smaller `Baudrate` value).  I think you'll also need to include the `+1` in your `fn value()` implementation to produce correct results.\r\n\r\n> What abut asynchronous and synchronous difference? u2x works only on async. On sync always should be 0\r\n\r\nWe're always configuring the peripheral for _async_ operation:\r\n\r\nhttps://github.com/Rahix/avr-hal/blob/7337cd76cd96f2d27701b137396d94a06d3a501d/avr-hal-generic/src/serial.rs#L71",
+        "createdAt" : "2020-10-15T09:42:27Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c660ae21263ab55e8792d3f1bbe36787ca8a2857",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +4,8 @@\n// Clock is needed because the calculations needs to take core clock into account\n#[derive(Debug, Clone, Copy)]\npub struct Baudrate<CLOCK> {\n    pub ubrr: u16,"
+  },
+  {
+    "id" : "ff305a49-a555-4964-bb2f-30accbccfb98",
+    "prId" : 88,
+    "prUrl" : "https://github.com/Rahix/avr-hal/pull/88#pullrequestreview-507808256",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c3271191-c4cb-43ce-9ebd-2a4bf6816554",
+        "parentId" : null,
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "The `u2x` bit needs to be written as well now.  It's in `UCSRnA`, so replace the `.reset()` with something similar to:\r\n\r\n```rust\r\nself.p.[<ucsr $n a>].write(|w| w.[<u2x $n>].bit(baud.u2x));\r\n```",
+        "createdAt" : "2020-10-13T12:32:49Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a7aff91f-3c8a-45b1-9755-2bd272dfa65b",
+        "parentId" : "c3271191-c4cb-43ce-9ebd-2a4bf6816554",
+        "authorId" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "body" : "done",
+        "createdAt" : "2020-10-13T20:35:16Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c660ae21263ab55e8792d3f1bbe36787ca8a2857",
+    "line" : 126,
+    "diffHunk" : "@@ -1,1 +154,158 @@\n            fn initialize(&mut self, baud: Baudrate<CLOCK>) {\n                self.p.[<ubrr $n>].write(|w| unsafe { w.bits(baud.ubrr) });\n                self.p.[<ucsr $n a>].write(|w| w.[<u2x $n>]().bit(baud.u2x));\n"
+  },
+  {
+    "id" : "207d62eb-fa15-4acb-8f0b-0e8c90c42e78",
+    "prId" : 88,
+    "prUrl" : "https://github.com/Rahix/avr-hal/pull/88#pullrequestreview-511080359",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e9cc67b5-5e2c-4121-b522-3977c23521f6",
+        "parentId" : null,
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "I'm not 100% convinced that this is what we want to do.  I think there is value in allowing `u32` as well, which will then just go with the default implementation.  I.e. I'd allow any `Into<Baudrate<CLOCK>>` here and implement\r\n\r\n```rust\r\nimpl<CLOCK: crate::clock::CLOCK> From<u32> for Baudrate<CLOCK> {\r\n    ...\r\n}\r\n```",
+        "createdAt" : "2020-10-16T09:49:23Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09bc9534-b3a1-40ef-b28e-1f39f2bd3b03",
+        "parentId" : "e9cc67b5-5e2c-4121-b522-3977c23521f6",
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "An alternative would be to implement an extension trait on `u32` for converting a value into a baudrate.  E.g.\r\n\r\n```rust\r\ntrait BaudExt {\r\n    fn into_baud<CLOCK: crate::clock::Clock>(self) -> Baudrate<CLOCK>;\r\n}\r\n\r\nimpl BaudExt for u32 {\r\n    fn into_baud<CLOCK: crate::clock::Clock>(self) -> Baudrate<CLOCK> {\r\n        Baudrate::new(self)\r\n    }\r\n}\r\n```\r\n\r\nand in application code\r\n\r\n```rust\r\nuse arduino_leonardo::prelude::*;\r\n\r\nSerial::new(..., 57600.into_baud());\r\n```",
+        "createdAt" : "2020-10-16T10:00:30Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db5ded82-eb0f-4185-8e8a-37950fc9e739",
+        "parentId" : "e9cc67b5-5e2c-4121-b522-3977c23521f6",
+        "authorId" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "body" : "With `Into` I'm getting `the trait `Into` cannot be made into an object`",
+        "createdAt" : "2020-10-16T20:17:21Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a9683bc3-8b84-47e0-a86e-e14d6154bfdb",
+        "parentId" : "e9cc67b5-5e2c-4121-b522-3977c23521f6",
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "You have to either make it a generic parameter:\r\n\r\n```rust\r\npub fn new<B: Into<Baudrate<CLOCK>>>(..., baudrate: B)\r\n```\r\n\r\nor use the `impl Trait` syntax:\r\n\r\n```rust\r\npub fn new(..., baudrate: impl Into<Baudrate<CLOCK>>)\r\n```\r\n\r\n---\r\n\r\nThough, to be honest I prefer my second alternative suggestion even more.  It would allow us to provide board-specific `into_baud()` implementations so boards that need non-standard calculations can be supported easily.",
+        "createdAt" : "2020-10-17T10:31:52Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b01fc4d8-16d7-41b0-8695-9d9e80fa7b93",
+        "parentId" : "e9cc67b5-5e2c-4121-b522-3977c23521f6",
+        "authorId" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "body" : "Will move to second option",
+        "createdAt" : "2020-10-17T15:54:25Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "231d6455-dbf3-440b-8cff-f21c299a3bf1",
+        "parentId" : "e9cc67b5-5e2c-4121-b522-3977c23521f6",
+        "authorId" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "body" : "Not sure where put `BaudrateExt` trait. It should be in board lib? ",
+        "createdAt" : "2020-10-17T16:57:38Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "68da009e-5b4b-43ec-8344-fb0896eb930d",
+        "parentId" : "e9cc67b5-5e2c-4121-b522-3977c23521f6",
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "`BaudrateExt` goes into the prelude as an anonymous import:\r\n\r\n```rust\r\npub use ...::BaudrateExt as _;\r\n```",
+        "createdAt" : "2020-10-17T16:59:58Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e16354ba-26f6-42e9-8c2f-34d979cc5746",
+        "parentId" : "e9cc67b5-5e2c-4121-b522-3977c23521f6",
+        "authorId" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "body" : "Can you please review if I done this in correct way? Thanks.",
+        "createdAt" : "2020-10-17T20:10:19Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "50cfad9a-b28b-4106-bbc3-7d2088b9c246",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d7961df-c94b-4d23-bd4a-7fb496f4c4d3",
+        "parentId" : "e9cc67b5-5e2c-4121-b522-3977c23521f6",
+        "authorId" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "body" : "The import looks good but you put it in the wrong place.  Sorry, I should have explained better:  It's meant to go into the `prelude` module which is a module imported in all the examples as \r\n\r\n```rust\r\nuse arduino_leonardo::prelude::*;\r\n```\r\n\r\nThis pulls all the traits into scope which means all their methods are available to be called (because a trait must be in scope for its methods to be callable).  The anonymous import\r\n\r\n```rust\r\nuse ...::BaudrateExt as _;\r\n```\r\n\r\nmeans that the 'name' `BaudrateExt` is not actually imported, which would 'pollute' the namespace where `prelude` is imported.  You can think of this as importing `BaudrateExt` under an alternate name like `BaudrateExt32748937248972394792389479` which is unlikely to clash with any names defined in the file importing `prelude`.\r\n\r\nAnyway, in practical terms, right now `arduino-leonardo` just reexports the prelude from the HAL:\r\n\r\nhttps://github.com/Rahix/avr-hal/blob/7337cd76cd96f2d27701b137396d94a06d3a501d/boards/arduino-leonardo/src/lib.rs#L54\r\n\r\nInstead of this, you want to create a new `prelude` module here:\r\n\r\n```rust\r\npub mod prelude {\r\n    // Expose everything from the HAL prelude\r\n    pub use atmega32u4_hal::prelude::*;\r\n\r\n    pub use ...::BaudrateExt as _;\r\n}\r\n```",
+        "createdAt" : "2020-10-18T07:03:22Z",
+        "updatedAt" : "2020-11-06T20:34:06Z",
+        "lastEditedBy" : "126ee8df-948d-452e-a666-5239b5e88a2c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c660ae21263ab55e8792d3f1bbe36787ca8a2857",
+    "line" : 111,
+    "diffHunk" : "@@ -1,1 +141,145 @@                rx: $rxmod::$RX<$crate::port::mode::Input<RX_MODE>>,\n                tx: $txmod::$TX<$crate::port::mode::Output>,\n                baud: Baudrate<CLOCK>,\n            ) -> $Usart<CLOCK, RX_MODE> {\n                let mut usart = $Usart {"
+  }
+]
