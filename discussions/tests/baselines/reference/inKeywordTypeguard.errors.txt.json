@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "44a0350f-5f5c-4a6e-8326-d99b26563856",
+    "prId" : 15256,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/15256#pullrequestreview-81383037",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1ce5a029-0c6d-436e-89ec-e8fa87bc7d7d",
+        "parentId" : null,
+        "authorId" : "f6f9f6e7-b6dc-4ac7-9d04-3df732edd35b",
+        "body" : "I'd really like to be able to use `in` for narrowing, but I'm not sure this is it...\r\n\r\nConsider:\r\n\r\n```ts\r\nconst foo = { a: true, b: '' }\r\nnegativeClassesTest(foo)\r\n```\r\n\r\n`foo` is only valid as a `B`, but it would pass the `in` check, and then be treated as an `A`; but its `a` key is not of type `string`.\r\n\r\nThis means that, within the branch, the type of `x` should still be `A|B`, but you are allowed to access `.a`; I just don't know what type `.a` should have. It probably should be `any`, which should trip `--noImplicitAny` if it's not used with a type narrowing expression.\r\n\r\nScenarios:\r\n\r\n```ts\r\nfunction negativeClassesTest(x: A | B) {\r\n  if (\"a\" in x) {\r\n    x.a // --noImplicitAny error\r\n    const y: string = x.a // ideally a --noImplicitAny error, if it's possible to have \"signalling any\"s\r\n    const z = x.a as string // accepted because it's a cast\r\n    const u: string = typeof x.a === 'string' ? x.a : '' // accepted because it's narrowed\r\n  }\r\n}\r\n```\r\n\r\nIt doesn't seem to be all that useful to work like this, but it at least allows you to access `.a` at all.\r\n\r\nBonus points, but probably hard to actually do in practice:\r\n\r\n```ts\r\nfunction negativeClassesTest(x: A | B) {\r\n  if (\"a\" in x && typeof x.a === \"string\") {\r\n    // x _should_ be an A!\r\n  }\r\n}\r\n```\r\n\r\nAlternative solution: Have a way to indicate that `B` has \"not this key\". Maybe, for example, `interface B { a: never; b: string }` should mean that `B` is not allowed to have an `a` key at all; even if it's set to a value of type `never` such as `undefined!`.",
+        "createdAt" : "2017-12-05T01:32:46Z",
+        "updatedAt" : "2017-12-05T22:40:32Z",
+        "lastEditedBy" : "f6f9f6e7-b6dc-4ac7-9d04-3df732edd35b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2eb24cbe-35e7-4528-a66e-c41a314af9bc",
+        "parentId" : "1ce5a029-0c6d-436e-89ec-e8fa87bc7d7d",
+        "authorId" : "8ef7dcc8-4842-40e3-9f9a-182aa5f9b120",
+        "body" : "We considered the soundness aspect and it's not very different from existing soundness issues around aliased objects with undeclared properties. IOW you can already write this code, error-free (even in flow!), which observably fails:\r\n```ts\r\ninterface T { x: string, y?: number };\r\nconst s = { x: \"\", y: \"uh oh\" };\r\nconst not_t: { x: string } = s;\r\nconst unsound: T = not_t;\r\n(unsound.y && unsound.y.toFixed());\r\n```\r\nThe reality is that most unions are already correctly disjointed and don't alias enough to manifest the problem. Someone writing an `in` test is not going to write a \"better\" check; all that really happens in practice is that people add type assertions or move the code to an equally-unsound user-defined type predicate. On net I don't think this is any worse than the status quo (and is better because it induces fewer user-defined type predicates, which are error-prone if written using `in` due to a lack of typo-checking).\r\n\r\nFor automatically disjointed unions, see #14094.",
+        "createdAt" : "2017-12-05T04:12:56Z",
+        "updatedAt" : "2017-12-05T22:40:32Z",
+        "lastEditedBy" : "8ef7dcc8-4842-40e3-9f9a-182aa5f9b120",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eabd9dad-8b1d-4150-8cc2-d68ce133a046",
+        "parentId" : "1ce5a029-0c6d-436e-89ec-e8fa87bc7d7d",
+        "authorId" : "8196a172-6304-4e65-9c99-1ff2df1bbc0e",
+        "body" : "@Kovensky im agree, this is nasty case, but it grows from the fact we have structural type system in place. If we, for example, had nominal type system, the info we provided in function definitions would *exactly* matching all its usages and we never had this problem in place. \r\n\r\nWorkaround is to give compiler more complete info about types given, like this:\r\n```ts\r\nclass A { a: string }\r\nclass B { b: string }\r\nclass C { a: number; b: string }\r\nfunction z(x: A|B|C){\r\n\tif(\"a\" in x){\r\n\t\tvar num_a: number = x.a; // error TS2322: Type 'string | number' is not assignable to type 'number'.\r\n                                         // Type 'string' is not assignable to type 'number'.\r\n\t\tvar str_a: string = x.a; // error TS2322: Type 'string | number' is not assignable to type 'string'.\r\n                                         // Type 'number' is not assignable to type 'string'.\r\n\t}\r\n}\r\n```",
+        "createdAt" : "2017-12-06T00:26:27Z",
+        "updatedAt" : "2017-12-06T00:26:27Z",
+        "lastEditedBy" : "8196a172-6304-4e65-9c99-1ff2df1bbc0e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "04b9b304a3afe17d8e24f09c6ddbb308ed99b6d7",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +30,34 @@            x.b = \"1\";\n              ~\n!!! error TS2339: Property 'b' does not exist on type 'A'.\n        } else {\n            x.a = \"1\";"
+  }
+]

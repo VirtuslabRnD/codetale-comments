@@ -1,0 +1,200 @@
+[
+  {
+    "id" : "68d5d00e-2eb6-4927-97ca-d5c1f8d2356e",
+    "prId" : 26707,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/26707#pullrequestreview-160951318",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "99307abe-31ac-420c-9150-26704e0a6862",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "This could be a fairly heavy opt-in if your function is read-heavy with only a single write. Consider this:\r\n\r\n```ts\r\nconst a = super.a;\r\nconst b = super.b;\r\nsuper.c = 1;\r\n```\r\n\r\n\r\nWe only ever assign to `super.c`, but we end up emitting:\r\n\r\n```ts\r\nconst _superProps = Object.create(null, {\r\n  a: { get: () => super.a, set: (value) => super.a = value },\r\n  b: { get: () => super.b, set: (value) => super.b = value },\r\n  c: { get: () => super.c, set: (value) => super.c = value }\r\n});\r\n```\r\n\r\nIt might be cleaner to have your `names` map track whether the name is used for reading or writing, so that we could emit something like this:\r\n\r\n```ts\r\nconst _superProps = Object.create(null, {\r\n  a: { get: () => super.a },\r\n  b: { get: () => super.b },\r\n  c: { set: (value) => super.c = value }\r\n});\r\n```\r\n",
+        "createdAt" : "2018-08-29T21:59:32Z",
+        "updatedAt" : "2018-10-04T06:08:01Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a828f27-095b-449e-a78c-d5243cd19806",
+        "parentId" : "99307abe-31ac-420c-9150-26704e0a6862",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "Note that, to track whether the name is used for reading or writing would require a case in `visitor` for every assignment-capable node, e.g.:\r\n\r\n```ts\r\nfunction visitor(node: Node) {\r\n  switch (node.kind) {\r\n    …\r\n    case SyntaxKind.BinaryExpression:\r\n      return visitBinaryExpression(<BinaryExpression>node);\r\n  }\r\n  …\r\n}\r\n\r\nfunction assignmentTargetVisitor(node: Node) {\r\n  // visitor that descends through assignment targets:\r\n  // - left side of any assignment expression\r\n  // - array literal (destructuring assignment)\r\n  // - object literal (destructuring assignment)\r\n  // - property assignment (destructuring assignment)\r\n  // - etc.\r\n  // if the node is a SuperProperty, we can visit it knowing that we are in an assignment position.\r\n}\r\n\r\nfunction visitBinaryExpression(node: BinaryExpression) {\r\n  // only need to special case if the assignment target contains `super`\r\n  if (isAssignmentExpression(node) && node.left.transformFlags & TransformFlags.ContainsSuper) {\r\n    return updateBinary(\r\n      visitNode(node.left, assignmentTargetVisitor, isExpression), // visit left side as assignment.\r\n      node.operatorToken,\r\n      visitNode(node.right, visitor, isExpression));\r\n  }\r\n  return visitEachChild(node, visitor, context);\r\n}\r\n```",
+        "createdAt" : "2018-08-29T22:10:55Z",
+        "updatedAt" : "2018-10-04T06:08:01Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "939a1e78-af92-47d9-865a-2abd5cf9d1ac",
+        "parentId" : "99307abe-31ac-420c-9150-26704e0a6862",
+        "authorId" : "184c886e-007c-42e3-b591-2f0cc0bd5d23",
+        "body" : "Agreed, with the code as is, we're over-generating setters in this situation.\r\n\r\nI'm not sure if it's worth the added complexity though. As the original comment in checker states, we expect async methods accessing `super` to be rather uncommon, and I'd expect async methods accessing multiple different `super` properties to be even less common (I think most methods only ever call a single `super` method, their own parent, otherwise just dispatch via this), and then on top of that, async methods that are assigning into some super properties but not others where the over-generation of setters would kick in, to be very rare. These are all just guesses based on what code I've seen in the wild, but I think very few users will ever run into this situation.\r\n\r\nOn the flip side, we'd need to special case all assignments here and I think would also need to duplicate the code given the structure between `es2017.ts` and `esnext.ts` here.\r\n\r\nI'm happy to make the change though if you think it's warranted/carrying its own weight in complexity.",
+        "createdAt" : "2018-08-31T09:03:50Z",
+        "updatedAt" : "2018-10-04T06:08:01Z",
+        "lastEditedBy" : "184c886e-007c-42e3-b591-2f0cc0bd5d23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3dc8229f-6228-4999-8ca8-57339e6fc785",
+        "parentId" : "99307abe-31ac-420c-9150-26704e0a6862",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "Probably not for now, but we may want to consider it in the future.",
+        "createdAt" : "2018-10-02T22:39:44Z",
+        "updatedAt" : "2018-10-04T06:08:01Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "539c4559428d1548af331764807b76f20f54d619",
+    "line" : 174,
+    "diffHunk" : "@@ -1,1 +672,676 @@        // Create a variable declaration with a getter/setter (if binding) definition for each name:\n        //   const _super = Object.create(null, { x: { get: () => super.x, set: (v) => super.x = v }, ... });\n        const hasBinding = (resolver.getNodeCheckFlags(node) & NodeCheckFlags.AsyncMethodWithSuperBinding) !== 0;\n        const accessors: PropertyAssignment[] = [];\n        names.forEach((_, key) => {"
+  },
+  {
+    "id" : "1c27921c-816b-48e8-b32c-e8be5bdb0332",
+    "prId" : 21215,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/21215#pullrequestreview-89562331",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a34a0d93-1e79-48b0-80ce-2159507b2905",
+        "parentId" : null,
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "Is there a canonical source we can reference in a comment here for the list-of-things-which-may-contain-or-whose-children-may-contain-hoisted-declarations? It seems nonobvious which elements of [the statement and declaration list](https://tc39.github.io/ecma262/#sec-ecmascript-language-statements-and-declarations) need to be explicitly visited here.\r\n\r\nAlso: Does `LabeledStatement` need to be handled? eg \r\n```ts\r\nasync function fn4(x) {\r\n  lbl: {\r\n    var x = y;\r\n  }\r\n}\r\n```",
+        "createdAt" : "2018-01-17T07:29:27Z",
+        "updatedAt" : "2018-01-17T19:55:50Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3ec1fc3-0dde-4ea9-8bbd-60916de8c635",
+        "parentId" : "a34a0d93-1e79-48b0-80ce-2159507b2905",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "Good catch",
+        "createdAt" : "2018-01-17T19:08:45Z",
+        "updatedAt" : "2018-01-17T19:55:50Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b02b66a1-2e24-4f22-b6eb-6b70fc045e36",
+        "parentId" : "a34a0d93-1e79-48b0-80ce-2159507b2905",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "I've added `isNodeWithPossibleVarDeclaration` in 2ba29d8 as a way to verify this list.",
+        "createdAt" : "2018-01-17T19:28:04Z",
+        "updatedAt" : "2018-01-17T19:55:50Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5b45db790729508553016572a5cddb8e806bc214",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +86,90 @@        }\n\n        function asyncBodyVisitor(node: Node): VisitResult<Node> {\n            if (isNodeWithPossibleHoistedDeclaration(node)) {\n                switch (node.kind) {"
+  },
+  {
+    "id" : "b6a5c210-c793-4594-b624-16b567d60a4c",
+    "prId" : 21215,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/21215#pullrequestreview-89561833",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dd666944-129b-4af4-b82c-0f7cb2b5cae0",
+        "parentId" : null,
+        "authorId" : "fda8894a-88d1-42dd-a55e-7a8592225c11",
+        "body" : "variableDeclaration may be undefined",
+        "createdAt" : "2018-01-17T10:25:19Z",
+        "updatedAt" : "2018-01-17T19:55:50Z",
+        "lastEditedBy" : "fda8894a-88d1-42dd-a55e-7a8592225c11",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "735588b7-c810-444b-ad6e-c9287894e178",
+        "parentId" : "dd666944-129b-4af4-b82c-0f7cb2b5cae0",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "Actually, by the time we get to the `es2017` transform a `CatchClause` **must** have a catch variable, otherwise it's not valid ES2017. Assigning the catch variable is handled in the `esnext` transform before the `es2017` transform is run.",
+        "createdAt" : "2018-01-17T19:12:47Z",
+        "updatedAt" : "2018-01-17T19:55:50Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "86bc5e03-63fd-4c1b-9744-1928db37ca6d",
+        "parentId" : "dd666944-129b-4af4-b82c-0f7cb2b5cae0",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "I've added a test case in e655446 to verify this case.",
+        "createdAt" : "2018-01-17T19:26:30Z",
+        "updatedAt" : "2018-01-17T19:55:50Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5b45db790729508553016572a5cddb8e806bc214",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +120,124 @@        function visitCatchClauseInAsyncBody(node: CatchClause) {\n            const catchClauseNames = createUnderscoreEscapedMap<true>();\n            recordDeclarationName(node.variableDeclaration, catchClauseNames);\n\n            // names declared in a catch variable are block scoped"
+  },
+  {
+    "id" : "b476678f-493d-4f24-a56d-672117e7fb3d",
+    "prId" : 12346,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/12346#pullrequestreview-19952381",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4a1594fe-87de-4f38-9583-2ca898db9e82",
+        "parentId" : null,
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "I expected the names like `thisArg`, `_arguments`, etc. to be minified like the other helpers. Why not? #Resolved",
+        "createdAt" : "2017-01-25T22:47:21Z",
+        "updatedAt" : "2017-02-17T01:31:33Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "799d6594-333b-4bd4-878d-8659232faf28",
+        "parentId" : "4a1594fe-87de-4f38-9583-2ca898db9e82",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "We don't use a minified representation for these names currently.",
+        "createdAt" : "2017-02-03T05:51:34Z",
+        "updatedAt" : "2017-02-17T01:31:33Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "11f58ea2f0c193780a660602bb040514c46f5fba",
+    "line" : 293,
+    "diffHunk" : "@@ -1,1 +445,449 @@        priority: 5,\n        text: `\n            var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {\n                return new (P || (P = Promise))(function (resolve, reject) {\n                    function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }"
+  },
+  {
+    "id" : "593144f1-7d93-4a9c-8a30-5e237012b3a6",
+    "prId" : 11407,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/11407#pullrequestreview-3958578",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ae4209c7-859d-4184-bcff-a76dc4cf0b31",
+        "parentId" : null,
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "@rbuckton do you mind taking a look at least at this file and ts.ts?\n",
+        "createdAt" : "2016-10-12T20:48:19Z",
+        "updatedAt" : "2016-10-15T06:32:50Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17d60d5d8f373ecb61039d71023d3f1f4c9808d4",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +3,7 @@\n/*@internal*/\nnamespace ts {\n    type SuperContainer = ClassDeclaration | MethodDeclaration | GetAccessorDeclaration | SetAccessorDeclaration | ConstructorDeclaration;\n"
+  }
+]

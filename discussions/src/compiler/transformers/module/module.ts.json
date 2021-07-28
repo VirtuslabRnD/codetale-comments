@@ -1,0 +1,574 @@
+[
+  {
+    "id" : "3058d298-d8ae-4617-9a8a-fe1b57ffe8cc",
+    "prId" : 44968,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/44968#pullrequestreview-707868908",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1feea84e-a661-4f2a-a5fc-4a7beddbaf67",
+        "parentId" : null,
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "why do you have to redo this check if the factory sets TransformFlags.ContainsUpdateExpressionForIdentifier?",
+        "createdAt" : "2021-07-14T23:49:23Z",
+        "updatedAt" : "2021-07-14T23:57:56Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0f62b3f-a254-4104-9f48-c58edaed5ffc",
+        "parentId" : "1feea84e-a661-4f2a-a5fc-4a7beddbaf67",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "Because not every `PrefixUnaryExpression` or `PostfixUnaryExpression` is one we should transform, and the `TransformFlags.ContainsUpdateExpressionForIdentifier` flag could be set deeper in the parse tree:\r\n\r\n```ts\r\nlet x;\r\n({ get y() { return x++; }, set y(value) { x = value; }).y++;\r\nexport { x }\r\n```\r\nThe `TransformFlags.ContainsUpdateExpressionForIdentifier` flag will be set on `x++` and every node that contains it, including the outer `({ ... }).y++`.",
+        "createdAt" : "2021-07-15T22:13:04Z",
+        "updatedAt" : "2021-07-15T22:13:05Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a7e124a7-32b7-4efb-82a1-e17465e3f5d8",
+        "parentId" : "1feea84e-a661-4f2a-a5fc-4a7beddbaf67",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "Many of the `Contains*` flags bubble up to the `SourceFile` so that we can accept an entire subtree if there's no work to be done. The few that don't are due to the specific needs of a transformation.",
+        "createdAt" : "2021-07-15T22:28:17Z",
+        "updatedAt" : "2021-07-15T22:28:17Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5fbe3848ad2ae79f57230dadea0494edc623e0c",
+    "line" : 195,
+    "diffHunk" : "@@ -1,1 +673,677 @@                && !isGeneratedIdentifier(node.operand)\n                && !isLocalName(node.operand)\n                && !isDeclarationNameOfEnumOrNamespace(node.operand)) {\n                const exportedNames = getExports(node.operand);\n                if (exportedNames) {"
+  },
+  {
+    "id" : "41c4982e-fc8c-420e-8966-856d0d464f2a",
+    "prId" : 44968,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/44968#pullrequestreview-707865287",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ef00d097-9559-470c-b8af-8fb803c92932",
+        "parentId" : null,
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "I don't understand what this loop is for. Is it doing something that the code path through visitEachChild would normally do?",
+        "createdAt" : "2021-07-14T23:52:38Z",
+        "updatedAt" : "2021-07-14T23:57:56Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b1da63a7-8d79-4804-8a0e-e2844965c5c5",
+        "parentId" : "ef00d097-9559-470c-b8af-8fb803c92932",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "Whenever a variable is exported using `export {}` it will have one or more additional exported names:\r\n\r\n```ts\r\n// source\r\n// @target: esnext\r\n// @module: commonjs\r\nlet x = 1;\r\nx++;\r\nexport { x as a };\r\nexport { x as b };\r\n\r\n// output\r\n\"use strict\";\r\nObject.defineProperty(exports, \"__esModule\", { value: true });\r\nexports.b = exports.a = void 0;\r\nlet x = 1;\r\nexports.a = x;\r\nexports.b = x;\r\nexports.b = exports.a = (x++, x);\r\n```\r\n\r\nIn the above case, `exportedNames` would contain `a` and `b`, so every time we change the value of `x` we also need to update the exports for `a` and `b`.",
+        "createdAt" : "2021-07-15T22:20:33Z",
+        "updatedAt" : "2021-07-15T22:20:33Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5fbe3848ad2ae79f57230dadea0494edc623e0c",
+    "line" : 214,
+    "diffHunk" : "@@ -1,1 +692,696 @@                    }\n\n                    for (const exportName of exportedNames) {\n                        noSubstitution[getNodeId(expression)] = true;\n                        expression = createExportExpression(exportName, expression);"
+  },
+  {
+    "id" : "ef55ecbc-2d74-4f98-8d75-0c5089ba5c8b",
+    "prId" : 41757,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/41757#pullrequestreview-542143574",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d53095f7-681b-45a0-bbf6-c93a8d8d1278",
+        "parentId" : null,
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "This change (and the similar ones in `system`) are what fix the crash mentioned in the OP. The non-module file has a reference to a synthetic import that, since it's never _actually_ inserted into the file (since it's not a module), is never parented, and thus has no name. We emit a (admittedly type system, rather than grammar/program) error in these cases usually (`module \"react/jsx-runtime\" not found`), so the emitted JS being nonfunctional is _probably_ fine, but this case might need a more descriptive error added. The emit simply uses an arbitrary name now (`_a`), rather than crashing.\r\n\r\nSince this part fixes a crash, I'm wondering if I should (partially?) port this to the 4.1 branch or no? @DanielRosenwasser ?",
+        "createdAt" : "2020-12-01T17:29:08Z",
+        "updatedAt" : "2020-12-08T20:16:30Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9f8937e-ec9e-432e-970a-d9ddf4bd1173",
+        "parentId" : "d53095f7-681b-45a0-bbf6-c93a8d8d1278",
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "[This comment](https://github.com/microsoft/TypeScript/issues/41616#issuecomment-735690427) may actually be referring to the crash fixed here (assuming the input file is exactly what the user in that comment says, odd as a top-level `return` is, since we wouldn't mark that as a module), though the stack is very different than the on the OP of that thread refers to (and is definitely a separate issue).",
+        "createdAt" : "2020-12-01T17:40:04Z",
+        "updatedAt" : "2020-12-08T20:16:30Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d1db247fa281935707a097a6eb1b1524d508773a",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +1791,1795 @@                        return setTextRange(\n                            factory.createPropertyAccessExpression(\n                                factory.getGeneratedNameForNode(importDeclaration.parent?.parent?.parent || importDeclaration),\n                                factory.cloneNode(name)\n                            ),"
+  },
+  {
+    "id" : "f17319dd-a0a7-44b7-aea1-8d9ea364dbd4",
+    "prId" : 41390,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/41390#pullrequestreview-561367858",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0c8d0979-53f9-48f7-b942-3522abb533f1",
+        "parentId" : null,
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "If we really wanted to, couldn't we copy the quote style from the first argument string, if present?",
+        "createdAt" : "2020-12-16T21:46:44Z",
+        "updatedAt" : "2020-12-16T21:46:44Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3b3a77e3-28e9-417b-813a-19c3feb85cfd",
+        "parentId" : "0c8d0979-53f9-48f7-b942-3522abb533f1",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "We don't preserve quote-style on parse, and this is how we handle strings everywhere else (copy from source text if possible).",
+        "createdAt" : "2021-01-04T21:46:17Z",
+        "updatedAt" : "2021-01-04T21:46:17Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1a0e8b8c59c76e0514fabca51c31f61db47a6adf",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +612,616 @@            const externalModuleName = getExternalModuleNameLiteral(factory, node, currentSourceFile, host, resolver, compilerOptions);\n            const firstArgument = visitNode(firstOrUndefined(node.arguments), moduleExpressionElementVisitor);\n            // Only use the external module name if it differs from the first argument. This allows us to preserve the quote style of the argument on output.\n            const argument = externalModuleName && (!firstArgument || !isStringLiteral(firstArgument) || firstArgument.text !== externalModuleName.text) ? externalModuleName : firstArgument;\n            const containsLexicalThis = !!(node.transformFlags & TransformFlags.ContainsLexicalThis);"
+  },
+  {
+    "id" : "0b1c9f7a-d40b-4ffe-89d6-d769d870581f",
+    "prId" : 39803,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/39803#pullrequestreview-458270883",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c7557ad2-901a-447e-9e50-f98827990f19",
+        "parentId" : null,
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "it would be nice to update the explanatory comment at line 1045",
+        "createdAt" : "2020-07-29T23:09:23Z",
+        "updatedAt" : "2020-07-30T10:16:31Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7904061f-992e-4147-a10d-a085534c4be3",
+        "parentId" : "c7557ad2-901a-447e-9e50-f98827990f19",
+        "authorId" : "b34d84f4-89ab-4dd2-92e3-8e7d670020b5",
+        "body" : "Done.",
+        "createdAt" : "2020-07-30T10:16:56Z",
+        "updatedAt" : "2020-07-30T10:16:57Z",
+        "lastEditedBy" : "b34d84f4-89ab-4dd2-92e3-8e7d670020b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bdd6e12d0539c1d3c8f210a5b967a76c59acfb26",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +1050,1054 @@                            factory.createExpressionStatement(\n                                createExportExpression(\n                                    factory.cloneNode(node.exportClause.name),\n                                    getHelperExpressionForExport(node, moduleKind !== ModuleKind.AMD ?\n                                        createRequireCall(node) :"
+  },
+  {
+    "id" : "f67cc2a5-8724-48e7-bb78-2050bca598c2",
+    "prId" : 38994,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/38994#pullrequestreview-427316183",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5634058a-c656-4dad-98ec-6b1361662e74",
+        "parentId" : null,
+        "authorId" : "d5d7e656-99cd-4133-b2e1-e347c8b0f72b",
+        "body" : "`.slice()` substitutes the length of the array if the second argument is greater than `.length`",
+        "createdAt" : "2020-06-09T16:02:49Z",
+        "updatedAt" : "2020-08-03T20:42:23Z",
+        "lastEditedBy" : "d5d7e656-99cd-4133-b2e1-e347c8b0f72b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "728ce16ca11e45f36612c177900e13379c6d1ba5",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +106,110 @@                        factory.createExpressionStatement(\n                            reduceLeft(\n                                currentModuleInfo.exportedNames!.slice(i, i + chunkSize),\n                                (prev, nextId) => factory.createAssignment(factory.createPropertyAccessExpression(factory.createIdentifier(\"exports\"), factory.createIdentifier(idText(nextId))), prev),\n                                factory.createVoidZero() as Expression"
+  },
+  {
+    "id" : "e879d9c1-caac-4372-9a61-22c40a4bd391",
+    "prId" : 35967,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/35967#pullrequestreview-363643408",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "69ab953b-835b-4e23-9a5f-a34aa8d465e1",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "I assume we will need to add this to tslib?",
+        "createdAt" : "2020-02-24T19:16:30Z",
+        "updatedAt" : "2020-02-24T23:04:27Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d97cc69c-390b-4e33-932d-04905651162e",
+        "parentId" : "69ab953b-835b-4e23-9a5f-a34aa8d465e1",
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "Aye.",
+        "createdAt" : "2020-02-24T19:28:32Z",
+        "updatedAt" : "2020-02-24T23:04:27Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4501286a-05a1-4c34-bd4f-5dada565ccb4",
+        "parentId" : "69ab953b-835b-4e23-9a5f-a34aa8d465e1",
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "https://github.com/microsoft/tslib/pull/89",
+        "createdAt" : "2020-02-24T19:30:27Z",
+        "updatedAt" : "2020-02-24T23:04:27Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6776f4cb8703088d47bc8230912399f7d197a40d",
+    "line" : 183,
+    "diffHunk" : "@@ -1,1 +1866,1870 @@        priority: 1,\n        text: `\nvar __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {\n    Object.defineProperty(o, \"default\", { enumerable: true, value: v });\n}) : function(o, v) {"
+  },
+  {
+    "id" : "d176cd63-1986-47d9-b15c-b128ba4d378a",
+    "prId" : 35967,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/35967#pullrequestreview-363643449",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "989dd7f3-aa4f-4380-a7f2-7567744560b5",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "This will also need to be in tslib.",
+        "createdAt" : "2020-02-24T19:18:04Z",
+        "updatedAt" : "2020-02-24T23:04:27Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7031bb97-8b90-4abe-9112-52eafff0e1ec",
+        "parentId" : "989dd7f3-aa4f-4380-a7f2-7567744560b5",
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "Yep.",
+        "createdAt" : "2020-02-24T19:28:43Z",
+        "updatedAt" : "2020-02-24T23:04:27Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6cd1f216-5996-4580-9ee0-16fea0b27d6b",
+        "parentId" : "989dd7f3-aa4f-4380-a7f2-7567744560b5",
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "https://github.com/microsoft/tslib/pull/89",
+        "createdAt" : "2020-02-24T19:30:32Z",
+        "updatedAt" : "2020-02-24T23:04:27Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6776f4cb8703088d47bc8230912399f7d197a40d",
+    "line" : 163,
+    "diffHunk" : "@@ -1,1 +1846,1850 @@        priority: 1,\n        text: `\nvar __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {\n    if (k2 === undefined) k2 = k;\n    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });"
+  },
+  {
+    "id" : "3cc90ccb-7975-4737-86d0-847ffe97af8a",
+    "prId" : 35967,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/35967#pullrequestreview-363643865",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "24cc8878-3d63-4241-82f6-44f033b44a5c",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "We will need to update tslib for this as well.",
+        "createdAt" : "2020-02-24T19:24:49Z",
+        "updatedAt" : "2020-02-24T23:04:27Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ad12308-d935-4b03-a454-8a557abf0a6d",
+        "parentId" : "24cc8878-3d63-4241-82f6-44f033b44a5c",
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "https://github.com/microsoft/tslib/pull/89",
+        "createdAt" : "2020-02-24T19:30:38Z",
+        "updatedAt" : "2020-02-24T23:04:27Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "942ac937-2884-4967-bdee-64f435e87ecc",
+        "parentId" : "24cc8878-3d63-4241-82f6-44f033b44a5c",
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "(`tslib` already has an `__exportStar` helper, we just update it)",
+        "createdAt" : "2020-02-24T19:31:11Z",
+        "updatedAt" : "2020-02-24T23:04:27Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6776f4cb8703088d47bc8230912399f7d197a40d",
+    "line" : 202,
+    "diffHunk" : "@@ -1,1 +1881,1885 @@        priority: 2,\n        text: `\n            var __exportStar = (this && this.__exportStar) || function(m, exports) {\n                for (var p in m) if (!exports.hasOwnProperty(p)) __createBinding(exports, m, p);\n            }`"
+  },
+  {
+    "id" : "991a1e10-9530-4ca9-8256-76084be8ad51",
+    "prId" : 18998,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/18998#pullrequestreview-67801683",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3a88cdd3-5aa3-4858-9f71-e484a2d515ff",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "Its generally safer to _always_ clone (or cache in a temp at runtime) an expression that is used more than once, unless that expression is a `GeneratedIdentifier`. ",
+        "createdAt" : "2017-10-06T21:57:41Z",
+        "updatedAt" : "2017-10-12T19:34:27Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "80ad77f65e9c714b75405f4a854806d340f976e4",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +549,553 @@            // });\n            needUMDDynamicImportHelper = true;\n            if (isSimpleCopiableExpression(arg)) {\n                const argClone = isGeneratedIdentifier(arg) ? arg : isStringLiteral(arg) ? createLiteral(arg) : setEmitFlags(setTextRange(getSynthesizedClone(arg), arg), EmitFlags.NoComments);\n                return createConditional("
+  },
+  {
+    "id" : "9a7ae279-f160-4f57-81d4-fc869e972454",
+    "prId" : 18028,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/18028#pullrequestreview-58768450",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6bfacc41-c85a-40ae-b4ac-39c748e96c3c",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "This should have been `visitNode(currentModuleInfo.exportEquals.expression, importCallExpressionVisitor, isExpression)` as it does the necessary validation you're doing on 435-437 for you.",
+        "createdAt" : "2017-08-25T21:32:12Z",
+        "updatedAt" : "2017-08-25T21:32:22Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7946f8995d029eb38a033d7dd888368a0cef3429",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +431,435 @@        function addExportEqualsIfNeeded(statements: Statement[], emitAsReturn: boolean) {\n            if (currentModuleInfo.exportEquals) {\n                const expressionResult = importCallExpressionVisitor(currentModuleInfo.exportEquals.expression);\n                if (expressionResult) {\n                    if (expressionResult instanceof Array) {"
+  },
+  {
+    "id" : "249ad6e9-6171-4815-8ca6-82451af725fd",
+    "prId" : 14774,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/14774#pullrequestreview-32732097",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cc3719df-50dc-4124-abf5-479a6c58f430",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "As with my comments for `transformImportCallExpressionUMD`, I'd rather see this added as a scoped helper at the top of the module body function.",
+        "createdAt" : "2017-04-13T21:44:52Z",
+        "updatedAt" : "2017-06-05T04:19:28Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1729ea860925485616de87e751eccdd7c81a2f5e",
+    "line" : 106,
+    "diffHunk" : "@@ -1,1 +547,551 @@        }\n\n        function transformImportCallExpressionAMD(node: ImportCall): Expression {\n            // improt(\"./blah\")\n            // emit as"
+  },
+  {
+    "id" : "29aae7b4-d2c9-4592-97f7-38a7a29ca797",
+    "prId" : 14774,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/14774#pullrequestreview-41641821",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3c240f0-e34a-4cf9-97cd-d9b51c11bc9c",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "Though not an error currently, `parameters` does not allow `undefined` and this will be an error if we ever move to `--strictNullChecks` in the compiler.",
+        "createdAt" : "2017-06-01T22:27:53Z",
+        "updatedAt" : "2017-06-05T04:19:28Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1729ea860925485616de87e751eccdd7c81a2f5e",
+    "line" : 151,
+    "diffHunk" : "@@ -1,1 +592,596 @@                    /*name*/ undefined,\n                    /*typeParameters*/ undefined,\n                    /*parameters*/ undefined,\n                    /*type*/ undefined,\n                    createBlock([createReturn(createCall(createIdentifier(\"require\"), /*typeArguments*/ undefined, node.arguments))])"
+  },
+  {
+    "id" : "ff16a4a9-8bb5-4901-80f0-08613ebaca22",
+    "prId" : 14774,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/14774#pullrequestreview-41641821",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a5f8254a-3933-428d-a37c-e4763111c2ee",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "The arguments to `require` should be more explicit: `[firstOrUndefined(node.arguments) || createOmittedExpression()]`.",
+        "createdAt" : "2017-06-01T22:29:37Z",
+        "updatedAt" : "2017-06-05T04:19:28Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1729ea860925485616de87e751eccdd7c81a2f5e",
+    "line" : 153,
+    "diffHunk" : "@@ -1,1 +594,598 @@                    /*parameters*/ undefined,\n                    /*type*/ undefined,\n                    createBlock([createReturn(createCall(createIdentifier(\"require\"), /*typeArguments*/ undefined, node.arguments))])\n                )]);\n        }"
+  },
+  {
+    "id" : "3c52e5c2-f237-422d-afa1-417bb49c05f1",
+    "prId" : 8991,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a53a5e03-68b3-4fa2-b31e-020a77d796c6",
+        "parentId" : null,
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "You need to enable emit notification for source files so that you know the current source file during substitution.\n",
+        "createdAt" : "2016-06-11T05:17:33Z",
+        "updatedAt" : "2016-06-14T18:10:59Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "97526994e1a72d19ee8ae919078f6cc029269a84",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +33,37 @@        context.enableSubstitution(SyntaxKind.BinaryExpression);\n        context.enableSubstitution(SyntaxKind.PrefixUnaryExpression);\n        context.enableSubstitution(SyntaxKind.PostfixUnaryExpression);\n        context.enableSubstitution(SyntaxKind.ShorthandPropertyAssignment);\n        context.enableEmitNotification(SyntaxKind.SourceFile);"
+  },
+  {
+    "id" : "9ec5d35f-3a46-4d37-9b5c-7bc7fb21a3a3",
+    "prId" : 8598,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e0ca6c4b-1a2d-4f6f-be64-72f65e47d0c4",
+        "parentId" : null,
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "Why not make `NodeEmitFlags` a parameter to `create*`? It seems like it would be a lot harder to forget. If the majority of uses don't need to call `setNodeEmitFlags`, then maybe not. I just saw lots of calls to it in this PR.\n",
+        "createdAt" : "2016-05-18T21:21:29Z",
+        "updatedAt" : "2016-05-19T22:39:52Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25b325b7-41fd-4b04-be8b-86cb1f68c433",
+        "parentId" : "e0ca6c4b-1a2d-4f6f-be64-72f65e47d0c4",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "The `setNodeEmitFlags` function is bound to the current transformation (it is a member of `TransformationContext`) and isn't generally available to the create\\* functions in factory.ts.\n",
+        "createdAt" : "2016-05-19T22:28:48Z",
+        "updatedAt" : "2016-05-19T22:39:52Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "150cecbaf37b959ead6ac1aa3b628d2385e02418",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +235,239 @@                    );\n\n                    setNodeEmitFlags(statement, NodeEmitFlags.NoComments);\n                    statements.push(statement);\n                }"
+  },
+  {
+    "id" : "bef109bf-ccb0-49b6-a8d1-bed3f85b1917",
+    "prId" : 8071,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "820a32b5-d9b7-40a5-b1fa-6fd0e5ed2e4f",
+        "parentId" : null,
+        "authorId" : "cbc74313-e7e9-4313-b106-3e17fde5473d",
+        "body" : "`default` is not necessarily the only thing that needs an element access in ES3. ES3 permits _IdentifierName_s but not ES3 _ReservedWord_s to be on the right of a property access.\n\nhttp://www.ecma-international.org/publications/files/ECMA-ST-ARCH/ECMA-262,%203rd%20edition,%20December%201999.pdf\n",
+        "createdAt" : "2016-04-14T01:56:56Z",
+        "updatedAt" : "2016-04-14T01:57:57Z",
+        "lastEditedBy" : "cbc74313-e7e9-4313-b106-3e17fde5473d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4712a6ee-3c03-4636-b8b9-bcb214550079",
+        "parentId" : "820a32b5-d9b7-40a5-b1fa-6fd0e5ed2e4f",
+        "authorId" : "26699569-4335-45b0-a775-bfd0a044730b",
+        "body" : "I am aware of that. However, my understanding is  this case, export/import, only \"default\" will be affected because other reservedWords can't be used in exportClause and therefore shouldn't be able to appear in importSpecifier\n\n Originally I do check for all other ES3 and I won't mind to do that approach. I didn't keep it because I am not sure it will be more confusing\n",
+        "createdAt" : "2016-04-14T03:33:31Z",
+        "updatedAt" : "2016-04-14T03:43:54Z",
+        "lastEditedBy" : "26699569-4335-45b0-a775-bfd0a044730b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dde1d09a-4142-40b7-8667-a83536ca86e0",
+        "parentId" : "820a32b5-d9b7-40a5-b1fa-6fd0e5ed2e4f",
+        "authorId" : "7a428a65-3bd3-41f2-b899-b42dc7177963",
+        "body" : "This is the brhaviour in master today as well. In the future we should add an es3 transform that will write keywords correctelly as well as trailing commas removal etc.\n",
+        "createdAt" : "2016-04-14T04:27:04Z",
+        "updatedAt" : "2016-04-14T04:27:04Z",
+        "lastEditedBy" : "7a428a65-3bd3-41f2-b899-b42dc7177963",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "78848a0e455e6d8b83db8299fc1b0d8524a9cb4f",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +746,750 @@                        const name = (<ImportSpecifier>declaration).propertyName\n                            || (<ImportSpecifier>declaration).name;\n                        if (name.originalKeywordKind === SyntaxKind.DefaultKeyword && languageVersion <= ScriptTarget.ES3) {\n                            return createElementAccess(\n                                getGeneratedNameForNode(declaration.parent.parent.parent),"
+  },
+  {
+    "id" : "69f15f28-f8c4-4e32-a28a-afc24ace739b",
+    "prId" : 7206,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e5e41dd6-5cf9-47f7-835a-a0cc66d1666b",
+        "parentId" : null,
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "If it's `undefined`, will it be skipped in the emit or emitted as `undefined`?\n",
+        "createdAt" : "2016-03-10T17:34:03Z",
+        "updatedAt" : "2016-03-18T20:05:02Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b7fcd2ea-7504-46fe-92e7-7728ebfdb50a",
+        "parentId" : "e5e41dd6-5cf9-47f7-835a-a0cc66d1666b",
+        "authorId" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "body" : "`flattenNodes` removes undefined nodes.\n",
+        "createdAt" : "2016-03-18T19:27:17Z",
+        "updatedAt" : "2016-03-18T20:05:02Z",
+        "lastEditedBy" : "1eec7f68-de25-4f88-827c-00769c75a2d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "44ca7d435fc9b0d9b6f05de360dd11a4a18726a4",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +126,130 @@                        flatten([\n                            // Add the module name (if provided).\n                            moduleName,\n\n                            // Add the dependency array argument:"
+  }
+]

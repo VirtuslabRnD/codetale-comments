@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "8c5a0dc5-e199-4738-a45c-3bd472968890",
+    "prId" : 36108,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/36108#pullrequestreview-344081129",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e242892e-49e4-42e3-bc3e-e7111d338626",
+        "parentId" : null,
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "Wut. That seems... wrong? The function is inline and anonymous, so it should be hoisted in declaration emit into a local member named `_exports`.\r\n\r\nFor this file, I'd expect declarations like\r\n```ts\r\ndeclare function _exports(p: number): void;\r\ndeclare class _exports {\r\n  constructor(p: number);\r\n  t: number;\r\n}\r\ndeclare namespace _exports {\r\n  export function Sub(): void;\r\n  export class Sub {\r\n    instance: _exports;\r\n  }\r\n}\r\nexport = _exports;\r\n```\r\nideally. ...I guess it's fine? I think it's the reference in `Sub` that actually would trip us up, since we can't track the rename+hoist. If `Sub` didn't have a public reference to the exported class, I'd definitely expect it to be OK.",
+        "createdAt" : "2020-01-10T22:13:08Z",
+        "updatedAt" : "2020-01-29T17:16:46Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "89c4dfc7-0d62-4787-b8a9-8a66a2d7f80c",
+        "parentId" : "e242892e-49e4-42e3-bc3e-e7111d338626",
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "Yep, I think that error is wrong. This PR is just fixing the crash.",
+        "createdAt" : "2020-01-10T22:17:35Z",
+        "updatedAt" : "2020-01-29T17:16:46Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba59d1d5-6e57-420a-826b-14eb96c70ee2",
+        "parentId" : "e242892e-49e4-42e3-bc3e-e7111d338626",
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "Does the much simpler original repro of\r\n```js\r\nmodule.exports.MyClass = function() {\r\n    this.x = 1\r\n}\r\nmodule.exports.MyClass.prototype = {\r\n    a: function() {\r\n        this.b = 2\r\n    }\r\n}\r\n```\r\nemit correctly? That has way less going on and I'd fully expect that to work if it doesn't crash.",
+        "createdAt" : "2020-01-10T22:19:47Z",
+        "updatedAt" : "2020-01-29T17:16:46Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cbe9ad08-ad10-41d0-840d-62f7af4bcd60",
+        "parentId" : "e242892e-49e4-42e3-bc3e-e7111d338626",
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "Nope:\r\n\r\n```ts\r\nexport {};\r\n```",
+        "createdAt" : "2020-01-10T23:03:51Z",
+        "updatedAt" : "2020-01-29T17:16:46Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8571841-f337-4add-884a-fc7e0d8bb837",
+        "parentId" : "e242892e-49e4-42e3-bc3e-e7111d338626",
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "I added the simple test case (slightly modified to get rid of a couple of errors from the binder).\r\n\r\n",
+        "createdAt" : "2020-01-10T23:13:22Z",
+        "updatedAt" : "2020-01-29T17:16:46Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "471f1579-4d75-4d71-bf0e-80abe3851d18",
+        "parentId" : "e242892e-49e4-42e3-bc3e-e7111d338626",
+        "authorId" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "body" : "☹️ I imagine we're just missing some `isJSConstructor` calls in `serializeSymbol` to handle it via the `serializeAsClass` function? (Shouldn't the symbol have `SymbolFlags.Class`? I thought we did that? The case _without_ a prototype assignment does, doesn't it?)",
+        "createdAt" : "2020-01-11T00:03:23Z",
+        "updatedAt" : "2020-01-29T17:16:46Z",
+        "lastEditedBy" : "f7813195-22a2-4200-9f53-7aadb83a2cc9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f27067b6-3c25-48ce-93b9-d9bb15cdb046",
+        "parentId" : "e242892e-49e4-42e3-bc3e-e7111d338626",
+        "authorId" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "body" : "So, there's *this* comment, which is correct as far as I can tell:\r\n\r\n```\r\n                            // Looks like a `module.exports.Sub = class {}` - if we serialize `symbol` as a class, the result will have no members,\r\n                            // since the classiness is actually from the target of the effective alias the symbol is. yes. A BlockScopedVariable|Class|Property\r\n                            // _really_ acts like an Alias, and none of a BlockScopedVariable, Class, or Property. This is the travesty of JS binding today.\r\n```\r\n\r\nYou don't get any members. I didn't dig any deeper than to verify that the comment correctly describes the current behaviour.\r\n\r\nAre you OK with the fix as-is? I just want to fix the crash for now.",
+        "createdAt" : "2020-01-16T17:16:39Z",
+        "updatedAt" : "2020-01-29T17:16:46Z",
+        "lastEditedBy" : "2b0d3f17-3eae-4173-ad8a-73c9440bf608",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e2603b301ee68f2528dba22e2ceb503540ae7876",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +10,14 @@    module.exports = function (p) {\n    ~~~~~~\n!!! error TS9005: Declaration emit for this file requires using private name 'exports'. An explicit type annotation may unblock declaration emit.\n        this.t = 12 + p;\n             ~"
+  }
+]

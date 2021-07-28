@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "d98d5232-b858-4a6a-a955-f57febab23e0",
+    "prId" : 1861,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4f57610f-e0aa-493c-ae99-5303a047d83d",
+        "parentId" : null,
+        "authorId" : "cbc74313-e7e9-4313-b106-3e17fde5473d",
+        "body" : "Is this from #241? This is definitely a regression.\n\nTo clarify in readability for anyone jumping in:\n\n``` TypeScript\nfunction fun<T>(g: (x: T) => T, h: (y: T) => T, x: T): T;\n```\n\nOur parameters are\n- `((Math.random() < 0.5 ? ((x => x)) : ((x => undefined))))`\n- `((x => x))`\n- `10`\n\nIt looks like we're widening from `x => undefined`. Clearly this is not desirable.\n",
+        "createdAt" : "2015-01-30T08:38:42Z",
+        "updatedAt" : "2015-02-02T18:26:39Z",
+        "lastEditedBy" : "cbc74313-e7e9-4313-b106-3e17fde5473d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "21468ebd-4b04-4e79-839d-8f90d4fc152a",
+        "parentId" : "4f57610f-e0aa-493c-ae99-5303a047d83d",
+        "authorId" : "1b34783f-ccca-4b94-9373-cb3f0e0d8028",
+        "body" : "This also seems wrong. The first two arguments should be skipped the first time around, and number is inferred from the third argument. Then we come back to visit all the lambdas, and T gets fixed to number. It should be fixed to number in all 3 lambdas, but looks like it only worked for the first two.\n",
+        "createdAt" : "2015-01-30T08:57:43Z",
+        "updatedAt" : "2015-02-02T18:26:39Z",
+        "lastEditedBy" : "1b34783f-ccca-4b94-9373-cb3f0e0d8028",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d873c032-9b93-42c0-9e5d-fce8ff6c7f61",
+        "parentId" : "4f57610f-e0aa-493c-ae99-5303a047d83d",
+        "authorId" : "bdee90d3-fa06-43ed-8bf1-d381c3d69e0b",
+        "body" : "The change in the test output is related to the missing contextualMapper argument for parenthesized expressions (and just brings the test in line with the non-parenthesized case), but the widening of the function result from `undefined` to `any` is real culprit. We've got that issue captured in #241.\n",
+        "createdAt" : "2015-01-30T17:25:32Z",
+        "updatedAt" : "2015-02-02T18:26:39Z",
+        "lastEditedBy" : "bdee90d3-fa06-43ed-8bf1-d381c3d69e0b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80d238e2-8b37-4fff-ac7b-bbccd6fbeb63",
+        "parentId" : "4f57610f-e0aa-493c-ae99-5303a047d83d",
+        "authorId" : "1b34783f-ccca-4b94-9373-cb3f0e0d8028",
+        "body" : "I do not understand. Even if the lambda `x => undefined` gets widened, we should still fix T before trying to add 'any' as a candidate.\n",
+        "createdAt" : "2015-01-30T18:56:19Z",
+        "updatedAt" : "2015-02-02T18:26:39Z",
+        "lastEditedBy" : "1b34783f-ccca-4b94-9373-cb3f0e0d8028",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "86e374cd-6d4f-429e-9830-ae8447c2d87d",
+        "parentId" : "4f57610f-e0aa-493c-ae99-5303a047d83d",
+        "authorId" : "bdee90d3-fa06-43ed-8bf1-d381c3d69e0b",
+        "body" : "It's a subtle interplay between several things. Because we create a new inference type mapper each time we let in an excluded argument, we forget which type parameters were fixed the last time around. Combine that with the fact that once we assign parameter types to a contextually typed function expression, we keep those assignments and don't reassign again. This means that the parameter type assignments that caused type parameter fixing in the previous round don't occur again, and the type parameter now doesn't get fixed, causing us to make more inferences (in this case the `any` that came from the widened `undefined`).\n\nThe right thing to do would be to use a single inference mapper for all inferences related to a particular signature and incrementally build up more inferences in that mapper, but remembering which type parameters were already fixed. This would get us more consistent results and also be more efficient. But I'm not sure it needs to be part of this PR, it's really an orthogonal issue.\n",
+        "createdAt" : "2015-01-30T21:34:30Z",
+        "updatedAt" : "2015-02-02T18:26:39Z",
+        "lastEditedBy" : "bdee90d3-fa06-43ed-8bf1-d381c3d69e0b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7726311-2c32-4b2d-8bd8-d09d230f9791",
+        "parentId" : "4f57610f-e0aa-493c-ae99-5303a047d83d",
+        "authorId" : "1b34783f-ccca-4b94-9373-cb3f0e0d8028",
+        "body" : "Ah I see. That is really complicated and very hard for anybody to understand. I definitely think we need to make the inference context shared, and make it smarter. It has to distinguish between type parameters that were fixed because of contextual typing, versus type parameters that were just finalized because the inference round was over.\n",
+        "createdAt" : "2015-01-30T21:45:05Z",
+        "updatedAt" : "2015-02-02T18:26:39Z",
+        "lastEditedBy" : "1b34783f-ccca-4b94-9373-cb3f0e0d8028",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "34ed45df8e21de17c061ac01933c7d34058480b5",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +225,229 @@>x => x : (x: any) => any\n>x : any\n>x : any\n\nvar lambda1: (x: number) => number = x => x;"
+  }
+]

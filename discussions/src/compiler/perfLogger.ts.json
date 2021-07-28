@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "f26f7a78-3c66-49ca-9f29-57a997bb1303",
+    "prId" : 33141,
+    "prUrl" : "https://github.com/microsoft/TypeScript/pull/33141#pullrequestreview-281785124",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8b20c20a-7648-46cb-bf42-d1682eefc6a4",
+        "parentId" : null,
+        "authorId" : "7b7aae27-4774-41a7-bce2-94c871708547",
+        "body" : "I think this is ok in a pinch, but it actually feels a bit weird to me that this module has observable side effects upon being loaded. @mrcrane, I’m not too familiar with your ETW work, but could this log statement be wrapped in an exported function instead of evaluated immediately? Or at least be predicated upon the existence of `etwModule`?",
+        "createdAt" : "2019-08-29T17:33:26Z",
+        "updatedAt" : "2019-09-04T20:47:53Z",
+        "lastEditedBy" : "7b7aae27-4774-41a7-bce2-94c871708547",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b3eee5b-cd8d-486b-bfbb-b36d2a785481",
+        "parentId" : "8b20c20a-7648-46cb-bf42-d1682eefc6a4",
+        "authorId" : "6bdd339b-f73c-4887-bed9-3e6ae98f8659",
+        "body" : "Logging is predicated on the existence of `etwModule` through the use of `nullLogger` on line 40.\r\n\r\nHowever there seems to be a problem where we are still evaluating the parameter to the logging function even though `nullLogger` will ignore it. I'm not sure of the best way to solve that problem in a concise way for all of the `perfLogger.log` statements that are littered throughout the code base. Is that the problem you are trying to solve?\r\n\r\nThis particular log statement does not really need to be called immediately from within this module. Instead of wrapping it in an exported function we could just simply move the log statement somewhere else if that would be more appropriate. But it would still need a fix like the one in this PR. Alternatively we could come up with a way to guard the parameter from being evaluated, which we would want to apply to all log statements throughout the code base.",
+        "createdAt" : "2019-08-29T20:40:35Z",
+        "updatedAt" : "2019-09-04T20:47:53Z",
+        "lastEditedBy" : "6bdd339b-f73c-4887-bed9-3e6ae98f8659",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3eeaf357-fecc-4671-92bc-aee880265365",
+        "parentId" : "8b20c20a-7648-46cb-bf42-d1682eefc6a4",
+        "authorId" : "7b7aae27-4774-41a7-bce2-94c871708547",
+        "body" : "The real problem is that `process` can’t be referenced without checking it, because some parts of TypeScript need to be able to run in the browser. But the fact that this runs something (even though in most contexts it’s a noop) on load is a little unusual. I would expect a startup message to go, perhaps, `executeCommandLine` in tsc.ts.\r\n\r\nAs-is, you could get some strange effects by using TypeScript’s Node API. Imagine you’re working in a Node project in which you have `@microsoft/typescript-etw` installed, and you do something like\r\n\r\n```ts\r\nimport * as ts from 'typescript';\r\n\r\nexport async function runSomething() {\r\n  await someLongRunningSetupThing();\r\n  doSomethingWithTypeScript(ts);\r\n}\r\n```\r\n\r\nIn this program, the log happens immediately after the VM parses this source file, even though you haven’t started doing anything with TypeScript yet. Your program may _never_ do something with TypeScript, and yet the logger will say “Starting TypeScript... with command line” and then spit out the command line arguments that were given to your program, not even to TypeScript. So yeah, it’s easy to work around the `process` problem here, but it drew my attention to the fact that this might not be the right place for that log statement in the place.",
+        "createdAt" : "2019-08-29T23:14:47Z",
+        "updatedAt" : "2019-09-04T20:47:53Z",
+        "lastEditedBy" : "7b7aae27-4774-41a7-bce2-94c871708547",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "75a88d7b-bfee-4f42-b84a-ef5e0fa123e0",
+        "parentId" : "8b20c20a-7648-46cb-bf42-d1682eefc6a4",
+        "authorId" : "6bdd339b-f73c-4887-bed9-3e6ae98f8659",
+        "body" : "Ok I see what you're getting at now and I agree. I wasn't initially aware of those other ways to load TypeScript.\r\n\r\nActually our primary use case for this perf logging is around tsserver so we would like to capture tsserver args, but having them available for tsc could be useful as well. In any case this can be resolved by removing this `perfLogger.log` statement from this file and essentially pasting it into those other entrypoints where we want to capture the args. It does not require any local variables so it should be fully moveable. That would certainly be a more sane solution.",
+        "createdAt" : "2019-08-30T00:42:11Z",
+        "updatedAt" : "2019-09-04T20:47:53Z",
+        "lastEditedBy" : "6bdd339b-f73c-4887-bed9-3e6ae98f8659",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "45227ee337f820f41ead143052511e9ec9c90f5d",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +40,44 @@    export const perfLogger: PerfLogger = etwModule && etwModule.logEvent ? etwModule : nullLogger;\n    const args = typeof process === \"undefined\" ? [] : process.argv;\n    perfLogger.logInfoEvent(`Starting TypeScript v${versionMajorMinor} with command line: ${JSON.stringify(args)}`);\n}"
+  }
+]
