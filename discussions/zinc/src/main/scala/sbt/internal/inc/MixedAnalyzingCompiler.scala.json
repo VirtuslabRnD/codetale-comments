@@ -1,0 +1,255 @@
+[
+  {
+    "id" : "f03775ef-5b28-4f93-a863-e04beb0f1b02",
+    "prId" : 883,
+    "prUrl" : "https://github.com/sbt/zinc/pull/883#pullrequestreview-469757856",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "parentId" : null,
+        "authorId" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "body" : "What happened to the other conditions here?",
+        "createdAt" : "2020-08-17T08:50:37Z",
+        "updatedAt" : "2020-08-17T08:52:07Z",
+        "lastEditedBy" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3810c0e9-72e6-4d08-98f5-1f1739973020",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "The other conditions do not matter, I think. We need to run through scalac regardless of the compile order. Now that pipelining effectively means \"skip javac\", we could consider putting that in CompileOrder actually as `OnlyScala` or something.",
+        "createdAt" : "2020-08-18T01:03:36Z",
+        "updatedAt" : "2020-08-18T01:03:37Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33a2b8a6-351b-4058-9b17-5785d56f45bc",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "body" : "This should only be true when it's mixed compilation, so it was right before.",
+        "createdAt" : "2020-08-18T07:28:05Z",
+        "updatedAt" : "2020-08-18T07:28:05Z",
+        "lastEditedBy" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed41d883-71ba-40bb-b6ac-8e0dcb12f822",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "Compilation order is about the order in which scalac and javac are called. For example, there's a pure Java project in sbt and it was using `CompileOrder.JavaThenScala`. It still needs to _generate_ pickle for the downstream no?",
+        "createdAt" : "2020-08-18T12:24:34Z",
+        "updatedAt" : "2020-08-18T12:24:34Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "abce9581-6535-4cb5-9772-d74f9fcb32ab",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "body" : "Not in my eyes.  What's the point in running scalac and generating a pickle-only jar when you've got the whole bytecode jar/dir already?  You just feed that downstream.\r\n\r\nThe sources compiled by scalac are determined by `Mixed` so with this change `-Ypickle-java` + `JavaThenScala` will cause scalac to run on 0 sources, which is wrong and I'm not even sure how that behaves.",
+        "createdAt" : "2020-08-18T12:40:07Z",
+        "updatedAt" : "2020-08-18T12:40:07Z",
+        "lastEditedBy" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a63cd7c-7fdf-458c-b85d-513bc9b77a2a",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "> Not in my eyes. What's the point in running scalac and generating a pickle-only jar when you've got the whole bytecode jar/dir already? You just feed that downstream.\r\n\r\nIn sbt/sbt, `testingProj` depends on `testAgentProj`. In this case `testAgentProj` is the pure Java subproject with `CompileOrder.JavaThenScala`. The ordering should NOT matter because there are only Java sources in that subproject.\r\n\r\nAt a first glance it might seem pointless to call scalac on `testAgentProj`, but it's actually not true. What we want to do is regardless of the compile order etc, we want to let the downstream _`testingProj`_ start the compilation early, and since `testingProj` contains Scala sources, they can make use of the early output (pickle JAR). So even though `testAgentProj` itself needs bytecode JAR for _its_ upstream (in this cases none), it can still contribute to the overall pipelining.",
+        "createdAt" : "2020-08-18T15:06:10Z",
+        "updatedAt" : "2020-08-18T15:06:10Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9bfb7963-ff50-4e16-a3e0-5338a0ea01a6",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "body" : "That doesn't make sense.  With `JavaThenScala` the earliest output is the bytecode from compiling the java code, which for `testAgentProj` is all the code.  Calling scalac is just wasting time - just feed the bytecode jar to testingProj, it's ready.",
+        "createdAt" : "2020-08-18T15:31:28Z",
+        "updatedAt" : "2020-08-18T15:31:28Z",
+        "lastEditedBy" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f7d538a-6fc1-4db8-ba8c-57043b3bb9cf",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "I guess in case when you only have Java sources we could think of a way of communicating to downstream that information, but in a mixed source case, wouldn't `JavaThenScala` still require pickle generation?",
+        "createdAt" : "2020-08-18T15:57:54Z",
+        "updatedAt" : "2020-08-18T15:57:54Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7be461ca-a4ee-4cc5-9d8a-fb814d06b2ce",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "body" : "Yes, but you still don't drop the extra conditions here around `-Ypickle-java`.  You compiled the java sources to bytecode, you compile the scala sources if there are any (`scalaSrcs.nonEmpty`), and you coordinate downstream to compile with the java bytecode and the scala pickle once the latter are ready.\r\n\r\nAlso:\r\n\r\n> We need to run through scalac regardless of the compile order.\r\n\r\nIf you pass both java+scala sources to scalac under the opposite `ScalaThenJava` order you break the invariant that the Scala can't depend on the Java.",
+        "createdAt" : "2020-08-18T16:29:44Z",
+        "updatedAt" : "2020-08-18T16:29:44Z",
+        "lastEditedBy" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "45f58471-fbe8-4fba-8a73-8386b1da0acb",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "`ScalaThenJava` is a fiction that exists only in Scaladoc though - https://github.com/sbt/zinc/issues/235.\r\nEven `JavaThenScala`, it mostly denotes the ordering during full compilation, and it's not like during incremental cycles we evict the stuff from Scala.\r\n\r\nHere's a diagram I drew out:\r\n![compile order vs pipelining](https://user-images.githubusercontent.com/184683/90546571-4210f280-e158-11ea-91da-fa82664d8ee8.jpg)\r\n",
+        "createdAt" : "2020-08-18T17:40:26Z",
+        "updatedAt" : "2020-08-18T17:40:26Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90a95be6-2be4-4c05-b7cd-186f1fb805e8",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "In the above, if `core` uses `JavaThenScala`, then it cannot do pipelining itself, but it can still make early output so `app` subproject can use `early/core.jar`.",
+        "createdAt" : "2020-08-18T17:44:46Z",
+        "updatedAt" : "2020-08-18T17:44:46Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "576ce653-af6a-424a-b449-af1864dfb776",
+        "parentId" : "1a704dbc-ca40-40e1-87ad-3db28e81d94b",
+        "authorId" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "body" : "Even if ScalaThenJava means the same ordering as Mixed, there's still a distinction in what sources it compiles.",
+        "createdAt" : "2020-08-18T19:26:34Z",
+        "updatedAt" : "2020-08-18T19:26:34Z",
+        "lastEditedBy" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b4b68ba6444a8d19588a2e3adb162dc247c716c7",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +135,139 @@    val (javaSrcs, scalaSrcs) = incSrc.partition(MixedAnalyzingCompiler.javaOnly)\n    logInputs(log, javaSrcs.size, scalaSrcs.size, outputDirs)\n    val pickleJava = Incremental.isPickleJava(config.currentSetup.options.scalacOptions)\n\n    // Compile Scala sources."
+  },
+  {
+    "id" : "1b792114-e212-4af8-b7b7-fc81afd25cd2",
+    "prId" : 860,
+    "prUrl" : "https://github.com/sbt/zinc/pull/860#pullrequestreview-455898601",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eb1ec655-7b5d-4d62-bc0f-f225fb2e78ed",
+        "parentId" : null,
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "In general, Zinc should avoid adding Scalac options since the build user wouldn't be able to control it.\r\n`-Y` flag especially has no guarantee and it's not even supported in all of 2.12 or 2.13.",
+        "createdAt" : "2020-07-27T14:38:33Z",
+        "updatedAt" : "2020-07-27T15:08:51Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8fa01708-d9f1-4234-9d70-26d74d67510d",
+        "parentId" : "eb1ec655-7b5d-4d62-bc0f-f225fb2e78ed",
+        "authorId" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "body" : "Do you want to send a PR with a way to address this, without breaking the initial use case?",
+        "createdAt" : "2020-07-27T15:26:44Z",
+        "updatedAt" : "2020-07-27T15:26:44Z",
+        "lastEditedBy" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0f12742-75c9-43af-bb34-cb33a6883634",
+        "parentId" : "eb1ec655-7b5d-4d62-bc0f-f225fb2e78ed",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "What is the initial use case?",
+        "createdAt" : "2020-07-27T15:35:28Z",
+        "updatedAt" : "2020-07-27T15:35:28Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "af29a4aedc10e1755833ce33b274d58fbd12ce6d",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +148,152 @@      if (out.toString.endsWith(\".jar\") && !Files.exists(out))\n        scala.reflect.io.RootPath(out, writable = true).close() // creates an empty jar\n      List(\"-Ypickle-write\", out.toString).filter(_ => sbv == \"2.12\" || sbv == \"2.13\")\n    }\n"
+  },
+  {
+    "id" : "0741fd58-9687-4028-9b88-de02ddb14ca9",
+    "prId" : 821,
+    "prUrl" : "https://github.com/sbt/zinc/pull/821#pullrequestreview-448030636",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "78fa0a77-489b-4cd2-a574-76bf0dbc25aa",
+        "parentId" : null,
+        "authorId" : "c7d4bff9-85e5-49d0-85e4-79743bd27861",
+        "body" : "@dnw This version dependent logic looks a bit fragile. e.g. it will break for Scala \"2.120\" 👽 ",
+        "createdAt" : "2020-07-14T11:44:59Z",
+        "updatedAt" : "2020-07-14T11:44:59Z",
+        "lastEditedBy" : "c7d4bff9-85e5-49d0-85e4-79743bd27861",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7dc3198161bc97142330aaceb0538a07dbbb105e",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +87,91 @@      if (out.toString.endsWith(\".jar\") && !Files.exists(out))\n        scala.reflect.io.RootPath(out, writable = true).close() // creates an empty jar\n      List(\"-Ypickle-write\", out.toString).filter(_ => sbv == \"2.12\" || sbv == \"2.13\")\n    }\n"
+  },
+  {
+    "id" : "2fd06734-47c6-46c0-b800-490cf885b50b",
+    "prId" : 597,
+    "prUrl" : "https://github.com/sbt/zinc/pull/597#pullrequestreview-159933197",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7fd9c8ac-bb29-4889-8ad7-cf3e2883c34c",
+        "parentId" : null,
+        "authorId" : "ee674eea-a8c8-4bb7-aef2-04e7f846d57d",
+        "body" : "I remember you mentioned we don't support forked javac compilation. Can we not do a best effort to support it?",
+        "createdAt" : "2018-09-28T14:33:52Z",
+        "updatedAt" : "2018-10-08T08:10:20Z",
+        "lastEditedBy" : "ee674eea-a8c8-4bb7-aef2-04e7f846d57d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e904e1b-f051-474d-95a6-d0ef7a91c5f0",
+        "parentId" : "7fd9c8ac-bb29-4889-8ad7-cf3e2883c34c",
+        "authorId" : "d678c996-c151-48d6-804d-0ec3358d7699",
+        "body" : "Maybe I explained something wrong or you misunderstood, but we actually do support it. \r\n\r\nOne thing changed in javac is closing the custom file manager. This is not relevant for forked javac as it just exists. The other thing is `-XDuseOptimizedZips=false`. This flag is just passed to javac. If it is forked, it just works. If it is local it doesn't because we create custom file manager and the logic of applying options there is stupid, hence I needed the hack with classloaders and reflection. \r\n\r\nBut as I tested it, it works with both forked and local.",
+        "createdAt" : "2018-09-28T15:04:46Z",
+        "updatedAt" : "2018-10-08T08:10:20Z",
+        "lastEditedBy" : "d678c996-c151-48d6-804d-0ec3358d7699",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "566db981-1a5c-42aa-8c56-3c16cb858e3e",
+        "parentId" : "7fd9c8ac-bb29-4889-8ad7-cf3e2883c34c",
+        "authorId" : "ee674eea-a8c8-4bb7-aef2-04e7f846d57d",
+        "body" : "Then no problem :smile: I remembered having read that it wasn't working with forked compilation but it was probably my misremembering.",
+        "createdAt" : "2018-09-28T16:28:01Z",
+        "updatedAt" : "2018-10-08T08:10:20Z",
+        "lastEditedBy" : "ee674eea-a8c8-4bb7-aef2-04e7f846d57d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a5889917ab9016bd225e175df55255e862e9d04d",
+    "line" : 120,
+    "diffHunk" : "@@ -1,1 +101,105 @@          val joptions = config.currentSetup.options.javacOptions\n\n          JarUtils.getOutputJar(output) match {\n            case Some(outputJar) =>\n              val outputDir = JarUtils.javacTempOutput(outputJar)"
+  }
+]

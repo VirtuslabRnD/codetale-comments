@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "e90bc604-1d44-497e-a263-9d9ae4efe1ca",
+    "prId" : 985,
+    "prUrl" : "https://github.com/sbt/zinc/pull/985#pullrequestreview-703756635",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bfd8a2f5-a2f1-4f28-b331-9d539755339a",
+        "parentId" : null,
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "This failed integration test in sbt (https://github.com/sbt/sbt/pull/6591) because `OriginalTreeAttachment` appeared in Scala 2.12.3.\r\n\r\n```\r\n[info] Non-compiled module 'compiler-bridge_2.12' for Scala 2.12.1. Compiling...\r\n/var/folders/hg/2602nfrs2958vnshglyl3srw0000gn/T/sbt_f35b067/xsbt/Compat.scala:26: error: not found: type OriginalTreeAttachment\r\n    in.attachments.get[OriginalTreeAttachment].foreach { a =>\r\n                       ^\r\n```\r\n\r\nI guess we can drop the support of Scala 2.12.0 - 2.12.2 at some point, but I don't think we can during 1.5.x series. /cc @retronym ",
+        "createdAt" : "2021-07-12T04:49:45Z",
+        "updatedAt" : "2021-07-12T04:49:45Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74a1b3c3-88d1-4e35-bb38-37f865e68e0c",
+        "parentId" : "bfd8a2f5-a2f1-4f28-b331-9d539755339a",
+        "authorId" : "c7d4bff9-85e5-49d0-85e4-79743bd27861",
+        "body" : "In the meantime, how about:\r\n\r\n```diff\r\ndiff --git a/internal/compiler-bridge/src/main/scala-2.12/xsbt/Compat.scala b/internal/compiler-bridge/src/main/scala-2.12/xsbt/Compat.scala\r\nindex 13c9d7724..c7d4ac4da 100644\r\n--- a/internal/compiler-bridge/src/main/scala-2.12/xsbt/Compat.scala\r\n+++ b/internal/compiler-bridge/src/main/scala-2.12/xsbt/Compat.scala\r\n@@ -20,11 +20,18 @@ abstract class Compat {\r\n   val global: Global\r\n   import global._\r\n \r\n+  private lazy val OriginalTreeAttachmentTag = try {\r\n+    reflect.classTag[OriginalTreeAttachment]\r\n+  } catch {\r\n+    case _: LinkageError => null // OriginalTreeAttachment is not in 2.12.{1,2}\r\n+  }\r\n+\r\n   /** If given tree contains object tree attachment calls func on tree from attachment. */\r\n   protected def processOriginalTreeAttachment(in: Tree)(func: Tree => Unit): Unit = {\r\n     import analyzer._\r\n-    in.attachments.get[OriginalTreeAttachment].foreach { a =>\r\n-      func(a.original)\r\n+    OriginalTreeAttachmentTag match {\r\n+      case null =>\r\n+      case tag => in.attachments.get[OriginalTreeAttachment](tag).foreach(a => func(a.original))\r\n     }\r\n   }\r\n }\r\n\r\n```",
+        "createdAt" : "2021-07-12T05:13:16Z",
+        "updatedAt" : "2021-07-12T05:13:16Z",
+        "lastEditedBy" : "c7d4bff9-85e5-49d0-85e4-79743bd27861",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ec48b637-340a-49a9-b73f-a84d07b05aaf",
+        "parentId" : "bfd8a2f5-a2f1-4f28-b331-9d539755339a",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "`Compat.scala` is compiled on user's laptop against Scala 2.12.1 so any reference to `OriginalTreeAttachment` would cause compilation error?\r\n\r\nThis is what I get for example when I set scalaVersion to 2.12.2:\r\n\r\n```\r\n[error] /Users/eed3si9n/work/sbt-modules/zinc/internal/compiler-bridge/src/main/scala-2.12/xsbt/Compat.scala:24:22: not found: type OriginalTreeAttachment\r\n[error]     reflect.classTag[OriginalTreeAttachment]\r\n[error]                      ^\r\n```\r\n",
+        "createdAt" : "2021-07-12T05:36:39Z",
+        "updatedAt" : "2021-07-12T05:36:40Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fae7812a-08d2-47b1-aa3b-e9e8ce867073",
+        "parentId" : "bfd8a2f5-a2f1-4f28-b331-9d539755339a",
+        "authorId" : "c7d4bff9-85e5-49d0-85e4-79743bd27861",
+        "body" : "Oh, in that case the lookup of the tag and the call to `.original` needs to be reflective.\r\n\r\nRoughly:\r\n\r\n```diff\r\ndiff --git a/internal/compiler-bridge/src/main/scala-2.12/xsbt/Compat.scala b/internal/compiler-bridge/src/main/scala-2.12/xsbt/Compat.scala\r\nindex 13c9d7724..e0f3f007b 100644\r\n--- a/internal/compiler-bridge/src/main/scala-2.12/xsbt/Compat.scala\r\n+++ b/internal/compiler-bridge/src/main/scala-2.12/xsbt/Compat.scala\r\n@@ -23,9 +23,7 @@ abstract class Compat {\r\n   /** If given tree contains object tree attachment calls func on tree from attachment. */\r\n   protected def processOriginalTreeAttachment(in: Tree)(func: Tree => Unit): Unit = {\r\n     import analyzer._\r\n-    in.attachments.get[OriginalTreeAttachment].foreach { a =>\r\n-      func(a.original)\r\n-    }\r\n+    OriginalTreeTraverser.Instance.traverseOriginal(in)(func)\r\n   }\r\n }\r\n object Compat {\r\n@@ -34,6 +32,34 @@ object Compat {\r\n \r\n   // IMain in 2.13 accepts ReplReporter\r\n   def replReporter(settings: Settings, writer: PrintWriter) = writer\r\n+\r\n+  private class OriginalTreeTraverser {\r\n+    def traverseOriginal(t: T)(f: T => Unit): Unit = ()\r\n+  }\r\n+  object OriginalTreeTraverser {\r\n+    private[this] val OriginalTreeClass = \r\n+      try Class.forName(\"scala.tools.nsc.typechecker.StdAttachments$OriginalTreeAttachment\") catch case _ = > null\r\n+    private[this] val OriginalTreeClassTag = OriginalTreeClass match {\r\n+      case null => null\r\n+      case cls => reflect.ClassTag(cls)\r\n+    }\r\n+    // Compiled into a final static field\r\n+    private[this] val OriginalTree_original = OriginalTreeClass match {\r\n+      case null => null\r\n+      case cls => Class.getMethod(\"original\")\r\n+    }\r\n+    private object Reflective extends OriginalTreeTraverser {\r\n+      def traverseOriginal(t: T)(f: T => Unit): Unit = {\r\n+        t.get(OriginalTreeClassTag) match {\r\n+          case Some(attachment) => f(OriginalTree_original.invoke(attachment))\r\n+          case None =>\r\n+        }\r\n+    }\r\n+    private object NoOp extends OriginalTreeTraverser {\r\n+      def traverseOriginal(t: T)(f: T => Unit): Unit = ()\r\n+    }\r\n+    val Instance = if (OriginalTree_original != null) Reflective else NoOp\r\n+  }\r\n }\r\n \r\n /** Defines compatibility utils for [[ZincCompiler]]. */\r\n\r\n```",
+        "createdAt" : "2021-07-12T06:16:31Z",
+        "updatedAt" : "2021-07-12T06:16:32Z",
+        "lastEditedBy" : "c7d4bff9-85e5-49d0-85e4-79743bd27861",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "216e7305-c7e9-408d-ad01-860b76ef6d6d",
+        "parentId" : "bfd8a2f5-a2f1-4f28-b331-9d539755339a",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "Yea. That makes sense.",
+        "createdAt" : "2021-07-12T06:31:29Z",
+        "updatedAt" : "2021-07-12T06:31:29Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d15228951f3de0ae07c0da5f34b84be5f0e7a4bb",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +26,30 @@    in.attachments.get[OriginalTreeAttachment].foreach { a =>\n      func(a.original)\n    }\n  }\n}"
+  }
+]

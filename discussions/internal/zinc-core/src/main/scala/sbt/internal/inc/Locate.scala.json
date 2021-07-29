@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "b68aaf39-7681-48cf-a078-3c90d1caf0fa",
+    "prId" : 926,
+    "prUrl" : "https://github.com/sbt/zinc/pull/926#pullrequestreview-495693585",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6e82e484-e520-4331-942e-c10638090219",
+        "parentId" : null,
+        "authorId" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "body" : "What?  Classes might be synthetic, but they still have classfiles, unless they're lambdas.\r\n\r\nThis looks like a hackaround without understanding the original issue and where the \"<\" isn't being encoded.",
+        "createdAt" : "2020-09-24T11:35:44Z",
+        "updatedAt" : "2020-09-24T11:35:44Z",
+        "lastEditedBy" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3725dc45-6e8c-4e9b-89a7-72031c08e793",
+        "parentId" : "6e82e484-e520-4331-942e-c10638090219",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "Note this is different from type name. _Before_ someone asks `Locate` to locate the corresponding `*.class` lookup they have to figure out the mapping between the type and the class, and it will not be obvious from just the type name. Here's an example:\r\n\r\n```scala\r\npackage example\r\n\r\nobject Foo extends App {\r\n  trait Greeting {\r\n    lazy val greeting: String = \"hello\"\r\n  }\r\n  def foo = {\r\n    object Hello extends Greeting\r\n    Hello\r\n  }\r\n  import scala.language.existentials\r\n  import scala.reflect.runtime.universe._\r\n  def typeName[A: TypeTag](a: A) = {\r\n    val t = typeOf[A]\r\n    t.typeSymbol.toString\r\n  }\r\n  println(\"class is: \" + foo.getClass)\r\n  println(\"type is: \" + typeName(foo))\r\n}\r\n```\r\n\r\nThis outputs:\r\n\r\n```\r\nclass is: class example.Foo$Hello$1$\r\ntype is: <refinement of example.Foo.Greeting>\r\n```\r\n\r\nIt's not possible for `Locate` here to deduce `example.Foo$Hello$1$.class` given `<refinement of example.Foo.Greeting>` or `<none>` or whatever.  Previously using `java.io.File` this type of query probably just returned `false`. I'm now doing it intentionally. Could we try to do the mapping between types and classes? Maybe but I am not sure if the added cost adds to the accuracy of https://github.com/sbt/zinc/issues/925 `isLibraryModified` in IncrementalCommon. Feel free to open a new issue if you think there something you want to look into.",
+        "createdAt" : "2020-09-24T12:51:01Z",
+        "updatedAt" : "2020-09-24T12:51:01Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e5d6131-25e7-4c1c-bf26-a8a715a425a4",
+        "parentId" : "6e82e484-e520-4331-942e-c10638090219",
+        "authorId" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "body" : "> It's not possible for `Locate` here to deduce `example.Foo$Hello$1$.class` given `<refinement of example.Foo.Greeting>` or `<none>` or whatever.\r\n\r\nYeah, and it shouldn't be `Locate`'s job to.  `<refinement of example.Foo.Greeting>` isn't a classname, so the root cause here isn't that Locate isn't checking for \"<\".\r\n\r\nDo you know what introduced this regression?  What's the connection with `java.io.File`?",
+        "createdAt" : "2020-09-24T14:26:49Z",
+        "updatedAt" : "2020-09-24T14:26:49Z",
+        "lastEditedBy" : "b1c80b04-b64d-48bd-95ec-f1ce9c0f0774",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e5e39831-2977-43ea-90ab-196d923004b5",
+        "parentId" : "6e82e484-e520-4331-942e-c10638090219",
+        "authorId" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "body" : "I switched the internals to use more NIO Path, and that surfaced this behavior/bug. `java.io.File` would allow the creation of `<none>.class` whereas NIO Path on Windows would blow up saying invalid path on Windows.",
+        "createdAt" : "2020-09-24T15:27:25Z",
+        "updatedAt" : "2020-09-24T15:27:26Z",
+        "lastEditedBy" : "25a8667a-469c-4af9-ae50-c45d69e5c60d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b8a1d64949ef86697df1e1cdfaaaff9998f62a19",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +62,66 @@    className =>\n      // See sbt/zinc#757, sbt/zinc#925. Class name containing \"<\" is usually a synthetic\n      // one that does not have a corresponding *.class file.\n      // Yet the process of creating the path would fail only on Windows.\n      if (className.contains(\"<\")) None"
+  }
+]
