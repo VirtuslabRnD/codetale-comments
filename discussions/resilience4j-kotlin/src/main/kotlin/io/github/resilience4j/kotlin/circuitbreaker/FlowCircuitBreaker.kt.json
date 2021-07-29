@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "9a6e97d6-caa7-4cf0-8500-94688e1c6dd7",
+    "prId" : 658,
+    "prUrl" : "https://github.com/resilience4j/resilience4j/pull/658#pullrequestreview-298187863",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "parentId" : null,
+        "authorId" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "body" : "I think you can use [`onStart`](https://kotlin.github.io/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.flow/on-start.html) here.\r\n```\r\nonStart {\r\n    if(circuitBreaker.tryAcquirePermission()) {\r\n        val start = System.nanoTime()\r\n        val source = this@circuitBreaker.onCompletion { e ->\r\n            when {\r\n                isCancellation(e, coroutineContext) -> circuitBreaker.releasePermission()\r\n                e == null -> circuitBreaker.onSuccess(System.nanoTime() - start, TimeUnit.NANOSECONDS)\r\n                else -> circuitBreaker.onError(System.nanoTime() - start, TimeUnit.NANOSECONDS, e)\r\n            }\r\n        }\r\n    } else {\r\n        throw CallNotPermittedException.createCallNotPermittedException(circuitBreaker)\r\n    }\r\n}\r\n```",
+        "createdAt" : "2019-10-04T13:54:14Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3e88a680-b51d-49e5-8db1-9e9537a5e805",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "body" : "The completion handler won’t be subscribed to since its being appended in the onstart. Val source goes used here. ",
+        "createdAt" : "2019-10-04T13:57:56Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a5b4a7b-c516-49af-860a-5464d9c8b7cb",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "body" : "Ah I see. Using `onCompletion` in there is a bit awkward to read I think. Perhaps just using try /catch /finally would be clearer? ",
+        "createdAt" : "2019-10-04T16:48:48Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c20ad8aa-4885-4619-9a45-c365204ef959",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "body" : "The `onCompletion` operator will return a new instance of flow not the original receiver. Running the tests against this implementation fails. To use `onStart` we would need to structure the method a little differently so that the completion operator is still chained.\r\n\r\n```kotlin\r\nfun <T> Flow<T>.circuitBreaker(circuitBreaker: CircuitBreaker): Flow<T> {\r\n    var start: Long = 0\r\n    return onStart {\r\n        start = System.nanoTime()\r\n        if (!circuitBreaker.tryAcquirePermission()) {\r\n            throw CallNotPermittedException.createCallNotPermittedException(circuitBreaker)\r\n        }\r\n    }.onCompletion { e ->\r\n        when {\r\n            isCancellation(e, coroutineContext) -> circuitBreaker.releasePermission()\r\n            e == null -> circuitBreaker.onSuccess(System.nanoTime() - start, TimeUnit.NANOSECONDS)\r\n            else -> circuitBreaker.onError(System.nanoTime() - start, TimeUnit.NANOSECONDS, e)\r\n        }\r\n    }\r\n}\r\n``` \r\n\r\nBut I think this implementation would go against the patterns defined in the stdlib for implementing [operators](https://github.com/Kotlin/kotlinx.coroutines/tree/master/kotlinx-coroutines-core/common/src/flow/operators). \r\n\r\nMost operators that transform their receiver do so by encapsulating their implementation in a flow builder ie.`flow{}`. With the example above we could potentially see issues with the setting of the start val and reading in the completion handler\r\n\r\n",
+        "createdAt" : "2019-10-04T16:55:19Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9746ce0e-0104-4e7c-a33f-a7a1728b0cf5",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "body" : "```\r\nfun <T> Flow<T>.circuitBreaker(circuitBreaker: CircuitBreaker): Flow<T> = flow {\r\n    if (circuitBreaker.tryAcquirePermission()) {\r\n        val start = System.nanoTime()\r\n        try {\r\n            emitAll(this@circuitBreaker)\r\n            \r\n            circuitBreaker.onSuccess(System.nanoTime() - start, TimeUnit.NANOSECONDS)\r\n        } catch (e: Throwable) {\r\n            if (isCancellation(e, coroutineContext)) {\r\n                circuitBreaker.releasePermission()\r\n            } else {\r\n                circuitBreaker.onError(System.nanoTime() - start, TimeUnit.NANOSECONDS, e)\r\n            }\r\n            throw e\r\n        }\r\n    } else {\r\n        throw CallNotPermittedException.createCallNotPermittedException(circuitBreaker)\r\n    }\r\n}\r\n```",
+        "createdAt" : "2019-10-05T22:18:44Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1d3f680a-a0df-4e0b-a8b7-cbada67bb00c",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "body" : "After reading the doc for `releasePermission`, I'm not sure it should be called based on cancellation, since you don't really know if cancellation happened before use or not.",
+        "createdAt" : "2019-10-05T22:20:53Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10684d1b-a961-4c07-8e62-de4a010d0faf",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "body" : "If the flow is already completed then the on complete block wont be invoked again. Meaning that if a cancellation were to occur after the circuit breaker was used, it would not affect completed flows.\r\n \r\nAs for using a try / catch block, the flow documentation explicitly advises against this. Since it violates [Exception Transparency](https://kotlin.github.io/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.flow/-flow/#exception-transparency)\r\n>Flow implementations never catch or handle exceptions that occur in downstream flows. From the implementation standpoint it means that calls to emit and emitAll shall never be wrapped into try { ... } catch { ... } blocks.",
+        "createdAt" : "2019-10-05T22:39:14Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4331cd26-2a13-4fc7-a9ef-a49af08707ea",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "body" : "I guess there's no nice way to write this then.",
+        "createdAt" : "2019-10-05T22:51:52Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "0207534d-9ef7-4ad6-b295-f5fb963776d2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "84ece8fc-608d-46be-910a-c6b9619947ca",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "I think a flow function should not catch/handle and swallow an exception. But in our case the exception is not swallowed, but rethrown. The function just has a side-effect when an exception occurs.\r\nOr am I wrong?",
+        "createdAt" : "2019-10-07T09:32:11Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "03860b05-c9c9-45ac-9ef4-85bdacfa3fbb",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "> After reading the doc for releasePermission, I'm not sure it should be called based on cancellation, since you don't really know if cancellation happened before use or not.\r\n\r\nYour implementation is fine. The method `circuitBreaker.releasePermission()` should be invoked, when the flow is cancelled, but neither `circuitBreaker.onSuccess` nor `circuitBreaker.onError` can be called. It doesn't matter if the cancellation happened before or after the publisher was called. Usually the cancellation happens before the flow is completed or has failed.",
+        "createdAt" : "2019-10-07T10:54:03Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "86fc3d10-d9e2-4742-af35-bc5abd1da978",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "body" : "The current implementation will only ever call one of `releasePermission`, `onSuccess`, or `onError`. There are also tests that verify proper permission handling by exercising both normal and exceptional coroutine cancellation.",
+        "createdAt" : "2019-10-07T14:07:15Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa5ce36b-b36d-4d50-9a30-fb6369698cc3",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "That's the correct behavior ",
+        "createdAt" : "2019-10-07T14:07:51Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "97870e83-edf7-490f-bc57-b2166a7cfc85",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "body" : "@RobWin Even if we catch and rethrow the exception in the flow body, that will only allow us to handle success / error cases. Using the onCompletion operator ensures that our event reporting is still invoked even in the case of cancellation. ",
+        "createdAt" : "2019-10-07T14:12:08Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "4e7b737f-ea2d-467f-8102-9b476a29569f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0ce86778-76f9-48ae-bb2f-2a0d4c84968c",
+        "parentId" : "07763123-24a8-44cb-bd1c-e37efd06b2a4",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "Your current implementation looks good to me",
+        "createdAt" : "2019-10-07T14:51:47Z",
+        "updatedAt" : "2019-10-09T14:45:47Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fbf60f17a13b2edc4d6b56774764a8d826d88de1",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +48,52 @@@UseExperimental(ExperimentalCoroutinesApi::class)\nfun <T> Flow<T>.circuitBreaker(circuitBreaker: CircuitBreaker): Flow<T> =\n    flow {\n        circuitBreaker.acquirePermission()\n"
+  }
+]

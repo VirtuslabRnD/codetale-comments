@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "27ae3613-a647-4e45-9d14-b0b77bbf44f4",
+    "prId" : 542,
+    "prUrl" : "https://github.com/resilience4j/resilience4j/pull/542#pullrequestreview-261086925",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fd71b749-42e4-461f-9341-7ae607f3690f",
+        "parentId" : null,
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "`releasePermission` should only be called, if downstream obtained a permission to connect to upstream, but upstream was cancelled afterwards.\r\nIf the upstream completes successfully, we should call circuitbreaker.onSuccess instead.\r\nIf upstream handles the error and therefore onComplete is invoked, we should assume that the call has completed successfully. We can't assume that the call was cancelled.\r\n\r\nPlease have a look at the RxJava2 `CompletableCircuitBreaker` or Reactor `CircuitBreakerSubscriber` implementation",
+        "createdAt" : "2019-07-11T20:01:48Z",
+        "updatedAt" : "2019-07-11T20:03:12Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "149deb3b-9c18-4996-a7c0-8b605d8021ef",
+        "parentId" : "fd71b749-42e4-461f-9341-7ae607f3690f",
+        "authorId" : "0f61341f-e58a-4526-a739-6cba0c8f872e",
+        "body" : "Ratpack's name `complete` is very misleading here. Effectively it's a cancellation of the Promise: https://ratpack.io/manual/current/api/ratpack/exec/Downstream.html#complete--\r\n\r\nBasically if the upstream execution had an error and swallowed it, then it calls `complete` on all the executions downstream of it to notify them that there's no work to do since it will not provide any data to them.",
+        "createdAt" : "2019-07-11T21:01:41Z",
+        "updatedAt" : "2019-07-11T21:01:41Z",
+        "lastEditedBy" : "0f61341f-e58a-4526-a739-6cba0c8f872e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea5fd507-d5f4-42e6-8d20-948c00393b1e",
+        "parentId" : "fd71b749-42e4-461f-9341-7ae607f3690f",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "Ok, then its fine ",
+        "createdAt" : "2019-07-12T06:55:30Z",
+        "updatedAt" : "2019-07-12T06:55:30Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0d1b6c8fb8cff9180a01f69ed150f5b56b2fda29",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +78,82 @@                    @Override\n                    public void complete() {\n                        circuitBreaker.releasePermission();\n                        down.complete();\n                    }"
+  },
+  {
+    "id" : "c417aa22-3249-41ac-934d-b091e1f7b330",
+    "prId" : 238,
+    "prUrl" : "https://github.com/resilience4j/resilience4j/pull/238#pullrequestreview-128656015",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "85c5e557-e307-4874-af13-a639f07c339c",
+        "parentId" : null,
+        "authorId" : "5694a384-3d06-45cc-bde3-e848d97a000a",
+        "body" : "in the else, shouldn't we have circuitBreaker.onSuccess(durationInNanos) call?",
+        "createdAt" : "2018-06-13T14:28:05Z",
+        "updatedAt" : "2018-06-13T14:28:06Z",
+        "lastEditedBy" : "5694a384-3d06-45cc-bde3-e848d97a000a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e4d4407-46ba-4756-ab40-0fa59406f7c7",
+        "parentId" : "85c5e557-e307-4874-af13-a639f07c339c",
+        "authorId" : "fb6931e8-399d-424b-9bb8-8ba62648103d",
+        "body" : "@amityatagiri @RobWin This appears to be the same behavior as we see in https://github.com/resilience4j/resilience4j/blob/41f1f7eff7ddc9a3dfafcc34f8510ad33b85a155/resilience4j-circuitbreaker/src/main/java/io/github/resilience4j/circuitbreaker/internal/CircuitBreakerStateMachine.java#L108.\r\n\r\nShould we make a change there as well to record it as a success if the predicate failed?",
+        "createdAt" : "2018-06-13T15:46:55Z",
+        "updatedAt" : "2018-06-13T15:51:19Z",
+        "lastEditedBy" : "fb6931e8-399d-424b-9bb8-8ba62648103d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1bf3613d-853b-48d6-b84f-483f355efdfc",
+        "parentId" : "85c5e557-e307-4874-af13-a639f07c339c",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "@amityatagiri @drmaas No, we should not make a change.\r\nWhen a decorated service throws a business exception (not a technical exception) and the exception should be ignored, we must not count the exception as an error or success. The CircuitBreaker emits a `CircuitBreakerOnIgnoredErrorEvent` when an exception is ignored.\r\n\r\nFrom my point of view the `CircuitBreakerTransformer` can invoke `circuitBreaker.onError` directly and must not do the check `circuitBreakerConfig.getRecordFailurePredicate().test(throwable)`, because this is implemented in `circuitBreaker.onError` anyway.",
+        "createdAt" : "2018-06-14T06:34:55Z",
+        "updatedAt" : "2018-06-14T06:37:58Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fc0e96929e5da24470727d99aa7bf149fbc2cdfb",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +90,94 @@                        if (recordFailurePredicate.test(throwable)) {\n                            circuitBreaker.onError(durationInNanos, throwable);\n                        }\n                        handleRecovery(down, throwable);\n                    }"
+  }
+]

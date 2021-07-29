@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "5822b7a4-d8b1-4a08-9ad8-b5be33d5e8eb",
+    "prId" : 621,
+    "prUrl" : "https://github.com/resilience4j/resilience4j/pull/621#pullrequestreview-290975746",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e30dcd5f-5411-46b3-8e4a-77520d7b3c17",
+        "parentId" : null,
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "Shouldn't we throw a `AcquirePermissionCancelledException` as well instead of setting the interrupt flag?",
+        "createdAt" : "2019-09-18T06:34:28Z",
+        "updatedAt" : "2019-09-23T19:43:20Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "99cc4d66-074b-46c1-9335-f221dacfead7",
+        "parentId" : "e30dcd5f-5411-46b3-8e4a-77520d7b3c17",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "It is not backward-compatible, but I think it's more a bugfix than an API change.",
+        "createdAt" : "2019-09-18T06:35:12Z",
+        "updatedAt" : "2019-09-23T19:43:20Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f710fb7-4b16-43e0-a693-34599b5e1033",
+        "parentId" : "e30dcd5f-5411-46b3-8e4a-77520d7b3c17",
+        "authorId" : "fa4c37db-2cfa-4971-a871-52021f5b5067",
+        "body" : "I'm not sure it is a good idea to throw exceptions from this \"low-level\" method.\r\nThe idea was that the user would be able to handle it in their code. And if the caller thread is a part of some thread pool, the standard library code will handle this flag properly and so on.",
+        "createdAt" : "2019-09-18T16:43:46Z",
+        "updatedAt" : "2019-09-23T19:43:20Z",
+        "lastEditedBy" : "fa4c37db-2cfa-4971-a871-52021f5b5067",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d7ee530-ee38-4fe7-bdc8-8c149340d977",
+        "parentId" : "e30dcd5f-5411-46b3-8e4a-77520d7b3c17",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "But what's the difference to RateLimiter.waitForPermission?",
+        "createdAt" : "2019-09-18T17:50:39Z",
+        "updatedAt" : "2019-09-23T19:43:20Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc8442de-3345-4c04-98f5-475f361fbf70",
+        "parentId" : "e30dcd5f-5411-46b3-8e4a-77520d7b3c17",
+        "authorId" : "fa4c37db-2cfa-4971-a871-52021f5b5067",
+        "body" : "My thoughts process behind it was the following:\r\nWe have \"low-level\"/\"raw\" methods in our components that are unopinionated and designed to be used from different programming paradigms blocking/non-blocking, threads/fibers/actors, different error handling mechanisms like exceptions/monads/error-values etc.\r\nFor `RateLimiter` such methods are the following: `acquirePermission`, `reservePermission`.\r\nFor `Bulkhead`: `tryAcquirePermission`, `acquirePermission`, `releasePermission`, `onComplete` and package-private `tryEnterBulkhead`.\r\n\r\nBut at the same time, our library provides an opinionated set of decorators and helpers that are \"high-level\". But users aren't forced to use these, and here we can throw exceptions or cancel Futures and so on.\r\nAnd `RateLimiter.waitForPermission` is the static helper methods created for blocking decorators and others.",
+        "createdAt" : "2019-09-18T19:19:24Z",
+        "updatedAt" : "2019-09-23T19:43:20Z",
+        "lastEditedBy" : "fa4c37db-2cfa-4971-a871-52021f5b5067",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5543219d-1fac-4858-9fb4-205268f978a7",
+        "parentId" : "e30dcd5f-5411-46b3-8e4a-77520d7b3c17",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "ok, I understand now why the interrupt flag must be set again.\r\nBut I think we should add  the following code snippet, in `SempahoreBulkhead.acquirePermission`  so that it is comparable to `RateLimiter.waitForPermission` or?\r\n\r\n```\r\nif (Thread.currentThread().isInterrupted()) {\r\n    throw new AcquirePermissionCancelledException(\"Thread was interrupted during permission wait\");\r\n}\r\n```",
+        "createdAt" : "2019-09-19T08:13:15Z",
+        "updatedAt" : "2019-09-23T19:43:20Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e58c04c-6667-409b-9449-a294207c97d2",
+        "parentId" : "e30dcd5f-5411-46b3-8e4a-77520d7b3c17",
+        "authorId" : "fa4c37db-2cfa-4971-a871-52021f5b5067",
+        "body" : "As for `acquirePermission` we also consider it a low-level method and actual exception throwing we offload to decorators. \r\nNotice that `SempahoreBulkhead.acquirePermission` is a method defined by each implementation of `Bulkhead` interface, and `RateLimiter.waitForPermission` is a static helper method defined in actual `RateLimiter` interface.",
+        "createdAt" : "2019-09-19T20:08:51Z",
+        "updatedAt" : "2019-09-23T19:43:20Z",
+        "lastEditedBy" : "fa4c37db-2cfa-4971-a871-52021f5b5067",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b818b7b9-a85d-4204-8831-19e062722d63",
+        "parentId" : "e30dcd5f-5411-46b3-8e4a-77520d7b3c17",
+        "authorId" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "body" : "`SempahoreBulkhead.tryAcquirePermission` is returning a boolean and is offloading exception throwing to the client. Comparable to `Semaphore.tryAcquire`.\r\n\r\nBut `SempahoreBulkhead.acquirePermission` is throwing a BulkheadFullException, if `tryAcquirePermission` is returning false. Means it is throwing a `BulkheadFullException`, even if the Thread was interrupted. I'm saying tat it should be an `AcquirePermissionCancelledException` instead of `BulkheadFullException`. ",
+        "createdAt" : "2019-09-20T06:32:21Z",
+        "updatedAt" : "2019-09-23T19:43:20Z",
+        "lastEditedBy" : "2fe61b32-2803-4ae2-b54d-0aefbbf60523",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "02567f79a76660901cb8e91cc45ad61680599f68",
+    "line" : 91,
+    "diffHunk" : "@@ -1,1 +229,233 @@                callPermitted = semaphore.tryAcquire(timeout, TimeUnit.MILLISECONDS);\n            } catch (InterruptedException ex) {\n                Thread.currentThread().interrupt();\n                callPermitted = false;\n            }"
+  },
+  {
+    "id" : "d25c563f-96b0-421c-b6cf-bfa9cce9ec0b",
+    "prId" : 184,
+    "prUrl" : "https://github.com/resilience4j/resilience4j/pull/184#pullrequestreview-82642858",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7bdc6935-f3df-457f-b2ed-1a83b80fbb88",
+        "parentId" : null,
+        "authorId" : "2e9625db-8103-494b-9a3b-8c715e762f19",
+        "body" : "How does a semaphore behave when releasing permits beyond originally configured cap ? Is this \"a hack\" ? :)",
+        "createdAt" : "2017-12-11T21:10:09Z",
+        "updatedAt" : "2017-12-11T23:01:24Z",
+        "lastEditedBy" : "2e9625db-8103-494b-9a3b-8c715e762f19",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a336793-6f0f-4be8-99a7-e90615d7d96f",
+        "parentId" : "7bdc6935-f3df-457f-b2ed-1a83b80fbb88",
+        "authorId" : "fa4c37db-2cfa-4971-a871-52021f5b5067",
+        "body" : "Original permits in Semaphore constructor it is only the `initial` number of permits available.\r\nThere is actually no limit for them. Moreever it can even be negative number initially) In this case specified number of releases must occur before anyone can get permission.",
+        "createdAt" : "2017-12-11T21:22:45Z",
+        "updatedAt" : "2017-12-11T23:01:24Z",
+        "lastEditedBy" : "fa4c37db-2cfa-4971-a871-52021f5b5067",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7ca5f8eb-1660-4bf2-a14c-2bce4e1c8e5e",
+        "parentId" : "7bdc6935-f3df-457f-b2ed-1a83b80fbb88",
+        "authorId" : "2e9625db-8103-494b-9a3b-8c715e762f19",
+        "body" : "Yeah, I remember now that it was up to the client to make the cap actually hold & be consistent.",
+        "createdAt" : "2017-12-11T21:24:04Z",
+        "updatedAt" : "2017-12-11T23:01:24Z",
+        "lastEditedBy" : "2e9625db-8103-494b-9a3b-8c715e762f19",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c048f8786c95d50c925da22cdfc27685cf70725a",
+    "line" : 51,
+    "diffHunk" : "@@ -1,1 +92,96 @@                semaphore.acquireUninterruptibly(-delta);\n            } else if (delta > 0) {\n                semaphore.release(delta);\n            }\n            config.set(newConfig);"
+  }
+]
