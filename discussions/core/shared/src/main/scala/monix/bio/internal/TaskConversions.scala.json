@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "085d4829-0488-4106-9a13-3fd5945e118c",
+    "prId" : 59,
+    "prUrl" : "https://github.com/monix/monix-bio/pull/59#pullrequestreview-338353535",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cb3fd2d0-8e61-472e-8b2d-d570528348a2",
+        "parentId" : null,
+        "authorId" : "560e1de5-7481-4bf3-b08d-f23a983f5966",
+        "body" : "I think we could also include `EvalTotal`",
+        "createdAt" : "2019-12-30T23:29:03Z",
+        "updatedAt" : "2020-01-04T13:28:33Z",
+        "lastEditedBy" : "560e1de5-7481-4bf3-b08d-f23a983f5966",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4f52c680-896c-4ec5-ad9d-d947b6c91892",
+        "parentId" : "cb3fd2d0-8e61-472e-8b2d-d570528348a2",
+        "authorId" : "ee74c363-32ce-4d86-9430-73c975e00983",
+        "body" : "Oh, you're totally right. I have added `case BIO.EvalTotal` to three conversion methods :thumbsup:",
+        "createdAt" : "2020-01-04T13:29:30Z",
+        "updatedAt" : "2020-01-04T13:29:31Z",
+        "lastEditedBy" : "ee74c363-32ce-4d86-9430-73c975e00983",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "32e543c434329d15c76facb334884f5f1c59a9bf",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +38,42 @@      case BIO.Error(e) => IO.raiseError(e)\n      case BIO.FatalError(e) => IO.raiseError(e)\n      case BIO.Eval(thunk) => IO(thunk())\n      case BIO.EvalTotal(thunk) => IO(thunk())\n      case _ =>"
+  },
+  {
+    "id" : "60c6d5e4-139a-4817-8ad0-abfa9614f2dd",
+    "prId" : 54,
+    "prUrl" : "https://github.com/monix/monix-bio/pull/54#pullrequestreview-336885392",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "55c43dbc-4a34-431e-97c1-758284c9fce6",
+        "parentId" : null,
+        "authorId" : "560e1de5-7481-4bf3-b08d-f23a983f5966",
+        "body" : "I wonder if it makes sense to do \r\n\r\n```scala\r\nif (!cb.tryOnFatalError(e)) {\r\n  ctx.scheduler.reportFailure(e)\r\n}\r\n```\r\n\r\nBut I'll have to find out why it's like this for Monix Task",
+        "createdAt" : "2019-12-18T16:37:57Z",
+        "updatedAt" : "2019-12-26T23:41:28Z",
+        "lastEditedBy" : "560e1de5-7481-4bf3-b08d-f23a983f5966",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "92867587-dcdd-4d8a-8b93-69be3220828e",
+        "parentId" : "55c43dbc-4a34-431e-97c1-758284c9fce6",
+        "authorId" : "ee74c363-32ce-4d86-9430-73c975e00983",
+        "body" : "@Avasil We can't use `.tryOnFatalError` here, because we're operating on a `Callback` and not `BiCallback` ;)",
+        "createdAt" : "2019-12-26T22:49:02Z",
+        "updatedAt" : "2019-12-26T23:41:28Z",
+        "lastEditedBy" : "ee74c363-32ce-4d86-9430-73c975e00983",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ec798497-fc25-42e4-bed7-0ee9f065737f",
+        "parentId" : "55c43dbc-4a34-431e-97c1-758284c9fce6",
+        "authorId" : "560e1de5-7481-4bf3-b08d-f23a983f5966",
+        "body" : "It is passed to `BIO.Async` so it could be `BiCallback`, right?\r\nbut I'm not sure if it should so I suppose we can leave it as is",
+        "createdAt" : "2019-12-27T10:54:31Z",
+        "updatedAt" : "2019-12-27T10:54:32Z",
+        "lastEditedBy" : "560e1de5-7481-4bf3-b08d-f23a983f5966",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b7e43f10-f2f2-4c62-854b-e757bcc817cd",
+        "parentId" : "55c43dbc-4a34-431e-97c1-758284c9fce6",
+        "authorId" : "ee74c363-32ce-4d86-9430-73c975e00983",
+        "body" : "@Avasil After some investigation: you're right that we could have used `BiCallback` here, but I don't think we have to call neither`cb.tryOnError`, nor `cb.tryOnFatalError`  in that `catch` clause.\r\n\r\nThe reason is that this `catch` clause exists only for the exceptions thrown during the initialization of the run-loop (i.e. that `io.unsafeRunSync()` call), and throwing an exception in such cases would be a violation of the `Effect#runAsync` contract (but please double-check me :D). \r\n\r\nThat's why such illegal implementations of an `Effect` aren't converted into a `Task`, and they are merely reported. This is verified by [this](https://github.com/monix/monix/blob/991497509f39f920d34ae52386a1915841b83d8c/monix-eval/shared/src/test/scala/monix/eval/TaskConversionsSuite.scala#L153) test in Monix and by my slightly refactored [equivalent](https://github.com/pjurczenko/monix-bio/blob/99245aaec6f206726feeec15ee0af9807392e990/core/shared/src/test/scala/monix/bio/TaskConversionsSuite.scala#L155) in Monix-Bio.\r\n\r\nLet me know if that makes sense ;)",
+        "createdAt" : "2019-12-27T22:34:00Z",
+        "updatedAt" : "2019-12-27T22:37:13Z",
+        "lastEditedBy" : "ee74c363-32ce-4d86-9430-73c975e00983",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c744696-4da1-4640-acbf-d14be3e3cd11",
+        "parentId" : "55c43dbc-4a34-431e-97c1-758284c9fce6",
+        "authorId" : "560e1de5-7481-4bf3-b08d-f23a983f5966",
+        "body" : "Yeah, it makes sense because it should be `UIO` if we had a machinery to do that\r\n\r\nI think the test from Monix was before we implemented `tryOnXXX` in callbacks so that's why I was wondering",
+        "createdAt" : "2019-12-27T22:55:31Z",
+        "updatedAt" : "2019-12-27T22:55:31Z",
+        "lastEditedBy" : "560e1de5-7481-4bf3-b08d-f23a983f5966",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "99245aaec6f206726feeec15ee0af9807392e990",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +75,79 @@        io.unsafeRunSync()\n      } catch {\n        case NonFatal(e) => ctx.scheduler.reportFailure(e)\n      }\n    }"
+  }
+]
