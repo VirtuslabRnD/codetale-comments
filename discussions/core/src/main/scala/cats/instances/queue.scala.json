@@ -1,0 +1,189 @@
+[
+  {
+    "id" : "4a4b6f1e-da58-4dd1-8261-a70132bf856b",
+    "prId" : 3292,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3292#pullrequestreview-363100774",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "56823523-0159-4a90-82bf-121471916be6",
+        "parentId" : null,
+        "authorId" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "body" : "We can have an implementation without using `Eval`, might even perform a little better (for a bigger queue); without all those extra `Eval` wrappers.\r\n\r\n`fa.foldRight(G.pure(Queue.empty[B]))( (x, xse) => G.map2(f(x), xse)((i, o) => i.fold(o)(_ +: o)))`",
+        "createdAt" : "2020-02-11T11:57:24Z",
+        "updatedAt" : "2020-03-11T15:10:20Z",
+        "lastEditedBy" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "75a651a7-fa9e-4b24-9b31-f551a36397df",
+        "parentId" : "56823523-0159-4a90-82bf-121471916be6",
+        "authorId" : "6943dbfe-856b-4f1b-bd04-dca0091e8291",
+        "body" : "That won't short-circuit, though, right?",
+        "createdAt" : "2020-02-19T08:48:09Z",
+        "updatedAt" : "2020-03-11T15:10:20Z",
+        "lastEditedBy" : "6943dbfe-856b-4f1b-bd04-dca0091e8291",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "171660a1-b4e2-40d9-887a-56d2fbb091f6",
+        "parentId" : "56823523-0159-4a90-82bf-121471916be6",
+        "authorId" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "body" : "@travisbrown yes agreed it won't, but for the same reason the present implementation wouldn't. \r\n\r\nIf by short circuit you mean `f` wouldn't have to run on the remaining Queue elements (given we are folding from the right). \r\n\r\nThis is my understanding and derived reasoning-\r\n`map2Eval` short-circuits: given the underlying `G` structure allows it, then the `Eval` argument skips running. \r\n\r\nIn this case however, the Eval description is computed by running `f` on each element of the `Queue` already. The first argument to `map2Eval` is not `Lazy`. In every situation `f` will run on each element.\r\n\r\nPlease correct me If I understood this wrongly.\r\n",
+        "createdAt" : "2020-02-23T14:29:42Z",
+        "updatedAt" : "2020-03-11T15:10:20Z",
+        "lastEditedBy" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d10752bf-be23-4fbc-ab6e-400e832c0245",
+        "parentId" : "56823523-0159-4a90-82bf-121471916be6",
+        "authorId" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "body" : "I see it now, we are using the wrong `foldRight` here, queue.foldRight ends up with a while loop (standard library). This should have been-\r\n\r\n`\r\n        traverse.foldRight[A, G[Queue[B]]](fa, Always(G.pure(Queue.empty))) { (a, lglb) =>\r\n          G.map2Eval(f(a), lglb)((i, o) => i.fold(o)(_ +: o))\r\n        }\r\n        .value`",
+        "createdAt" : "2020-02-23T14:39:22Z",
+        "updatedAt" : "2020-03-11T15:10:20Z",
+        "lastEditedBy" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e1f33e5a-04ac-4857-9957-f69c71ed01bf",
+        "parentId" : "56823523-0159-4a90-82bf-121471916be6",
+        "authorId" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "body" : "I see the same problem with other `traverseFilter` implementations, should I open a new issue?",
+        "createdAt" : "2020-02-23T14:54:38Z",
+        "updatedAt" : "2020-03-11T15:10:20Z",
+        "lastEditedBy" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8335f18a2fda9cabf01e370a61c0ef2defe7b131",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +173,177 @@          (x, xse) => G.map2Eval(f(x), xse)((i, o) => i.fold(o)(_ +: o))\n        )\n        .value\n\n    override def filterA[G[_], A](fa: Queue[A])(f: (A) => G[Boolean])(implicit G: Applicative[G]): G[Queue[A]] ="
+  },
+  {
+    "id" : "218ff7e7-c136-4805-90d4-7156bb699dd3",
+    "prId" : 3103,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3103#pullrequestreview-300487742",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "33bada77-a7d6-4005-a9ab-360dec52f9c0",
+        "parentId" : null,
+        "authorId" : "ca087524-e0c4-4688-b4df-2e512de282c9",
+        "body" : "I don't know why , but `implicit val catsStdTraverseFilterForQueue` breaks binary compatibility.\r\n\r\n```\r\n[error]  * abstract synthetic method cats$instances$QueueInstances$_setter_$catsStdTraverseFilterForQueue_=(cats.TraverseFilter)Unit in interface cats.instances.QueueInstances is present only in current version\r\n[error]    filter with: ProblemFilters.exclude[ReversedMissingMethodProblem](\"cats.instances.QueueInstances.cats$instances$QueueInstances$_setter_$catsStdTraverseFilterForQueue_=\")\r\n[error]  * abstract method catsStdTraverseFilterForQueue()cats.TraverseFilter in interface cats.instances.QueueInstances is present only in current version\r\n[error]    filter with: ProblemFilters.exclude[ReversedMissingMethodProblem](\"cats.instances.QueueInstances.catsStdTraverseFilterForQueue\")\r\n```",
+        "createdAt" : "2019-10-11T06:29:51Z",
+        "updatedAt" : "2019-10-11T06:29:51Z",
+        "lastEditedBy" : "ca087524-e0c4-4688-b4df-2e512de282c9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f546484ce7858c305cd0ed540be4b09dfb78eb5c",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +154,158 @@    }\n\n  implicit def catsStdTraverseFilterForQueue: TraverseFilter[Queue] = QueueInstances.catsStdTraverseFilterForQueue\n}\n"
+  },
+  {
+    "id" : "01c0a23d-f542-4701-bc9b-b237523727d2",
+    "prId" : 3103,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3103#pullrequestreview-311672648",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d3803311-4ccc-41e9-bce8-98394cdcfb32",
+        "parentId" : null,
+        "authorId" : "ca087524-e0c4-4688-b4df-2e512de282c9",
+        "body" : "This is just an instance cache.",
+        "createdAt" : "2019-10-11T06:31:24Z",
+        "updatedAt" : "2019-10-11T06:31:24Z",
+        "lastEditedBy" : "ca087524-e0c4-4688-b4df-2e512de282c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56969f73-2fba-4ebd-8eae-654b1348adc6",
+        "parentId" : "d3803311-4ccc-41e9-bce8-98394cdcfb32",
+        "authorId" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "body" : "I don't see this pattern as problematic but it's not very consistent with rest of the code base, can we just make the one in the trait a `val` instead of creating a new object?  ",
+        "createdAt" : "2019-10-19T00:14:03Z",
+        "updatedAt" : "2019-10-19T00:14:33Z",
+        "lastEditedBy" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9eed324b-9549-42ec-a746-36157d32428c",
+        "parentId" : "d3803311-4ccc-41e9-bce8-98394cdcfb32",
+        "authorId" : "ca087524-e0c4-4688-b4df-2e512de282c9",
+        "body" : "I get an error that \r\n```\r\n[error]  * abstract synthetic method cats$instances$QueueInstances$_setter_$cats$instances$QueueInstances$$_catsStdTraverseFilterForQueue_=(cats.TraverseFilter)Unit in interface cats.instances.QueueInstances is present only in current version\r\n[error]    filter with: ProblemFilters.exclude[ReversedMissingMethodProblem](\"cats.instances.QueueInstances.cats$instances$QueueInstances$_setter_$cats$instances$QueueInstances$$_catsStdTraverseFilterForQueue_=\")\r\n[error]  * abstract synthetic method cats$instances$QueueInstances$$_catsStdTraverseFilterForQueue()cats.TraverseFilter in interface cats.instances.QueueInstances is present only in current version\r\n```",
+        "createdAt" : "2019-10-21T07:15:08Z",
+        "updatedAt" : "2019-10-21T07:15:09Z",
+        "lastEditedBy" : "ca087524-e0c4-4688-b4df-2e512de282c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "11393901-f66a-4b79-b1eb-ba4a3ff83288",
+        "parentId" : "d3803311-4ccc-41e9-bce8-98394cdcfb32",
+        "authorId" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "body" : "how did you run the check? did you get that error from `sbt validateBC`?",
+        "createdAt" : "2019-10-21T14:13:15Z",
+        "updatedAt" : "2019-10-21T14:13:16Z",
+        "lastEditedBy" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "18e95e35-e46a-45b9-8929-71f05b481057",
+        "parentId" : "d3803311-4ccc-41e9-bce8-98394cdcfb32",
+        "authorId" : "ca087524-e0c4-4688-b4df-2e512de282c9",
+        "body" : "Yes, I ran `sbt validateBC`.",
+        "createdAt" : "2019-10-21T16:16:56Z",
+        "updatedAt" : "2019-10-21T16:16:56Z",
+        "lastEditedBy" : "ca087524-e0c4-4688-b4df-2e512de282c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a44d3e8-a832-4404-930d-0ea3d473a82b",
+        "parentId" : "d3803311-4ccc-41e9-bce8-98394cdcfb32",
+        "authorId" : "6943dbfe-856b-4f1b-bd04-dca0091e8291",
+        "body" : "Adding a `val` to a trait will break bincompat on all Scala versions so far because of the synthetic setter that's necessary because of the way trait initialization works. The workaround here looks reasonable to me.",
+        "createdAt" : "2019-11-05T11:37:45Z",
+        "updatedAt" : "2019-11-05T11:37:46Z",
+        "lastEditedBy" : "6943dbfe-856b-4f1b-bd04-dca0091e8291",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f546484ce7858c305cd0ed540be4b09dfb78eb5c",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +158,162 @@\nprivate object QueueInstances {\n  private val catsStdTraverseFilterForQueue: TraverseFilter[Queue] = new TraverseFilter[Queue] {\n    val traverse: Traverse[Queue] = cats.instances.queue.catsStdInstancesForQueue\n"
+  },
+  {
+    "id" : "ab1c1e3c-cf0d-462f-976f-6e119ca7723f",
+    "prId" : 1878,
+    "prUrl" : "https://github.com/typelevel/cats/pull/1878#pullrequestreview-59904414",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1a8cfd29-ef4e-432b-8ffc-2757c6a73e4a",
+        "parentId" : null,
+        "authorId" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "body" : "A bunch of these overrides are not tested. I am not sure how big a deal it is since they don't seem to be tested for the `list` instance either. ",
+        "createdAt" : "2017-08-31T15:49:28Z",
+        "updatedAt" : "2017-09-01T18:48:15Z",
+        "lastEditedBy" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "adcb06be7e8dd252d3e4eefd725a25b83d28b64e",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +10,14 @@trait QueueInstances extends cats.kernel.instances.QueueInstances {\n\n  implicit val catsStdInstancesForQueue: Traverse[Queue] with Alternative[Queue] with Monad[Queue] with CoflatMap[Queue] =\n    new Traverse[Queue] with Alternative[Queue] with Monad[Queue] with CoflatMap[Queue] {\n      def empty[A]: Queue[A] = Queue.empty"
+  }
+]

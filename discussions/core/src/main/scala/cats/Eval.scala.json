@@ -1,0 +1,332 @@
+[
+  {
+    "id" : "6a5dfdae-9371-45e3-976c-6177a34cf56d",
+    "prId" : 3519,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3519#pullrequestreview-446909856",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "75fdca4f-4fa2-4eef-99cb-0bb34dad85fc",
+        "parentId" : null,
+        "authorId" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "body" : "here we have 1 allocation more than we did before: `Ident` where as before we did `Nil`. But since this is one allocation per call to `.value`, I think this is well worth the cost considering how many allocations we already make (1 per depth at least to build up the user level stack).",
+        "createdAt" : "2020-07-12T21:08:20Z",
+        "updatedAt" : "2020-07-16T01:31:28Z",
+        "lastEditedBy" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "12eebe63a67bfe04b0848d8898303af2c2f0e396",
+    "line" : 165,
+    "diffHunk" : "@@ -1,1 +361,365 @@      }\n\n    loop(e, Ident(implicitly[A <:< A]))\n  }\n}"
+  },
+  {
+    "id" : "f89a0b8e-cca4-4642-bfc7-2e280eb7ad76",
+    "prId" : 3519,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3519#pullrequestreview-446921628",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "64c00e44-7e14-4067-a648-37f1e08158e2",
+        "parentId" : null,
+        "authorId" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "body" : "this branch needs to be added. Note I added a test to the PR the exercises this. Without this change we blow the stack.",
+        "createdAt" : "2020-07-13T00:00:47Z",
+        "updatedAt" : "2020-07-16T01:31:28Z",
+        "lastEditedBy" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "12eebe63a67bfe04b0848d8898303af2c2f0e396",
+    "line" : 110,
+    "diffHunk" : "@@ -1,1 +319,323 @@              val nextFs = Many(c.run, fs)\n              loop(cc.start(), Many(cc.run, nextFs))\n            case call: Defer[c.Start] =>\n              // though the flatMap method handles defer(x).flatMap(f)\n              // by removing the Defer, we can nest defers,"
+  },
+  {
+    "id" : "83903f28-1271-41f2-ae5a-fc30546f7b24",
+    "prId" : 3519,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3519#pullrequestreview-446926324",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5f07cc91-d962-4e0d-9207-e70aed24c5e7",
+        "parentId" : null,
+        "authorId" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "body" : "with this, we can use `x: Leaf[A]` below to make it clear calling `.value` is safe. This helps the reader review the `def evaluate` method and see that it is safe (we only call .value on Leafs).\r\n\r\nit doesn't impact the performance (hopefully scala removes the type check when it can statically prove that it would always pass, and since this was in the last position of the match that is the case currently).",
+        "createdAt" : "2020-07-13T00:41:24Z",
+        "updatedAt" : "2020-07-16T01:31:28Z",
+        "lastEditedBy" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "12eebe63a67bfe04b0848d8898303af2c2f0e396",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +184,188 @@   * any flatMaps or defers\n   */\n  sealed abstract class Leaf[A] extends Eval[A]\n\n  /**"
+  },
+  {
+    "id" : "e5a8e4be-3a8d-4758-b156-0549921ce087",
+    "prId" : 3519,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3519#pullrequestreview-449231411",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9b1f8ec2-2f56-4a59-9fcc-e14ebb11df44",
+        "parentId" : null,
+        "authorId" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "body" : "I'm not entirely sure why we don't do:\r\n```scala\r\ncase c: FlatMap[A1] =>\r\n  loop(c.start(), Many(c.run, fs))\r\n```\r\nand let the rest of the code run.\r\n\r\nThat would be correct, but I assume @non inlined this because for a FlatMap we know that we have at least one item on the stack and if we do my suggestion above, we allocate a `Many` just to pattern match on it in many cases and discard it. So, by nesting the pattern match on the `c.start()` we often can often sometimes avoid the allocation and pattern match.\r\n\r\nIf @non has time to chime in, it would be appreciated, I could update a comment to make it clearer.",
+        "createdAt" : "2020-07-15T18:39:36Z",
+        "updatedAt" : "2020-07-16T01:31:28Z",
+        "lastEditedBy" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "12eebe63a67bfe04b0848d8898303af2c2f0e396",
+    "line" : 107,
+    "diffHunk" : "@@ -1,1 +316,320 @@        case c: FlatMap[A1] =>\n          c.start() match {\n            case cc: FlatMap[c.Start] =>\n              val nextFs = Many(c.run, fs)\n              loop(cc.start(), Many(cc.run, nextFs))"
+  },
+  {
+    "id" : "1ca79283-78d1-4ebe-95aa-fcc1e0d9c6a6",
+    "prId" : 3041,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3041#pullrequestreview-285235686",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "94f516c0-f77b-4500-9e74-4ffa27d17ee8",
+        "parentId" : null,
+        "authorId" : "6943dbfe-856b-4f1b-bd04-dca0091e8291",
+        "body" : "This is unrelated?",
+        "createdAt" : "2019-09-08T20:27:51Z",
+        "updatedAt" : "2019-11-05T17:43:47Z",
+        "lastEditedBy" : "6943dbfe-856b-4f1b-bd04-dca0091e8291",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d6da8621-846b-4327-a5d5-38cc0477b37b",
+        "parentId" : "94f516c0-f77b-4500-9e74-4ffa27d17ee8",
+        "authorId" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "body" : "yes. I added a comment, I just noticed it was missing while looking at Eval.",
+        "createdAt" : "2019-09-08T21:18:25Z",
+        "updatedAt" : "2019-11-05T17:43:47Z",
+        "lastEditedBy" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e24a6026cbf9393d6b511b994b7adc98c1d9fb24",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +379,383 @@      def extract[A](la: Eval[A]): A = la.value\n      def coflatMap[A, B](fa: Eval[A])(f: Eval[A] => B): Eval[B] = Later(f(fa))\n      override def unit: Eval[Unit] = Eval.Unit\n    }\n"
+  },
+  {
+    "id" : "2cb616a8-a139-48ed-914e-de512e10bbfa",
+    "prId" : 3041,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3041#pullrequestreview-285233796",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "679abe52-aca1-486a-a658-bdf244b73aee",
+        "parentId" : null,
+        "authorId" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "body" : "unrelated, but I noticed we could add this and avoid allocations for some folks that use `Applicative[F].unit` with `Eval`.",
+        "createdAt" : "2019-09-08T20:28:40Z",
+        "updatedAt" : "2019-11-05T17:43:47Z",
+        "lastEditedBy" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e24a6026cbf9393d6b511b994b7adc98c1d9fb24",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +379,383 @@      def extract[A](la: Eval[A]): A = la.value\n      def coflatMap[A, B](fa: Eval[A])(f: Eval[A] => B): Eval[B] = Later(f(fa))\n      override def unit: Eval[Unit] = Eval.Unit\n    }\n"
+  },
+  {
+    "id" : "772fcf16-4763-4bfb-89b5-01b9a58c3b0b",
+    "prId" : 1888,
+    "prUrl" : "https://github.com/typelevel/cats/pull/1888#pullrequestreview-63806722",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2e2bfee-ed60-4e69-95f0-08def6208e92",
+        "parentId" : null,
+        "authorId" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "body" : "totally nitpick: `call` can be renamed to `defer` and the `compute` below. No need to address in this PR, I can do in a separate one. ",
+        "createdAt" : "2017-09-19T21:18:27Z",
+        "updatedAt" : "2017-09-19T21:18:27Z",
+        "lastEditedBy" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9572b2d9eaf96025a0bdcd4fbaf3d1c1e8ecbd3",
+    "line" : 85,
+    "diffHunk" : "@@ -1,1 +269,273 @@  @tailrec private def advance[A](fa: Eval[A]): Eval[A] =\n    fa match {\n      case call: Eval.Defer[A] =>\n        advance(call.thunk())\n      case compute: Eval.FlatMap[A] =>"
+  },
+  {
+    "id" : "884f34ca-6e42-4fea-964f-b4585b8c3b7d",
+    "prId" : 1888,
+    "prUrl" : "https://github.com/typelevel/cats/pull/1888#pullrequestreview-63808862",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "efa18872-bc8a-4c4b-9477-2749ff948ffa",
+        "parentId" : null,
+        "authorId" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "body" : "This line isn't tested. I am curious how come the random stack safety stress test didn't hit it, is it expected? ",
+        "createdAt" : "2017-09-19T21:26:42Z",
+        "updatedAt" : "2017-09-19T21:26:42Z",
+        "lastEditedBy" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9572b2d9eaf96025a0bdcd4fbaf3d1c1e8ecbd3",
+    "line" : 206,
+    "diffHunk" : "@@ -1,1 +357,361 @@            case Some(a) =>\n              fs match {\n                case f :: fs => loop(f(a), fs)\n                case Nil => a\n              }"
+  },
+  {
+    "id" : "c18e4e00-0f8d-48b2-b485-08e8a938b2b7",
+    "prId" : 1475,
+    "prUrl" : "https://github.com/typelevel/cats/pull/1475#pullrequestreview-14211886",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dc39b7c0-b214-4f0d-9fab-a9d258539f0c",
+        "parentId" : null,
+        "authorId" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "body" : "should this be combined with the monad/comonad above?\r\n\r\nI don't *think* we can ever implement `Traverse[Eval]` (I'd love to be wrong about that), so it didn't have the same ambiguous implicit concern that `Id` has (since `Traverse[Id]` also extends `Foldable[Id]`, we don't want `Reducible[Id]` we have to either use priority, or unify them in the same instance).",
+        "createdAt" : "2016-11-25T20:14:48Z",
+        "updatedAt" : "2016-12-22T07:14:50Z",
+        "lastEditedBy" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bf0271ec-df4e-4b87-84ad-eb89fc8be051",
+        "parentId" : "dc39b7c0-b214-4f0d-9fab-a9d258539f0c",
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "Couldn't a fairly trivial `Traverse[Eval]` be implemented where `traverse` looks something like this?\r\n\r\n```scala\r\ndef traverse[G[_]: Applicative, A, B](fa: Eval[A])(f: A => G[B]): G[Eval[B]] =\r\n  f(fa.value).map(Eval.now)\r\n```\r\n\r\nIt's a bit wonky, but the `Comonad`, `Reducible`, etc instances are already based on eager calls to `.value`, so I don't know if it's any different.",
+        "createdAt" : "2016-12-22T18:33:00Z",
+        "updatedAt" : "2016-12-22T18:33:00Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c171c6e9-e657-42dc-bb93-fe16c5d2ad64",
+        "parentId" : "dc39b7c0-b214-4f0d-9fab-a9d258539f0c",
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "It occurs to me that such a `Traverse` instance can be defined for any comonad, so it it's probably a known thing with some known properties to people who know more than I do :)",
+        "createdAt" : "2016-12-22T18:34:37Z",
+        "updatedAt" : "2016-12-22T18:34:37Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a67c55c6-6e51-49de-af1c-2304dcd64d27",
+        "parentId" : "dc39b7c0-b214-4f0d-9fab-a9d258539f0c",
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "It also occurs to me that a big difference between this `Traverse` instance and the instances that you've added is that yours shouldn't ever lead to stack overflows while this one is probably pretty likely to bite people with them.",
+        "createdAt" : "2016-12-22T18:38:55Z",
+        "updatedAt" : "2016-12-22T18:38:55Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b9f610a1-4579-4ddf-8628-57b09cf19801",
+        "parentId" : "dc39b7c0-b214-4f0d-9fab-a9d258539f0c",
+        "authorId" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "body" : "none of our instances call `.value` unless the return type requires it. It seems to me we should keep that since otherwise you lose the stack safety if Eval, so that is what I really meant. If you are willing to call `.value`, `Eval` is isomorphic to `Id` I think, but the best practice of `Eval` (though perhaps not required, but the real rule might somewhat complex and difficult to verify) is to only call `.value` once at the end.",
+        "createdAt" : "2016-12-22T18:41:25Z",
+        "updatedAt" : "2016-12-22T18:41:25Z",
+        "lastEditedBy" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea5d84b4-3fad-42ee-a5ec-8c46cc9990a2",
+        "parentId" : "dc39b7c0-b214-4f0d-9fab-a9d258539f0c",
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "I think that limiting ourselves to instances that (if they need to call `.value` at all) only call `.value` once at the end is probably a good general rule. 👍",
+        "createdAt" : "2016-12-22T18:52:00Z",
+        "updatedAt" : "2016-12-22T18:52:00Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a241ec9f-67eb-4153-b3e2-aa4504405407",
+        "parentId" : "dc39b7c0-b214-4f0d-9fab-a9d258539f0c",
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "Hmm sorry for all of the thinking out loud here, but I just realized that the `traverse` implementation above only calls `.value` once, just as the `Reducible` instances do. Is there a reason that we would consider this to be different? Maybe because the `Eval` in the return type suggests that we aren't calling `.value`?",
+        "createdAt" : "2016-12-22T19:01:33Z",
+        "updatedAt" : "2016-12-22T19:01:33Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "544bfc15f24b4dfea2fc5da763f69acc0124eb00",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +311,315 @@    }\n\n  implicit val catsReducibleForEval: Reducible[Eval] =\n    new Reducible[Eval] {\n      def foldLeft[A, B](fa: Eval[A], b: B)(f: (B, A) => B): B ="
+  },
+  {
+    "id" : "ae629fa1-bfb2-470a-aef4-d0046b3eb0ee",
+    "prId" : 937,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a6fdccb1-ab9e-4b3a-ad32-81d34d35d6ef",
+        "parentId" : null,
+        "authorId" : "4aafd631-794d-4704-aeda-a6c56ce667d1",
+        "body" : "Why is this needed?\n",
+        "createdAt" : "2016-03-18T19:44:12Z",
+        "updatedAt" : "2016-03-18T19:44:12Z",
+        "lastEditedBy" : "4aafd631-794d-4704-aeda-a6c56ce667d1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ccaf30b4-1abf-4ca5-876e-0a5a375357de",
+        "parentId" : "a6fdccb1-ab9e-4b3a-ad32-81d34d35d6ef",
+        "authorId" : "7e3d5e72-6b63-4e9d-8d2b-da0bc51b173c",
+        "body" : "@adelbertc it isn't needed, but the definition of that function in `cats.syntax.GroupOps` is:\n\n``` scala\ndef inverse(): A = macro Ops.unop[A]\n```\n\nNot sure why that's the definition, but when you've got a parens pair like that in your `def`, then you have tools like IntelliJ IDEA complaining about you not using the parens at the call site. Which I personally find cool because those parens usually indicate side-effects. Maybe we should change the `def inverse()` definition?\n",
+        "createdAt" : "2016-03-18T20:19:54Z",
+        "updatedAt" : "2016-03-18T20:20:15Z",
+        "lastEditedBy" : "7e3d5e72-6b63-4e9d-8d2b-da0bc51b173c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "02ec0e8b-d5f4-4130-9e33-e6e8bd950c40",
+        "parentId" : "a6fdccb1-ab9e-4b3a-ad32-81d34d35d6ef",
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "I tried removing the parens from `def inverse()` and got this:\n\n```\n[error] /Users/cody/code/cats/core/src/main/scala/cats/syntax/group.scala:15: macro implementation has incompatible shape:\n[error]  required: (c: scala.reflect.macros.whitebox.Context): c.Expr[A]\n[error]  or      : (c: scala.reflect.macros.whitebox.Context): c.Tree\n[error]  found   : (c: reflect.macros.Context)(): c.Expr[R]\n[error] number of parameter sections differ\n[error]   def inverse: A = macro Ops.unop[A]\n```\n\nPaging @non, our macro optimization wizard.\n",
+        "createdAt" : "2016-03-19T13:19:05Z",
+        "updatedAt" : "2016-03-19T13:19:05Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9909bbc4-b450-42c1-8c79-2edeece32701",
+        "parentId" : "a6fdccb1-ab9e-4b3a-ad32-81d34d35d6ef",
+        "authorId" : "ca741d6d-c629-4558-85cb-02e76238d728",
+        "body" : "You would also need to remove the parens from the corresponding macro defn.\n",
+        "createdAt" : "2016-03-20T13:38:30Z",
+        "updatedAt" : "2016-03-20T13:38:30Z",
+        "lastEditedBy" : "ca741d6d-c629-4558-85cb-02e76238d728",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2a001aff3596300c496e0e52cc34caea0fd4785f",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +351,355 @@  implicit def algebra: Group[A]\n  def inverse(lx: Eval[A]): Eval[A] =\n    lx.map(_.inverse())\n  override def remove(lx: Eval[A], ly: Eval[A]): Eval[A] =\n    for { x <- lx; y <- ly } yield x |-| y"
+  }
+]

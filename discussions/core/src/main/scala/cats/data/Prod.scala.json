@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "48ad6f06-7e24-45fa-9ccd-65a7f8900972",
+    "prId" : 1402,
+    "prUrl" : "https://github.com/typelevel/cats/pull/1402#pullrequestreview-5100395",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f99b567c-0bda-48c4-b651-046bb78deeba",
+        "parentId" : null,
+        "authorId" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "body" : "In this particular case, to ensure the more specific instance having the highest priority, we basically want to ensure that instances of typeclasses who are lower in the inheritance tree are also lower in the instance trait inheritance tree. For example, `Monad` inherits `Functor` and thus is more \"specific\" than `Functor`, so it should be in an instance trait with higher priority (0 - 3)  than where `Functor` is (4). \nSo, we need to rearrange the instances to that order. \n`MonadCombine` <: `Altenative`\n`MonadCombine` <: `Monad` <: `Applicative` <: `Apply` <: `Functor`\n`Traverse` <: `Foldable`\n`Traverse` <: `Functor`\n",
+        "createdAt" : "2016-10-19T14:14:40Z",
+        "updatedAt" : "2016-10-24T17:34:02Z",
+        "lastEditedBy" : "6b760ef7-e448-44a7-b744-0c25c840a80a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "475bd9a3-6805-4fbf-b5e2-d3ad9cef3f51",
+        "parentId" : "f99b567c-0bda-48c4-b651-046bb78deeba",
+        "authorId" : "45cdb12c-791d-41a3-9927-73520bbb010b",
+        "body" : "Thanks for pointing that out, I didn't think on that!\n\nI've done the changes in 000a583\n",
+        "createdAt" : "2016-10-20T15:53:19Z",
+        "updatedAt" : "2016-10-24T17:34:02Z",
+        "lastEditedBy" : "45cdb12c-791d-41a3-9927-73520bbb010b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "867b2a2b3b6fee570966ee2108a96408dc1746b5",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +84,88 @@  }\n}\n\nsealed trait ProdFunctor[F[_], G[_]] extends Functor[λ[α => Prod[F, G, α]]] {\n  def F: Functor[F]"
+  },
+  {
+    "id" : "ae3854c8-0de8-4a58-8bfb-e46c6635a8ec",
+    "prId" : 388,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7960d438-214e-42b4-befa-02ab17492f97",
+        "parentId" : null,
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "Should this just take two `Lazy` args instead of forcing by-name and then converting to `Lazy` anyway?\n",
+        "createdAt" : "2015-07-06T12:37:41Z",
+        "updatedAt" : "2015-08-20T03:13:00Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d04650a-8c9c-418c-871f-d21afa75c1c4",
+        "parentId" : "7960d438-214e-42b4-befa-02ab17492f97",
+        "authorId" : "82d25386-bd7e-4bbe-ad79-33feddfab2fb",
+        "body" : "I am actually unsure if I should attempt laziness at all, since most of the other parts in Cats that are involved, like the `CompositeApplicative` in https://github.com/non/cats/blob/master/core/src/main/scala/cats/Applicative.scala are eager.\n\nThe potential usefulness in keeping lazy/by-name is computing `first` and `second` in parallel as a future extension. I haven't figured out if that's essentially the same as making a composite with `Future[_]`.\n",
+        "createdAt" : "2015-07-06T18:49:50Z",
+        "updatedAt" : "2015-08-20T03:13:00Z",
+        "lastEditedBy" : "82d25386-bd7e-4bbe-ad79-33feddfab2fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1041afee-cd23-49e5-b9df-f93fb4353415",
+        "parentId" : "7960d438-214e-42b4-befa-02ab17492f97",
+        "authorId" : "89a3e0e3-e301-4aa8-b150-74070eb5a619",
+        "body" : "Just to echo @ceedubs here, would you consider something like this?\n\n``` scala\nfinal class Prod[F[_], G[_], A](first0: Eval[F[A]], second0: Eval[F[A]]) {\n  def first: F[A] = first0.value\n  def second: G[A] = second0.value\n}\n\nobject Prod extends ProdInstances {\n  def apply[F[_], G[_], A](first0: => F[A], second0: => G[A]): Prod[F, G, A] =\n    new Prod(Later(first0), Later(second0))\n  ...\n}\n```\n\nThe advantage here is that in situations where you already have an `F[A]` or `G[A]` in-hand, you can simply say `new Prod(Now(fa), Now(ga))`. If you want the syntactic niceness you can still say `Prod(..., ...)`.\n\nWhat do you think?\n",
+        "createdAt" : "2015-08-20T03:59:34Z",
+        "updatedAt" : "2015-08-20T03:59:34Z",
+        "lastEditedBy" : "89a3e0e3-e301-4aa8-b150-74070eb5a619",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "15ae481e-170e-49b7-98a7-c18300e3d96b",
+        "parentId" : "7960d438-214e-42b4-befa-02ab17492f97",
+        "authorId" : "82d25386-bd7e-4bbe-ad79-33feddfab2fb",
+        "body" : "Sounds good. Should I rename what's `def apply` to `def later`, and add a new eager `def apply`?\n",
+        "createdAt" : "2015-08-20T04:05:25Z",
+        "updatedAt" : "2015-08-20T04:05:25Z",
+        "lastEditedBy" : "82d25386-bd7e-4bbe-ad79-33feddfab2fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85b44109-3042-43c3-a829-a63d9ab34e2a",
+        "parentId" : "7960d438-214e-42b4-befa-02ab17492f97",
+        "authorId" : "4aafd631-794d-4704-aeda-a6c56ce667d1",
+        "body" : "I'm in favor of making the constructor private and adding constructors on the companion object taking varying levels of eagerness/laziness.\n",
+        "createdAt" : "2015-08-20T04:44:50Z",
+        "updatedAt" : "2015-08-20T04:44:50Z",
+        "lastEditedBy" : "4aafd631-794d-4704-aeda-a6c56ce667d1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ed08b9067b4c8580bf1975bbe1ac37321a90e26a",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +12,16 @@}\nobject Prod extends ProdInstances {\n  def apply[F[_], G[_], A](first0: => F[A], second0: => G[A]): Prod[F, G, A] = new Prod[F, G, A] {\n    val firstThunk: Eval[F[A]] = Later(first0)\n    val secondThunk: Eval[G[A]] = Later(second0)"
+  }
+]

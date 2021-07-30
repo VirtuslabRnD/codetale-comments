@@ -1,0 +1,255 @@
+[
+  {
+    "id" : "dbeaad5d-40dd-4ef9-8414-93cb133e11b6",
+    "prId" : 3340,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3340#pullrequestreview-372954915",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c5e9dcb3-b3af-4383-b8d0-e3cf1e8dee46",
+        "parentId" : null,
+        "authorId" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "body" : "@travisbrown  \r\n\r\nHello, sorry to bother you again on this PR.\r\n\r\nI was looking at the `toIterable` implementation to understand why would we use Stream.\r\n\r\nThese are the possible arguments that I read from the original PR-\r\n> Still aiming at mitigating the possible cost of building a list, it could be delayed up to when the iterator is traversing it\r\n\r\nand \r\n\r\n>@travisbrown .toList.iterator forces a full materialization, and we don't control the API of List. So, the uses of a lazy structure (like Iterator, Stream, LazyList) are very different since we can interact with other tools that will not force a full materialization of the data. This is useful in things like spark or scalding.\r\n\r\n> That said, I think in a library focused on FP, we should use an immutable lazy structure if possible, so I would lean towards Stream/LazyList. Users can then call .iterator on that, but we don't control that API. Alternatively, they can use foldLeft to tear down the Stream without materializing the whole thing in memory at once.\r\n\r\nthis is when I added a few `printLn` in between, confirming my suspicion that the Stream is created from the end to the first element, this means that the entire Stream is already materialised yet not visible.\r\n\r\n<img width=\"397\" alt=\"Screenshot 2020-03-05 at 9 09 28 PM\" src=\"https://user-images.githubusercontent.com/8997846/75985134-ae8b9280-5f26-11ea-97a2-ac6eb871dd7b.png\">\r\n\r\nwhen replacing Stream with List, no difference.\r\n\r\n\r\n<img width=\"262\" alt=\"Screenshot 2020-03-05 at 9 16 09 PM\" src=\"https://user-images.githubusercontent.com/8997846/75985137-b1868300-5f26-11ea-9833-d798b3f573c2.png\">\r\n\r\nand given this evidence we can replace this entire implementation with-\r\n\r\n`F.foldLeft(fa, List.empty[A])((acc, a) => a :: acc).reverse`\r\n\r\nStream is materialised yet not visible then re-materialised (going through the whole `synchronise` thing).\r\n\r\nDo you see value here?\r\n",
+        "createdAt" : "2020-03-05T15:25:35Z",
+        "updatedAt" : "2020-03-11T17:03:22Z",
+        "lastEditedBy" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0beeacbd-80dc-4e8e-ab8d-8302dbbf8abb",
+        "parentId" : "c5e9dcb3-b3af-4383-b8d0-e3cf1e8dee46",
+        "authorId" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "body" : "@travisbrown if you get a chance to go through this one, that's the last of it",
+        "createdAt" : "2020-03-11T17:04:18Z",
+        "updatedAt" : "2020-03-11T17:04:29Z",
+        "lastEditedBy" : "429eae10-8138-404f-b9b2-421bcdcf30be",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "41f6306363a1f9e246d6c189a4f5007a3aa3fe59",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +343,347 @@   */\n  def toIterable(implicit F: Foldable[F]): Iterable[A] =\n    F.foldRight[A, Stream[A]](fa, Eval.now(Stream.empty))((a, eb) => eb.map(Stream.cons(a, _))).value\n\n  /**"
+  },
+  {
+    "id" : "b9947bed-769c-44e4-84f1-056ed6862777",
+    "prId" : 3150,
+    "prUrl" : "https://github.com/typelevel/cats/pull/3150#pullrequestreview-318311398",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fa6a675d-5442-4cd5-929f-5f3eedd8d6b3",
+        "parentId" : null,
+        "authorId" : "6943dbfe-856b-4f1b-bd04-dca0091e8291",
+        "body" : "Is there precedent in Cats for using `asInstanceOf` instead of just mapping here?",
+        "createdAt" : "2019-11-18T09:55:20Z",
+        "updatedAt" : "2019-11-20T15:21:50Z",
+        "lastEditedBy" : "6943dbfe-856b-4f1b-bd04-dca0091e8291",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43706434-9250-4c0b-a38a-4f794423bbca",
+        "parentId" : "fa6a675d-5442-4cd5-929f-5f3eedd8d6b3",
+        "authorId" : "99463b54-df20-402b-b15f-a87a788ef759",
+        "body" : "Simulacrum generates the same code for the syntax. I didn't figure out how to get rid of `.asInstanceOf`, because `Foldable` is invariant type. Something similar is used at `Functor#widen`.\r\n\r\nI can make make a separate type `FoldableOps2[F[_], G[_], A]`. This way it will work without `.asInstanceOf`. Is it a better option?",
+        "createdAt" : "2019-11-18T11:45:53Z",
+        "updatedAt" : "2019-11-20T15:21:50Z",
+        "lastEditedBy" : "99463b54-df20-402b-b15f-a87a788ef759",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3544ca10-3e2a-42ea-a8cb-d207c033e9d2",
+        "parentId" : "fa6a675d-5442-4cd5-929f-5f3eedd8d6b3",
+        "authorId" : "240add12-1fe5-499a-918c-053b1f46b348",
+        "body" : "You can use `ev.apply`. `<:<[A, B]` extends `Function1[A, B]` :)",
+        "createdAt" : "2019-11-18T12:29:02Z",
+        "updatedAt" : "2019-11-20T15:21:50Z",
+        "lastEditedBy" : "240add12-1fe5-499a-918c-053b1f46b348",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "858ba213-b0c3-4afe-a2bd-42456d61629c",
+        "parentId" : "fa6a675d-5442-4cd5-929f-5f3eedd8d6b3",
+        "authorId" : "99463b54-df20-402b-b15f-a87a788ef759",
+        "body" : "It's impossible because I don't have access to `A`, I have only `F[A]` and `F` isn't a functor.",
+        "createdAt" : "2019-11-18T12:36:28Z",
+        "updatedAt" : "2019-11-20T15:21:50Z",
+        "lastEditedBy" : "99463b54-df20-402b-b15f-a87a788ef759",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "13deaebe-1058-4020-bbd7-484aa473c4cb",
+        "parentId" : "fa6a675d-5442-4cd5-929f-5f3eedd8d6b3",
+        "authorId" : "240add12-1fe5-499a-918c-053b1f46b348",
+        "body" : "Oh, duh! 👍 ",
+        "createdAt" : "2019-11-18T13:00:14Z",
+        "updatedAt" : "2019-11-20T15:21:50Z",
+        "lastEditedBy" : "240add12-1fe5-499a-918c-053b1f46b348",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c63b8bc7b467fc986e389bd6e7909b0ed7d9c21b",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +48,52 @@\n  def foldA[G[_], B](implicit F: Foldable[F], ev: A <:< G[B], G: Applicative[G], B: Monoid[B]): G[B] =\n    F.foldA[G, B](fa.asInstanceOf[F[G[B]]])\n\n  /**"
+  },
+  {
+    "id" : "a7f49b23-cc1e-45ad-9b79-4cd1470dbd73",
+    "prId" : 2641,
+    "prUrl" : "https://github.com/typelevel/cats/pull/2641#pullrequestreview-191948544",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "864f2d2d-c24e-47c0-bf94-fb164bb70539",
+        "parentId" : null,
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "This code is duplicated in two places. What if instead we added a `partitionEitherM` method to the `Foldable` companion object and had the `FoldableOps0` method delegate to it? At that point, I'm not sure if it makes sense to have the `FoldableOps1` extension to the type class itself; people could just call the method on the companion object if they wanted it. WDYT @kailuowang and @blast-hardcheese?\r\n\r\nSorry I'm sure that this is annoying. I think that Cats maintainers need to put some effort into our approach to binary compatibility and making it easier on other contributors.",
+        "createdAt" : "2019-01-12T19:02:24Z",
+        "updatedAt" : "2019-01-18T16:59:36Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "de393971-d660-4fc3-b7f4-29d46a09e3d7",
+        "parentId" : "864f2d2d-c24e-47c0-bf94-fb164bb70539",
+        "authorId" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "body" : "Consolidating definitely felt like the right approach, but doing the same syntax lookup again while we're already working around bin compat seemed worse. I can make the change.",
+        "createdAt" : "2019-01-12T19:12:42Z",
+        "updatedAt" : "2019-01-18T16:59:36Z",
+        "lastEditedBy" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "43e4276c5d3d9eb0711a3219346958a4385b5e52",
+    "line" : 160,
+    "diffHunk" : "@@ -1,1 +355,359 @@   * }}}\n   */\n  def partitionEitherM[G[_], A, B, C](fa: F[A])(f: A => G[Either[B, C]])(implicit A: Alternative[F],\n                                                                         M: Monad[G]): G[(F[B], F[C])] = {\n    import cats.instances.either._"
+  },
+  {
+    "id" : "2b415bc9-a09b-4d3d-92d8-c504425b8355",
+    "prId" : 2641,
+    "prUrl" : "https://github.com/typelevel/cats/pull/2641#pullrequestreview-192007106",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "efa39fc6-a077-4df1-932b-33b3fc08e42e",
+        "parentId" : null,
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "Would it make sense to generalize this to any `Bifoldable` instead of just `Either`?\r\n\r\n```scala\r\n  def partitionBiffyM[G[_], H[_,_], A, B, C](fa: F[A])(f: A => G[H[B, C]])(implicit A: Alternative[F],\r\n                                                                         M: Monad[G], H: Bifoldable[H]): G[(F[B], F[C])] = {\r\n    import cats.instances.tuple._\r\n\r\n    implicit val mb: Monoid[F[B]] = A.algebra[B]\r\n    implicit val mc: Monoid[F[C]] = A.algebra[C]\r\n\r\n    F.foldMapM[G, A, (F[B], F[C])](fa)(\r\n      a =>\r\n        M.map(f(a)){\r\n          H.bifoldMap[B, C, (F[B], F[C])](_)(\r\n            b => (A.pure(b), A.empty[C]),\r\n            c => (A.empty[B], A.pure(c)))\r\n      }\r\n    )\r\n  }\r\n```\r\n\r\nThen you could use it for the `partitionEitherM` use-case, but you could also use it for other `Bifoldable`s like `Tuple2`:\r\n\r\n```\r\nscala> Foldable[List].partitionBiffyM(list)(a => Eval.now((a - 1, a + 1)))\r\nres5: cats.Eval[(List[Int], List[Int])] = cats.Eval$$anon$6@67bef13e\r\n\r\nscala> res5.value\r\nres6: (List[Int], List[Int]) = (List(0, 1, 2, 3),List(2, 3, 4, 5))\r\n```\r\n\r\nI'm hoping that someone else has a better name than mine 😛 ",
+        "createdAt" : "2019-01-13T18:35:13Z",
+        "updatedAt" : "2019-01-18T16:59:36Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8cb61a0b-9954-4fda-a7c5-65ef2f580b80",
+        "parentId" : "efa39fc6-a077-4df1-932b-33b3fc08e42e",
+        "authorId" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "body" : "This seems to suggest a broader refactor that includes [`partitionEither`](https://github.com/typelevel/cats/blob/774fb51/core/src/main/scala/cats/Foldable.scala#L494-L507). I can generalize to `partitionBiffy` as well as `partitionBiffyM`, while providing the concretized `partitionEitherM` that just defers to `partitionBiffyM`, if that is desirable",
+        "createdAt" : "2019-01-13T20:01:33Z",
+        "updatedAt" : "2019-01-18T16:59:36Z",
+        "lastEditedBy" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c9e35dee-2357-4986-a14d-8253542b11a4",
+        "parentId" : "efa39fc6-a077-4df1-932b-33b3fc08e42e",
+        "authorId" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "body" : "I gave it a shot, though the examples are getting increasingly convoluted I think.",
+        "createdAt" : "2019-01-14T02:47:53Z",
+        "updatedAt" : "2019-01-18T16:59:36Z",
+        "lastEditedBy" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "43e4276c5d3d9eb0711a3219346958a4385b5e52",
+    "line" : 160,
+    "diffHunk" : "@@ -1,1 +355,359 @@   * }}}\n   */\n  def partitionEitherM[G[_], A, B, C](fa: F[A])(f: A => G[Either[B, C]])(implicit A: Alternative[F],\n                                                                         M: Monad[G]): G[(F[B], F[C])] = {\n    import cats.instances.either._"
+  },
+  {
+    "id" : "dffdc6ed-40ca-4aee-8a4c-7c4b25b5543c",
+    "prId" : 2641,
+    "prUrl" : "https://github.com/typelevel/cats/pull/2641#pullrequestreview-195094959",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4eba3b80-fc97-4265-a29b-cf1afc76c14f",
+        "parentId" : null,
+        "authorId" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "body" : "Should line 231 have a `//` at the beginning of the comment? I guess that I don't know whether or not that's necessary in a doctest example; just wanted to make sure that this code is running when tests are run.",
+        "createdAt" : "2019-01-22T03:49:19Z",
+        "updatedAt" : "2019-01-22T03:56:45Z",
+        "lastEditedBy" : "b714495a-5740-47d4-aaaa-98f354f5c0a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "237b6a7a-9a60-49a1-b4ef-12b5989bf5b4",
+        "parentId" : "4eba3b80-fc97-4265-a29b-cf1afc76c14f",
+        "authorId" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "body" : "I just assumed the parser rules were similar to literate extensions for languages. Altering line 232 to have a syntax error caused `coreJVM/test:compile` to fail to compile, which was good as it seems as though there are other instances of this: https://github.com/typelevel/cats/blob/774fb51/core/src/main/scala/cats/Foldable.scala#L48",
+        "createdAt" : "2019-01-22T05:28:27Z",
+        "updatedAt" : "2019-01-22T05:28:27Z",
+        "lastEditedBy" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "13bc111b-76d1-4aa9-8f97-c7816c2b8806",
+        "parentId" : "4eba3b80-fc97-4265-a29b-cf1afc76c14f",
+        "authorId" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "body" : "I should say, I'm not opposed to changing it, just that it currently isn't causing the tool to stop compiling the other lines.",
+        "createdAt" : "2019-01-22T16:13:17Z",
+        "updatedAt" : "2019-01-22T16:13:17Z",
+        "lastEditedBy" : "aa31b1bc-a7e9-49ea-b24b-8924cadd356d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "43e4276c5d3d9eb0711a3219346958a4385b5e52",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +229,233 @@   * scala> list.partitionBifold(a => (a, \"value \" + a.toString))\n   * res0: (List[Int], List[String]) = (List(1, 2, 3, 4),List(value 1, value 2, value 3, value 4))\n   * `Const`'s second parameter is never instantiated, so we can use an impossible type:\n   * scala> list.partitionBifold(a => Const[Int, Nothing with Any](a))\n   * res1: (List[Int], List[Nothing with Any]) = (List(1, 2, 3, 4), List())"
+  },
+  {
+    "id" : "f45907ff-07f6-426a-bbee-7f303a119cce",
+    "prId" : 2421,
+    "prUrl" : "https://github.com/typelevel/cats/pull/2421#pullrequestreview-149447151",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "65f92f7b-0cb7-4ea1-8fff-e6a94f19e55e",
+        "parentId" : null,
+        "authorId" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "body" : "couldn't this be `collectFirstSome { a => p(a).map(if (_) Some(a) else None) }`?",
+        "createdAt" : "2018-08-24T18:07:00Z",
+        "updatedAt" : "2018-08-24T18:40:45Z",
+        "lastEditedBy" : "64725de8-1e61-4b2f-a436-5cc06313d237",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6bbcf6ba-488d-4c41-bdf5-2bde3c2a52b9",
+        "parentId" : "65f92f7b-0cb7-4ea1-8fff-e6a94f19e55e",
+        "authorId" : "11808841-3007-42af-a1b5-0703a8d35af3",
+        "body" : "Sure it could but would require an extra `map` for each iteration. I just followed the recommendation of other contributors to prefer efficiency over conciseness in code.",
+        "createdAt" : "2018-08-24T20:18:43Z",
+        "updatedAt" : "2018-08-24T20:18:44Z",
+        "lastEditedBy" : "11808841-3007-42af-a1b5-0703a8d35af3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ce25400643c26d5b9a68a879764b1357ef7a38c3",
+    "line" : 73,
+    "diffHunk" : "@@ -1,1 +155,159 @@    */\n  def findM[G[_]](p: A => G[Boolean])(implicit F: Foldable[F], G: Monad[G]): G[Option[A]] =\n    G.tailRecM(Foldable.Source.fromFoldable(fa))(_.uncons match {\n      case Some((a, src)) => G.map(p(a))(if (_) Right(Some(a)) else Left(src.value))\n      case None => G.pure(Right(None))"
+  }
+]
