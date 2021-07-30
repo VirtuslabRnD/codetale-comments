@@ -1,0 +1,464 @@
+[
+  {
+    "id" : "568b5950-daac-49c8-89f6-05c19614957e",
+    "prId" : 3419,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/3419#pullrequestreview-515168182",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5d722f42-75c9-47c6-a85c-edddab9f7272",
+        "parentId" : null,
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "The last component of `model_uri` may not always be an integer version. Users can specify the lifecycle stage of a model via the last component. For example, `models:/my-model/production` can be used to refer to the latest version of `my-model` in stage `production`.\r\n\r\nBecause the latest production version may change over time, `m_id` will not necessarily continue to refer to the same model version. A similar problem occurs if the user deletes a registered model and re-creates it with the same name: version `1` of `my-model` at time T is not guaranteed to refer to the same ML model as version `1` of `my-model` at time T + n if deletion and re-creation occurs in between.\r\n\r\nIs `m_id` meant to be a unique identifier? Are we trying to enforce a 1:1 mapping between AzureModels and model versions in the AzureML Model Registry? It would be helpful to spell out the exact goals in the PR description.",
+        "createdAt" : "2020-09-25T19:05:35Z",
+        "updatedAt" : "2020-11-09T18:52:55Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38092606-62b6-488e-9e63-3ab2dc04a525",
+        "parentId" : "5d722f42-75c9-47c6-a85c-edddab9f7272",
+        "authorId" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "body" : "In AzureML, model ID is unique within a workspace, and is a composite of <name>:<version>. This doesn't necessarily mean that there is a 1:1 mapping between a model file and a model version, as the file could be registered multiple times, deleted and re-registered.etc.\r\n\r\nSpecifically for this however, we need to have the AzureML Model ID in order to deploy, that's just how the deployment functionality works currently. This function that I'm editing is a workaround that was introduced to allow MLFlow users a convenience method for deploying on Azure, and as such as limitations. I personally am fine with saying that one of those limitations is lack of support for `/production` type uris, however @akshaya-a may feel differently about that.",
+        "createdAt" : "2020-10-08T21:36:11Z",
+        "updatedAt" : "2020-11-09T18:52:55Z",
+        "lastEditedBy" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9234b441-650d-4dc4-a338-2cbd37520dd2",
+        "parentId" : "5d722f42-75c9-47c6-a85c-edddab9f7272",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "> In AzureML, model ID is unique within a workspace, and is a composite of :. This doesn't necessarily mean that there is a 1:1 mapping between a model file and a model version, as the file could be registered multiple times, deleted and re-registered.etc.\r\n\r\nThe model ID uniqueness part of this concerns me though. With the logic implemented in this PR, what happens if a user deploys a model with name `A`, deletes the associated registered model, and then tries to redeploy with name `A`? In that case, it seems like we'll pull down the old AzureModel because the ID matches and end up deploying content that the user didn't specify.\r\n\r\nAlso, do users expect to have their models registered with the MLflow Model Registry on Azure at deployment time? We should at least document this side-effect, but I wonder if that's the intended UX.",
+        "createdAt" : "2020-10-22T19:52:27Z",
+        "updatedAt" : "2020-11-09T18:52:55Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7699d12b-ec05-4b59-919e-3d3ee5eaf280",
+        "parentId" : "5d722f42-75c9-47c6-a85c-edddab9f7272",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "What are the drawbacks to using a UUID for the model ID instead?",
+        "createdAt" : "2020-10-22T19:53:20Z",
+        "updatedAt" : "2020-11-09T18:52:55Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d0d8dde-5e46-4cdf-b2dd-3d0ca6cdc7fd",
+        "parentId" : "5d722f42-75c9-47c6-a85c-edddab9f7272",
+        "authorId" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "body" : "A UUID can not be used for ID, the ID is not something that is set client side, it's set service side, and is a composite of name and version as I mention, that is out of my control.\r\n\r\nIf a user deploys a model with name A version 1, and then deletes that model, it won't exist anywhere at that point, so it couldn't pull down the old model. Unless I'm not understanding your concern correctly?\r\n\r\nAnd yes, it is expected that the model will be registered at deployment time if it's not already. At the very least it is the expectation for our users and has been from the beginning.",
+        "createdAt" : "2020-10-22T22:39:08Z",
+        "updatedAt" : "2020-11-09T18:52:55Z",
+        "lastEditedBy" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "397baadc3282f3338cc632ec9ce445fe81211450",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +399,403 @@        if model_uri.startswith(\"models:/\"):\n            m_name = model_uri.split(\"/\")[-2]\n            m_version = int(model_uri.split(\"/\")[-1])\n            azure_model_id = \"{}:{}\".format(m_name, m_version)\n        elif ("
+  },
+  {
+    "id" : "fa7d588a-e98e-4ec0-84d0-e35e65918f85",
+    "prId" : 3419,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/3419#pullrequestreview-515166371",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4e9ca7b4-e244-4015-85c1-8a9078f72eaa",
+        "parentId" : null,
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "I'm a bit confused by this logging statement. In this block, we're registering a model with the model registry, which I think is distinct from creating an `AzureModel`. Is this log message accurate?",
+        "createdAt" : "2020-10-22T19:34:59Z",
+        "updatedAt" : "2020-11-09T18:52:55Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e892bb7-9f7c-4458-b9a7-a8b324e796a0",
+        "parentId" : "4e9ca7b4-e244-4015-85c1-8a9078f72eaa",
+        "authorId" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "body" : "This is the inherent issue with representing a cloud object. Registering the model with the model registry does create the azure model, but it's a cloud object, not an in memory object.\r\n\r\nWhen we register the model, it creates a cloud object in the azure model registry, and then because we're registering through MLFlow, that function returns an MLFlow SDK model object. However, we need an AzureML SDK model object to be able to deploy (at this time, that will change once we fully integrate with the deployment handling in MLFlow), so we end up getting the AzureML SDK object in order to do the deployment (the AzureML SDK uses the object constructor as a getter, it's a long story).",
+        "createdAt" : "2020-10-22T22:34:35Z",
+        "updatedAt" : "2020-11-09T18:52:55Z",
+        "lastEditedBy" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "397baadc3282f3338cc632ec9ce445fe81211450",
+    "line" : 61,
+    "diffHunk" : "@@ -1,1 +413,417 @@                registered_model.name,\n                registered_model.version,\n            )\n\n        # Attempt to retrieve an AzureML Model object which we intend to deploy"
+  },
+  {
+    "id" : "4f812c60-fb61-4a82-be80-cb4cc273f822",
+    "prId" : 2375,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/2375#pullrequestreview-389412689",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "212c6f49-9b50-43b9-9dce-30dd3ac440dd",
+        "parentId" : null,
+        "authorId" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "body" : "Considering `_download_artifact_from_uri` can take an output path, why not have it download straight into the temp directory instead of having to download it and then copy it over?",
+        "createdAt" : "2020-04-06T20:33:30Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "524e3121-79ab-4ca8-af21-e2f31cb7d1e3",
+        "parentId" : "212c6f49-9b50-43b9-9dce-30dd3ac440dd",
+        "authorId" : "8305e67b-1a76-4162-aefc-df95bbb6c833",
+        "body" : "for whatever reason this doesn't play nice with relative paths. When I tried it, multiple tests started to fail.",
+        "createdAt" : "2020-04-07T19:11:01Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "8305e67b-1a76-4162-aefc-df95bbb6c833",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c0a0ea7f601366ef612ee0ff0f168681c0bd342",
+    "line" : 149,
+    "diffHunk" : "@@ -1,1 +330,334 @@        tmp_model_path = os.path.join(\n            model_directory_path,\n            _copy_file_or_tree(src=absolute_model_path, dst=model_directory_path))\n\n        registered_model = AzureModel.register(workspace=workspace, model_path=tmp_model_path,"
+  },
+  {
+    "id" : "0a71ec86-9939-4fcc-9874-87a389f13b6c",
+    "prId" : 2375,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/2375#pullrequestreview-391712560",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "00d6ab78-fd00-4ff6-9ae3-9dcb0302405b",
+        "parentId" : null,
+        "authorId" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "body" : "Any particular reason we don't let users specify their own tags?",
+        "createdAt" : "2020-04-06T20:45:02Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2aaf2375-0149-4723-b816-c084fb784445",
+        "parentId" : "00d6ab78-fd00-4ff6-9ae3-9dcb0302405b",
+        "authorId" : "8305e67b-1a76-4162-aefc-df95bbb6c833",
+        "body" : "Tags for the service are specified in the deployment config now.",
+        "createdAt" : "2020-04-07T19:11:42Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "8305e67b-1a76-4162-aefc-df95bbb6c833",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e129a328-ab60-4d09-8762-8ff5dea6b981",
+        "parentId" : "00d6ab78-fd00-4ff6-9ae3-9dcb0302405b",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "@csteegz The `mlflow.azureml.build_image()` method also applies the user-specified tags to the AzureML model entity that is created during the image build process. For consistency, can we re-introduce the `tags` parameter to `mlflow.azureml.deploy()` and apply these tags to the deployment config *and* the Azure ML model that is created? This workflow will be more familiar to existing users.",
+        "createdAt" : "2020-04-11T00:08:41Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c09cf1ce-a4aa-4c42-bee6-f51b6748ec5c",
+        "parentId" : "00d6ab78-fd00-4ff6-9ae3-9dcb0302405b",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "@csteegz Can we also add a corresponding unit test (similar to `test_image_creation.test_build_image_includes_default_metadata_in_azure_image_and_model_tags` verifying that the expected tags are correctly applied to the Azure ML model *and* the webservice entity? This will provide confidence that critical metadata, such as the MLflow Run ID (if present), is incorporated into the set of tags.",
+        "createdAt" : "2020-04-11T00:17:42Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c0a0ea7f601366ef612ee0ff0f168681c0bd342",
+    "line" : 138,
+    "diffHunk" : "@@ -1,1 +319,323 @@                error_code=INVALID_PARAMETER_VALUE)\n\n    tags = _build_tags(model_uri=model_uri, model_python_version=model_python_version)\n\n    if service_name is None:"
+  },
+  {
+    "id" : "b468341f-d70d-4301-b968-a96dd9c14f1d",
+    "prId" : 2375,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/2375#pullrequestreview-389393934",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5b3f47ff-eba6-4af2-87b3-addb9379d84b",
+        "parentId" : null,
+        "authorId" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "body" : "I'm in favor of including `:rtype:` as well, for better clarity",
+        "createdAt" : "2020-04-06T20:46:24Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "cdb19054-43ec-4ffc-a461-00fd844e66f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3749be3-bf6f-499d-861f-9fe10096be6f",
+        "parentId" : "5b3f47ff-eba6-4af2-87b3-addb9379d84b",
+        "authorId" : "8305e67b-1a76-4162-aefc-df95bbb6c833",
+        "body" : "that doesn't appear to be convention for this project - not gonna do it.",
+        "createdAt" : "2020-04-07T18:45:13Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "8305e67b-1a76-4162-aefc-df95bbb6c833",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c0a0ea7f601366ef612ee0ff0f168681c0bd342",
+    "line" : 234,
+    "diffHunk" : "@@ -1,1 +483,487 @@\n    :param model_path: The absolute path to the model.\n    :return: The model's `python_function` flavor configuration and the model.\n    \"\"\"\n    model_path = os.path.abspath(model_path)"
+  },
+  {
+    "id" : "639de3ad-94ef-4641-8c01-33b18538d90a",
+    "prId" : 2375,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/2375#pullrequestreview-391712560",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a3c3cf4e-9d3d-4ffb-92f1-5ca63ce831e6",
+        "parentId" : null,
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "Nit: Can we reorder this parameter documentation so that it matches the parameter order in the method prototype (i.e., move `workspace` directly below `model_uri`). I noticed that the current ordering is also incorrect for `build_image`; would you mind fixing it there as well?",
+        "createdAt" : "2020-04-11T00:01:03Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c0a0ea7f601366ef612ee0ff0f168681c0bd342",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +238,242 @@                      `Referencing Artifacts <https://www.mlflow.org/docs/latest/concepts.html#\n                      artifact-locations>`_.\n    :param workspace: The AzureML workspace in which to deploy the service. This is a\n                      `azureml.core.Workspace` object.\n    :param deployment_config: The configuration for the Azure web service. This configuration"
+  },
+  {
+    "id" : "8366db5e-6d30-4a7a-9d9a-121360739ead",
+    "prId" : 2375,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/2375#pullrequestreview-391712560",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0b80ac1c-301d-45dc-9eee-2a65ddb9fed4",
+        "parentId" : null,
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "@csteegz I think this behavior is confusing because it produces service and model names of the form `mlflow-run-<run_id>` where `<run_id>` is not an actual MLflow Run ID. Can we refactor the `_get_mlflow_azure_name_from_run(run_id)` method to `_get_mlflow_azure_name(uuid)` and return names of the form `mlflow-model-<uuid>` instead of `mlflow-run-<run_id>`?",
+        "createdAt" : "2020-04-11T00:14:35Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c0a0ea7f601366ef612ee0ff0f168681c0bd342",
+    "line" : 128,
+    "diffHunk" : "@@ -1,1 +309,313 @@        run_id = model.run_id\n    except AttributeError:\n        run_id = str(uuid.uuid4())\n    if model_python_version is not None and\\\n            StrictVersion(model_python_version) < StrictVersion(\"3.0.0\"):"
+  },
+  {
+    "id" : "7d8f8d0e-9f0b-4979-987c-d24dfb3c50f6",
+    "prId" : 2375,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/2375#pullrequestreview-391712560",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3fefc09e-2915-44ef-b1a4-8c043a78f1ce",
+        "parentId" : null,
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "Awesome! Thank you for this change!",
+        "createdAt" : "2020-04-11T00:22:56Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c0a0ea7f601366ef612ee0ff0f168681c0bd342",
+    "line" : 293,
+    "diffHunk" : "@@ -1,1 +547,551 @@\nfrom azureml.core.model import Model\nfrom mlflow.pyfunc import load_model\nfrom mlflow.pyfunc.scoring_server import parse_json_input, _get_jsonable_obj\n"
+  },
+  {
+    "id" : "45abb00a-932b-4b40-b9d5-66e9f8b1bbec",
+    "prId" : 2375,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/2375#pullrequestreview-394242234",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f1d8c196-5503-4488-89ab-eb8fe128cca1",
+        "parentId" : null,
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "Nit: Now that we've defined `load_pyfunc_conf_with_model`, can we remove this `_load_pyfunc_conf()` method and invoke `_load_pyfunc_conf_with_model` in `build_image()` instead? I don't thinking keeping this method is buying is much, since it loads the full ML model anyway by calling `_load_pyfunc_conf_with_model`.",
+        "createdAt" : "2020-04-11T00:26:56Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "78db3938-b5cc-4c1c-b03d-31bde97aea02",
+        "parentId" : "f1d8c196-5503-4488-89ab-eb8fe128cca1",
+        "authorId" : "649f9122-9279-4cbc-98ec-f8c4bffe19fa",
+        "body" : "addressed",
+        "createdAt" : "2020-04-16T01:35:48Z",
+        "updatedAt" : "2020-04-16T05:48:51Z",
+        "lastEditedBy" : "649f9122-9279-4cbc-98ec-f8c4bffe19fa",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c0a0ea7f601366ef612ee0ff0f168681c0bd342",
+    "line" : 224,
+    "diffHunk" : "@@ -1,1 +473,477 @@    :return: The model's `python_function` flavor configuration.\n    \"\"\"\n    (name, _) = _load_pyfunc_conf_with_model(model_path)\n    return name\n"
+  },
+  {
+    "id" : "ce5361d0-68d0-40d6-8ea6-fa5651f41aa8",
+    "prId" : 1253,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/1253#pullrequestreview-236825383",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "29330e67-ddae-40b1-8d08-9636b600b7b2",
+        "parentId" : null,
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "Thanks for catching this!",
+        "createdAt" : "2019-05-13T18:15:05Z",
+        "updatedAt" : "2019-06-03T20:58:02Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9227653c150e9e2d35751c8f4c75049c2bb0a0d",
+    "line" : 58,
+    "diffHunk" : "@@ -1,1 +102,106 @@    >>> # Build an Azure ML Container Image for an MLflow model\n    >>> azure_image, azure_model = mlflow.azureml.build_image(\n    >>>                                 model_uri=\"<model_uri>\",\n    >>>                                 workspace=azure_workspace,\n    >>>                                 synchronous=True)"
+  },
+  {
+    "id" : "fb194092-ea33-4253-9ff1-4498fa7595d1",
+    "prId" : 631,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/631#pullrequestreview-167102716",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "43cb08bb-437e-4216-8b88-203ce3ca9e66",
+        "parentId" : null,
+        "authorId" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "body" : "Let's print out azure_image.image_build_log_uri so people can see what's going on with their build",
+        "createdAt" : "2018-10-22T20:45:59Z",
+        "updatedAt" : "2018-10-24T18:10:14Z",
+        "lastEditedBy" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa8f5569-2227-4ed0-ba36-f3c8052c5bfa",
+        "parentId" : "43cb08bb-437e-4216-8b88-203ce3ca9e66",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "Great idea. Done!",
+        "createdAt" : "2018-10-22T20:51:36Z",
+        "updatedAt" : "2018-10-24T18:10:14Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fc931bfbbfa0728a7505557d1d6b376d50e5c1fc",
+    "line" : 63,
+    "diffHunk" : "@@ -1,1 +46,50 @@                        MLflow from pip.\n    :param description: A string description to associate with the Azure Container Image and the\n                        Azure Model that will be created. For more information, see\n                        `<https://docs.microsoft.com/en-us/python/api/azureml-core/\n                        azureml.core.image.container.containerimageconfig>`_ and"
+  },
+  {
+    "id" : "cfff5aa0-fe30-4efc-8872-7fe7fcc32c2a",
+    "prId" : 631,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/631#pullrequestreview-167114853",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2ee0bdbe-a037-41e7-bd46-7fa8c09b5fef",
+        "parentId" : null,
+        "authorId" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "body" : "Out of curiosity, why do we copy it?",
+        "createdAt" : "2018-10-22T20:53:25Z",
+        "updatedAt" : "2018-10-24T18:10:14Z",
+        "lastEditedBy" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a3354ab-6bbf-4ad6-925a-a1a7f0de7c40",
+        "parentId" : "2ee0bdbe-a037-41e7-bd46-7fa8c09b5fef",
+        "authorId" : "d79ebb0f-0833-4329-8a37-7ae540003587",
+        "body" : "you might want to use _copy_project instead, it filter out patterns defined in .gitignore.",
+        "createdAt" : "2018-10-22T21:56:59Z",
+        "updatedAt" : "2018-10-24T18:10:14Z",
+        "lastEditedBy" : "d79ebb0f-0833-4329-8a37-7ae540003587",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "81859341-07a5-4f83-9d63-15b6cca40c09",
+        "parentId" : "2ee0bdbe-a037-41e7-bd46-7fa8c09b5fef",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "@aarondav We copy it for safety. If the Azure SDK were to make any modifications to the specified directory during `ContainerImage.create()`, we wouldn't want the original copy to be modified. This is the same reason that we copy the MLflow model. ",
+        "createdAt" : "2018-10-22T22:25:49Z",
+        "updatedAt" : "2018-10-24T18:10:14Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1abebbc3-74b4-4842-9b9d-e48121e9dee0",
+        "parentId" : "2ee0bdbe-a037-41e7-bd46-7fa8c09b5fef",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "@tomasatdatabricks Thanks! I changed the command to `_copy_project`.",
+        "createdAt" : "2018-10-22T22:39:14Z",
+        "updatedAt" : "2018-10-24T18:10:14Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fc931bfbbfa0728a7505557d1d6b376d50e5c1fc",
+    "line" : 189,
+    "diffHunk" : "@@ -1,1 +159,163 @@            mlflow_home = os.path.join(tmp.path(),\n                                       _copy_project(src_path=mlflow_home, dst_path=tmp.path()))\n            image_file_dependencies = [mlflow_home]\n        else:\n            image_file_dependencies = None"
+  },
+  {
+    "id" : "026b3dab-c7ef-43d9-b8ac-9413ab09e8ea",
+    "prId" : 631,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/631#pullrequestreview-167114853",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d220f018-74eb-417e-b21f-eb1a1d27dcb1",
+        "parentId" : null,
+        "authorId" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "body" : "btw, maybe we could somewhere throw an error if we notice mlflow version contains 'dev' and suggest the user use mlflow_home instead.",
+        "createdAt" : "2018-10-22T20:59:47Z",
+        "updatedAt" : "2018-10-24T18:10:14Z",
+        "lastEditedBy" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25569e5d-1514-4fb2-b3c1-f72d3a5e08b6",
+        "parentId" : "d220f018-74eb-417e-b21f-eb1a1d27dcb1",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "Good idea - Done!",
+        "createdAt" : "2018-10-22T23:05:38Z",
+        "updatedAt" : "2018-10-24T18:10:14Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fc931bfbbfa0728a7505557d1d6b376d50e5c1fc",
+    "line" : 322,
+    "diffHunk" : "@@ -1,1 +245,249 @@            mlflow_path=_get_container_path(mlflow_path))\n    elif not mlflow_version.endswith(\"dev\"):\n        mlflow_install_cmd = \"RUN pip install mlflow=={mlflow_version}\".format(\n            mlflow_version=mlflow_version)\n    else:"
+  }
+]

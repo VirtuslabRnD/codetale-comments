@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "e51d3088-757c-4e17-bd96-88400573eb91",
+    "prId" : 2242,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/2242#pullrequestreview-391806695",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "859c9ba3-9ad6-43ee-aabf-e438b93f50e5",
+        "parentId" : null,
+        "authorId" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "body" : "I'm not too familiar with Spacy, but it seems it'd be worth documenting this limitation in the `save_model` & `log_model` docstrings? Seems like a good idea to keep the functionality here minimal in the initial PR & expand upon it later, but do you have an idea what it'd take to extend it to supporting other types of Spacy pipeline components in the future?",
+        "createdAt" : "2020-02-13T05:36:02Z",
+        "updatedAt" : "2020-04-14T18:36:01Z",
+        "lastEditedBy" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3cc2d5f-c528-412a-bf98-b13f9eaa1e91",
+        "parentId" : "859c9ba3-9ad6-43ee-aabf-e438b93f50e5",
+        "authorId" : "1e40e258-e169-44a4-897f-9bd63f3f7e1a",
+        "body" : "It depends on how \"flexible\" we want to keep the predict pyfunc method. Right now I have used it only as the \"Text classifier/categorizer\", however when the Language/nlp object is called (see https://spacy.io/usage/spacy-101#annotations) a Doc is created. Then you can use these Doc attributes to get the relevant information.\r\n\r\nI would say that the text categorizer predict is the one that fits more the pyfunc predict. However the loaded model can be called and generate the Doc object at anytime. I would say **the Saved and Loaded model has no limitations. Only the predict pyfunc api works for the text categorizer.**\r\n\r\nIf you wish I can add it also to save_model and log_model, however I worry that might be misleading.",
+        "createdAt" : "2020-02-15T19:17:06Z",
+        "updatedAt" : "2020-04-14T18:36:01Z",
+        "lastEditedBy" : "1e40e258-e169-44a4-897f-9bd63f3f7e1a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e77ebb0-7371-446f-b8fd-88b3290ec884",
+        "parentId" : "859c9ba3-9ad6-43ee-aabf-e438b93f50e5",
+        "authorId" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "body" : "Got it, so if I understand correctly:\r\n* Users can save & load back spaCy models without any limitations (makes sense, since `mlflow.spacy.load_model` simply loads back the original `spaCy` model object)\r\n* However, in order to use the saved `spaCy` model with tools dependent on the python-function (pyfunc) flavor, the saved model must be a text categorizer (one thing I'd appreciate help understanding is if most common spaCy use cases only involve a text categorizer, or if this limitation would affect many spaCy use cases). \r\n\r\nMy intuition here is that it would be strange to allow saving/logging spaCy models that can't be used with pyfunc predict.",
+        "createdAt" : "2020-03-06T21:50:30Z",
+        "updatedAt" : "2020-04-14T18:36:01Z",
+        "lastEditedBy" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea1b0675-a395-4d4b-aa70-2b4bf9b7995a",
+        "parentId" : "859c9ba3-9ad6-43ee-aabf-e438b93f50e5",
+        "authorId" : "1e40e258-e169-44a4-897f-9bd63f3f7e1a",
+        "body" : "Yes, I think your sum up is correct. I think the text categorizer is not the only use case of spacy, as a matter of fact the different components of the pipeline are used. However, If I understood correctly the way the pyfunc predict method works here, it usually appends a column with the \"prediction\" at the end of the input dataframe, and I have found that among the different spaCy pipeline components the text categorizer would fit the description.\r\n\r\nIf we want, we can try to work around the different components and find a format for what spaCy is returning when the nlp object is called.\r\nThe table here: https://spacy.io/usage/spacy-101#pipelines explains fairly well how a different pipeline component is mapped to the object it creates.\r\n\r\nMy idea was to start from the text categorizer and build up from there as new use cases arise for the pyfunc.",
+        "createdAt" : "2020-03-07T14:15:18Z",
+        "updatedAt" : "2020-04-14T18:36:01Z",
+        "lastEditedBy" : "1e40e258-e169-44a4-897f-9bd63f3f7e1a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a92131e-be8f-4109-8c02-90678c333094",
+        "parentId" : "859c9ba3-9ad6-43ee-aabf-e438b93f50e5",
+        "authorId" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "body" : "@arocketman got it, makes sense that it'd be nice to incrementally add support for additional pipeline components.  Could we check via `spacy_model.pipeline` ([see API docs](https://spacy.io/api/language#attributes)) in `save_model` that the last component of the persisted model is an instance of `spacy.pipeline.pipes.TextCategorizer`, and only generate the pyfunc flavor if that's the case? \r\n\r\nIf the final pipeline component isn't a TextCategorizer, we can log a warning like:\r\n\r\n```\r\nWARNING: Generating only the spacy flavor for the provided spacy model. This means the model can be loaded back via `mlflow.spacy.load_model`, but cannot be loaded back using pyfunc APIs like `mlflow.pyfunc.load_model` or via the `mlflow models` CLI commands. MLflow will only generate the pyfunc flavor for spacy models whose final pipeline component is an instance of spacy.pipeline.pipes.TextCategorizer.\r\n```\r\n\r\nI think such a change would result in nicer behavior - we'll only generate a pyfunc flavor for Spacy models that can be served as pyfuncs (users won't hit issues where they attempt to run `mlflow models serve /path/to/saved/spacy/model` and the model errors out at inference time because it's not a text classifier). We can then later add support for serving other types of spacy models as pyfuncs later on.",
+        "createdAt" : "2020-04-11T23:02:09Z",
+        "updatedAt" : "2020-04-14T18:36:01Z",
+        "lastEditedBy" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d07f5161893cf06942d6270571acafec9c94f490",
+    "line" : 162,
+    "diffHunk" : "@@ -1,1 +160,164 @@    def predict(self, dataframe):\n        \"\"\"\n        Only works for predicting using text categorizer.\n        Not suitable for other pipeline components (e.g: parser)\n        :param dataframe: pandas dataframe containing texts to be categorized"
+  },
+  {
+    "id" : "a88af1f9-9662-49c8-9421-0a94507571c5",
+    "prId" : 2242,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/2242#pullrequestreview-359361276",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b0aa800d-a2c7-4115-870a-52fac818e37d",
+        "parentId" : null,
+        "authorId" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "body" : "Should we check the dimensions of the input here & throw an `MlflowException` if it's invalid? Would be nice to make our assumptions about the input shape here (that it contains a single column) clear to the end user. ",
+        "createdAt" : "2020-02-13T05:57:54Z",
+        "updatedAt" : "2020-04-14T18:36:01Z",
+        "lastEditedBy" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7c898fb-6cc7-4cd9-a0c7-829a41735e52",
+        "parentId" : "b0aa800d-a2c7-4115-870a-52fac818e37d",
+        "authorId" : "1e40e258-e169-44a4-897f-9bd63f3f7e1a",
+        "body" : "Added check before prediction and some shape info in the docstrings for the dataframe parameter.\r\nAlso created a test to assert the exception is raised on wrong shape.",
+        "createdAt" : "2020-02-15T19:09:53Z",
+        "updatedAt" : "2020-04-14T18:36:01Z",
+        "lastEditedBy" : "1e40e258-e169-44a4-897f-9bd63f3f7e1a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d07f5161893cf06942d6270571acafec9c94f490",
+    "line" : 172,
+    "diffHunk" : "@@ -1,1 +170,174 @@\n        return pd.DataFrame({\n            'predictions': dataframe.ix[:, 0].apply(lambda text: self.spacy_model(text).cats)\n        })\n"
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "814778b2-948a-4324-afc5-6a787500c209",
+    "prId" : 331,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/331#pullrequestreview-149477306",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "596073f1-dbaf-46c0-aa39-7e997aca139d",
+        "parentId" : null,
+        "authorId" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "body" : "OK, my understanding of the data flow is we:\r\n\r\n  1. Take a string off the wire, which we expect is JSON.\r\n  2. Deserialize that JSON in a manner which attempts to be analogous to if the data were a Pandas DataFrame serialized as JSON, i.e., into a list of dictionaries, one dictionary per row (or `List<Map<String, Object>>` in Java).\r\n  3. Re-serialize the JSON into a String of similar format, but with two main differences: (A) We drop columns that are not expected from the serialized schema and (B) we add the schema as a top-level field.\r\n  4. Ask MLeap to deserialize the JSON string into a DefaultLeapFrame.\r\n\r\nWe then ask the model to predict based on this DefaultLeapFrame, which results in a new LeapFrame. We then:\r\n  1. Throw out the schema, pulling out just the rows, which we for some reason assume the first column of each row is the result of interest.\r\n  2. Serialize the predictions as an array of simple types.\r\n  3. Output that array back to the user.\r\n\r\nIs the above flow correct?",
+        "createdAt" : "2018-08-24T18:04:52Z",
+        "updatedAt" : "2018-08-27T18:09:31Z",
+        "lastEditedBy" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f11522cb-28ca-4489-8e15-6b8cb4e5735b",
+        "parentId" : "596073f1-dbaf-46c0-aa39-7e997aca139d",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "That flow is correct. Regarding (1) from the second portion, we only want to use rows from the column named `prediction` - this is what our `pyfunc` wrapper for Spark models does. Accordingly, the statically definitely `predictionColumnNames` list is misleading; I defined it because the `LeapFrame.select()` operation takes a list. I think it would be better to statically define the column name as a string and create a new list containing the single column name within the method that calls `LeapFrame.select()`.",
+        "createdAt" : "2018-08-24T22:26:24Z",
+        "updatedAt" : "2018-08-27T18:09:31Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c1267650e88e0fc47ba0b2660a6af8e1ea5e1749",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +54,58 @@\n  @Override\n  protected PredictorDataWrapper predict(PredictorDataWrapper input)\n      throws PredictorEvaluationException {\n    PandasRecordOrientedDataFrame pandasFrame = null;"
+  },
+  {
+    "id" : "eb67f310-2c45-46d8-8584-d0e8b6db2b76",
+    "prId" : 331,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/331#pullrequestreview-149477940",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8b29b2ab-b82a-48c5-9472-da24d34c0ba4",
+        "parentId" : null,
+        "authorId" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "body" : "Why `getRaw(0)`? What if there are multiple predictionColumnNames?",
+        "createdAt" : "2018-08-24T18:30:13Z",
+        "updatedAt" : "2018-08-27T18:09:31Z",
+        "lastEditedBy" : "6e958077-8d60-494d-8079-e77af3a2951f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b4b298f-f789-4b80-bf16-8d603635db5f",
+        "parentId" : "8b29b2ab-b82a-48c5-9472-da24d34c0ba4",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "We only want to use rows from the column named `prediction` - this is what our `pyfunc` wrapper for Spark models does. Accordingly, the statically definitely `predictionColumnNames` list is misleading; I defined it because the `LeapFrame.select()` operation takes a list. I think it would be better to statically define the column name as a string and create a new list containing the single column name within the method that calls `LeapFrame.select()`.\r\n\r\nAfter performing a select on a single-element list of column names, we can then select the first and only element of each row via `getRaw(0)`.",
+        "createdAt" : "2018-08-24T22:30:10Z",
+        "updatedAt" : "2018-08-27T18:09:31Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c1267650e88e0fc47ba0b2660a6af8e1ea5e1749",
+    "line" : 108,
+    "diffHunk" : "@@ -1,1 +103,107 @@    List<Object> predictions = new ArrayList<Object>();\n    for (Row row : predictionRowsIterable) {\n      predictions.add(row.getRaw(0));\n    }\n"
+  }
+]

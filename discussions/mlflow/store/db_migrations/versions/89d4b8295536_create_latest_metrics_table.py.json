@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "1c3126d7-96ec-4c3b-9761-faa35b22cf27",
+    "prId" : 1767,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/1767#pullrequestreview-280614852",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "78d4fe1a-d24f-439d-85ee-2c499447628b",
+        "parentId" : null,
+        "authorId" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "body" : "Out of curiosity, did we measure migration timings against a DB with a reasonable number of logged metrics as a sanity check? Just because SQLAlchemy has surprised us before...:P",
+        "createdAt" : "2019-08-27T02:02:45Z",
+        "updatedAt" : "2019-09-01T04:13:51Z",
+        "lastEditedBy" : "bd3067fd-855b-4bd1-898d-ca29199fd092",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7057a7c7-ec87-4744-b6cd-14abee39a42b",
+        "parentId" : "78d4fe1a-d24f-439d-85ee-2c499447628b",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "Excellent question! After replacing multiple calls to `session.merge()` in the migration with a single batch insert call to `session.add_all()`, I measured a migration latency of **three seconds** when migrating a *remote* Tracking database running MySQL 5.7 with the following attributes:\r\n\r\n* ``3702`` unique metrics\r\n* ``466860`` total metric entries\r\n* ``186`` runs\r\n* An average of ``125`` entries per unique metric\r\n\r\nGiven that almost 500,000 metric entries were examined during the migration, I am reasonably confident that this migration will execute quickly in most cases.\r\n\r\nI've also documented this information, along with other helpful info about the migration, in the migrations README (https://github.com/mlflow/mlflow/blob/46e960fff5c6fa9153b7174db8c8efb20124da19/mlflow/store/db_migrations/README.md#89d4b8295536_create_latest_metrics_table).",
+        "createdAt" : "2019-08-28T06:35:36Z",
+        "updatedAt" : "2019-09-01T04:13:51Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7fa61934515e0b92b1711d5fa9f3fded119d56cb",
+    "line" : 67,
+    "diffHunk" : "@@ -1,1 +65,69 @@\ndef _get_latest_metrics_for_runs(session):\n    metrics_with_max_step = session \\\n        .query(SqlMetric.run_uuid, SqlMetric.key, func.max(SqlMetric.step).label('step')) \\\n        .group_by(SqlMetric.key, SqlMetric.run_uuid) \\"
+  },
+  {
+    "id" : "b2a49ad7-4fcb-443b-881d-81f6a82bea50",
+    "prId" : 1767,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/1767#pullrequestreview-280619693",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3c321ef2-b9b3-40d9-93a7-cb22565c216e",
+        "parentId" : null,
+        "authorId" : "585a7aa0-77e3-46ce-95a0-4a8de00c6c4a",
+        "body" : "This is a mean query. Can we look an alternative mechanisms like `rank`? Partitioned by `run_uuid, metric_name` and ordered by step and timestamp -- all we need is rank == 1.\r\n\r\nref: https://stackoverflow.com/questions/40635099/convert-rank-and-partition-query-to-sqlalchemy",
+        "createdAt" : "2019-08-27T06:46:12Z",
+        "updatedAt" : "2019-09-01T04:13:51Z",
+        "lastEditedBy" : "585a7aa0-77e3-46ce-95a0-4a8de00c6c4a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "712476e1-c06c-4c93-a6c3-2df071721b1f",
+        "parentId" : "3c321ef2-b9b3-40d9-93a7-cb22565c216e",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "@mparkhe This is an excellent suggestion. I tried out rank with the following query:\r\n```\r\n    subquery = session.query(\r\n        SqlMetric,\r\n        func.rank().over(\r\n            order_by=[\r\n                SqlMetric.step.desc(),\r\n                SqlMetric.timestamp.desc(),\r\n                SqlMetric.value.desc(),\r\n            ],\r\n            partition_by=SqlMetric.run_uuid\r\n        ).label(\"metric_rank\")\r\n    ).subquery()\r\n\r\n    return session.query(subquery).filter(subquery.c.metric_rank == 1).all()\r\n```\r\n\r\nThis works well against MYSQL 8.0. However, it fails against MYSQL 5.7:\r\n```\r\n(MySQLdb._exceptions.ProgrammingError) (1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '(PARTITION BY metrics.run_uuid ORDER BY metrics.step DESC, metrics.timestamp DES' at line 2\")\r\n[SQL: SELECT anon_1.`key` AS anon_1_key, anon_1.value AS anon_1_value, anon_1.timestamp AS anon_1_timestamp, anon_1.step AS anon_1_step, anon_1.is_nan AS anon_1_is_nan, anon_1.run_uuid AS anon_1_run_uuid, anon_1.metric_rank AS anon_1_metric_rank\r\nFROM (SELECT metrics.`key` AS `key`, metrics.value AS value, metrics.timestamp AS timestamp, metrics.step AS step, metrics.is_nan AS is_nan, metrics.run_uuid AS run_uuid, rank() OVER (PARTITION BY metrics.run_uuid ORDER BY metrics.step DESC, metrics.timestamp DESC, metrics.value DESC) AS metric_rank\r\nFROM metrics) AS anon_1\r\nWHERE anon_1.metric_rank = %s]\r\n[parameters: (1,)]\r\n(Background on this error at: http://sqlalche.me/e/f405)\r\n```\r\n\r\nUnfortunately, the `rank()` function is not supported on MYSQL 5.7 - this version is still widely used.\r\n\r\nI can add a comment to the mean query indicating that `rank()` is not being used to ensure compatibility with certain types of databases. It's worth noting that this query will only execute when a users database is being migrated, so the hope is that the additional query overhead should not be prohibitive for day-to-day use.",
+        "createdAt" : "2019-08-27T19:21:08Z",
+        "updatedAt" : "2019-09-01T04:13:51Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e00464f0-dffb-4ec4-acdf-1b59882905bc",
+        "parentId" : "3c321ef2-b9b3-40d9-93a7-cb22565c216e",
+        "authorId" : "585a7aa0-77e3-46ce-95a0-4a8de00c6c4a",
+        "body" : "This is truly unfortunate. Based on our conversation.\r\n\r\n1. Let's write out a big massive warning so people know to to backup database before migration. Ideally, if we have an option to give a `--backup_to` option with migration script that would make it super convenient\r\n\r\n2. Give clear directive on what is being migrated and why this could be an expensive process. A simple script like this would give migrators an idea a size of their problem, esp if counts are large.\r\n\r\n```\r\nSELECT metric, counts\r\nFROM (\r\n  SELECT run_uuid, name, COUNT(1) as counts\r\n  FROM metrics\r\n  GROUP BY run_uuid, name\r\n)\r\nORDER BY counts DESC\r\nLIMIT 100\r\n```\r\n\r\n3. Finally, if someone runs into migration trouble, they might have to batch up the metrics to migrate. Especially the ones with large counts.\r\n\r\nThanks, @dbczumar!\r\n ",
+        "createdAt" : "2019-08-28T03:34:07Z",
+        "updatedAt" : "2019-09-01T04:13:51Z",
+        "lastEditedBy" : "585a7aa0-77e3-46ce-95a0-4a8de00c6c4a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e79758fa-95bb-4973-8f8a-ca1102d3f8e2",
+        "parentId" : "3c321ef2-b9b3-40d9-93a7-cb22565c216e",
+        "authorId" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "body" : "Thanks for the thorough breakdown @mparkhe.\r\n\r\n1. I've revamped the message displayed by ``mlflow db upgrade --help`` to more strongly indicate that databases should be backed up prior to executing migrations; this revamped message also links to the updated migrations README, which provides detailed information about the new migration (see point #2). I've also added a call to `_logger.warn()` prior to the execution of the migration indicating that the migration may be heavyweight / performance-intensive on databases with large ``metrics`` tables. This warning message also refers users to the README, where they can find information about recovering from migration failures (fortunately, the recovery process is easy in this case .- users can simply delete the ``latest_metrics`` table).\r\n\r\n2. The migrations README has been updated to include a detailed description of the ``create_latest_metrics`` migration, including queries for estimating performance and some performance benchmarking results against a test MySQL database. This migration information is summarized in the warning message emitted at the beginning of the migration script (see point #1). Additionally, the migration script computes statistics, such as the total number of metric entries and unique (run_id, metric_key) tuples, and prints them prior to the execution of the migration. This will aid the user (and us by way of issue stacktraces) in debugging migration failures.\r\n\r\n3. The migrations README and the warning message emitted by the `create_latest_metrics` migration encourage the user to file a GitHub issue if they encounter an unresolvable migration failure. Batching would definitely help if computing the latest metric entry for every unique `(key, run_id)` tuple proves to be too slow for large databases (though I'm encouraged by the fact that migrating 500,000 metric entries for 3702 unique tuples only takes 3 seconds and latency is dominated by the batch insert operation, rather than the triply-joined query). \r\n\r\nI'm not sure that large counts (e.g., many metric entries per unique (key, run_id) tuple) have an outsized impact on the performance of the query as its currently structured. Given a fixed number of metric entries, I think having more unique (key, run_id) tuples (== *smaller* counts per tuple) makes for a more expensive query because it increases the size of each join operation. Please correct me if I'm wrong here.\r\n\r\nLet me know what your thoughts are regarding these changes! Thanks so much for your help!",
+        "createdAt" : "2019-08-28T06:49:23Z",
+        "updatedAt" : "2019-09-01T04:13:51Z",
+        "lastEditedBy" : "3f60ced2-d2f0-4cc5-9898-5aefe16e0be8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7fa61934515e0b92b1711d5fa9f3fded119d56cb",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +70,74 @@        .subquery('metrics_with_max_step')\n    metrics_with_max_timestamp = session \\\n        .query(SqlMetric.run_uuid, SqlMetric.key, SqlMetric.step,\n               func.max(SqlMetric.timestamp).label('timestamp')) \\\n        .join(metrics_with_max_step,"
+  },
+  {
+    "id" : "781a057f-1865-433f-bfc3-aa939fcdbb4e",
+    "prId" : 1767,
+    "prUrl" : "https://github.com/mlflow/mlflow/pull/1767#pullrequestreview-283166485",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27718189-1625-4f18-ab31-7fb03b48780f",
+        "parentId" : null,
+        "authorId" : "585a7aa0-77e3-46ce-95a0-4a8de00c6c4a",
+        "body" : ":+1:",
+        "createdAt" : "2019-09-03T18:03:09Z",
+        "updatedAt" : "2019-09-03T18:05:29Z",
+        "lastEditedBy" : "585a7aa0-77e3-46ce-95a0-4a8de00c6c4a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7fa61934515e0b92b1711d5fa9f3fded119d56cb",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +47,51 @@        \" {issues_link}.\".format(\n            readme_link=(\n                \"https://github.com/mlflow/mlflow/blob/master/mlflow/store/db_migrations/README.md\"\n                \"#89d4b8295536_create_latest_metrics_table\"\n            ),"
+  }
+]
