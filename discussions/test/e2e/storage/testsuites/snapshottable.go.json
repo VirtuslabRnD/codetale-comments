@@ -1,0 +1,937 @@
+[
+  {
+    "id" : "ba5ca246-f2c0-4113-8135-47267f2f6115",
+    "prId" : 101280,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101280#pullrequestreview-641446746",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "I think we should have 2 tests cases: One that takes a a snapshot online while it's still mounted, and one that takes a snapshot offline. \r\n\r\nI was hesitant when this workaround was initially added to Windows because I think the online snapshot case is the more common one, and the solution there is to have the application flush their data before taking a snapshot.",
+        "createdAt" : "2021-04-20T16:45:07Z",
+        "updatedAt" : "2021-04-21T19:01:49Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b4d3217-984c-42ef-9bbb-19865fa650fc",
+        "parentId" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "but our \"application\" (`/bin/echo`) does not flush anything. With `/bin/sync` it works pretty well.",
+        "createdAt" : "2021-04-20T18:18:01Z",
+        "updatedAt" : "2021-04-21T19:01:49Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7ff1e06e-827c-444b-b44a-721b98691010",
+        "parentId" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "authorId" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "body" : "Yah adding a sync to the tester pod so that we still have a test case for online snapshots makes sense to me. Then add another test for the offline snapshot. Doing a sync after the echo probably is a good idea in both cases to reduce flakiness.",
+        "createdAt" : "2021-04-20T18:32:22Z",
+        "updatedAt" : "2021-04-21T19:01:49Z",
+        "lastEditedBy" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80c8fe96-ced5-458d-a069-1a108ef66662",
+        "parentId" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "For the offline case, if we want to specifically verify that volume plugins are correctly flushing when unstaging, then it's better to not do the flush to mask plugin bugs.\r\n\r\nBut anyway, it seems like we've already turned these tests into the \"offline\" scenario for windows, so we can continue to do the same for linux, but we should find someone that has time to add the online scenario this release because I feel like the online scenario is the more common one.",
+        "createdAt" : "2021-04-20T18:40:59Z",
+        "updatedAt" : "2021-04-21T19:01:49Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e6268110-3b78-463c-90f9-520c84637295",
+        "parentId" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "authorId" : "87fae8a2-4751-4356-ba8a-ce265708b853",
+        "body" : "`sync` wasn't available in windows when I was working on https://github.com/kubernetes/kubernetes/pull/100377, FYI I opened https://github.com/kubernetes/kubernetes/issues/101172",
+        "createdAt" : "2021-04-20T19:17:17Z",
+        "updatedAt" : "2021-04-21T19:01:49Z",
+        "lastEditedBy" : "87fae8a2-4751-4356-ba8a-ce265708b853",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "72fbb097-31f5-4bc9-bac0-5a09306f36bd",
+        "parentId" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "authorId" : "1a46cba5-dd9b-4c03-b94c-4dbfb64198e4",
+        "body" : "Feel free to correct me, but in an attempt to summarize the conversation and action items here:\r\n\r\n1. We need to have two different test sets. With this PR (and https://github.com/kubernetes/kubernetes/pull/100057 ) the current tests have been converted to an \"offline\" scenario, where the container is no longer running at the time the snapshot is taken. This forces the volume to be unmounted and unpublished, which also results in a cache flush and disk write. If we assume this path forward (2 sets of tests), then we need to ensure all distros complete a NodeUnstageVolume call, and this PR is appropriate?\r\n2. We need to create a series of online tests, where the container continues to run when we take the VolumeSnapshot. In this scenario we'll need to execute a `sync` to ensure that the cache is flushed and the data is persisted in the snapshot.\r\n\r\nIs this understanding correct?",
+        "createdAt" : "2021-04-20T19:22:15Z",
+        "updatedAt" : "2021-04-21T19:01:49Z",
+        "lastEditedBy" : "1a46cba5-dd9b-4c03-b94c-4dbfb64198e4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80098209-3a3b-49f2-9dac-464841007e36",
+        "parentId" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Yup!",
+        "createdAt" : "2021-04-20T19:53:47Z",
+        "updatedAt" : "2021-04-21T19:01:49Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35ddb85e-36c6-4244-b4a0-1e28e806e630",
+        "parentId" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "So.. is this PR OK then?",
+        "createdAt" : "2021-04-21T11:47:52Z",
+        "updatedAt" : "2021-04-21T19:01:49Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "deff2b0f-2291-466f-b45c-e22072cfb8c7",
+        "parentId" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Opened up https://github.com/kubernetes/kubernetes/issues/101333 to track adding online shapshot tests",
+        "createdAt" : "2021-04-21T18:11:26Z",
+        "updatedAt" : "2021-04-21T19:01:49Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23abc29e-7e9f-4cad-b54c-0e779bde6b48",
+        "parentId" : "f962892c-9ec0-46b1-a6bb-7ce92ee99fe2",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I think the original test is considered more like offline test. The pod was deleted first and then snapshot is taken. The subtle thing here is that even when pod is deleted from api server, there might be a chance that volume is not finished unstaging yet.\r\n\r\nSo the new online test need to change this logic.",
+        "createdAt" : "2021-04-21T19:23:16Z",
+        "updatedAt" : "2021-04-21T19:24:11Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "21ea9af37f11d5b6d5c0c6baf3855206372e7212",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +185,189 @@\t\t\tgomega.Expect(nodeName).NotTo(gomega.BeEmpty(), \"pod.Spec.NodeName must not be empty\")\n\n\t\t\tginkgo.By(fmt.Sprintf(\"[init] waiting until the node=%s is not using the volume=%s\", nodeName, pv.Name))\n\t\t\tsuccess := storageutils.WaitUntil(framework.Poll, f.Timeouts.PVDelete, func() bool {\n\t\t\t\tnode, err := cs.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})"
+  },
+  {
+    "id" : "1ddb5b9e-6358-4d5b-a43e-317c055f5357",
+    "prId" : 99161,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99161#pullrequestreview-592767317",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "64bd7873-6970-4cb1-a174-06fe608c8230",
+        "parentId" : null,
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "nit: Can this comment be clarified? Does this mean the storage system expects the PVC to be deleted before the snapshot is deleted?",
+        "createdAt" : "2021-02-17T23:30:19Z",
+        "updatedAt" : "2021-02-18T00:17:41Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "017ecfa2-1a8e-4568-87c0-dbc5a5363474",
+        "parentId" : "64bd7873-6970-4cb1-a174-06fe608c8230",
+        "authorId" : "d10fef96-5a18-44e7-b23e-735de7561af7",
+        "body" : "Done",
+        "createdAt" : "2021-02-18T01:08:30Z",
+        "updatedAt" : "2021-02-18T01:08:30Z",
+        "lastEditedBy" : "d10fef96-5a18-44e7-b23e-735de7561af7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c4dfee62628beee01707b2a1abf08b6a4936cb0d",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +271,275 @@\t\t\t\tginkgo.By(\"should delete the VolumeSnapshotContent according to its deletion policy\")\n\n\t\t\t\t// Delete both Snapshot and PVC at the same time because different storage systems\n\t\t\t\t// have different ordering of deletion. Some may require delete PVC first before\n\t\t\t\t// Snapshot deletion and some are opposite."
+  },
+  {
+    "id" : "ced1bdb3-8c52-4127-b5c6-e78957e38836",
+    "prId" : 99161,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99161#pullrequestreview-592736489",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "20b31ebb-0250-455a-b20e-80e12c12354d",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Is DeleteAndWaitSnapshot used in any other tests? Will those other tests have the same issue?",
+        "createdAt" : "2021-02-18T00:12:31Z",
+        "updatedAt" : "2021-02-18T00:17:41Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a870eb3-b4e0-4f31-bf8f-5fe13257c00a",
+        "parentId" : "20b31ebb-0250-455a-b20e-80e12c12354d",
+        "authorId" : "d10fef96-5a18-44e7-b23e-735de7561af7",
+        "body" : "It's being used in the csi_mock_volume test and It seems the mock driver is okay with the ordering.",
+        "createdAt" : "2021-02-18T00:14:35Z",
+        "updatedAt" : "2021-02-18T00:17:41Z",
+        "lastEditedBy" : "d10fef96-5a18-44e7-b23e-735de7561af7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c4dfee62628beee01707b2a1abf08b6a4936cb0d",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +270,274 @@\n\t\t\t\tginkgo.By(\"should delete the VolumeSnapshotContent according to its deletion policy\")\n\n\t\t\t\t// Delete both Snapshot and PVC at the same time because different storage systems\n\t\t\t\t// have different ordering of deletion. Some may require delete PVC first before"
+  },
+  {
+    "id" : "666c38dd-ae01-4f1a-8421-5066f57a4250",
+    "prId" : 93196,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/93196#pullrequestreview-460976739",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "08367cd7-794a-4254-8b30-d9070d0ea83c",
+        "parentId" : null,
+        "authorId" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "body" : "We update the vs content object delete policy to \"retain\" in line 424. Should delete of vs content fail here? i.e framework.ExpectError(err) ? Can you please elaborate?\r\n\r\nhttps://github.com/kubernetes-csi/external-snapshotter/blob/master/config/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml#L21",
+        "createdAt" : "2020-07-21T18:42:55Z",
+        "updatedAt" : "2020-08-28T17:45:24Z",
+        "lastEditedBy" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3de646c0-c79b-4a3a-9e3d-297a41a7334b",
+        "parentId" : "08367cd7-794a-4254-8b30-d9070d0ea83c",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "The deletion policy can be confusing, I was confused as well. If the deletion policy is retain on vscontent, when vs is deleted vscontent will not be deleted. Further, if the vscontent is manually deleted then the underlying snapshot resource will not be deleted.",
+        "createdAt" : "2020-07-23T15:05:42Z",
+        "updatedAt" : "2020-08-28T17:45:24Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5130622e-b47c-41d6-9540-4b1ae559537f",
+        "parentId" : "08367cd7-794a-4254-8b30-d9070d0ea83c",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "The policy will not prevent vscontent from being deleted.",
+        "createdAt" : "2020-07-23T15:06:51Z",
+        "updatedAt" : "2020-08-28T17:45:24Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0e943e6-72e2-4254-898e-f4e7a5673938",
+        "parentId" : "08367cd7-794a-4254-8b30-d9070d0ea83c",
+        "authorId" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "body" : "I see, can you note this behavior in a comment in the code",
+        "createdAt" : "2020-07-23T17:37:00Z",
+        "updatedAt" : "2020-08-28T17:45:24Z",
+        "lastEditedBy" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e6847ae-5c5e-40ae-8be2-377738cff2ec",
+        "parentId" : "08367cd7-794a-4254-8b30-d9070d0ea83c",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "Noted in the code at line 437",
+        "createdAt" : "2020-08-04T16:28:00Z",
+        "updatedAt" : "2020-08-28T17:45:24Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "673af97bcd7d5c7f6ebfc4b97dca4c8822875055",
+    "line" : 252,
+    "diffHunk" : "@@ -1,1 +438,442 @@\n\t\tginkgo.By(\"checking the Snapshot content has been deleted\")\n\t\terr = utils.WaitForGVRDeletion(dc, SnapshotContentGVR, r.Vscontent.GetName(), framework.Poll, framework.SnapshotDeleteTimeout)\n\t\tframework.ExpectNoError(err)\n"
+  },
+  {
+    "id" : "e6a2c638-d0c0-4324-9048-b173d9eb764d",
+    "prId" : 92555,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92555#pullrequestreview-445125773",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b7627fa5-ed68-49cc-8735-00b4149d3c65",
+        "parentId" : null,
+        "authorId" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "body" : "Your test ends up creating and extra snapshot compared to the original test, and it also doesn't verify delete/retain works with whatever is happening in the snapshot check---which, granted, shouldn't matter now, but might if something is added.\r\n\r\nI wonder if it would be better to pull out the checks in \"should create objects with default\" into a common function that is run by the delete & retain steps, or put it into the beforeEach step.",
+        "createdAt" : "2020-07-08T01:09:43Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a2652ed-731e-4eac-96eb-63136ee4675b",
+        "parentId" : "b7627fa5-ed68-49cc-8735-00b4149d3c65",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "Please check the next commit. It's confusing because there was more refactoring done after I had added the new test.",
+        "createdAt" : "2020-07-08T15:45:33Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d2349f99-0836-4944-b42b-c73121d6b72a",
+        "parentId" : "b7627fa5-ed68-49cc-8735-00b4149d3c65",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "Now there is a test pattern which handles \"retain\" vs \"delete\" deletion policy. For each It statement it should be testing both policies now. \r\n\r\nRegarding the creating an extra snapshot compared to the original test, I don't believe that is the case, see:\r\nhttps://github.com/kubernetes/kubernetes/blob/master/test/e2e/storage/testsuites/snapshottable.go#L204\r\n",
+        "createdAt" : "2020-07-08T16:59:38Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "24340b10-8fe0-45af-b117-4947d4837821",
+        "parentId" : "b7627fa5-ed68-49cc-8735-00b4149d3c65",
+        "authorId" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "body" : "From what I understand, in the original test (https://github.com/kubernetes/kubernetes/blob/master/test/e2e/storage/testsuites/snapshottable.go), a snapshot is created in TestSnapshottable, which is run once each on the It()s on lines 189 and 204 when testing delete and retain policies (two snapshots total).\r\n\r\nIf I'm understanding your refactored code, the delete policy is hoisted up to a testpattern. A snapshot is created in CreateSnapshotResource. That happens before each of the It()s on lines 205 and 218 in https://github.com/kubernetes/kubernetes/blob/9b0dff7686228e2b6f514cdd496e2ae6ab236b9b/test/e2e/storage/testsuites/snapshottable.go. So to test both delete and retain, this code is run through two testpatterns (?) and a total of 4 snapshots are created.\r\n\r\nMaybe I've missed something?",
+        "createdAt" : "2020-07-08T20:06:51Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ab2bf2fc-6dbe-4fe6-b233-b3c45b26db02",
+        "parentId" : "b7627fa5-ed68-49cc-8735-00b4149d3c65",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "Take a look at https://github.com/kubernetes/kubernetes/blob/master/test/e2e/storage/testsuites/snapshottable.go#L321 and https://github.com/kubernetes/kubernetes/blob/master/test/e2e/storage/testsuites/snapshottable.go#L264.\r\n\r\nI believe both TestSnapshotDeleted and TestSnapshottable create their own snapshot, and snapshot class. So that would be a total of 4 before and after the change.",
+        "createdAt" : "2020-07-08T20:41:42Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "857df79f-8a8a-454a-9ed1-cf0be43f8705",
+        "parentId" : "b7627fa5-ed68-49cc-8735-00b4149d3c65",
+        "authorId" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "body" : "ah, right you are. Thanks.",
+        "createdAt" : "2020-07-08T21:01:19Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b64f05b70ab0e4ef986d229ece4ac02566ff0fe5",
+    "line" : 253,
+    "diffHunk" : "@@ -1,1 +241,245 @@\t\t\t\tframework.ExpectEqual(volumeSnapshotRef[\"name\"], vs.GetName())\n\t\t\t\tframework.ExpectEqual(volumeSnapshotRef[\"namespace\"], vs.GetNamespace())\n\t\t\t})\n\t\t\tginkgo.It(\"should restore from snapshot with saved data after modifying source data\", func() {\n\t\t\t\tvar restoredPVC *v1.PersistentVolumeClaim"
+  },
+  {
+    "id" : "d877d62b-2516-49e1-a673-667065e45768",
+    "prId" : 92555,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92555#pullrequestreview-445178224",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7ed633d1-62b9-4d59-a593-a0d318e86b93",
+        "parentId" : null,
+        "authorId" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "body" : "I think this CleanupResource() organization is a big win. But I want to make sure I understand what's going on.\r\n\r\nIt looks like the semantics have changed here: if a VolumeSnapshot isn't found, the previous test would fail, whereas this one would continue (see https://github.com/kubernetes/kubernetes/blob/master/test/e2e/storage/testsuites/snapshottable.go#L335 I think).\r\n\r\nIs that because this may not have been called after WaitForSnapshotReady? Or another reason?",
+        "createdAt" : "2020-07-08T20:26:50Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd646904-81a7-4bb8-8ebf-27d87c90ad48",
+        "parentId" : "7ed633d1-62b9-4d59-a593-a0d318e86b93",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "The big idea with CleanupResource is that it's purpose should be to clean up as much as it can to prevent resource leaks and be resilient to weird conditions, instead of acting as a way to test the deletion works.\r\n\r\nThe semantics of deletion should be captured by the deletion test: https://github.com/kubernetes/kubernetes/blob/9b0dff7686228e2b6f514cdd496e2ae6ab236b9b/test/e2e/storage/testsuites/snapshottable.go#L205. If the semantics of the test there has changed that would be an issue. If the volume snapshot was not found in that test then https://github.com/kubernetes/kubernetes/blob/9b0dff7686228e2b6f514cdd496e2ae6ab236b9b/test/e2e/storage/testsuites/snapshottable.go#L281 would throw an error.",
+        "createdAt" : "2020-07-08T20:49:10Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3b0adb3-9205-408f-ad17-d4c07f6c576e",
+        "parentId" : "7ed633d1-62b9-4d59-a593-a0d318e86b93",
+        "authorId" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "body" : "but line 281 won't fire if the resource is not found---don't we want that to be a test error?\r\n\r\n+1 on making CleanupResource robust and doing the testing in the test body, that's very nice organization.",
+        "createdAt" : "2020-07-08T21:05:53Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6fc0d9a6-84c7-4869-9c55-d7a479ce9a77",
+        "parentId" : "7ed633d1-62b9-4d59-a593-a0d318e86b93",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "I suppose you're right. Although CreateSnapshotResource does wait for the snapshot to be ready before it returns, and will error if it doesnt get created. https://github.com/kubernetes/kubernetes/blob/9b0dff7686228e2b6f514cdd496e2ae6ab236b9b/test/e2e/storage/testsuites/snapshottable.go#L332\r\n\r\nI suppose implicitly relying on the creation step to guarantee the snapshot exists prior to deletion would be confusing. It may just be easier for the DeleteAndWaitSnapshot method to not ignore `not found` errors.",
+        "createdAt" : "2020-07-08T22:21:16Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9261e37b-97a0-4474-a08f-81ec68468d9d",
+        "parentId" : "7ed633d1-62b9-4d59-a593-a0d318e86b93",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "I changed the behavior of DeleteAndWaitSnapshot to not ignore not found errors, and to return the error instead of failing. The test now checks that the deletion succeeds, so it should catch any not found errors.",
+        "createdAt" : "2020-07-08T22:45:02Z",
+        "updatedAt" : "2020-07-09T16:30:53Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b64f05b70ab0e4ef986d229ece4ac02566ff0fe5",
+    "line" : 581,
+    "diffHunk" : "@@ -1,1 +422,426 @@\t\tframework.Logf(\"deleting snapshot %q/%q\", sr.Vs.GetNamespace(), sr.Vs.GetName())\n\n\t\tsr.Vs, err = dc.Resource(SnapshotGVR).Namespace(sr.Vs.GetNamespace()).Get(context.TODO(), sr.Vs.GetName(), metav1.GetOptions{})\n\t\tswitch {\n\t\tcase err == nil:"
+  },
+  {
+    "id" : "1bfa488b-bc5a-4879-b023-a6829603889f",
+    "prId" : 92555,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92555#pullrequestreview-445890869",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "30a27c49-8f21-4bc2-b07f-b8359b292937",
+        "parentId" : null,
+        "authorId" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "body" : "nits: separate dataSourceRef variable not needed.",
+        "createdAt" : "2020-07-09T18:17:13Z",
+        "updatedAt" : "2020-07-09T18:17:13Z",
+        "lastEditedBy" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ab76e3e4-568d-45ce-9d5c-1e2ab55582b1",
+        "parentId" : "30a27c49-8f21-4bc2-b07f-b8359b292937",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "Good point",
+        "createdAt" : "2020-07-09T19:03:39Z",
+        "updatedAt" : "2020-07-09T19:03:39Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b64f05b70ab0e4ef986d229ece4ac02566ff0fe5",
+    "line" : 277,
+    "diffHunk" : "@@ -1,1 +265,269 @@\t\t\t\t}\n\n\t\t\t\trestoredPVC.Spec.DataSource = dataSourceRef\n\n\t\t\t\trestoredPVC, err = cs.CoreV1().PersistentVolumeClaims(restoredPVC.Namespace).Create(context.TODO(), restoredPVC, metav1.CreateOptions{})"
+  },
+  {
+    "id" : "448bb628-003c-4bef-9ec9-da81b9da6ab7",
+    "prId" : 92555,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92555#pullrequestreview-445889762",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "32129cb2-94a8-4787-8c04-f375f03f8206",
+        "parentId" : null,
+        "authorId" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "body" : "Cant we use the pod \"pvc-snapshottable-tester\" created in init() to modify the contents of the PV?\r\nHere we are starting yet another pod \"pvc-snapshottable-data-tester\" to modify the pv contents.\r\nIf we re-use the \"pvc-snapshottable-tester\" the test timings would be less. Thoughts?",
+        "createdAt" : "2020-07-09T18:23:43Z",
+        "updatedAt" : "2020-07-09T18:23:44Z",
+        "lastEditedBy" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "98b23530-ff94-43bf-b206-9e08ebc26c4d",
+        "parentId" : "32129cb2-94a8-4787-8c04-f375f03f8206",
+        "authorId" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "body" : "Is there an easy way to talk to the process in that init pod? IIUC it needs to wait until after the snapshot is made before modifying the volume. \r\n\r\nYour point about reducing the timing is good, though, considering all the timeouts we've been having recently. Maybe it would be worth it to create some utility pod infrastructure that could easily communicate back and forth with the test to avoid starting up extra pods.\r\n\r\n(all of that out of scope for this PR of course :-)",
+        "createdAt" : "2020-07-09T18:56:23Z",
+        "updatedAt" : "2020-07-09T18:56:23Z",
+        "lastEditedBy" : "5d64207d-3933-4932-8517-aace5b6574c0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5b1bf984-40ae-44f9-b321-f42762768e91",
+        "parentId" : "32129cb2-94a8-4787-8c04-f375f03f8206",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "We have some tests that do a Pod exec in order to modify data. That may be a method to consider if we don't want to launch a new pod.",
+        "createdAt" : "2020-07-09T19:00:04Z",
+        "updatedAt" : "2020-07-09T19:00:04Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8307ae99-44a5-4086-89c9-3e2412fc6a46",
+        "parentId" : "32129cb2-94a8-4787-8c04-f375f03f8206",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "The pod \"pvc-snapshottable-tester\" created in init() is destroyed in init(), although there's no reason we can't keep it around so that we can reuse it. It looks like it currently takes ten seconds for a pod to become ready, and we would save ten seconds.\r\n\r\nI was having trouble finding a way to execute commands in an existing pod, perhaps I can use this https://github.com/kubernetes/kubernetes/blob/master/test/e2e/framework/util.go#L500 and just ignore the error because I'm not looking for a string in output.",
+        "createdAt" : "2020-07-09T19:01:53Z",
+        "updatedAt" : "2020-07-09T19:01:53Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b64f05b70ab0e4ef986d229ece4ac02566ff0fe5",
+    "line" : 262,
+    "diffHunk" : "@@ -1,1 +250,254 @@\n\t\t\t\tcommand := fmt.Sprintf(\"echo '%s' > /mnt/test/data\", modifiedMntTestData)\n\t\t\t\tRunInPodWithVolume(cs, pvc.Namespace, pvc.Name, \"pvc-snapshottable-data-tester\", command, config.ClientNodeSelection)\n\n\t\t\t\tginkgo.By(\"creating a pvc from the snapshot\")"
+  },
+  {
+    "id" : "6dfd8ffa-b885-4e90-96ac-2dc706106daa",
+    "prId" : 92555,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92555#pullrequestreview-445890694",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "487e1772-8e07-4e42-a6e2-c94310830479",
+        "parentId" : null,
+        "authorId" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "body" : "Don't think these are needed. \"not implemented\" is good enough. We can add details when the test is added.",
+        "createdAt" : "2020-07-09T18:24:49Z",
+        "updatedAt" : "2020-07-09T18:24:50Z",
+        "lastEditedBy" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd7c33cc-4b19-4f70-b526-45830035de76",
+        "parentId" : "487e1772-8e07-4e42-a6e2-c94310830479",
+        "authorId" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "body" : "True these aren't needed, but it's a scaffolding to remember the steps.",
+        "createdAt" : "2020-07-09T19:03:21Z",
+        "updatedAt" : "2020-07-09T19:03:22Z",
+        "lastEditedBy" : "192cd883-79e5-493d-a21c-4ddb67024b40",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b64f05b70ab0e4ef986d229ece4ac02566ff0fe5",
+    "line" : 553,
+    "diffHunk" : "@@ -1,1 +403,407 @@\t\t// the first snapshot's snapshot handle.\n\t\tginkgo.Skip(\"Preprovisioned test not implemented\")\n\t\tginkgo.By(\"taking a snapshot with deletion policy retain\")\n\t\tginkgo.By(\"recording the volume handle and status.snapshotHandle\")\n\t\tginkgo.By(\"deleting the snapshot and snapshot content\") // TODO: test what happens when I have two snapshot content that refer to the same content"
+  },
+  {
+    "id" : "f8bf3885-36e3-40ad-a58a-c9f545f246a2",
+    "prId" : 89705,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89705#pullrequestreview-386917456",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "58e887f2-4245-4488-ba9c-ff14f95a86ab",
+        "parentId" : null,
+        "authorId" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "body" : "Add a step to specifically delete the snapshotContent.  Verify that the content object is deleted from API server but the physical snapshot resource remains.",
+        "createdAt" : "2020-04-01T13:50:41Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2155294b-b829-4246-a469-2fc7ad698691",
+        "parentId" : "58e887f2-4245-4488-ba9c-ff14f95a86ab",
+        "authorId" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "body" : "Added this. ",
+        "createdAt" : "2020-04-02T03:17:23Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d88f250d-4a45-4928-b87e-0ee8c60046d9",
+        "parentId" : "58e887f2-4245-4488-ba9c-ff14f95a86ab",
+        "authorId" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "body" : "Actually, having issues finding the physical snapshot resource in a way that's agnostic to the driver being tested. Trying other ways now.",
+        "createdAt" : "2020-04-02T16:52:52Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0f15626-c2cb-4f56-aff8-fe2ce49ebb02",
+        "parentId" : "58e887f2-4245-4488-ba9c-ff14f95a86ab",
+        "authorId" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "body" : "ok, fixed this @xing-yang ",
+        "createdAt" : "2020-04-03T03:38:16Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1f0e4cd9f866c13cf17f62857d18f2c5919e315",
+    "line" : 387,
+    "diffHunk" : "@@ -1,1 +381,385 @@\t\tginkgo.By(\"checking the SnapshotContent has been deleted\")\n\t\terr = utils.WaitForGVRDeletion(l.dc, SnapshotContentGVR, snapshotContentName, framework.Poll, framework.SnapshotDeleteTimeout)\n\t\tframework.ExpectNoError(err)\n\t} else {\n\t\tframework.Failf(\"Invalid test config. DeletionPolicy should be either Delete or Retain. DeletionPolicy: %v\", sct.DeletionPolicy)"
+  },
+  {
+    "id" : "f1988a4a-f20f-4ad8-b94f-09ef08e2e990",
+    "prId" : 89705,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89705#pullrequestreview-399690345",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9965eb65-7812-4a1f-ad6d-f6252e7ef1ba",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Some of these setup steps look very familiar with the other test cases. Can we combine them into a common init() and cleanup() method?",
+        "createdAt" : "2020-04-14T00:56:54Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "75e587ad-ae61-4951-820a-dfadda5b7adc",
+        "parentId" : "9965eb65-7812-4a1f-ad6d-f6252e7ef1ba",
+        "authorId" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "body" : "Yes - good idea, refactored this suite to work similar to testsuite in `provisioning.go`",
+        "createdAt" : "2020-04-24T07:07:02Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1f0e4cd9f866c13cf17f62857d18f2c5919e315",
+    "line" : 56,
+    "diffHunk" : "@@ -1,1 +115,119 @@\n\t\t// Now do the more expensive test initialization.\n\t\tconfig, driverCleanup := driver.PrepareTest(f)\n\t\tl.config = config\n\t\tl.driverCleanup = driverCleanup"
+  },
+  {
+    "id" : "bf959e90-b4f1-4ecb-afd3-f76209a75025",
+    "prId" : 89705,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89705#pullrequestreview-396216741",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fba869c8-2ad4-4cbb-a11d-aa6d2fc993f8",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "All of these steps seem similar to other test cases and can probably benefit from some helper utilities to reduce code duplication and make the test case easier to read.",
+        "createdAt" : "2020-04-14T01:01:39Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f3ee465-6640-44fa-afd3-fce009934283",
+        "parentId" : "fba869c8-2ad4-4cbb-a11d-aa6d2fc993f8",
+        "authorId" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "body" : "Makes sense, will clean up these tests with helper utilities.",
+        "createdAt" : "2020-04-20T07:51:07Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1f0e4cd9f866c13cf17f62857d18f2c5919e315",
+    "line" : 119,
+    "diffHunk" : "@@ -1,1 +154,158 @@\t\t})\n\n\t\tginkgo.By(\"starting a pod to use the claim\")\n\t\tcommand := \"echo 'hello world' > /mnt/test/data\"\n\t\tl.pod = StartInPodWithVolume(l.cs, l.pvc.Namespace, l.pvc.Name, \"pvc-snapshottable-tester\", command, config.ClientNodeSelection)"
+  },
+  {
+    "id" : "8c66deed-1252-40a2-bd1f-decf310b4bed",
+    "prId" : 89705,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89705#pullrequestreview-414922802",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e542f953-456c-4afe-9233-4cf7cc8cc473",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "We can follow up on this separately, but there is a `CreateVolumeResource()` function that handles creating the StorageClass, PVC and Pod",
+        "createdAt" : "2020-04-30T01:31:34Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a5c5a03-47e2-44df-a31f-b5b493f7dee8",
+        "parentId" : "e542f953-456c-4afe-9233-4cf7cc8cc473",
+        "authorId" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "body" : "Ok sounds good.",
+        "createdAt" : "2020-05-20T00:58:21Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1f0e4cd9f866c13cf17f62857d18f2c5919e315",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +127,131 @@\t\tclaimSize, err := getSizeRangesIntersection(testVolumeSizeRange, driverVolumeSizeRange)\n\t\tframework.ExpectNoError(err, \"determine intersection of test size range %+v and driver size range %+v\", testVolumeSizeRange, driverVolumeSizeRange)\n\t\tl.pvc = e2epv.MakePersistentVolumeClaim(e2epv.PersistentVolumeClaimConfig{\n\t\t\tClaimSize:        claimSize,\n\t\t\tStorageClassName: &(l.sc.Name),"
+  },
+  {
+    "id" : "43122649-5ab4-45fb-9fa6-2837ffea55b2",
+    "prId" : 89705,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89705#pullrequestreview-419780559",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e507db17-bb87-4223-b738-5118cec4e2fe",
+        "parentId" : null,
+        "authorId" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "body" : "A one liner description of the struct snapshottableLocal  is helpful",
+        "createdAt" : "2020-05-28T05:08:58Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1f0e4cd9f866c13cf17f62857d18f2c5919e315",
+    "line" : 210,
+    "diffHunk" : "@@ -1,1 +219,223 @@// snapshottableLocal is used to keep the current state of a snapshottable\n// test, associated objects, and cleanup steps.\ntype snapshottableLocal struct {\n\tconfig        *PerTestConfig\n\tdriverCleanup func()"
+  },
+  {
+    "id" : "b9e5a0ae-c522-4522-a07e-fcc951758f7a",
+    "prId" : 89705,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89705#pullrequestreview-427622699",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f9d8b864-5c99-4550-af8b-ffb2c9172aad",
+        "parentId" : null,
+        "authorId" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "body" : "What if we hit an error (for e.g framework.ExpectNoError()) in one of the steps of the the init() call itself, in that case, we will miss cleanup of resources?\r\nsay for e.g. in init() we hit error after pod created or pv created. Can you please try it out?",
+        "createdAt" : "2020-05-28T05:42:02Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cddc2d38-170b-4af9-b03f-a58680c3f234",
+        "parentId" : "f9d8b864-5c99-4550-af8b-ffb2c9172aad",
+        "authorId" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "body" : "I'm not sure what we can do in that case. This will definitely happen in that case. I wanted to continue the execution of the cleanup steps, in that case, to continue getting rid of other resources.",
+        "createdAt" : "2020-06-05T01:13:00Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "180fff4a-52b6-4643-8107-93f207b22beb",
+        "parentId" : "f9d8b864-5c99-4550-af8b-ffb2c9172aad",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "There were some changes done to other storage test suites so that in the cleanup, we gather all the errors, and then at the end finally throw an error. That way we make sure we have run through all cleanup steps. [Example](https://github.com/kubernetes/kubernetes/blob/master/test/e2e/storage/testsuites/provisioning.go#L176)",
+        "createdAt" : "2020-06-09T01:20:03Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c42cd02d-913a-4642-96e9-af86d0be1179",
+        "parentId" : "f9d8b864-5c99-4550-af8b-ffb2c9172aad",
+        "authorId" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "body" : "Using tryFunc inside of  `cleanup()` now.",
+        "createdAt" : "2020-06-09T23:55:58Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "69dfcdb2-87bb-418a-81a7-28e458332cdd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1f0e4cd9f866c13cf17f62857d18f2c5919e315",
+    "line" : 182,
+    "diffHunk" : "@@ -1,1 +191,195 @@\n\t\tinit(l)\n\t\tdefer cleanup(l)\n\n\t\tTestSnapshottable(l, SnapshotClassTest{"
+  },
+  {
+    "id" : "0c236e0e-cdb9-4fb7-9983-7df8ffcbe3e4",
+    "prId" : 89705,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89705#pullrequestreview-419797670",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e0922a80-f4cd-46fd-9f84-082050990b81",
+        "parentId" : null,
+        "authorId" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "body" : "Lets put a print here to indicate the status and bound content of the snapshot, for better debugging?",
+        "createdAt" : "2020-05-28T05:58:41Z",
+        "updatedAt" : "2020-06-18T02:54:13Z",
+        "lastEditedBy" : "70e0dd56-8907-46d7-8381-c173d3c02d47",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1f0e4cd9f866c13cf17f62857d18f2c5919e315",
+    "line" : 335,
+    "diffHunk" : "@@ -1,1 +341,345 @@\tl.vscontent, err = l.dc.Resource(SnapshotContentGVR).Get(context.TODO(), snapshotContentName, metav1.GetOptions{})\n\tframework.ExpectNoError(err)\n\n\tginkgo.By(\"deleting the snapshot\")\n\terr = l.dc.Resource(SnapshotGVR).Namespace(l.vs.GetNamespace()).Delete(context.TODO(), l.vs.GetName(), metav1.DeleteOptions{})"
+  },
+  {
+    "id" : "a5f31a0f-917d-436c-a3c1-b138dfe61ab2",
+    "prId" : 85169,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85169#pullrequestreview-317313427",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "493ad15b-20bd-4c8e-96c3-92f2b8fc64fc",
+        "parentId" : null,
+        "authorId" : "87d7d25e-5586-44fd-93fa-024da6e91035",
+        "body" : "@msau42 \r\nSpoke with @boylee1111 w.r.t this piece. For PD CSI driver, it returns a storage class with delay binding and thus the need to create a pod.\r\nAs this is really to test snapshot functionality, IMHO it could be beneficial to remove this constraint.\r\nThought this PR is just to enable PD CSI driver e2e testing for snapshot, we could leave it here for now and think about removing it later when more test cases are added.",
+        "createdAt" : "2019-11-14T19:30:14Z",
+        "updatedAt" : "2019-11-14T19:30:14Z",
+        "lastEditedBy" : "87d7d25e-5586-44fd-93fa-024da6e91035",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6691568d-9119-4d9d-8ed8-a524789a557a",
+        "parentId" : "493ad15b-20bd-4c8e-96c3-92f2b8fc64fc",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "I think it is fine to keep it. This test suite should work against any storageclass, with or without delayed binding.",
+        "createdAt" : "2019-11-14T22:50:21Z",
+        "updatedAt" : "2019-11-14T22:50:21Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9b9562837f22680ac8d20d24b27fbabce0ec5844",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +149,153 @@\t\t}()\n\n\t\tginkgo.By(\"starting a pod\")\n\t\tcommand := fmt.Sprintf(\"grep '%s' /mnt/test/initialData\", pvc.Namespace)\n\t\tpod := StartInPodWithVolume(cs, pvc.Namespace, pvc.Name, \"pvc-snapshottable-tester\", command, e2epod.NodeSelection{Name: config.ClientNodeName})"
+  },
+  {
+    "id" : "4b45f534-5d74-47b4-b6ea-b5c0473afa74",
+    "prId" : 80058,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80058#pullrequestreview-309555221",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce9d8afb-c979-40f1-8df9-c565a787cdff",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "I'm undecided on whether or not we should remove the [Feature] tag from the tests. Because this also has a deployment dependency, the test is going to start failing for deployments that haven't been updated. I'll try to talk to a few folks to figure out what the recommendation should be.",
+        "createdAt" : "2019-10-24T00:26:33Z",
+        "updatedAt" : "2019-11-11T02:37:03Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce4e2072-0012-46af-a1ae-7241f259bdd0",
+        "parentId" : "ce9d8afb-c979-40f1-8df9-c565a787cdff",
+        "authorId" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "body" : "Sure.",
+        "createdAt" : "2019-10-24T00:51:35Z",
+        "updatedAt" : "2019-11-11T02:37:03Z",
+        "lastEditedBy" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3d44615e-57d0-42c7-9999-09fe6ea48f69",
+        "parentId" : "ce9d8afb-c979-40f1-8df9-c565a787cdff",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Didn't get much response. I would say let's keep the feature tag on, and we'll look into adding another non-alpha job for it.",
+        "createdAt" : "2019-10-30T23:10:15Z",
+        "updatedAt" : "2019-11-11T02:37:03Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3324722e071953065ad3418923c25b11a1c5629b",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +153,157 @@\n\t\t// Get the bound PV\n\t\t_, err = cs.CoreV1().PersistentVolumes().Get(pvc.Spec.VolumeName, metav1.GetOptions{})\n\t\tframework.ExpectNoError(err)\n"
+  },
+  {
+    "id" : "76e1c77b-f630-47ce-bb76-154a2bbff372",
+    "prId" : 69036,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69036#pullrequestreview-196015682",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ee599e7c-be60-462c-bbad-e128064750d0",
+        "parentId" : null,
+        "authorId" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "body" : "This field is changed to \"readyToUse\" in v1.0.1 from \"ready\" in v0.4.1.  So it won't work with the v0.4.1 snapshotter image and hostpath/hostpath-v0.  See Breaking Changes section in the release notes: https://github.com/kubernetes-csi/external-snapshotter/releases/tag/v1.0.1",
+        "createdAt" : "2019-01-23T19:17:41Z",
+        "updatedAt" : "2019-02-01T08:34:55Z",
+        "lastEditedBy" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b4e4ce73-8231-4a36-8c7f-152960046161",
+        "parentId" : "ee599e7c-be60-462c-bbad-e128064750d0",
+        "authorId" : "f71497cc-dd85-47eb-bbed-996bde0d13a4",
+        "body" : "updated",
+        "createdAt" : "2019-01-24T13:00:45Z",
+        "updatedAt" : "2019-02-01T08:34:55Z",
+        "lastEditedBy" : "f71497cc-dd85-47eb-bbed-996bde0d13a4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7280fcef5cf6a210016e70beeb198aa273e63970",
+    "line" : 311,
+    "diffHunk" : "@@ -1,1 +309,313 @@\t\t\t}\n\t\t\tvalue := status.(map[string]interface{})\n\t\t\tif value[\"readyToUse\"] == true {\n\t\t\t\tframework.Logf(\"VolumeSnapshot %s found and is ready\", snapshotName, time.Since(start))\n\t\t\t\treturn nil"
+  },
+  {
+    "id" : "54428dd4-3c6c-4a34-888b-b9e010be974d",
+    "prId" : 69036,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69036#pullrequestreview-199731658",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fcd9a73e-22a4-43f0-9c5b-3552ce16af55",
+        "parentId" : null,
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "I think this check is now redundant. But I'm in favor of merging it as-is anyway and will remove it when moving the test setup around.\r\n",
+        "createdAt" : "2019-02-01T19:15:00Z",
+        "updatedAt" : "2019-02-01T19:15:01Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f74a66da-3009-420a-9c79-3eb818fe8118",
+        "parentId" : "fcd9a73e-22a4-43f0-9c5b-3552ce16af55",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "@wackxu as @msau42 pointed out one more thing that needs to be changed before merging (the feature tag), can you remove this check while updating the PR?\r\n",
+        "createdAt" : "2019-02-04T18:17:24Z",
+        "updatedAt" : "2019-02-04T18:17:24Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7280fcef5cf6a210016e70beeb198aa273e63970",
+    "line" : 191,
+    "diffHunk" : "@@ -1,1 +189,193 @@func testSnapshot(input *snapshottableTestInput) {\n\tIt(\"should create snapshot with defaults\", func() {\n\t\tif input.dInfo.Name == \"csi-hostpath-v0\" {\n\t\t\tframework.Skipf(\"skip test when using driver csi-hostpath-v0 - skipping\")\n\t\t}"
+  },
+  {
+    "id" : "4dfdb4d3-aeae-442a-8a40-ef6931b6bb60",
+    "prId" : 69036,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69036#pullrequestreview-199730689",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "42872d93-3d84-49ec-b2ea-3c5e1b0a625f",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "This test case needs a Feature tag so it only runs in the alpha suite",
+        "createdAt" : "2019-02-04T18:15:16Z",
+        "updatedAt" : "2019-02-04T18:15:16Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7280fcef5cf6a210016e70beeb198aa273e63970",
+    "line" : 190,
+    "diffHunk" : "@@ -1,1 +188,192 @@\nfunc testSnapshot(input *snapshottableTestInput) {\n\tIt(\"should create snapshot with defaults\", func() {\n\t\tif input.dInfo.Name == \"csi-hostpath-v0\" {\n\t\t\tframework.Skipf(\"skip test when using driver csi-hostpath-v0 - skipping\")"
+  }
+]

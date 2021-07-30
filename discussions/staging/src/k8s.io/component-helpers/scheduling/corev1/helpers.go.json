@@ -1,0 +1,277 @@
+[
+  {
+    "id" : "cfbad536-6319-4b4c-b862-3a2314e7e005",
+    "prId" : 98445,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98445#pullrequestreview-582418003",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fbf9f2a1-068b-4834-a4bf-0f2e4b602910",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "A function that returns a negated boolean (Untolerated) is going to cause problems (it already did #98703), and we better fix it before the release is cut. The problem is that you would usually run into situation where you have to say `!untolerated`, which is a double negation.\r\n\r\nIn this case, it would be simpler to make this function just return a pointer. And perhaps we can have another exported function that uses this and returns true or false, where true means that it passes all taints.",
+        "createdAt" : "2021-02-03T14:13:45Z",
+        "updatedAt" : "2021-02-03T14:13:48Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2100bc9f-d3cb-491d-9338-c0c29630b253",
+        "parentId" : "fbf9f2a1-068b-4834-a4bf-0f2e4b602910",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "The problem is that the deprecated function `TolerationsTolerateTaintsWithFilter` which we removed had the opposite behavior (returned `true` if all the taints were tolerated). So this should only affect people who were using the deprecated function, where we had to update their semantics (which caused the regression).\r\n\r\nOn its own, I don't think this function is too confusing. It's searching for Untolerated Taints, returning true if there are any. But if it would be clearer for some use cases to wrap this and negate it to search for Tolerated Taints, returning true if *all* are tolerated then that's fine.",
+        "createdAt" : "2021-02-03T14:25:03Z",
+        "updatedAt" : "2021-02-03T14:25:03Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "578ff3ec343d1f165a06e943a5ec2bd7111aae89",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +76,80 @@// Returns true if there is an untolerated taint\n// Returns false if all taints are tolerated\nfunc FindMatchingUntoleratedTaint(taints []v1.Taint, tolerations []v1.Toleration, inclusionFilter taintsFilterFunc) (v1.Taint, bool) {\n\tfilteredTaints := getFilteredTaints(taints, inclusionFilter)\n\tfor _, taint := range filteredTaints {"
+  },
+  {
+    "id" : "18f79651-6c16-4b4e-8bbf-e8f31cca4a3e",
+    "prId" : 95531,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95531#pullrequestreview-513856352",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "can we change this to `MatchNodeSelectorTerms(node *v1.Node, terms []v1.NodeSelectorTerm) bool`?",
+        "createdAt" : "2020-10-14T21:13:37Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f9047728-7326-44d9-b4b7-27d96096be02",
+        "parentId" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "authorId" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "body" : "```\r\npkg/scheduler/framework/plugins/helper/node_affinity.go:75:\treturn corev1.MatchNodeSelectorTerms(nodeSelectorTerms, node.Labels, fields.Set{\r\n```\r\nrelies on `nodeFields fields.Set` argument to be set.",
+        "createdAt" : "2020-10-15T19:52:40Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4aa0ebcf-900f-43c6-907c-7cfcb8cd5af7",
+        "parentId" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "Really though, the context of that usage is:\r\n\r\n```go\r\n// nodeMatchesNodeSelectorTerms checks if a node's labels satisfy a list of node selector terms,\r\n// terms are ORed, and an empty list of terms will match nothing.\r\nfunc nodeMatchesNodeSelectorTerms(node *v1.Node, nodeSelectorTerms []v1.NodeSelectorTerm) bool {\r\n\treturn corev1.MatchNodeSelectorTerms(nodeSelectorTerms, node.Labels, fields.Set{\r\n\t\t\"metadata.name\": node.Name,\r\n\t})\r\n}\r\n```\r\n\r\nSo it's just a wrapper using the same signature @alculquicondor is suggesting.  The only other usage of this (in `pkg/volume/util` sets it to nil:\r\n```\r\npkg/volume/util/util.go:180:\t\tif !corev1.MatchNodeSelectorTerms(terms, labels.Set(nodeLabels), nil) {\r\n```\r\n\r\nThe question is do we want to switch the intent of this function to check *all* of the node's fields/labels or leave the option to pass specific ones to check against?",
+        "createdAt" : "2020-10-19T16:14:28Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db2ef0c8-b129-4e3b-8884-c4af7f9a2aa8",
+        "parentId" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "isn't it rather none when the fields are `nil`?\r\nIn any case, this is a question for pkg/volume OWNERs",
+        "createdAt" : "2020-10-19T16:58:56Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2ca7f0d8-62aa-41b3-97f4-63d26363ff97",
+        "parentId" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "> isn't it rather none when the fields are nil?\r\n\r\nIt checks against whatever is passed in. If that's nil, then it's none, but it could be a specific subset",
+        "createdAt" : "2020-10-19T17:11:48Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04932ac4-c997-49ae-96fb-61acd4a506f0",
+        "parentId" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Where you able to contact sig-storage regarding this?",
+        "createdAt" : "2020-10-20T18:03:10Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f43d29d-0baf-413b-8d30-6f88eccee2bb",
+        "parentId" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "> Where you able to contact sig-storage regarding this?\r\n\r\nI'm not sure who to ping on that (@kubernetes/sig-storage-misc or @saad-ali ?), but perhaps they can weigh in (to summarize, the question is does [the call to `MatchNodeSelectorTerms` in `CheckVolumeNodeAffinity`](https://github.com/kubernetes/kubernetes/blob/master/pkg/volume/util/util.go#L179) depend on ignoring node fields?)\r\n\r\nHowever, sig-scheduling also needs to consider the effect on ourselves here in the Node Affinity plugin (https://github.com/kubernetes/kubernetes/pull/95531#discussion_r507879839): is it important that we are only checking for matches against `metadata.name` or do we want to consider all of the node fields?",
+        "createdAt" : "2020-10-20T18:13:37Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a48aa561-3a56-4c11-a456-d033700ff2aa",
+        "parentId" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "storage shouldn't depend on the check to be nil. I think it would be nice to have a consistent check that can be shared across all users of this field, instead of each needing to supply the list of fields to check against.",
+        "createdAt" : "2020-10-21T00:02:43Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7fe9f6ee-43a6-41ad-a251-7a0d3d653f67",
+        "parentId" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "According to [the documentation](https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/#supported-fields) we should just support name and namespace (which doesn't apply to Nodes). Is there any other field supported for Nodes when using filters? Could you investigate this @damemi?\r\nThis is the opportunity to make this uniform.",
+        "createdAt" : "2020-10-21T00:41:36Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1e62f2d3-374f-4b0f-8b2a-5d5643c49067",
+        "parentId" : "ff636955-7057-4a52-b4bc-cb2eb50a290a",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "@msau42 @alculquicondor thanks for the updates, I wasn't aware of the restriction on field selectors so I think as you mentioned Aldo, only Name applies for node selectors anyway. In that case, the only usage of this field is to specifically exclude `metadata.name` from this node selector check, which seems like an oddly specific edge case. I also couldn't find any use cases of the `MatchFields` option that *didn't* use `metadata.name`.\r\n\r\nBased on that I think we have a consensus that the extra fields are unnecessary, and I'll update this to simplify the function signature. Thanks for the feedback!",
+        "createdAt" : "2020-10-21T16:08:46Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b7ba77c25b6a2c2c6bd0ed9fee5b125f98672946",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +40,44 @@// MatchNodeSelectorTerms checks whether the node labels and fields match node selector terms in ORed;\n// nil or empty term matches no objects.\nfunc MatchNodeSelectorTerms(\n\tnode *v1.Node,\n\tnodeSelector *v1.NodeSelector,"
+  },
+  {
+    "id" : "a265d0dc-1b7f-4cce-bfcd-1d76080c7d36",
+    "prId" : 95531,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95531#pullrequestreview-516940412",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a50bfaa2-6353-4887-9385-a8886dd41a99",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "I didn't notice this, but nothing was reusing these processed selectors, right?\r\n\r\nWe might want to do that for the node affinity plugin:\r\n\r\n```\r\nTODO: Avoid computing it for all nodes if this becomes a performance problem.\r\n```\r\n\r\nIf we are not introducing any regression at this point, we could leave that for later. Then we can add:\r\n\r\n```\r\nMatchParsedNodeSelectorTerms(*v1.Node, []ParsedNodeSelectorTerm) bool\r\n```",
+        "createdAt" : "2020-10-21T17:44:59Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ec7c91f5-52b1-46fb-b3ef-770f34e947e0",
+        "parentId" : "a50bfaa2-6353-4887-9385-a8886dd41a99",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "Since this is intended to be used by more than just the scheduler, wouldn't it make sense to keep the processing in this function itself? Otherwise 3rd party callers will have to implement `nodeSelectorRequirementsAsFieldSelector` and `nodeSelectorRequirementsAsSelector` themselves (or we make those functions exportable). Though I agree this could be fixed later perhaps calculated in preScore/preFilter",
+        "createdAt" : "2020-10-21T18:47:32Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e57f7289-3603-4231-afaa-10a4a7415bdc",
+        "parentId" : "a50bfaa2-6353-4887-9385-a8886dd41a99",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "we can think of that later.",
+        "createdAt" : "2020-10-21T19:21:24Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7ff8d5cb-2332-4818-9a6e-1994ef3c01dd",
+        "parentId" : "a50bfaa2-6353-4887-9385-a8886dd41a99",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> wouldn't it make sense to keep the processing in this function itself\r\n\r\nThe point of the TODO was that if you have a selector you are going to evaluate against many nodes, constructing the selector per-node is expensive. If the function is limited to a single node, you cannot do the shared selector computation inside that function.",
+        "createdAt" : "2020-10-26T13:39:43Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38b0465a-d29f-442e-8532-6da5e89e6d2d",
+        "parentId" : "a50bfaa2-6353-4887-9385-a8886dd41a99",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "In the kube-scheduler's use case that makes sense, where we evaluate every node as a basic requirement of scheduling. But if the point of externalizing this helper is to make it accessible by 3rd party components and simplify the function signature, requiring preprocessing of the input selectors feels like it defeats the goal. We can do that, but like I said above we should also export the `requirementsAsSelector` helpers in that case.",
+        "createdAt" : "2020-10-26T16:10:43Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b7ba77c25b6a2c2c6bd0ed9fee5b125f98672946",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +55,59 @@\n\t\tif len(req.MatchExpressions) != 0 {\n\t\t\tlabelSelector, err := nodeSelectorRequirementsAsSelector(req.MatchExpressions)\n\t\t\tif err != nil {\n\t\t\t\terrors = append(errors, err)"
+  },
+  {
+    "id" : "fae6e5d5-6eba-45b4-a03b-ad2f1c4f2d99",
+    "prId" : 95531,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95531#pullrequestreview-514788602",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a7961db5-0097-4a9e-882a-8a3d38a2e5b3",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "`continue` if there is an error?",
+        "createdAt" : "2020-10-21T20:49:55Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "884e5775-2062-4974-9ae2-6f0fb03b4f4f",
+        "parentId" : "a7961db5-0097-4a9e-882a-8a3d38a2e5b3",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "Updated",
+        "createdAt" : "2020-10-22T14:27:06Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b7ba77c25b6a2c2c6bd0ed9fee5b125f98672946",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +57,61 @@\t\t\tlabelSelector, err := nodeSelectorRequirementsAsSelector(req.MatchExpressions)\n\t\t\tif err != nil {\n\t\t\t\terrors = append(errors, err)\n\t\t\t\tcontinue\n\t\t\t}"
+  },
+  {
+    "id" : "a50cf46a-5d8e-46c0-aa3e-acf68b2a4b90",
+    "prId" : 95531,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95531#pullrequestreview-514812340",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9271dbc0-c674-4160-ad4a-1714232c626e",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "newline after this",
+        "createdAt" : "2020-10-22T14:48:29Z",
+        "updatedAt" : "2020-10-29T17:39:33Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b7ba77c25b6a2c2c6bd0ed9fee5b125f98672946",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +18,22 @@\nimport (\n\t\"fmt\"\n\n\tv1 \"k8s.io/api/core/v1\""
+  }
+]

@@ -1,0 +1,387 @@
+[
+  {
+    "id" : "af973762-d6e6-47df-ad87-897c1518d594",
+    "prId" : 103487,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103487#pullrequestreview-701174692",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a942d1d7-fdcb-417c-baf8-1fda9171bbe0",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "probably also needed in Delete when calling w.Delete(obj)",
+        "createdAt" : "2021-07-06T15:26:52Z",
+        "updatedAt" : "2021-07-06T15:26:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1e3edd99-da48-4611-86ea-65a199f287be",
+        "parentId" : "a942d1d7-fdcb-417c-baf8-1fda9171bbe0",
+        "authorId" : "7e604959-aa79-498e-9f03-bf9ff796a6c2",
+        "body" : "We store obj in `t.objects` and do `w.Delete(obj)`, obj is deleted from `t.objects` map\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/3f86955da2e55ad6e7fe025cdc705b94e03a0357/staging/src/k8s.io/client-go/testing/fixture.go#L453-L461\r\n\r\nwatcher receives obj that is not stored in `t.objects` map.\r\n\r\nI also test following code with `go test -race .` ,and  the output is no data race.\r\n```go\r\n\tgo func() {\r\n\t\terr := o.Create(testResource, testObj, ns)\r\n\t\tif err != nil {\r\n\t\t\tt.Errorf(\"test resource creation failed: %v\", err)\r\n\t\t}\r\n\t\t_, err = o.Get(testResource, ns, testObj.GetName())\r\n\t\t// Delete obj\r\n\t\terr = o.Delete(testResource, ns, testObj.GetName())\r\n\t\tif err != nil {\r\n\t\t\tt.Errorf(\"test resource getting failed: %v\", err)\r\n\t\t}\r\n\r\n\t}()\r\n\tout := <-watch.ResultChan()\r\n\t// Modify received object\r\n\t// Potential data race\r\n\toutCasted := out.Object.(*unstructured.Unstructured)\r\n\toutCasted.Object[\"data\"] = strconv.Itoa(rand.Int())\r\n```\r\nSo I think there is no data race :), What did I miss?",
+        "createdAt" : "2021-07-07T02:16:20Z",
+        "updatedAt" : "2021-07-07T02:23:57Z",
+        "lastEditedBy" : "7e604959-aa79-498e-9f03-bf9ff796a6c2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ee8f957-c3c1-41f6-af25-ad6f61ba16eb",
+        "parentId" : "a942d1d7-fdcb-417c-baf8-1fda9171bbe0",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "if there are multiple watchers, and they modify the object in their delete handler, they should not observe each other's modifications",
+        "createdAt" : "2021-07-07T14:11:40Z",
+        "updatedAt" : "2021-07-07T14:11:40Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "809a6963-3b51-4a5d-96b8-257ecbe5981b",
+        "parentId" : "a942d1d7-fdcb-417c-baf8-1fda9171bbe0",
+        "authorId" : "7e604959-aa79-498e-9f03-bf9ff796a6c2",
+        "body" : "Thank you, i get it and fix it. PTAL ",
+        "createdAt" : "2021-07-07T15:47:26Z",
+        "updatedAt" : "2021-07-07T15:47:26Z",
+        "lastEditedBy" : "7e604959-aa79-498e-9f03-bf9ff796a6c2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ce257266aa7f3f104e656b722310be32e95a9cb5",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +419,423 @@\tfor _, w := range t.getWatches(gvr, ns) {\n\t\t// To avoid the object from being accidentally modified by watcher\n\t\tw.Add(obj.DeepCopyObject())\n\t}\n"
+  },
+  {
+    "id" : "ed73fc3f-7f2c-42c0-837a-2f26c0741425",
+    "prId" : 89575,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89575#pullrequestreview-383317470",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fc009797-9d30-4f35-9649-db1621d79276",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "doesn't this make the order returned by List non-deterministic?",
+        "createdAt" : "2020-03-28T02:41:49Z",
+        "updatedAt" : "2020-03-28T15:58:08Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1f603ad-102a-49bd-88fe-3d42b86c3c2f",
+        "parentId" : "fc009797-9d30-4f35-9649-db1621d79276",
+        "authorId" : "f8030d76-6069-40c7-9c21-93f9f4b262ad",
+        "body" : "You are right, the order is non-deterministic, is it a concern? I think even the result of the real clientset is non-deterministic as it uses `k8s.io/client-go/tools/cache.threadSafeMap` as the underlying cache.",
+        "createdAt" : "2020-03-28T05:22:07Z",
+        "updatedAt" : "2020-03-28T15:58:08Z",
+        "lastEditedBy" : "f8030d76-6069-40c7-9c21-93f9f4b262ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2e12271-e96d-44ac-a916-317fdf9389ec",
+        "parentId" : "fc009797-9d30-4f35-9649-db1621d79276",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "Client List order is deterministic. The interface this is a fake for is not the cache lister, it's the client that does live API lookups. ",
+        "createdAt" : "2020-03-28T05:32:49Z",
+        "updatedAt" : "2020-03-28T15:58:08Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "845a8c6f-ac5e-481a-93c1-e1eda598683a",
+        "parentId" : "fc009797-9d30-4f35-9649-db1621d79276",
+        "authorId" : "f8030d76-6069-40c7-9c21-93f9f4b262ad",
+        "body" : "Ohh, I see the difference, thanks for explaining. \r\nI checked Client List returns in alphabetical order, I can do it in filterByNamespace, does it make sense to you?",
+        "createdAt" : "2020-03-28T05:52:04Z",
+        "updatedAt" : "2020-03-28T15:58:08Z",
+        "lastEditedBy" : "f8030d76-6069-40c7-9c21-93f9f4b262ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "308edf0b-212e-4933-8b41-d33a14036569",
+        "parentId" : "fc009797-9d30-4f35-9649-db1621d79276",
+        "authorId" : "f8030d76-6069-40c7-9c21-93f9f4b262ad",
+        "body" : "I have made the result deterministic, PTAL. Thanks.",
+        "createdAt" : "2020-03-28T14:27:01Z",
+        "updatedAt" : "2020-03-28T15:58:08Z",
+        "lastEditedBy" : "f8030d76-6069-40c7-9c21-93f9f4b262ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7e15e31e11e48a6db855e30ca9b07dbce3047577",
+    "line" : 150,
+    "diffHunk" : "@@ -1,1 +464,468 @@// match provided namespace. Empty namespace matches\n// non-namespaced objects.\nfunc filterByNamespace(objs map[types.NamespacedName]runtime.Object, ns string) ([]runtime.Object, error) {\n\tvar res []runtime.Object\n"
+  },
+  {
+    "id" : "9f46ac72-b828-47ce-92e6-6dc2e494687c",
+    "prId" : 71225,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/71225#pullrequestreview-176601583",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f5ca995f-2513-4851-9d14-1e04d0cf6a4c",
+        "parentId" : null,
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "```suggestion\r\n\t\tif ns != metav1.NamespaceNone {\r\n\t\t\tif w := t.watchers[gvr][ns]; w != nil {\r\n\t\t\t\twatches = append(watches, w...)\r\n\t\t\t}\r\n\t\t}\r\n\t\tif w := t.watchers[gvr][metav1.NamespaceAll]; w != nil {\r\n\t\t\twatches = append(watches, w...)\r\n\t\t}\r\n```\r\n\r\nthis would be cleaner",
+        "createdAt" : "2018-11-20T04:45:55Z",
+        "updatedAt" : "2018-11-26T22:08:39Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd268c9971efd4db46074a80e52ce765583e0787",
+    "line" : 1,
+    "diffHunk" : "@@ -1,1 +337,341 @@\twatches := []*watch.RaceFreeFakeWatcher{}\n\tif t.watchers[gvr] != nil {\n\t\tif w := t.watchers[gvr][ns]; w != nil {\n\t\t\twatches = append(watches, w...)\n\t\t}"
+  },
+  {
+    "id" : "2d1a5e6e-e72e-412f-92d2-89caba6f8a82",
+    "prId" : 70886,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70886#pullrequestreview-174282863",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "006f8b59-0f5e-4de7-a9dc-8db0fa6ec299",
+        "parentId" : null,
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "LGTM. The previous code seemed to be an oversight. \r\n\r\n@caesarxuchao Does the boolean exist only to allow us skipping some valid actions in [chain](https://github.com/kubernetes/kubernetes/blob/3c5c6025bf5e962dd67931fd38e18031108d5a37/staging/src/k8s.io/client-go/testing/fake.go#L141-L143) which don't have reaction defined (Watch, ProxyGet)? ",
+        "createdAt" : "2018-11-13T00:26:26Z",
+        "updatedAt" : "2019-01-08T12:26:16Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90750498-79d8-44ae-8a00-f82a8dce3848",
+        "parentId" : "006f8b59-0f5e-4de7-a9dc-8db0fa6ec299",
+        "authorId" : "c8c3ed8e-a65a-4eea-84c2-b29902b791cf",
+        "body" : "If you look at the rest of the function you’ll see that it’s only used for unknown actions, so yes it seems to be an oversight. ",
+        "createdAt" : "2018-11-13T08:34:25Z",
+        "updatedAt" : "2019-01-08T12:26:16Z",
+        "lastEditedBy" : "c8c3ed8e-a65a-4eea-84c2-b29902b791cf",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eea0457b-af3a-4b4e-9bb8-afe5f20eef47",
+        "parentId" : "006f8b59-0f5e-4de7-a9dc-8db0fa6ec299",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "surprise! 🙃unhandling patch events here makes the fake client working correctly w/ the cohibitating resources! the fake client is simply grouping requesting objects by its `gvr` so the test is actually suppose to be broken when we write w/ `extensions/v1` but read w/ `apps/v1`.\r\n\r\nedit:  i suppose it's not intended b/c this line is written before we migrate resources. ",
+        "createdAt" : "2018-11-13T10:11:20Z",
+        "updatedAt" : "2019-01-08T12:26:16Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "96d0588440a96c5eba8b3ba0810563ad1e1a08b6",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +132,136 @@\t\t\tobj, err := tracker.Get(gvr, ns, action.GetName())\n\t\t\tif err != nil {\n\t\t\t\treturn true, nil, err\n\t\t\t}\n"
+  },
+  {
+    "id" : "b7ea5feb-ca50-4eb3-b64c-282df5b06489",
+    "prId" : 69330,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69330#pullrequestreview-246200951",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "da7a3ca5-eeb2-4dc7-83a3-b02eac55b243",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "This unfortunately only works with Unstructured objects.  Normal kube objects will fail on this because Unmarshal doesn't reset maps and a few other behaviors.  I'll take fixing this.",
+        "createdAt" : "2019-06-05T18:15:00Z",
+        "updatedAt" : "2019-06-05T18:15:01Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a3b7712-593f-4f88-b815-1b9d90e25d6c",
+        "parentId" : "da7a3ca5-eeb2-4dc7-83a3-b02eac55b243",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Fixed in https://github.com/kubernetes/kubernetes/pull/78743",
+        "createdAt" : "2019-06-05T19:05:55Z",
+        "updatedAt" : "2019-06-05T19:05:55Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a363b153851326ece7f81f4c1ae0a1ab8700a209",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +151,155 @@\t\t\t\t\treturn true, nil, err\n\t\t\t\t}\n\t\t\t\tif err = json.Unmarshal(modified, obj); err != nil {\n\t\t\t\t\treturn true, nil, err\n\t\t\t\t}"
+  },
+  {
+    "id" : "fe36d868-f3ce-4c11-a9a8-14fa124b261c",
+    "prId" : 62306,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/62306#pullrequestreview-111373363",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8ee3ee44-72c3-42d2-abc7-796aa9892fe8",
+        "parentId" : null,
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "I think this is ok as a starting point.",
+        "createdAt" : "2018-04-11T19:36:35Z",
+        "updatedAt" : "2018-05-30T18:34:10Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85e0d05ac76b943acb208ea70c6b806649706ea5",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +138,142 @@\t\t\t\treturn true, nil, err\n\t\t\t}\n\t\t\t// Only supports strategic merge patch\n\t\t\t// TODO: Add support for other Patch types\n\t\t\tmergedByte, err := strategicpatch.StrategicMergePatch(old, action.GetPatch(), obj)"
+  },
+  {
+    "id" : "7e833918-6cd1-432b-b2b9-8bdd33a0ccce",
+    "prId" : 57504,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/57504#pullrequestreview-87977445",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "66767302-b481-4298-a140-44fbf3a25153",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "This can end up called in parallel from multiple threads, right?  Please lock it.  Using the big lock will do.",
+        "createdAt" : "2018-01-02T13:37:07Z",
+        "updatedAt" : "2018-01-16T14:12:18Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16ad744b-d781-4fd1-afec-53b8ba56b4a3",
+        "parentId" : "66767302-b481-4298-a140-44fbf3a25153",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "I just realise that current implementation of `Watch` call doesn't support multiple invocation on the same namespace of the same resource. Because every namespace of every resource has only one `watcher` which has one watch event channel notifying the changes. In the fact, a complete multi-threading support can be sort of complicated for a fake client, because it's hard to let `Watch` know if itself is called from a different go routine or a different context. btw the fakeclient lacks the implementation of `Limit/Continue` support of `List` call as well, I will open another issue to discuss about it.\r\n  \r\n  ",
+        "createdAt" : "2018-01-06T03:37:58Z",
+        "updatedAt" : "2018-01-16T14:12:18Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c262ca45-daa9-4b12-9710-2300f5f21c3d",
+        "parentId" : "66767302-b481-4298-a140-44fbf3a25153",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "A watch event \"broadcasting\" may help solving the problem above, I'm not sure if it is necessary. WDYT?\r\n  \r\n  ",
+        "createdAt" : "2018-01-06T03:41:34Z",
+        "updatedAt" : "2018-01-16T14:12:18Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1765954e-2350-484c-9ea8-343bb0c1df58",
+        "parentId" : "66767302-b481-4298-a140-44fbf3a25153",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> I just realise that current implementation of Watch call doesn't support multiple invocation on the same namespace of the same resource.\r\n\r\nGood catch.  I think that you'll need to have a `map[GroupVersionResource]map[namespace][]watch.Interface`.",
+        "createdAt" : "2018-01-10T20:57:29Z",
+        "updatedAt" : "2018-01-16T14:12:18Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6f381ab2cd351c96a28b7ccde704ea96c38612dd",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +203,207 @@}\n\nfunc (t *tracker) Watch(gvr schema.GroupVersionResource, ns string) (watch.Interface, error) {\n\tt.lock.Lock()\n\tdefer t.lock.Unlock()"
+  },
+  {
+    "id" : "0ae3ea1f-7c62-40fe-99da-6ad9087d12bd",
+    "prId" : 57504,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/57504#pullrequestreview-86240150",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "faf17ee3-1ba5-4950-a595-dfa1b68dfeb3",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "This doesn't seem to be handling the \"empty namespace is all namespaces\" case.\r\n\r\nI think you may need a test for your test harness.",
+        "createdAt" : "2018-01-02T20:46:44Z",
+        "updatedAt" : "2018-01-16T14:12:18Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6f381ab2cd351c96a28b7ccde704ea96c38612dd",
+    "line" : 115,
+    "diffHunk" : "@@ -1,1 +392,396 @@\t\t\treturn err\n\t\t}\n\t\tif objMeta.GetNamespace() == ns && objMeta.GetName() == name {\n\t\t\tobj := t.objects[gvr][i]\n\t\t\tt.objects[gvr] = append(t.objects[gvr][:i], t.objects[gvr][i+1:]...)"
+  },
+  {
+    "id" : "fce5b2e7-d7cb-48ed-a1b6-0a166eb92899",
+    "prId" : 57504,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/57504#pullrequestreview-88517453",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9d8e0e13-6e02-4c26-af12-c05aeb56925b",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "Yes, thanks.",
+        "createdAt" : "2018-01-10T20:58:00Z",
+        "updatedAt" : "2018-01-16T14:12:18Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6dec17a7-02db-4660-9388-69aaaa9ea80f",
+        "parentId" : "9d8e0e13-6e02-4c26-af12-c05aeb56925b",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "@deads2k  I also added  test for multi-time & multi-thread invocation to prove its correctness, WDYT?",
+        "createdAt" : "2018-01-12T15:45:26Z",
+        "updatedAt" : "2018-01-16T14:12:18Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6f381ab2cd351c96a28b7ccde704ea96c38612dd",
+    "line" : 75,
+    "diffHunk" : "@@ -1,1 +294,298 @@}\n\nfunc (t *tracker) getWatches(gvr schema.GroupVersionResource, ns string) []*watch.FakeWatcher {\n\twatches := []*watch.FakeWatcher{}\n\tif t.watchers[gvr] != nil {"
+  },
+  {
+    "id" : "15cb60b2-9007-4a39-9459-f3dc454566c5",
+    "prId" : 45159,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/45159#pullrequestreview-36097319",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "843dcce6-407d-4295-b472-398c63561efd",
+        "parentId" : null,
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "where is this actually called with an empty version? A gvk without a version looks wrong.",
+        "createdAt" : "2017-05-03T07:03:58Z",
+        "updatedAt" : "2017-05-04T18:31:00Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1693ec0b-ece5-456d-b82d-bc4cba2b477f",
+        "parentId" : "843dcce6-407d-4295-b472-398c63561efd",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Mostly in the generated fake clients, like this [line](https://github.com/kubernetes/kubernetes/pull/45159/files#diff-1ce5095abadb94bcbff3015537351389R37). These are hidden from unit test writers so i think we should go with the approach that causes minimal changes.",
+        "createdAt" : "2017-05-03T18:14:03Z",
+        "updatedAt" : "2017-05-04T18:31:00Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5f5a70f65f7dbcfc9215caee27cfd9a4be23f348",
+    "line" : 158,
+    "diffHunk" : "@@ -1,1 +156,160 @@\t// GVK does have the concept of \"internal version\". The scheme recognizes\n\t// the runtime.APIVersionInternal, but not the empty string.\n\tif listGVK.Version == \"\" {\n\t\tlistGVK.Version = runtime.APIVersionInternal\n\t}"
+  }
+]

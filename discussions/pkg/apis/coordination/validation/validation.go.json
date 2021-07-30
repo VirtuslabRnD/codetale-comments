@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "f331e944-bf37-4277-bc7a-8b01a329b741",
+    "prId" : 64246,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64246#pullrequestreview-130713579",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "72cfade2-2678-402a-8183-0042c695bfb1",
+        "parentId" : null,
+        "authorId" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "body" : "Based on prior conversations, I have the following opinions about validation (some of which are already captured in other comments on this PR):\r\n- We should avoid clients having to reason about prior field values.\r\n- We should avoid cross-field validation, especially between critical and debug-only fields (e.g. do not validate RenewTime based on AcquireTime).\r\n- We can still reject obviously incorrect config:\r\n  - negative LeaseDurationSeconds\r\n  - negative LeaseTransitions\r\n  - empty HolderIdentity (as long as this doesn't break legacy applications)\r\n- The extent of additional validation we perform for *transitions* is bounded by how much we can expect from clients:\r\n  - If we can't expect clients to do *any* reasoning about prior values, we shouldn't do extra validation for transitions.\r\n  - But some expected client behavior may be possible to validate:\r\n    - e.g. tight clock skew means clients can probably be expected to make monotonic changes to RenewTime. We should be careful to identify what problems validating this can cause/prevent. If clients typically do this, and controllers just use changes in RenewTime as a trigger to fire a LeaseDurationSeconds timer, rather than reasoning about the RenewTime, validating monotonicity seems like it doesn't add much value (because then nobody cares about monotonicity).\r\n- I'm not sure we should do transition validation for fields that only provide debugging help (AcquireTime, LeaseTransitions), because it sounds like unnecessary complexity to me.\r\n- We should make sure that legacy applications won't depend on validation behavior that differs in this API.",
+        "createdAt" : "2018-06-19T22:14:57Z",
+        "updatedAt" : "2018-06-27T11:31:21Z",
+        "lastEditedBy" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5cb13f3c-70f4-4514-8957-3384f1177765",
+        "parentId" : "72cfade2-2678-402a-8183-0042c695bfb1",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I mostly agree with that with two caveats:\r\n1. I think that the fact that field is treated as \"debugging help\" doesn't really matter - it's in the API anyway.\r\n2. This is basically a new API (and we won't do any automatic transitions). We know what \"leaderElection\" library in k8s is doing and what it assumes so we know we can migrate it. For other clients, they will need to explicitly switch to use this API, so they will need to understand it anyway, I think.\r\n\r\nSo I think that doesn't results in any AIs for this PR for now.",
+        "createdAt" : "2018-06-20T06:51:05Z",
+        "updatedAt" : "2018-06-27T11:31:21Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "06f5c328-82dc-4e5f-bc0a-14c40efe9eb6",
+        "parentId" : "72cfade2-2678-402a-8183-0042c695bfb1",
+        "authorId" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "body" : ">So I think that doesn't results in any AIs for this PR for now.\r\n\r\nTo match my thoughts above, I think we'd need to:\r\n- in ValidateLeaseSpec\r\n  - remove cross-validation of RenewTime and AcquireTime\r\n  - potentially add validation to reject empty HolderIdentity (if this won't break any legacy)\r\n- in ValidateLeaseSpecUpdate\r\n  - @bgrant0607 wanted us to think carefully about whether requiring monotonicity/other special lease-update behavior can cause any issues. Nothing OTTH but I haven't given it a lot of thought...so still possible that we'd remove some of this logic.\r\n\r\n> I think that the fact that field is treated as \"debugging help\" doesn't really matter - it's in the API anyway.\r\n\r\nWorks for me.\r\n\r\n> This is basically a new API (and we won't do any automatic transitions). We know what \"leaderElection\" library in k8s is doing and what it assumes so we know we can migrate it. For other clients, they will need to explicitly switch to use this API, so they will need to understand it anyway, I think.\r\n\r\nSGTM",
+        "createdAt" : "2018-06-20T16:51:48Z",
+        "updatedAt" : "2018-06-27T11:31:21Z",
+        "lastEditedBy" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c104c5a7-fe88-42b2-bf98-0e657c28fdb6",
+        "parentId" : "72cfade2-2678-402a-8183-0042c695bfb1",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "> remove cross-validation of RenewTime and AcquireTime\r\n\r\nfair enough - done\r\n\r\n> potentially add validation to reject empty HolderIdentity (if this won't break any legacy)\r\n\r\nI didn't add that consciously (about legacy - see my comment above).\r\nMy usecase for allowing that to be empty is to enable usecase of passing leadership.\r\nE.g. if I'm gracefully terminating, I may want to drop the lease (and we can implement it by setting holder to empty and renew time to 0 or sth like that).\r\n\r\n> in ValidateLeaseSpecUpdate\r\n\r\nApparently what I wanted to do in Spec I failed in SpeUpdate - so I remove parts of validation logic.",
+        "createdAt" : "2018-06-21T08:27:56Z",
+        "updatedAt" : "2018-06-27T11:31:21Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0950084137a5abf5cd731bbda46ccb441499801d",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +24,28 @@\n// ValidateLease validates a Lease.\nfunc ValidateLease(lease *coordination.Lease) field.ErrorList {\n\tallErrs := validation.ValidateObjectMeta(&lease.ObjectMeta, true, validation.NameIsDNSSubdomain, field.NewPath(\"objectMeta\"))\n\tallErrs = append(allErrs, ValidateLeaseSpec(&lease.Spec, field.NewPath(\"spec\"))...)"
+  }
+]

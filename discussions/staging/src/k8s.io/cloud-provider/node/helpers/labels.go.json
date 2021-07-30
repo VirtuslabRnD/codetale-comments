@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "fcebc44d-69cc-48d9-a63e-aa9c9fb0b90d",
+    "prId" : 81431,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81431#pullrequestreview-309942558",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dd46640b-5769-49b1-ad6b-ceaff911ad4f",
+        "parentId" : null,
+        "authorId" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "body" : "not really sure how this works but seems a little odd - isn't the resource version 0 on the first creation of the `Node` object? After that it goes through thousands of iterations. I'm looking at the one on my cluster right now on `resourceVersion: 232035`",
+        "createdAt" : "2019-10-30T22:06:03Z",
+        "updatedAt" : "2019-11-08T02:22:16Z",
+        "lastEditedBy" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b5639912-fd29-418c-a176-9f7a7d91723d",
+        "parentId" : "dd46640b-5769-49b1-ad6b-ceaff911ad4f",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "getting a resourceVersion \"0\" means it is ok for the API server to return the version it has in the cache. since we're patching to apply a label, we don't care a lot if we get a slightly stale node status, etc",
+        "createdAt" : "2019-10-31T14:54:11Z",
+        "updatedAt" : "2019-11-08T02:22:16Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "349749644fb40f737c44e27b5b749bd18a3efaae",
+    "line" : 67,
+    "diffHunk" : "@@ -1,1 +65,69 @@\t\t// we get it from etcd to be sure to have fresh data.\n\t\tif firstTry {\n\t\t\tnode, err = kubeClient.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{ResourceVersion: \"0\"})\n\t\t\tfirstTry = false\n\t\t} else {"
+  },
+  {
+    "id" : "3fd82c07-72c1-4ef7-a17a-6356e05accb8",
+    "prId" : 81431,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81431#pullrequestreview-312128940",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab9ab163-6d35-45aa-aea5-be9c0d492e10",
+        "parentId" : null,
+        "authorId" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "body" : "I don't think patches produce conflict errors (this is wrapped in a `RetryOnConflict` func). And you're wrapping the errors anyway. I'm not sure this retry logic works",
+        "createdAt" : "2019-10-30T22:06:57Z",
+        "updatedAt" : "2019-11-08T02:22:16Z",
+        "lastEditedBy" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd80f2a5-6dc7-4404-b0e9-9cfe2609650c",
+        "parentId" : "ab9ab163-6d35-45aa-aea5-be9c0d492e10",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "This was copied from `pkg/util/node`, it's what node lifecycle controller uses as well. Duplicated here as part of https://github.com/kubernetes/kubernetes/issues/81172",
+        "createdAt" : "2019-10-31T23:40:41Z",
+        "updatedAt" : "2019-11-08T02:22:16Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a6ff9cfa-d5ff-414b-8b25-08b4e9ddccb8",
+        "parentId" : "ab9ab163-6d35-45aa-aea5-be9c0d492e10",
+        "authorId" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "body" : "/cc @caesarxuchao @liggitt I have a feeling this pattern is repeated in a bunch of places and may be subtly wrong if `resourceVersion` is not specified",
+        "createdAt" : "2019-11-06T01:45:56Z",
+        "updatedAt" : "2019-11-08T02:22:16Z",
+        "lastEditedBy" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "349749644fb40f737c44e27b5b749bd18a3efaae",
+    "line" : 97,
+    "diffHunk" : "@@ -1,1 +95,99 @@\t\t\treturn fmt.Errorf(\"failed to create a two-way merge patch: %v\", err)\n\t\t}\n\t\tif _, err := kubeClient.CoreV1().Nodes().Patch(node.Name, types.StrategicMergePatchType, patchBytes); err != nil {\n\t\t\treturn fmt.Errorf(\"failed to patch the node: %v\", err)\n\t\t}"
+  },
+  {
+    "id" : "35d51b87-ff70-43d7-af6f-e210eb30dbfe",
+    "prId" : 81431,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81431#pullrequestreview-312158214",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5682e4ce-4691-4c7b-bfcf-0089c02daebc",
+        "parentId" : null,
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "I think this retry is not meaningful. The patch does not contain a resourceVersion. API server will not return retriable 409 error if the patch does not set the resourceVersion as a precondition.",
+        "createdAt" : "2019-11-06T01:55:08Z",
+        "updatedAt" : "2019-11-08T02:22:16Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9bc5e50c-d53c-4d5a-8532-a6fcfca4b66a",
+        "parentId" : "5682e4ce-4691-4c7b-bfcf-0089c02daebc",
+        "authorId" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "body" : "@liggitt @andrewsykim it seems that this same bug is copy pasted throughout the code base. we should probably audit and open issues for those as well (like the place this logic was copied from)",
+        "createdAt" : "2019-11-06T01:56:39Z",
+        "updatedAt" : "2019-11-08T02:22:16Z",
+        "lastEditedBy" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "19b39043-b5ac-43f1-93fa-c470f13a67f6",
+        "parentId" : "5682e4ce-4691-4c7b-bfcf-0089c02daebc",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "in this case, we don't care if another change occurs, we are only updating a single label. I think this is correct. ",
+        "createdAt" : "2019-11-06T02:07:56Z",
+        "updatedAt" : "2019-11-08T02:22:16Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b32365a7-f7a9-40e7-93a2-8ff08e426936",
+        "parentId" : "5682e4ce-4691-4c7b-bfcf-0089c02daebc",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "The retry might not be exercised, but it's not harmful",
+        "createdAt" : "2019-11-06T02:08:20Z",
+        "updatedAt" : "2019-11-08T02:22:16Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "349749644fb40f737c44e27b5b749bd18a3efaae",
+    "line" : 61,
+    "diffHunk" : "@@ -1,1 +59,63 @@func addOrUpdateLabelsOnNode(kubeClient clientset.Interface, nodeName string, labelsToUpdate map[string]string) error {\n\tfirstTry := true\n\treturn clientretry.RetryOnConflict(updateLabelBackoff, func() error {\n\t\tvar err error\n\t\tvar node *v1.Node"
+  }
+]

@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "dcaf3bbd-9777-4348-9413-2e25d8b17e0f",
+    "prId" : 99463,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99463#pullrequestreview-603405097",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6bf69837-f753-4a61-a2af-cbd96cea5827",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this breaks plugins that register in the following way:\r\n```\r\nplugin sets up a dir on disk somewhere:\r\n/myplugin/mysocket.sock\r\n\r\nthen symlinks its dir into the kubelet's plugin dir:\r\n/var/plugindir/myplugin -> /myplugin\r\n```\r\n\r\n`event.Name` would be `/var/plugindir/myplugin`\r\n\r\npreviously:\r\n* `os.Stat` would follow, and get info for /var/plugindir/myplugin\r\n* fi.IsDir() would be true\r\n* we would traverse and find the plugin socket on line 185\r\n\r\nwith this change:\r\n* `os.Lstat` does not follow\r\n* `fi.IsDir()` is false\r\n* `IsUnixDomainSocket` is also false\r\n* we ignore and return \"klog.V(5).Infof(\"Ignoring non socket file %s\", fi.Name())\"\r\n\r\nIf os.Stat has known issues with sockets on windows, I think this would be a better workaround:\r\n\r\n```go\r\nfi, err := os.Stat(event.Name)\r\nif err != nil && os.GOOS == \"windows\" {\r\n  fi, err = os.Lstat(event.Name)\r\n}\r\n```",
+        "createdAt" : "2021-03-03T19:11:25Z",
+        "updatedAt" : "2021-03-03T19:11:26Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c1de1e7e-973d-4dfa-b454-1812bc312a9b",
+        "parentId" : "6bf69837-f753-4a61-a2af-cbd96cea5827",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "created a PR to address https://github.com/kubernetes/kubernetes/pull/99723\r\nI missed the traverse part. Thank you for pointing it out!",
+        "createdAt" : "2021-03-03T20:08:08Z",
+        "updatedAt" : "2021-03-03T20:08:09Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16c8509d-c5aa-45e6-92bc-6fba7531c232",
+        "parentId" : "6bf69837-f753-4a61-a2af-cbd96cea5827",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I tested this logic on Windows and found out in the case path is a symlink points to a dir, os.Stat() will not work for all Windows versions tested including LSTC and SAC\r\n\r\nThe error is \"Access is Denied\".\r\nSo this use case will not work for Windows before or after this change.",
+        "createdAt" : "2021-03-03T22:20:13Z",
+        "updatedAt" : "2021-03-03T22:20:13Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70e01c5e47be87b605a182d8fbe57f374b269dab",
+    "line" : 3,
+    "diffHunk" : "@@ -1,1 +159,163 @@func (w *Watcher) handleCreateEvent(event fsnotify.Event) error {\n\tklog.V(6).Infof(\"Handling create event: %v\", event)\n\n\tfi, err := os.Lstat(event.Name)\n\tif err != nil {"
+  },
+  {
+    "id" : "43925634-4501-44ae-b4b7-9fe4f0b39662",
+    "prId" : 81397,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81397#pullrequestreview-278099183",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fd1b7af1-d8e0-49a8-a698-06296d24c6b8",
+        "parentId" : null,
+        "authorId" : "01246cf1-b4e0-4cdd-818b-da86865d11bd",
+        "body" : "nit: maybe this could be made part of a helper package somewhere? Seems this is the exact same as https://github.com/kubernetes/kubernetes/blob/091a5dc53b1b961f95de225ca4cddf33193051cd/pkg/util/mount/mount_windows.go#L250-L256 and https://github.com/kubernetes/kubernetes/blob/091a5dc53b1b961f95de225ca4cddf33193051cd/pkg/volume/util/util.go#L314-L320.\r\n\r\nMaybe that func could live in pkg/kubelet/util/util.go ?",
+        "createdAt" : "2019-08-18T23:53:59Z",
+        "updatedAt" : "2019-08-27T23:25:04Z",
+        "lastEditedBy" : "01246cf1-b4e0-4cdd-818b-da86865d11bd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66411350-3c23-4e14-9ed2-73e4a0957e8a",
+        "parentId" : "fd1b7af1-d8e0-49a8-a698-06296d24c6b8",
+        "authorId" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "body" : "Thanks for highlighting the common functionality - one note, it makes me a little nervous to define a function in `pkg/kubelet/util/util.go` that is then imported by `pkg/volume` and `pkg/util/mount`. ",
+        "createdAt" : "2019-08-19T12:50:24Z",
+        "updatedAt" : "2019-08-27T23:25:04Z",
+        "lastEditedBy" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3104f793-d51c-44ec-8baa-91a255ccf693",
+        "parentId" : "fd1b7af1-d8e0-49a8-a698-06296d24c6b8",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "+1 for factoring the function out. Maybe we should have a `pkg/util/windows` package.\r\n\r\nFor this PR, I think we can put the helper function in `pkg/kubelet/util` so that we don't get more code duplication within kubelet.",
+        "createdAt" : "2019-08-19T17:09:55Z",
+        "updatedAt" : "2019-08-27T23:25:04Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea4c7877-7f85-475d-9692-f0157c674988",
+        "parentId" : "fd1b7af1-d8e0-49a8-a698-06296d24c6b8",
+        "authorId" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "body" : "Done. Moved to pkg/kubelet/util for now.",
+        "createdAt" : "2019-08-21T22:03:28Z",
+        "updatedAt" : "2019-08-27T23:25:04Z",
+        "lastEditedBy" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1321c9115b27809f9342d8dc291dcf7a3c9222ce",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +211,215 @@\tif runtime.GOOS == \"windows\" {\n\t\tsocketPath = util.NormalizePath(socketPath)\n\t}\n\t//TODO: Implement rate limiting to mitigate any DOS kind of attacks.\n\t// Update desired state of world list of plugins"
+  },
+  {
+    "id" : "cdaa14b9-c5e5-41be-a0aa-938432ec3699",
+    "prId" : 81397,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81397#pullrequestreview-277604100",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f6f9bc18-a134-47b9-8ff9-35e6c80ff486",
+        "parentId" : null,
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "What path format does fsnotify use? Is it just the typical unix `/foo/bar/` path?",
+        "createdAt" : "2019-08-19T17:29:13Z",
+        "updatedAt" : "2019-08-27T23:25:04Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "684701bc-6191-4876-900b-52ef7564d153",
+        "parentId" : "f6f9bc18-a134-47b9-8ff9-35e6c80ff486",
+        "authorId" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "body" : "It reports `/foo/bar` for paths in Linux and `\\\\foo\\\\bar` for paths in Windows.",
+        "createdAt" : "2019-08-21T07:31:22Z",
+        "updatedAt" : "2019-08-27T23:25:04Z",
+        "lastEditedBy" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1321c9115b27809f9342d8dc291dcf7a3c9222ce",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +209,213 @@\nfunc (w *Watcher) handlePluginRegistration(socketPath string) error {\n\tif runtime.GOOS == \"windows\" {\n\t\tsocketPath = util.NormalizePath(socketPath)\n\t}"
+  },
+  {
+    "id" : "3f0233b6-df28-4eec-98d7-05ba5f8abdcb",
+    "prId" : 73891,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/73891#pullrequestreview-230453522",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0e420fbe-b035-4c27-9811-f04a321f1ee8",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Previously this case just returned without doing anything. Looks like you're doing some additional cleanup. Can you comment what the intention of this code is?",
+        "createdAt" : "2019-04-16T01:03:40Z",
+        "updatedAt" : "2019-05-30T23:01:15Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b6e5dd7-0154-4310-ac57-b7aae7973565",
+        "parentId" : "0e420fbe-b035-4c27-9811-f04a321f1ee8",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Ah this was in the `Stop()` method before to give all pending go routines a chance to complete.",
+        "createdAt" : "2019-04-25T05:40:47Z",
+        "updatedAt" : "2019-05-30T23:01:15Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5e185544421d5504b0fe2ae32c8ebfb3000a1224",
+    "line" : 108,
+    "diffHunk" : "@@ -1,1 +106,110 @@\t\t\t\t}\n\t\t\t\tcontinue\n\t\t\tcase <-stopCh:\n\t\t\t\t// In case of plugin watcher being stopped by plugin manager, stop\n\t\t\t\t// probing the creation/deletion of plugin sockets."
+  }
+]

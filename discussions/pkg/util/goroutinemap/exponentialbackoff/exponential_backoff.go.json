@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "c988754b-8b03-4ef8-90a0-1fc904a1a464",
+    "prId" : 28939,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8ad2d003-110b-4415-ad7d-68ea4a8ff8c5",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I think there might be performance issue with the current exponential backoff design. Consider a scenario to creat a rc consisting of N pods which all reference the same disk . After desired world populator adds the volume and pod information, reconciler starts issuing waitforattach/mount requests periodically.  In the first round, reconciler scans all the pod volumes and issues total N requests almost at the same time. With gorountinemap, only one of them can succeed and some others will have ExponentialBackoffError which cause them to wait the same amount of time (double the current loop duration) to retry. After passing the durationBeforeRetry reconciler will issue N or N-1 (if the first finishes) requests again at around the same time, causing them to double the same wait time again. The same step repeat in the following rounds, each time only one request can be granted, and the waiting time to retry keeps doubling until reaching the maxDurationBeforeRetry. From my initial experiments, looks like mount operation finishes very fast which reduce the above problem. But wait for attach operation seems takes longer time. One possible solution is to introduce randomness into the algorithm.\n",
+        "createdAt" : "2016-07-20T08:22:12Z",
+        "updatedAt" : "2016-07-20T08:22:12Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1708e0b2-d7cc-448c-952f-b065128109de",
+        "parentId" : "8ad2d003-110b-4415-ad7d-68ea4a8ff8c5",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "> With gorountinemap, only one of them can succeed \n\nWith this change all of them will be able to run mount in parallel.\n\n> some others will have ExponentialBackoffError\n\nExponentialBackoff does not apply when an operation is rejected because there is an existing operation (only when there is an execution error).\n\n",
+        "createdAt" : "2016-07-20T16:45:58Z",
+        "updatedAt" : "2016-07-20T16:57:20Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bfec6138-50db-427e-9d02-c7204d37d707",
+        "parentId" : "8ad2d003-110b-4415-ad7d-68ea4a8ff8c5",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : " Here I am more focusing on the operations for attachable volumes. As you explained, if ExponentialBackoff only apply for execution error, it may not cause serious performance issue. But still, it may end up spending more time than necessary. For example, if the volume becomes attachable in 1 min, depending on the timing, it is possible for all N pods waiting for more than 3 mins before starting mount operations. Also it may have higher chances of operation is rejected because there is an existing operation. What will happen if there is a hanging operation in goroutine?\n\nFor volumes that are not attachable, since they can run in parallel without problem. Why need to run them through goroutine?\n",
+        "createdAt" : "2016-07-20T17:15:48Z",
+        "updatedAt" : "2016-07-20T17:15:48Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6744ac8a-a7e5-4d0b-b536-fadcbd9c4938",
+        "parentId" : "8ad2d003-110b-4415-ad7d-68ea4a8ff8c5",
+        "authorId" : "9680f0db-1c00-49c9-968a-be3d5084d153",
+        "body" : "This feels like a 1.4 conversation if the exponential behaviour has not\nchanged. I am not saying JinXu's idea don't have merit, but we do need the\nfix in 1.3 and if this is how it worked in 1.2 let's decouple this\nconversation.\n\nmrubin\n\nOn Wed, Jul 20, 2016 at 10:16 AM, Jing Xu notifications@github.com wrote:\n\n> In pkg/util/goroutinemap/exponentialbackoff/exponential_backoff.go\n> https://github.com/kubernetes/kubernetes/pull/28939#discussion_r71567301\n> :\n> \n> > +*/\n> > +\n> > +// Package exponentialbackoff contains logic for implementing exponential\n> > +// backoff for GoRoutineMap and NestedPendingOperations.\n> > +package exponentialbackoff\n> > +\n> > +import (\n> > -   \"fmt\"\n> > -   \"time\"\n> >   +)\n> >   +\n> >   +const (\n> > -   // initialDurationBeforeRetry is the amount of time after an error occurs\n> > -   // that GoroutineMap will refuse to allow another operation to start with\n> > -   // the same target (if exponentialBackOffOnError is enabled). Each\n> > -   // successive error results in a wait 2x times the previous.\n> \n> Here I am more focusing on the operations for attachable volumes. As you\n> explained, if ExponentialBackoff only apply for execution error, it may not\n> cause serious performance issue. But still, it may end up spending more\n> time than necessary. For example, if the volume becomes attachable in 1\n> min, depending on the timing, it is possible for all N pods waiting for\n> more than 3 mins before starting mount operations. Also it may have higher\n> chances of operation is rejected because there is an existing operation.\n> What will happen if there is a hanging operation in goroutine?\n> \n> For volumes that are not attachable, since they can run in parallel\n> without problem. Why need to run them through goroutine?\n> \n> —\n> You are receiving this because you were mentioned.\n> Reply to this email directly, view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/28939/files/88d495026dd3f741b1398531cbf6c484c0c03773#r71567301,\n> or mute the thread\n> https://github.com/notifications/unsubscribe-auth/ASzXe9_0zvzED3kQRFsrfcDHldrKqTdnks5qXlf0gaJpZM4JMGj8\n> .\n",
+        "createdAt" : "2016-07-20T18:01:07Z",
+        "updatedAt" : "2016-07-20T18:01:07Z",
+        "lastEditedBy" : "9680f0db-1c00-49c9-968a-be3d5084d153",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0f82475f-f7ee-469e-976a-563e7204fa6c",
+        "parentId" : "8ad2d003-110b-4415-ad7d-68ea4a8ff8c5",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "> if the volume becomes attachable in 1 min, depending on the timing, it is possible for all N pods waiting for more than 3 mins before starting mount operations\n\nThat's not correct. If multiple pods on a node are referencing the same attachable volume, the attach and mount device steps are serialized and only happen _once_ for all the pods. Once a device is attached and globally mounted, subsequent pods only need to do the bind mount (which, with this change is parallelized). \n\n> Also it may have higher chances of operation is rejected because there is an existing operation.\n\nThat makes little difference in execution speed. The reconciler retries very quickly.\n\n> What will happen if there is a hanging operation in goroutine\n\nIf an attachable volume fails to attach or complete global mount, regardless of if the operations fail or hang, they will block bind mounting. That is necessary and by design, an attachable volume can not be bind mounted until these operations succeed.\n\n> For volumes that are not attachable, since they can run in parallel without problem. Why need to run them through goroutine?\n\nThey must be run in a goroutine so that the caller is not blocked. They are run using `nestedpendingoperations` to prevent the multiple operations from being triggered on the same pod/volume.\n",
+        "createdAt" : "2016-07-20T18:39:16Z",
+        "updatedAt" : "2016-07-20T18:39:16Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "88d495026dd3f741b1398531cbf6c484c0c03773",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +28,32 @@\t// that GoroutineMap will refuse to allow another operation to start with\n\t// the same target (if exponentialBackOffOnError is enabled). Each\n\t// successive error results in a wait 2x times the previous.\n\tinitialDurationBeforeRetry time.Duration = 500 * time.Millisecond\n"
+  }
+]

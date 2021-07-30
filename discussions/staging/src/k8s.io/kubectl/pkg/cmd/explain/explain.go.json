@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "c497eeae-6ae6-4671-aa67-c3723cd01f63",
+    "prId" : 91295,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91295#pullrequestreview-481708659",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7324fe64-5006-4613-8210-9aa501e21635",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "The problem is that this will always return a GroupVersionKind, all of our API is prioritized, so with multiple APIs like from your example the one with higher priority will match. So you won't reach the code inside at all. I think you'd need to move the logic outside the below condition. ",
+        "createdAt" : "2020-06-04T09:06:36Z",
+        "updatedAt" : "2021-01-14T09:46:36Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef5babee-c86b-4997-9084-0f7fdf867937",
+        "parentId" : "7324fe64-5006-4613-8210-9aa501e21635",
+        "authorId" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "body" : "It does not matter as long as all the APIs are returned. Let's assume the list of returned APIs is (in the given order, some APIs are fabricated):\r\n- authentications.config.openshift.io (K=Authentications, G=config.openshift.io)\r\n- authentications.operator.openshift.io (K=Authentications, G=operator.openshift.io)\r\n- authentications.migration.k8s.io (K=Authentications, G=migration.k8s.io)\r\n- authentications.metal3.io (K=Authentications, G=metal3.io)\r\n- authentications.whereabouts.cni.cncf.io (K=Authentications, G=whereabouts.cni.cncf.io)\r\n- authentications.snapshot.storage.k8s.io (K=Authentications, G=snapshot.storage.k8s.io)\r\n\r\n> with multiple APIs like from your example the one with higher priority will match. \r\n\r\nRight, so you need to specify the group as well (e.g. `kubectl explain authentications.metal3.io` ). In which case the suggested changes will go through all APIs and pick the one which corresponds to the group.\r\n\r\n> So you won't reach the code inside at all.\r\n\r\nRight, `kubectl explain authentications.metal3.io.field` will not find anything since there's no `metal3.io.field` group. In which case you will need to specify `--api-version=metal3.io/VERSION` flag which will bypass the new code.\r\n\r\nCan you reach any code (=field) inside with the current implementation? No.",
+        "createdAt" : "2020-09-02T11:06:37Z",
+        "updatedAt" : "2021-01-14T09:46:36Z",
+        "lastEditedBy" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ea6c0c4-2c91-430c-954f-b4a90691c145",
+        "parentId" : "7324fe64-5006-4613-8210-9aa501e21635",
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "For having all GVK, you'd need to use `KindsFor` rather than `KindFor`, notice `s` after kind in the first method. That will return you all the known GVKs. What I was saying before, though, is that few lines earlier in `SplitAndParseResourceRequest` there's already parsing and matching with mapper which might result in only a single value. That's why I was proposing to move the code a bit earlier. ",
+        "createdAt" : "2020-09-03T10:32:37Z",
+        "updatedAt" : "2021-01-14T09:46:36Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "30674db1595e3a24273ceb71cbfe67bb300ad951",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +139,143 @@\t}\n\n\tgvk, _ := o.Mapper.KindFor(fullySpecifiedGVR)\n\tif gvk.Empty() {\n\t\tgvk, err = o.Mapper.KindFor(fullySpecifiedGVR.GroupResource().WithVersion(\"\"))"
+  }
+]

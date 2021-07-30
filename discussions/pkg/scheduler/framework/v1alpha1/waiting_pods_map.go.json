@@ -1,0 +1,222 @@
+[
+  {
+    "id" : "1309e082-ae97-4774-a835-4d362efc1bb0",
+    "prId" : 88199,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88199#pullrequestreview-359376571",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "93165d53-ef46-40b7-a793-2c18029f909e",
+        "parentId" : null,
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "Why make this change? for directly accessing `waitingPod.s`? If so, we can add a function to WaitingPod interface:\r\n\r\n```go\r\ntype WaitingPod interface {\r\n    StatusChan() <-chan *Status\r\n}\r\n```",
+        "createdAt" : "2020-02-16T01:44:48Z",
+        "updatedAt" : "2020-02-18T18:04:35Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c339273d-a16a-44c1-8cd0-aa426d921316",
+        "parentId" : "93165d53-ef46-40b7-a793-2c18029f909e",
+        "authorId" : "3ef67a83-5dc0-4916-a2c9-16e77052d502",
+        "body" : "Main reason is that if we expose channel then we risk that custom plugin code will use `handle.GetWaitingPod(uid).StatusChan()` and intercept status that was meant for `WaitOnPermit()` and `WaitOnPermit()` will block forever. \r\n\r\nOne option could be `Wait() *Status` or `Wait() (allowed bool)` which blocks until waiting pod is rejected or allowed and always return the same value that was memorized, however it would require more complicated `waitingPod` implementation. I think we should consider it as a separate feature and add it in the future if it is useful (right now it is not really possible to wait on a pod in the custom plugin code).\r\n\r\nI decided to simply use `waitingPod` inside `waitingPodsMap` given that both types are internal and we do not need to use different implementation of the `WaitingPod` inside the `waitingPodsMap`. Also this way the framework API for the plugins does not change. In the future, if `waitingPodsMap` is exported type, then we will have to address it.\r\n",
+        "createdAt" : "2020-02-16T02:15:52Z",
+        "updatedAt" : "2020-02-18T18:04:35Z",
+        "lastEditedBy" : "3ef67a83-5dc0-4916-a2c9-16e77052d502",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b5124115-cdfe-477d-a90f-d70c5c8d9cf4",
+        "parentId" : "93165d53-ef46-40b7-a793-2c18029f909e",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "Using a concrete value here (instead of an interface) would lose the flexibility of building tests, but it's affordable. So SGTM.",
+        "createdAt" : "2020-02-16T02:31:11Z",
+        "updatedAt" : "2020-02-18T18:04:35Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d221d82eaf3756a759530bdd332af9ba755151dd",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +28,32 @@// waitingPodsMap a thread-safe map used to maintain pods waiting in the permit phase.\ntype waitingPodsMap struct {\n\tpods map[types.UID]*waitingPod\n\tmu   sync.RWMutex\n}"
+  },
+  {
+    "id" : "8d99a0ca-2574-421a-bf55-30dbec9d245c",
+    "prId" : 84011,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84011#pullrequestreview-305597145",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "96332356-319e-4762-b01b-bb41c4848a8c",
+        "parentId" : null,
+        "authorId" : "df8dc16d-08c7-457c-8593-619395912000",
+        "body" : "I think it is ok for time.AfterFunc to execute before newWaitingPod finishes, because when `newWaitingPod` is called, it means that permit plugins has been running and we could start timer for them. \r\n\r\nIs there any other concern?",
+        "createdAt" : "2019-10-23T01:33:59Z",
+        "updatedAt" : "2019-10-23T13:09:39Z",
+        "lastEditedBy" : "df8dc16d-08c7-457c-8593-619395912000",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "91042365-1fd2-4d9f-8e99-685fbd5cb2ec",
+        "parentId" : "96332356-319e-4762-b01b-bb41c4848a8c",
+        "authorId" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "body" : "Yes this causes race. In time.AfterFunc,  `wp.Reject` is called, which needs to iterate through the map. I ran into that in tests.",
+        "createdAt" : "2019-10-23T01:54:56Z",
+        "updatedAt" : "2019-10-23T13:09:39Z",
+        "lastEditedBy" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c7787f46-8702-496a-9d11-e3be28ea8051",
+        "parentId" : "96332356-319e-4762-b01b-bb41c4848a8c",
+        "authorId" : "df8dc16d-08c7-457c-8593-619395912000",
+        "body" : "SG",
+        "createdAt" : "2019-10-23T02:01:01Z",
+        "updatedAt" : "2019-10-23T13:09:39Z",
+        "lastEditedBy" : "df8dc16d-08c7-457c-8593-619395912000",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f32d735b50f3c3141690e5fa177b2b85a53bb4bc",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +89,93 @@\t// lock here so that time.AfterFunc can only execute after newWaitingPod finishes.\n\twp.mu.Lock()\n\tdefer wp.mu.Unlock()\n\tfor k, v := range pluginsMaxWaitTime {\n\t\tplugin, waitTime := k, v"
+  },
+  {
+    "id" : "9bf27508-f04c-427b-a613-6c4cf252fa1d",
+    "prId" : 83756,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83756#pullrequestreview-301006004",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "874f8dd3-34a8-40b0-ae78-5e74510b78a3",
+        "parentId" : null,
+        "authorId" : "e1ba72c9-3be8-432b-b345-ac2d180a8eab",
+        "body" : "Is it concurrent safe to iterate over all elements in the map and delete an element?",
+        "createdAt" : "2019-10-12T11:09:51Z",
+        "updatedAt" : "2019-10-19T08:22:54Z",
+        "lastEditedBy" : "e1ba72c9-3be8-432b-b345-ac2d180a8eab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9542eca2-2f00-43d2-b36c-6eea05c0cef6",
+        "parentId" : "874f8dd3-34a8-40b0-ae78-5e74510b78a3",
+        "authorId" : "df8dc16d-08c7-457c-8593-619395912000",
+        "body" : "Yes, it is not safe. Addressed.",
+        "createdAt" : "2019-10-12T13:44:30Z",
+        "updatedAt" : "2019-10-19T08:22:54Z",
+        "lastEditedBy" : "df8dc16d-08c7-457c-8593-619395912000",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "38b7668bb3ef15c945d25dd84d7fd740e3163b2f",
+    "line" : 73,
+    "diffHunk" : "@@ -1,1 +124,128 @@\tif timer, exist := w.pendingPlugins[pluginName]; exist {\n\t\ttimer.Stop()\n\t\tdelete(w.pendingPlugins, pluginName)\n\t}\n"
+  },
+  {
+    "id" : "afdfb55a-7f2a-4f9d-b65c-99656adb84d0",
+    "prId" : 83756,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83756#pullrequestreview-303918646",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e0216831-2f83-4c09-8086-3ab276dd644b",
+        "parentId" : null,
+        "authorId" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "body" : "Logs can be easier to read if the pod is also logged.",
+        "createdAt" : "2019-10-17T00:12:33Z",
+        "updatedAt" : "2019-10-19T08:22:54Z",
+        "lastEditedBy" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "275ee868-fe56-4ea4-a4a7-61c73677b466",
+        "parentId" : "e0216831-2f83-4c09-8086-3ab276dd644b",
+        "authorId" : "df8dc16d-08c7-457c-8593-619395912000",
+        "body" : "The pod name will be logged in its callers, there is no need to add it here, otherwise pod name will be logged twice.",
+        "createdAt" : "2019-10-17T15:19:26Z",
+        "updatedAt" : "2019-10-19T08:22:54Z",
+        "lastEditedBy" : "df8dc16d-08c7-457c-8593-619395912000",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b9a6e91-a6f6-4c73-94d0-7fef907d4732",
+        "parentId" : "e0216831-2f83-4c09-8086-3ab276dd644b",
+        "authorId" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "body" : "However, since this is executed async, it's hard to link the caller log with this. Let me know if think otherwise.",
+        "createdAt" : "2019-10-17T15:35:36Z",
+        "updatedAt" : "2019-10-19T08:22:54Z",
+        "lastEditedBy" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f38dd26e-1ddf-477c-b5d2-0b49691eaf19",
+        "parentId" : "e0216831-2f83-4c09-8086-3ab276dd644b",
+        "authorId" : "df8dc16d-08c7-457c-8593-619395912000",
+        "body" : "This log message is not printed here, it is just sent to waiting pod's status channel to let signal receivers know the reason why it is rejected. Does it make sense?",
+        "createdAt" : "2019-10-17T23:11:47Z",
+        "updatedAt" : "2019-10-19T08:22:54Z",
+        "lastEditedBy" : "df8dc16d-08c7-457c-8593-619395912000",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "750a5867-fa47-46cb-ac7c-40f72092f06c",
+        "parentId" : "e0216831-2f83-4c09-8086-3ab276dd644b",
+        "authorId" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "body" : "ack",
+        "createdAt" : "2019-10-18T14:13:20Z",
+        "updatedAt" : "2019-10-19T08:22:54Z",
+        "lastEditedBy" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "38b7668bb3ef15c945d25dd84d7fd740e3163b2f",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +89,93 @@\t\tplugin, waitTime := k, v\n\t\twp.pendingPlugins[plugin] = time.AfterFunc(waitTime, func() {\n\t\t\tmsg := fmt.Sprintf(\"rejected due to timeout after waiting %v at plugin %v\",\n\t\t\t\twaitTime, plugin)\n\t\t\twp.Reject(msg)"
+  },
+  {
+    "id" : "ef68bc02-d099-487c-8706-2b52a1d1bbe0",
+    "prId" : 83756,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83756#pullrequestreview-303343079",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5129e97f-f8bb-464a-b088-e61166a606ea",
+        "parentId" : null,
+        "authorId" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "body" : "It took me a minute to understand this. Can you put a comment saying something like \"Only signal success status after all plugins are allowed\"",
+        "createdAt" : "2019-10-17T00:20:55Z",
+        "updatedAt" : "2019-10-19T08:22:54Z",
+        "lastEditedBy" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "296858c3-8989-4b53-a848-1bc767a331e9",
+        "parentId" : "5129e97f-f8bb-464a-b088-e61166a606ea",
+        "authorId" : "df8dc16d-08c7-457c-8593-619395912000",
+        "body" : "Updated.",
+        "createdAt" : "2019-10-17T15:21:55Z",
+        "updatedAt" : "2019-10-19T08:22:54Z",
+        "lastEditedBy" : "df8dc16d-08c7-457c-8593-619395912000",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "38b7668bb3ef15c945d25dd84d7fd740e3163b2f",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +128,132 @@\n\t// Only signal success status after all plugins have allowed\n\tif len(w.pendingPlugins) != 0 {\n\t\treturn true\n\t}"
+  }
+]

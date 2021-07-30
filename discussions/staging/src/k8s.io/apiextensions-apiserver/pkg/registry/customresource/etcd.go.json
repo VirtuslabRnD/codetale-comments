@@ -1,0 +1,354 @@
+[
+  {
+    "id" : "d2186c1f-b28e-4905-a208-8c750ebbc38e",
+    "prId" : 80572,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80572#pullrequestreview-285558575",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cc1deaae-f599-4a41-bc26-80bf80556085",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this is in the right direction, but prefer using the existing clientretry.OnError helper:\r\n\r\n```go\r\nretryOnConflict := false\r\nisRetriableConflict := func(err error) bool {\r\n  return apierrors.IsConflict(err) && retryOnConflict\r\n}\r\n\r\nvar (\r\n  newScale runtime.Object\r\n  err error\r\n)\r\n\r\nerr = clientretry.OnError(clientretry.DefaultRetry, isRetriableConflict, func() error {\r\n  obj, err := r.store.Get(ctx, name, &metav1.GetOptions{})\r\n  ...\r\n \r\n  if len(scale.ResourceVersion) == 0 {\r\n    // no resourceVersion was provided, so use the existing cr resourceVersion and retry conflicts server-side\r\n    retryOnConflict = true\r\n  } else {\r\n    // a resourceVersion was provided, so use it and return conflict errors to the user\r\n    retryOnConflict = false\r\n    cr.SetResourceVersion(scale.ResourceVersion)\r\n  }\r\n  ...\r\n  newScale, _, err = scaleFromCustomResource(cr, r.specReplicasPath, r.statusReplicasPath, r.labelSelectorPath)\r\n  if err != nil {\r\n    return apierrors.NewBadRequest(err.Error())\r\n  }\r\n  return nil\r\n})\r\n\r\nreturn newScale, false, err\r\n```",
+        "createdAt" : "2019-09-09T13:56:41Z",
+        "updatedAt" : "2019-11-14T01:50:24Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "46b2ac12-1c2e-4427-82d6-02bb5f2b9ddd",
+        "parentId" : "cc1deaae-f599-4a41-bc26-80bf80556085",
+        "authorId" : "9e6ce3ed-e2f7-40ea-b6d7-b1b04fc48f70",
+        "body" : "@liggitt Thanks for your detailed guidance! I have updated the code.",
+        "createdAt" : "2019-09-09T14:41:48Z",
+        "updatedAt" : "2019-11-14T01:50:24Z",
+        "lastEditedBy" : "9e6ce3ed-e2f7-40ea-b6d7-b1b04fc48f70",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "da246010c3d875f01f9c61ff220923c4e2be936b",
+    "line" : 3,
+    "diffHunk" : "@@ -1,1 +237,241 @@}\n\nfunc (r *ScaleREST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {\n\tscaleObjInfo := &scaleUpdatedObjectInfo{\n\t\treqObjInfo:         objInfo,"
+  },
+  {
+    "id" : "2cf7bb74-c269-4668-9fb7-6a4fad8ca1cf",
+    "prId" : 80572,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80572#pullrequestreview-316026496",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "25e918af-7e78-427d-aa1d-55ed7baaf18f",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "why the deep copy?",
+        "createdAt" : "2019-11-13T05:19:13Z",
+        "updatedAt" : "2019-11-14T01:50:24Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf19242c-909a-4e45-9239-d23c452f9ea3",
+        "parentId" : "25e918af-7e78-427d-aa1d-55ed7baaf18f",
+        "authorId" : "9e6ce3ed-e2f7-40ea-b6d7-b1b04fc48f70",
+        "body" : "I think the original object should not be modified and decide to make a copy.",
+        "createdAt" : "2019-11-13T06:33:29Z",
+        "updatedAt" : "2019-11-14T01:50:24Z",
+        "lastEditedBy" : "9e6ce3ed-e2f7-40ea-b6d7-b1b04fc48f70",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be0ba4c1-6f5e-4354-8c71-80bf6606eb76",
+        "parentId" : "25e918af-7e78-427d-aa1d-55ed7baaf18f",
+        "authorId" : "9e6ce3ed-e2f7-40ea-b6d7-b1b04fc48f70",
+        "body" : "And I found that if we dont deep copy here, the server would not return a conflict error even if resourceVersion mismatched.",
+        "createdAt" : "2019-11-13T06:35:21Z",
+        "updatedAt" : "2019-11-14T01:50:24Z",
+        "lastEditedBy" : "9e6ce3ed-e2f7-40ea-b6d7-b1b04fc48f70",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e9b2025b-f6e8-47fc-9be6-c75a2d5c7d62",
+        "parentId" : "25e918af-7e78-427d-aa1d-55ed7baaf18f",
+        "authorId" : "9e6ce3ed-e2f7-40ea-b6d7-b1b04fc48f70",
+        "body" : "I don't know why and I'll try to figure it out",
+        "createdAt" : "2019-11-13T06:36:33Z",
+        "updatedAt" : "2019-11-14T01:50:24Z",
+        "lastEditedBy" : "9e6ce3ed-e2f7-40ea-b6d7-b1b04fc48f70",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe03b132-c3b1-4e0d-87de-18c8e06c3249",
+        "parentId" : "25e918af-7e78-427d-aa1d-55ed7baaf18f",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "no, the deepcopy makes sense. I see the default impl does the same thing",
+        "createdAt" : "2019-11-13T06:40:14Z",
+        "updatedAt" : "2019-11-14T01:50:24Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "da246010c3d875f01f9c61ff220923c4e2be936b",
+    "line" : 89,
+    "diffHunk" : "@@ -1,1 +356,360 @@\nfunc (i *scaleUpdatedObjectInfo) UpdatedObject(ctx context.Context, oldObj runtime.Object) (runtime.Object, error) {\n\tcr := oldObj.DeepCopyObject().(*unstructured.Unstructured)\n\tconst invalidSpecReplicas = -2147483648 // smallest int32\n\toldScale, replicasFound, err := scaleFromCustomResource(cr, i.specReplicasPath, i.statusReplicasPath, i.labelSelectorPath)"
+  },
+  {
+    "id" : "dffda505-2334-4e2e-8c03-805eccb2f7a8",
+    "prId" : 78713,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78713#pullrequestreview-245850875",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5e9535e0-8222-44d9-af92-64f3b79e5e56",
+        "parentId" : null,
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "this is the important line?",
+        "createdAt" : "2019-06-05T07:40:39Z",
+        "updatedAt" : "2019-06-06T13:18:26Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43c1fb94-3d62-495e-9e3e-b5f7d6a314c6",
+        "parentId" : "5e9535e0-8222-44d9-af92-64f3b79e5e56",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "No, setting the kind in New(), and preserving it in the etcd3 store when instantisting the object we decode into. This was just a bug I found while here",
+        "createdAt" : "2019-06-05T07:47:28Z",
+        "updatedAt" : "2019-06-06T13:18:26Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a3bb81ff327bc4daa7bc7c9819d9ab18343d69a7",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +188,192 @@\t}\n\tif u, ok := o.(*unstructured.Unstructured); ok {\n\t\tshallowCopyObjectMeta(u)\n\t}\n\treturn o, nil"
+  },
+  {
+    "id" : "c89e7763-42f0-44c0-a94d-d15042015e12",
+    "prId" : 70087,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70087#pullrequestreview-167400790",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "083529e2-dcb7-4e58-828f-79509e4d8ad4",
+        "parentId" : null,
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "I remember we experimented with this before. Why is it needed with your changes now?",
+        "createdAt" : "2018-10-23T11:24:27Z",
+        "updatedAt" : "2018-10-23T13:04:47Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7053786c-ffcb-49b4-b6b2-10c091de0838",
+        "parentId" : "083529e2-dcb7-4e58-828f-79509e4d8ad4",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "The GVK in the `into` unstructured object is a signal to the versioning decoder that the target object has an opinion about what version is placed into it. This makes this constructor consistent with the way we were already setting GVK in new unstructured creation functions elsewhere:\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/577d0a382e4bfd03f752d7cdcf8c8095c863e83b/staging/src/k8s.io/apiextensions-apiserver/pkg/apiserver/customresource_handler.go#L643-L647\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/577d0a382e4bfd03f752d7cdcf8c8095c863e83b/staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource/etcd.go#L81-L86\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/577d0a382e4bfd03f752d7cdcf8c8095c863e83b/staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructuredscheme/scheme.go#L114-L118",
+        "createdAt" : "2018-10-23T12:56:21Z",
+        "updatedAt" : "2018-10-23T13:04:47Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1c5d3ab85e67f815e46006cc6a343983566837a3",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +81,85 @@\t\t\t// set the expected group/version/kind in the new object as a signal to the versioning decoder\n\t\t\tret := &unstructured.Unstructured{}\n\t\t\tret.SetGroupVersionKind(kind)\n\t\t\treturn ret\n\t\t},"
+  },
+  {
+    "id" : "9ccac1c6-e299-463b-b925-04cb4c0c3afa",
+    "prId" : 65092,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/65092#pullrequestreview-129099033",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "61bd99e9-ef2f-49d5-8b57-1300e58032e9",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "does this also happen for objects returned in watch events? what about objects returned from Get?",
+        "createdAt" : "2018-06-14T14:06:19Z",
+        "updatedAt" : "2018-06-15T13:17:33Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5c0af1ee-7b59-4f46-a648-37037dd86734",
+        "parentId" : "61bd99e9-ef2f-49d5-8b57-1300e58032e9",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "This looks suspicious as well: https://github.com/kubernetes/kubernetes/blob/70e45eccf27726f0e63dd1024924ccc7e2cd35a0/staging/src/k8s.io/apiserver/pkg/storage/cacher.go#L393\r\n",
+        "createdAt" : "2018-06-14T14:40:39Z",
+        "updatedAt" : "2018-06-15T13:17:33Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "45dadec0-caec-4d48-bc0d-622c64bb35a7",
+        "parentId" : "61bd99e9-ef2f-49d5-8b57-1300e58032e9",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "Verified GET as well. As soon as you pass a ResourceVersion in the GetOptions, the cache is used (same for LIST) and the concurrent write happens.",
+        "createdAt" : "2018-06-15T09:35:13Z",
+        "updatedAt" : "2018-06-15T13:17:33Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cd10f28ac19136bb3b532a1aa83644e52f8dd3e9",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +115,119 @@\t}\n\n\t// Shallow copy ObjectMeta in returned list for each item. Native types have `Items []Item` fields and therefore\n\t// implicitly shallow copy ObjectMeta. The generic store sets the self-link for each item. So this is necessary\n\t// to avoid mutation of the objects from the cache."
+  },
+  {
+    "id" : "85c176bb-8573-4abd-bda5-81ccdc686566",
+    "prId" : 55168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55168#pullrequestreview-88833970",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e76e2ddf-5b6d-479d-ae04-bc85db7e56fb",
+        "parentId" : null,
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "don't know what other strategies do this, but this looks more like an internal 500 error than a bad request, doesn't it?",
+        "createdAt" : "2018-01-15T11:48:07Z",
+        "updatedAt" : "2018-02-22T17:55:55Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3e5b8fd-b55a-4c76-aeb8-0f241f89fb88",
+        "parentId" : "e76e2ddf-5b6d-479d-ae04-bc85db7e56fb",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "Or can this happen if you pass an empty body?",
+        "createdAt" : "2018-01-15T11:48:29Z",
+        "updatedAt" : "2018-02-22T17:55:55Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29a79b10-5c3d-4fc5-bea2-a75b56346a63",
+        "parentId" : "e76e2ddf-5b6d-479d-ae04-bc85db7e56fb",
+        "authorId" : "fa530650-5886-4415-a42f-0dee2e0e9ae3",
+        "body" : "> don't know what other strategies do this\r\n\r\nAll strategies have this:\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/2476aa410b68d10bc49b55ba2dbfe6fde23b8cca/pkg/registry/apps/statefulset/storage/storage.go#L171-#L177\r\n\r\n> Or can this happen if you pass an empty body?\r\n\r\nSurprisingly, the comment on `UpdatedObject` says:\r\n\r\n```\r\n// The only time an empty oldObj should be passed in is if a \"create on update\" is occurring (there is no oldObj).\r\n```\r\n\r\nThis means a nil can be passed to Scale, so there should be no error(!)\r\n\r\ncc @deads2k ",
+        "createdAt" : "2018-01-15T13:28:05Z",
+        "updatedAt" : "2018-02-22T17:55:55Z",
+        "lastEditedBy" : "fa530650-5886-4415-a42f-0dee2e0e9ae3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "89c887c5-cb62-46d0-8e7b-15ea3e7d91f9",
+        "parentId" : "e76e2ddf-5b6d-479d-ae04-bc85db7e56fb",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "Ok, so this case should not happen, and if it does, the BadRequest is actually correct.",
+        "createdAt" : "2018-01-15T14:20:21Z",
+        "updatedAt" : "2018-02-22T17:55:55Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "55ce3dedaa51c66dcd52b86f01e687905afe3e94",
+    "line" : 153,
+    "diffHunk" : "@@ -1,1 +176,180 @@\t}\n\tif obj == nil {\n\t\treturn nil, false, apierrors.NewBadRequest(fmt.Sprintf(\"nil update passed to Scale\"))\n\t}\n"
+  },
+  {
+    "id" : "11c75978-9e65-4914-ae3d-544ba9248a6e",
+    "prId" : 55168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55168#pullrequestreview-94676231",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9fc676d9-92e4-41eb-a049-0729c1effc40",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "presence of status should affect create/update strategy on the main resource to disallow changes to status stanza, right?",
+        "createdAt" : "2018-01-15T21:45:00Z",
+        "updatedAt" : "2018-02-22T17:55:55Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0394117-09aa-4e92-8e98-713835e19972",
+        "parentId" : "9fc676d9-92e4-41eb-a049-0729c1effc40",
+        "authorId" : "fa530650-5886-4415-a42f-0dee2e0e9ae3",
+        "body" : "Create - https://github.com/kubernetes/kubernetes/pull/55168/files#diff-34aedeefa7784abbe7531bae68833ba6R74\r\n\r\nUpdate - https://github.com/kubernetes/kubernetes/pull/55168/files#diff-34aedeefa7784abbe7531bae68833ba6R96",
+        "createdAt" : "2018-02-07T11:33:32Z",
+        "updatedAt" : "2018-02-22T17:55:55Z",
+        "lastEditedBy" : "fa530650-5886-4415-a42f-0dee2e0e9ae3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "55ce3dedaa51c66dcd52b86f01e687905afe3e94",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +95,99 @@\t\tpanic(err) // TODO: Propagate error up\n\t}\n\n\tstatusStore := *store\n\tstatusStore.UpdateStrategy = NewStatusStrategy(strategy)"
+  },
+  {
+    "id" : "0817ad0b-28cb-4698-94e6-4dc545424994",
+    "prId" : 55168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55168#pullrequestreview-88939441",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ba50e5e2-f33d-402e-aa52-9f7bee60bb4b",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "TODO to plumb specified external type",
+        "createdAt" : "2018-01-15T21:45:52Z",
+        "updatedAt" : "2018-02-22T17:55:55Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "55ce3dedaa51c66dcd52b86f01e687905afe3e94",
+    "line" : 109,
+    "diffHunk" : "@@ -1,1 +132,136 @@\nfunc (r *ScaleREST) GroupVersionKind(containingGV schema.GroupVersion) schema.GroupVersionKind {\n\treturn autoscalingv1.SchemeGroupVersion.WithKind(\"Scale\")\n}\n"
+  },
+  {
+    "id" : "8f2d6531-31d7-475a-bf1d-1b043662ec06",
+    "prId" : 55168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55168#pullrequestreview-94675239",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "883e9096-d211-4821-b1af-f1ed7e0ea47d",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "do any kind of validation on the scale, like >= 0, <= 2^31, etc?",
+        "createdAt" : "2018-01-15T21:49:50Z",
+        "updatedAt" : "2018-02-22T17:55:55Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "858a38e6-de0c-4aed-b70b-3fc4814f1c78",
+        "parentId" : "883e9096-d211-4821-b1af-f1ed7e0ea47d",
+        "authorId" : "fa530650-5886-4415-a42f-0dee2e0e9ae3",
+        "body" : "Done.",
+        "createdAt" : "2018-02-07T11:29:40Z",
+        "updatedAt" : "2018-02-22T17:55:55Z",
+        "lastEditedBy" : "fa530650-5886-4415-a42f-0dee2e0e9ae3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "55ce3dedaa51c66dcd52b86f01e687905afe3e94",
+    "line" : 160,
+    "diffHunk" : "@@ -1,1 +183,187 @@\t\treturn nil, false, apierrors.NewBadRequest(fmt.Sprintf(\"wrong object passed to Scale update: %v\", obj))\n\t}\n\n\tif scale.Spec.Replicas == invalidSpecReplicas {\n\t\treturn nil, false, apierrors.NewBadRequest(fmt.Sprintf(\"the spec replicas field %q cannot be empty\", r.specReplicasPath))"
+  }
+]

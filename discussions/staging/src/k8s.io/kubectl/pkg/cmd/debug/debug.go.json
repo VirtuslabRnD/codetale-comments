@@ -1,0 +1,365 @@
+[
+  {
+    "id" : "69d3f785-fe52-43f9-8f0e-65c57d71b1d3",
+    "prId" : 96058,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96058#pullrequestreview-521550927",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "47280fa3-8bec-4841-beeb-a323202c13a9",
+        "parentId" : null,
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "@soltysh When implementing image mutation I realized it might be more intuitive to have a separate flag, using `--image` for adding a new debug container and `--set-image` for changing the images of existing containers. With this syntax it's possible to perform both operations in a single command, but mainly I just think the syntax is clearer.\r\n\r\nCould you have a look at these examples and let me know what you think? For reference, we previously discussed [overloading the `--image` flag for both uses](https://github.com/kubernetes/enhancements/tree/master/keps/sig-cli/1441-kubectl-debug#modify-application-image-by-copy)",
+        "createdAt" : "2020-11-02T11:34:30Z",
+        "updatedAt" : "2020-11-03T19:59:07Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ee9f11b95f01b32dade5d8dc7329625c40ac0e63",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +89,93 @@\t\t# Create a copy of mypod adding a debug container and changing container images\n\t\tkubectl alpha debug mypod -it --copy-to=my-debugger --image=debian --set-image=app=app:debug,sidecar=sidecar:debug\n\n\t\t# Create an interactive debugging session on a node and immediately attach to it.\n\t\t# The container will run in the host namespaces and the host's filesystem will be mounted at /host"
+  },
+  {
+    "id" : "0af76d6d-738d-45d4-9a33-61d834e61a50",
+    "prId" : 90094,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90094#pullrequestreview-436006339",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9b2f7caf-c600-4497-bc6d-51f3fe1ac5c4",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "Now that I'm looking at this I found it weird and hard to decipher. Have a look at how we do something similar in `kubectl set image`:\r\n```\r\n# Update image of all containers of daemonset abc to 'nginx:1.9.1'\r\nkubectl set image daemonset abc *=nginx:1.9.1\r\n```\r\nHow about supporting something similar here as well. Iow. when I pass `--image=busybox` it applies to all, similarly `--image=*=busybox`. But `--image=my-container=busybox` would apply that image only for that. @aylei @verb wdyt?",
+        "createdAt" : "2020-04-27T14:29:13Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07043489-d54c-4d5b-a624-fea4c253140d",
+        "parentId" : "9b2f7caf-c600-4497-bc6d-51f3fe1ac5c4",
+        "authorId" : "6004f825-5823-4f79-8d40-aede33ad8c6b",
+        "body" : "IMHO, current syntax works better for `debug`. A common use case of `debug` is to add a \"debug\" container, either by making a copy or adding an ephemeral container, to the pod so that user can diagnose their business containers with the tools installed in the debug container. So usually `debug` does't have to and also shouldn't mutate the image of other business containers. And `--image`, in semantic, is always the container image to use for the **debug container**.\r\n\r\n`--container` is only used to specify the name of the debug container before debug by copy is added. When debug by copy, `debug` will change the image of an existing container if `--container` is set to an existing on deliberately, I think it is a not a common use case of `debug` and is only implemented for completeness.",
+        "createdAt" : "2020-04-28T06:17:40Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "6004f825-5823-4f79-8d40-aede33ad8c6b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4381a17-6e35-4d14-9475-70ed9623a7d3",
+        "parentId" : "9b2f7caf-c600-4497-bc6d-51f3fe1ac5c4",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "There are two debugging scenarios I hoped to address with debug by copy:\r\n\r\n1. The same as addressed in debug by ephemeral container, but ephemeral containers are unavailable or the operator prefers to operate on a copy.\r\n2. A primary container in the pod is crashlooping and I want to replace the container image with (for example) busybox so I can examine the environment with a shell.\r\n\r\nI suspect it would be uncommon to change multiple or all container images at once. Rather than addressing that directly maybe it'd be better to have an `--edit` that opens an editor prior to create, similar to `kubectl edit`, which would be a useful catch-all for arbitrary changes.\r\n\r\nThe mutate specification of `kubectl set image` seems more generically useful, but I'm inclined to keep `kubectl debug` focused on specific debugging journeys. It would be easy to add `--image=*=busybox` functionality in the future while remaining backwards compatible with current \"only modify a single container\" behavior, so I'd omit it for now.\r\n\r\nIt is a bit hard to decipher, though, and I think it's because it's unclear which flags operate on pod names and which operate on containers. Should we rename `--copy-to` to `--copy-pod-to`?",
+        "createdAt" : "2020-05-18T13:43:22Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d040496-edd1-4d7c-8057-96f02ca65cf2",
+        "parentId" : "9b2f7caf-c600-4497-bc6d-51f3fe1ac5c4",
+        "authorId" : "6004f825-5823-4f79-8d40-aede33ad8c6b",
+        "body" : "IMHO, `--copy-to` is simpler but still accurate enough, since the object of `debug by copy` is exactly a Pod. ",
+        "createdAt" : "2020-05-20T14:08:01Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "6004f825-5823-4f79-8d40-aede33ad8c6b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "715ea463-841b-4dfe-b28c-5b5792e55bae",
+        "parentId" : "9b2f7caf-c600-4497-bc6d-51f3fe1ac5c4",
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "The form I'm suggesting is addressing that particular use-case you're talking about @verb. If you have a pod with multiple containers how do you specify which one you replace with the above syntax? With the one I'm proposing it's explicit. I'd prefer not to have `--edit` option, that seems like an overkill. @aylei I agree a Pod's copy, but you are mutating the copy with your own image, and you need a way to say which image and where. As long as you have just one container, you're fine. With multiple it becomes a problem. ",
+        "createdAt" : "2020-06-22T15:44:34Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85df1b24-da2d-4449-8471-9e4f428324b3",
+        "parentId" : "9b2f7caf-c600-4497-bc6d-51f3fe1ac5c4",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "Ok, SGTM. I don't feel strongly, and being able to mutate multiple images is undoubtedly useful. It's nice to use the same mutation language as other parts of kubectl.\r\n\r\nShould we allow `--container` && `--image` mutation syntax at the same time? That is, can we add a new container *and* change the image of the existing ones with a command line:\r\n\r\n```\r\nkubectl alpha debug mypod --copy-to=my-debugger --container=new-container --image=new-container=busybox,old-container=debug-image\r\n```\r\n\r\nSince `debug` sometimes adds containers and sometimes changes existing containers, it might be less error prone to *require* the mutation syntax like `--image=*=new-image` for changes to existing images rather than have a default mutate action for `--image=new-image`.",
+        "createdAt" : "2020-06-23T17:36:10Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cfece3edfe8a726fc5dc65ef89b89021316837c7",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +67,71 @@\n\t\t# Create a copy of mypod named my-debugger with my-container's image changed to busybox\n\t\tkubectl alpha debug mypod --image=busybox --container=my-container --copy-to=my-debugger -- sleep 1d\n`))\n)"
+  },
+  {
+    "id" : "a8cbf475-be0e-4ae8-b542-fad4870ee33b",
+    "prId" : 90094,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90094#pullrequestreview-401005187",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7479c5cf-bf66-4681-a762-025995a7f7d2",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "Return fast, is the rule, so:\r\n```\r\nif len(o.Container) > 0 {\r\n    return o.Container\r\n}\r\n// here goes the rest. ",
+        "createdAt" : "2020-04-27T14:35:34Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cfece3edfe8a726fc5dc65ef89b89021316837c7",
+    "line" : 241,
+    "diffHunk" : "@@ -1,1 +421,425 @@\t}\n\tname := o.Container\n\tif len(name) == 0 {\n\t\tcn, containerByName := \"\", containerNameToRef(pod)\n\t\tfor len(cn) == 0 || (containerByName[cn] != nil) {"
+  },
+  {
+    "id" : "6b2071bd-56d5-4328-bfbf-f389d4eb5f45",
+    "prId" : 90094,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90094#pullrequestreview-436006339",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5136b5c0-6874-43ef-b274-5fb2044661ef",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "I didn't catch it last time, but seems weird that it's on `ErrOut`.",
+        "createdAt" : "2020-04-27T14:36:16Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "960e0248-6d63-46b2-a72c-8dd3a0177225",
+        "parentId" : "5136b5c0-6874-43ef-b274-5fb2044661ef",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "I think the correct behavior here is for output from `kubectl` and the container to use separate channels. For example, `kubectl debug mypod --image=busybox -- ifconfig -a > interfaces.txt` shouldn't write \"Defaulting debug container...\" to interfaces.txt.",
+        "createdAt" : "2020-05-18T13:50:18Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4016b0d-c6d4-4f71-9a4e-a4cace409bee",
+        "parentId" : "5136b5c0-6874-43ef-b274-5fb2044661ef",
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "That's where you could use `-v=1` instead, or `--quiet` rather than printing on stderr something that is not an error. ",
+        "createdAt" : "2020-06-22T15:45:47Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0dd20e8c-01fc-4605-94ca-6c4a61b87d78",
+        "parentId" : "5136b5c0-6874-43ef-b274-5fb2044661ef",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "It's worth printing the message by default to make it easier to reconnect (and in the case of generating a pod name for node debugging, there's no other way to tell what the name is), but it's a good point that you can accomplish the same thing with `--quiet`.\r\n\r\nThe Unix user in me still thinks that stderr is correct here, but it's more important that `kubectl` is consistent. I can update this in my pending PR.",
+        "createdAt" : "2020-06-23T17:43:03Z",
+        "updatedAt" : "2020-07-01T13:35:43Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cfece3edfe8a726fc5dc65ef89b89021316837c7",
+    "line" : 247,
+    "diffHunk" : "@@ -1,1 +427,431 @@\t\t}\n\t\tif !o.Quiet {\n\t\t\tfmt.Fprintf(o.ErrOut, \"Defaulting debug container name to %s.\\n\", cn)\n\t\t}\n\t\tname = cn"
+  },
+  {
+    "id" : "34769b76-69ba-4644-98a4-e5f50fb7ff22",
+    "prId" : 89818,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89818#pullrequestreview-393696416",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a97d44b4-6b3a-4022-a646-2710eea4cc85",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "With this in, you need to update the examples to use other resources, but that can be done in the next PR.",
+        "createdAt" : "2020-04-15T11:44:49Z",
+        "updatedAt" : "2020-04-15T11:45:04Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8414d180feb9ddb0d4b9b80ea8e570dcacf98703",
+    "line" : 53,
+    "diffHunk" : "@@ -1,1 +214,218 @@\tr := o.builder.\n\t\tWithScheme(scheme.Scheme, scheme.Scheme.PrioritizedVersionsAllGroups()...).\n\t\tNamespaceParam(o.Namespace).DefaultNamespace().ResourceNames(\"pods\", o.TargetNames...).\n\t\tDo()\n\tif err := r.Err(); err != nil {"
+  },
+  {
+    "id" : "14150a61-1779-48a3-9f90-330666bb46be",
+    "prId" : 88004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88004#pullrequestreview-366357519",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "66abe887-8425-4bd6-a07a-9d5d09397a0e",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "I'd expect these to live in `Complete` method.",
+        "createdAt" : "2020-02-27T20:35:52Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b1aabab-9026-4d27-8118-0a58a230d031",
+        "parentId" : "66abe887-8425-4bd6-a07a-9d5d09397a0e",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "Ok, thanks for this feedback. It makes me realize that I've copypasta'd things that weren't necessarily intentional convention. I've gone back through `Run()` and moved out everything that would better be part of `Complete()` or `Validate()`.",
+        "createdAt" : "2020-02-28T13:12:57Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5b655938e55e0404545ff73e9239593a27a3272",
+    "line" : 167,
+    "diffHunk" : "@@ -1,1 +165,169 @@\tif err != nil {\n\t\treturn err\n\t}\n\n\t// Clientset"
+  },
+  {
+    "id" : "716675fe-486e-4baf-931f-5b1eaa803473",
+    "prId" : 88004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88004#pullrequestreview-366357519",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "415693bf-da56-4742-85d7-987c570d4c14",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "I'd expect these to live in `Validate`",
+        "createdAt" : "2020-02-27T20:36:10Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62201a01-f4b0-4ca4-b46e-772cf5833ec5",
+        "parentId" : "415693bf-da56-4742-85d7-987c570d4c14",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "Agreed, that makes more sense. fixed!",
+        "createdAt" : "2020-02-28T12:18:34Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5b655938e55e0404545ff73e9239593a27a3272",
+    "line" : 192,
+    "diffHunk" : "@@ -1,1 +190,194 @@\tif len(o.PodNames) == 0 {\n\t\treturn fmt.Errorf(\"NAME is required for debug\")\n\t}\n\n\t// Pull Policy"
+  },
+  {
+    "id" : "04220d58-561f-431d-b586-f29d5766f9b7",
+    "prId" : 88004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88004#pullrequestreview-366357519",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6de2ef7f-17b8-4738-9e84-302b7873cdea",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "This again to `Complete`",
+        "createdAt" : "2020-02-27T20:36:19Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3efec9ab-17ba-47b3-ad5c-37c7b5bf7366",
+        "parentId" : "6de2ef7f-17b8-4738-9e84-302b7873cdea",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "Fixed.",
+        "createdAt" : "2020-02-28T13:13:43Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5b655938e55e0404545ff73e9239593a27a3272",
+    "line" : 200,
+    "diffHunk" : "@@ -1,1 +198,202 @@\tdefault:\n\t\treturn fmt.Errorf(\"invalid image pull policy: %s\", o.PullPolicy)\n\t}\n\n\t// TTY"
+  },
+  {
+    "id" : "e1a1c5bf-3ce8-4c71-8d3c-be8814eb9621",
+    "prId" : 88004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88004#pullrequestreview-366357519",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cc1b9ae8-a6eb-4190-9486-3bb021d135dd",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "This to `Validate`",
+        "createdAt" : "2020-02-27T20:36:27Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "423ad6e8-ec21-4e95-b8c7-5344ad2ebb6e",
+        "parentId" : "cc1b9ae8-a6eb-4190-9486-3bb021d135dd",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "Fixed.",
+        "createdAt" : "2020-02-28T13:15:21Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5b655938e55e0404545ff73e9239593a27a3272",
+    "line" : 205,
+    "diffHunk" : "@@ -1,1 +203,207 @@\tif o.TTY && !o.Interactive {\n\t\treturn fmt.Errorf(\"-i/--stdin is required for containers with -t/--tty=true\")\n\t}\n\n\treturn nil"
+  },
+  {
+    "id" : "57b0ac57-5d0f-4d10-8d11-c2584b8a9b63",
+    "prId" : 88004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88004#pullrequestreview-368320612",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "25a7b878-40e8-4976-8982-cd49df1a58df",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "You're not consistent with i18n, you either do all or none. ",
+        "createdAt" : "2020-03-03T17:51:05Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "14a77747-4cc8-4760-9d69-3f7d839281a3",
+        "parentId" : "25a7b878-40e8-4976-8982-cd49df1a58df",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "Fixed.",
+        "createdAt" : "2020-03-03T21:01:07Z",
+        "updatedAt" : "2020-03-04T18:20:34Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5b655938e55e0404545ff73e9239593a27a3272",
+    "line" : 122,
+    "diffHunk" : "@@ -1,1 +120,124 @@\tcmd.Flags().BoolVar(&opt.ArgsOnly, \"arguments-only\", opt.ArgsOnly, i18n.T(\"If specified, everything after -- will be passed to the new container as Args instead of Command.\"))\n\tcmd.Flags().BoolVar(&opt.Attach, \"attach\", opt.Attach, i18n.T(\"If true, wait for the Pod to start running, and then attach to the Pod as if 'kubectl attach ...' were called.  Default false, unless '-i/--stdin' is set, in which case the default is true.\"))\n\tcmd.Flags().StringVar(&opt.Container, \"container\", opt.Container, i18n.T(\"Container name to use for debug container.\"))\n\tcmd.Flags().StringToString(\"env\", nil, i18n.T(\"Environment variables to set in the container.\"))\n\tcmd.Flags().StringVar(&opt.Image, \"image\", opt.Image, i18n.T(\"Container image to use for debug container.\"))"
+  }
+]

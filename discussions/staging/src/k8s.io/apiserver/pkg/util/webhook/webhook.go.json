@@ -1,0 +1,354 @@
+[
+  {
+    "id" : "3bb649a5-a9b0-4975-affa-b19bbd840a74",
+    "prId" : 95874,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95874#pullrequestreview-517219365",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "288aa83f-d01f-4712-a2b5-9cfbc2730b69",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "```go\r\nswitch{\r\n// if we have a webhook error, it's the most important\r\ncase webhookErr != nil:\r\n  return webhookErr\r\n\r\n// if we have a deadline exceeded or cancelled, then that 's got priority over timeouts.\r\ncase ctx.Err() != nil:\r\n  return ctx.Err()\r\n\r\n// if the wait returned an error, but we didn't get a webhook error, it should be timeout and return that\r\ncase err != nil:\r\n  return err\r\n\r\n// if nothing had an error, then return nil\r\ndefault:\r\n  return nil\r\n}\r\n```",
+        "createdAt" : "2020-10-26T20:24:49Z",
+        "updatedAt" : "2020-10-27T16:04:51Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0d592e1-2244-46cd-96a6-5500e085ea5d",
+        "parentId" : "288aa83f-d01f-4712-a2b5-9cfbc2730b69",
+        "authorId" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "body" : "@deads2k If the context gets canceled or times out then `wait.ExponentialBackoff` returns the context error  to us via `err`. So either `ctx` error or `wait.Timeout` error is returned. I don't think we need to check for `ctx.Err() != nil` in the switch.\r\n\r\nI added the switch statement as suggested.\r\n\r\nAlso, in the current implementation, we call the `webhookFn` first and then check for `ctx.Error`. I think checking if the context has timed out first before calling the `webhookFn` function is more correct. \r\n```\r\nerr := wait.ExponentialBackoff(backoff, func() (bool, error) {\t\t\r\n\t\tif ctx.Err() != nil {\r\n\t\t\t// we timed out or were cancelled, we should not retry\r\n\t\t\treturn true, ctx.Err()\r\n\t\t}\r\n                webhookErr = webhookFn()\r\n```\r\n\r\nI added two unit tests to verify:\r\n- webhookErr is more important than `ctx.Err()`\r\n- If the context is already canceled, there is no need to call the `webhookFn` function.\r\n",
+        "createdAt" : "2020-10-26T22:23:12Z",
+        "updatedAt" : "2020-10-27T16:04:51Z",
+        "lastEditedBy" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f8e35de156f212b6989b465e608dd99b525bd5dc",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +145,149 @@\t\treturn true, nil\n\t})\n\n\tswitch {\n\t// we check for webhookErr first, if webhookErr is set it's the most important error to return."
+  },
+  {
+    "id" : "d798bb79-dd92-4c31-a408-d8d6dbd27820",
+    "prId" : 95874,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95874#pullrequestreview-517864195",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "752a06a9-ad11-4cd9-9384-588ec855bc9d",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "maybe a comment for future generations\r\n\r\n`// having a webhook error allows us to track the last actual webhook error for requests that are later cancelled or time out`",
+        "createdAt" : "2020-10-27T15:51:37Z",
+        "updatedAt" : "2020-10-27T16:04:51Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f8e35de156f212b6989b465e608dd99b525bd5dc",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +134,138 @@\t// having a webhook error allows us to track the last actual webhook error for requests that\n\t// are later cancelled or time out.\n\tvar webhookErr error\n\terr := wait.ExponentialBackoffWithContext(ctx, backoff, func() (bool, error) {\n\t\twebhookErr = webhookFn()"
+  },
+  {
+    "id" : "1b8de45e-e579-4b07-b5b0-6232e4bc05b1",
+    "prId" : 95396,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95396#pullrequestreview-621020584",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "323c37e1-13f7-4be2-9bd0-5c33cd321ee4",
+        "parentId" : null,
+        "authorId" : "13c01cb8-6052-4a98-b6fd-20d3acd6332f",
+        "body" : "Have we considered setting the `Warning` header? ",
+        "createdAt" : "2021-03-25T08:37:46Z",
+        "updatedAt" : "2021-03-25T08:37:50Z",
+        "lastEditedBy" : "13c01cb8-6052-4a98-b6fd-20d3acd6332f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "234243f8-6f0d-44d7-a2b6-a5470d7721f3",
+        "parentId" : "323c37e1-13f7-4be2-9bd0-5c33cd321ee4",
+        "authorId" : "3b1ae918-e812-4767-bc2b-65d9e37597df",
+        "body" : "I don't think I would like to alert every user of the cluster about its internals.",
+        "createdAt" : "2021-03-25T11:54:09Z",
+        "updatedAt" : "2021-03-25T11:54:09Z",
+        "lastEditedBy" : "3b1ae918-e812-4767-bc2b-65d9e37597df",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3ff82908005a949f396ef241633657f2a4e27b1f",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +109,113 @@\n\tclientConfig.Dial = customDial\n\tclientConfig.Wrap(x509metrics.NewMissingSANRoundTripperWrapperConstructor(x509MissingSANCounter))\n\n\trestClient, err := rest.UnversionedRESTClientFor(clientConfig)"
+  },
+  {
+    "id" : "815d8a9c-273d-44b7-a3e1-98de18f0442d",
+    "prId" : 83238,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83238#pullrequestreview-295907693",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "533564ce-e268-4faf-a464-4fcb836d613d",
+        "parentId" : null,
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "I realize this is pre-existing code. But it looks like we don't fully respect the header; we don't wait for however long Retry-After requests us to. Could we fix that now?",
+        "createdAt" : "2019-09-27T17:49:22Z",
+        "updatedAt" : "2019-09-30T14:05:17Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a05416fa-7246-47e8-9fab-c2d6ac26606a",
+        "parentId" : "533564ce-e268-4faf-a464-4fcb836d613d",
+        "authorId" : "a0c56dcb-fd8a-40d6-ab3c-d84c2122af88",
+        "body" : "I agree it's kind of \"almost there\" solution. But do we want to risk waiting as long as an external webhook tells us to, or we want the api server to have full control on the wait time between retries? And equally, does it make sense to retry before the recommended time at all? It seems to me that both approaches have downsides.\r\n\r\nI would move the discussion in a separate PR though as this one is not precisely for this.",
+        "createdAt" : "2019-09-29T15:34:16Z",
+        "updatedAt" : "2019-09-30T14:05:17Z",
+        "lastEditedBy" : "a0c56dcb-fd8a-40d6-ab3c-d84c2122af88",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "78fcf926-fd95-4218-b5a3-44ea711a144c",
+        "parentId" : "533564ce-e268-4faf-a464-4fcb836d613d",
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "Would you open up an issue for this?",
+        "createdAt" : "2019-10-01T17:44:26Z",
+        "updatedAt" : "2019-10-01T17:44:27Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dec6b56d-9bb3-430a-807d-7a4c9853aa9a",
+        "parentId" : "533564ce-e268-4faf-a464-4fcb836d613d",
+        "authorId" : "a0c56dcb-fd8a-40d6-ab3c-d84c2122af88",
+        "body" : "sure: https://github.com/kubernetes/kubernetes/issues/83377",
+        "createdAt" : "2019-10-01T21:33:55Z",
+        "updatedAt" : "2019-10-01T21:33:55Z",
+        "lastEditedBy" : "a0c56dcb-fd8a-40d6-ab3c-d84c2122af88",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4877b0b7b50bdc3eaaadd3f968fd846c1396b708",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +55,59 @@\t}\n\t// if the error sends the Retry-After header, we respect it as an explicit confirmation we should retry.\n\tif _, shouldRetry := apierrors.SuggestsClientDelay(err); shouldRetry {\n\t\treturn true\n\t}"
+  },
+  {
+    "id" : "bdc22337-813d-4d85-98a0-e43d10fe3e59",
+    "prId" : 53947,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/53947#pullrequestreview-69576830",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "07b55a6b-31d2-4723-b2d4-6c2cdaf5b32f",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "doesn't client-go already turn connection errors into internal server errors?\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/4a6fec738b16db1f26ca968ab22984aec4e817ca/staging/src/k8s.io/client-go/rest/request.go#L652-L667",
+        "createdAt" : "2017-10-16T13:50:37Z",
+        "updatedAt" : "2017-10-16T13:50:38Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2acea2f0-89f5-4f9a-b232-fe7660b432ab",
+        "parentId" : "07b55a6b-31d2-4723-b2d4-6c2cdaf5b32f",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "client-go only retries on GET calls because it doesn't want to replay non-idempotent calls. this code should not assume all webhook calls are idempotent, either. seems like it would be better to be able to indicate a request is idempotent ",
+        "createdAt" : "2017-10-16T13:52:24Z",
+        "updatedAt" : "2017-10-16T13:52:24Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8aef899a-0302-43ce-b105-5aabb1718dbe",
+        "parentId" : "07b55a6b-31d2-4723-b2d4-6c2cdaf5b32f",
+        "authorId" : "fb41b733-ba12-42d8-b026-942db6e3696f",
+        "body" : "Only if it's a `GET`, but e.g. request with audit logs is `POST`",
+        "createdAt" : "2017-10-16T13:52:26Z",
+        "updatedAt" : "2017-10-16T13:52:26Z",
+        "lastEditedBy" : "fb41b733-ba12-42d8-b026-942db6e3696f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c18ead82-d465-4bb3-a8fe-921f6e0310fc",
+        "parentId" : "07b55a6b-31d2-4723-b2d4-6c2cdaf5b32f",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "right... this shouldn't assume all webhook calls are idempotent",
+        "createdAt" : "2017-10-16T14:06:58Z",
+        "updatedAt" : "2017-10-16T14:06:58Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "690226ec-1df8-47bb-afc2-ec6af240ddda",
+        "parentId" : "07b55a6b-31d2-4723-b2d4-6c2cdaf5b32f",
+        "authorId" : "fb41b733-ba12-42d8-b026-942db6e3696f",
+        "body" : "Writing audit logs is not an idempotent call, but it's still better to write audit logs twice than loose, esp. considering that audit logs have ids in it, that allow deduplication\r\n\r\n> seems like it would be better to be able to indicate a request is idempotent\r\n\r\nIs there really a need to do so? We still cannot guarantee that a request hasn't been processed if e.g. a timeout is returned. Additionally, for all known to me webhooks (auth[nz], audit) I see no benefit in not retrying connection resets\r\n",
+        "createdAt" : "2017-10-16T14:07:03Z",
+        "updatedAt" : "2017-10-16T14:07:03Z",
+        "lastEditedBy" : "fb41b733-ba12-42d8-b026-942db6e3696f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0d2a8a5a-6847-4f4e-bbad-51d634299310",
+        "parentId" : "07b55a6b-31d2-4723-b2d4-6c2cdaf5b32f",
+        "authorId" : "fb41b733-ba12-42d8-b026-942db6e3696f",
+        "body" : "I mean, if we really care about a request being idempotent in this case, we shouldn't unconditionally retry e.g. 5XX. However, nobody complained about this code before, so I think it's safe to assume that retrying is more important than idempotence, WDYT?",
+        "createdAt" : "2017-10-16T14:11:44Z",
+        "updatedAt" : "2017-10-16T14:12:01Z",
+        "lastEditedBy" : "fb41b733-ba12-42d8-b026-942db6e3696f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "635a3694-116c-446d-ba88-a0b4492a3deb",
+        "parentId" : "07b55a6b-31d2-4723-b2d4-6c2cdaf5b32f",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> I mean, if we really care about a request being idempotent in this case, we shouldn't unconditionally retry e.g. 5XX. However, nobody complained about this code before, so I think it's safe to assume that retrying is more important than idempotence, WDYT?\r\n\r\nHmm, that's probably true",
+        "createdAt" : "2017-10-16T14:22:56Z",
+        "updatedAt" : "2017-10-16T14:22:56Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "59bacba0565b3849d939e9330ffd4da2ae19f0e1",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +107,111 @@\t\terr = webhookFn()\n\t\t// these errors indicate a transient error that should be retried.\n\t\tif net.IsConnectionReset(err) || apierrors.IsInternalError(err) || apierrors.IsTimeout(err) || apierrors.IsTooManyRequests(err) {\n\t\t\treturn false, nil\n\t\t}"
+  },
+  {
+    "id" : "36819d95-6d65-4f71-91bb-cfa02845c3cf",
+    "prId" : 53756,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/53756#pullrequestreview-68800390",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6be91074-0132-4706-9d5c-e001537bf7b9",
+        "parentId" : null,
+        "authorId" : "c29e1906-5f0b-4d7b-af8b-d664805e8c8e",
+        "body" : "Should make this configurable?",
+        "createdAt" : "2017-10-12T01:09:56Z",
+        "updatedAt" : "2017-10-12T02:07:40Z",
+        "lastEditedBy" : "c29e1906-5f0b-4d7b-af8b-d664805e8c8e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f573d4f1-229a-4d81-ba39-e36abc7a05e3",
+        "parentId" : "6be91074-0132-4706-9d5c-e001537bf7b9",
+        "authorId" : "0af48e59-4be9-46ce-9275-aa218813b6fd",
+        "body" : "Configurable by who? You mean adding new API flags or adding this value to the admission webhook API?",
+        "createdAt" : "2017-10-12T01:41:30Z",
+        "updatedAt" : "2017-10-12T02:07:40Z",
+        "lastEditedBy" : "0af48e59-4be9-46ce-9275-aa218813b6fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce02fa21-26b2-4ffb-b2e9-f398b2250a7f",
+        "parentId" : "6be91074-0132-4706-9d5c-e001537bf7b9",
+        "authorId" : "c29e1906-5f0b-4d7b-af8b-d664805e8c8e",
+        "body" : "I am not sure ,  may be this \r\n>// TODO(ericchiang): Make these value configurable. Maybe through a\r\n>\t// kubeconfig extension?",
+        "createdAt" : "2017-10-12T01:51:19Z",
+        "updatedAt" : "2017-10-12T02:07:40Z",
+        "lastEditedBy" : "c29e1906-5f0b-4d7b-af8b-d664805e8c8e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7ec331c3-2bbe-4acf-bfeb-348c0bf768db",
+        "parentId" : "6be91074-0132-4706-9d5c-e001537bf7b9",
+        "authorId" : "0af48e59-4be9-46ce-9275-aa218813b6fd",
+        "body" : "If we're not sure let's just leave it as is. If there's a strong reason to control this timeout we can argue for that later.",
+        "createdAt" : "2017-10-12T02:08:28Z",
+        "updatedAt" : "2017-10-12T02:08:28Z",
+        "lastEditedBy" : "0af48e59-4be9-46ce-9275-aa218813b6fd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2de3ee5c48503d3b3214aef55ae7fd0dacc40457",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +44,48 @@// NewGenericWebhook creates a new GenericWebhook from the provided kubeconfig file.\nfunc NewGenericWebhook(registry *registered.APIRegistrationManager, codecFactory serializer.CodecFactory, kubeConfigFile string, groupVersions []schema.GroupVersion, initialBackoff time.Duration) (*GenericWebhook, error) {\n\treturn newGenericWebhook(registry, codecFactory, kubeConfigFile, groupVersions, initialBackoff, defaultRequestTimeout)\n}\n"
+  },
+  {
+    "id" : "4eb7d6f5-d2e6-46a5-919e-48888ee9def6",
+    "prId" : 53756,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/53756#pullrequestreview-68798715",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ac7c2ee6-abfe-4f06-bde2-1c51621eb7ca",
+        "parentId" : null,
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "@roycaihw could you confirm if this is the right way to set client timeout after your recent refactoring?",
+        "createdAt" : "2017-10-12T01:45:46Z",
+        "updatedAt" : "2017-10-12T02:07:40Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef6be2ae-8a0c-4649-a4b4-12f9f16e3e08",
+        "parentId" : "ac7c2ee6-abfe-4f06-bde2-1c51621eb7ca",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "nvm, I think it's still the correct API.",
+        "createdAt" : "2017-10-12T01:52:49Z",
+        "updatedAt" : "2017-10-12T02:07:40Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2de3ee5c48503d3b3214aef55ae7fd0dacc40457",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +68,72 @@\t//\n\t// Set this to something reasonable so request to webhooks don't hang forever.\n\tclientConfig.Timeout = requestTimeout\n\n\tcodec := codecFactory.LegacyCodec(groupVersions...)"
+  },
+  {
+    "id" : "0949cbd4-db8b-47e4-83f1-ab46f87b306b",
+    "prId" : 49678,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/49678#pullrequestreview-53989747",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "363992ea-0097-4db5-a595-0ff50dcced50",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "do these not trigger the lower check on a specified client delay?",
+        "createdAt" : "2017-08-01T15:47:44Z",
+        "updatedAt" : "2017-08-01T15:47:45Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cab65249-2f23-4a39-8d4a-ecbed4863d77",
+        "parentId" : "363992ea-0097-4db5-a595-0ff50dcced50",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Not necessarily. We don't actually honor the delay right now, but we have two classes of things:\r\n\r\n1. errors that mean retry\r\n2. an error or response (that doesn't automatically mean retry) that still asks you to retry for some other reason",
+        "createdAt" : "2017-08-03T04:03:40Z",
+        "updatedAt" : "2017-08-03T04:03:40Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ddbc2ad9cf3c11a00d1e0f622c31698f160378cd",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +92,96 @@\t\terr = webhookFn()\n\t\t// these errors indicate a need to retry an authentication check\n\t\tif apierrors.IsServerTimeout(err) || apierrors.IsTimeout(err) || apierrors.IsTooManyRequests(err) {\n\t\t\treturn false, nil\n\t\t}"
+  }
+]

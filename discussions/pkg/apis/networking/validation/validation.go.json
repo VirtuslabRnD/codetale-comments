@@ -1,0 +1,420 @@
+[
+  {
+    "id" : "f48bcbbe-240b-4c47-9ccf-8c9826a9d38e",
+    "prId" : 99275,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99275#pullrequestreview-599326463",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4665c56f-6611-44b4-a796-6a4adba1b7c0",
+        "parentId" : null,
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "Can you add a reference to the original validation function used for the ObjectRef before this change in this comment just so it's clear that this has to be identical to that + with additions for scope field?",
+        "createdAt" : "2021-02-26T02:15:34Z",
+        "updatedAt" : "2021-03-06T19:15:50Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0663226b-1437-401e-bbb0-32abdd9b8f3e",
+        "parentId" : "4665c56f-6611-44b4-a796-6a4adba1b7c0",
+        "authorId" : "8c4abb2c-47c2-4493-9f04-1ade33e6b980",
+        "body" : "I added a comment and also used the same function for validating the common fields (thereby removing some code duplication as well).",
+        "createdAt" : "2021-02-26T07:54:11Z",
+        "updatedAt" : "2021-03-06T19:15:50Z",
+        "lastEditedBy" : "8c4abb2c-47c2-4493-9f04-1ade33e6b980",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a7fc92089a42aff0c2f10d56b0ee290440adfbc4",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +570,574 @@}\n\n// validateIngressClassParametersReference ensures that Parameters fields are valid.\n// Parameters was previously of type `TypedLocalObjectReference` and used\n// `validateIngressTypedLocalObjectReference()`. This function extends validation"
+  },
+  {
+    "id" : "8ef2eeb4-7510-41b5-9f02-c349727323e9",
+    "prId" : 99275,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99275#pullrequestreview-605481264",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "51f37afd-b4d5-4df0-a389-eda317074901",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I find the below block hard to reason about.  Here's what I think it should\r\nlook like, at a high level (rough, please cross-check):\r\n\r\n```\r\nif gate-enabled && scope == nil {\r\n\t// error: required value\r\n} else if scope != nil {\r\n\t// if we get here, the gate may or may not be enabled, but scope has a value.\r\n\tif not valid scope value\r\n\t\t// error: not supported\r\n\t} else {\r\n\t    // if we get here, we have a valid scope.\r\n\t    if scope == cluster\r\n\t\t    if namespace != nil {\r\n\t\t\t    // error: forbidden when scope is cluster\r\n\t\t    }\r\n\t    }\r\n\t    if scope == Namespace {\r\n\t\t    if namespace == nil {\r\n\t\t\t    // error: required when scope is NS\r\n\t\t    }\r\n\t   }\r\n\t}\r\n}\r\n```\r\n\r\nThen, when we eventually remove the gate, it's simply removing the outermost\r\nif/else.\r\n\r\nDoes that make sense?\r\n",
+        "createdAt" : "2021-03-05T17:43:59Z",
+        "updatedAt" : "2021-03-06T19:15:50Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "06d1b24c-a7f3-4074-9661-a967fb0b7ed3",
+        "parentId" : "51f37afd-b4d5-4df0-a389-eda317074901",
+        "authorId" : "8c4abb2c-47c2-4493-9f04-1ade33e6b980",
+        "body" : "Great timing. I was just working on this logic and I arrived close to where you are.\r\nWe can't use `else if` because in that case, when gate is enabled and a value is set (to anything), the majority of validation will be skipped.\r\n\r\n\r\nThis is what I've right now (added comments here, not in git patch):\r\n```go\r\n        // when gate goes away, we have to delete the first condition of this if block\r\n        if utilfeature.DefaultFeatureGate.Enabled(features.IngressClassNamespacedParams) && params.Scope == nil {\r\n                allErrs = append(allErrs, field.Required(fldPath.Child(\"scope\"), \"scope is required\"))\r\n                return allErrs\r\n        }\r\n        // need to check for namespace too because if scope is not set, but namespace is we still validate\r\n        if params.Scope != nil || params.Namespace != nil {\r\n                scope := utilpointer.StringPtrDerefOr(params.Scope, \"\")\r\n                namespace := utilpointer.StringPtrDerefOr(params.Namespace, \"\")\r\n \r\n                if !supportedIngressClassParametersReferenceScopes.Has(scope) {\r\n                        allErrs = append(allErrs, field.NotSupported(fldPath.Child(\"scope\"), scope,\r\n                                supportedIngressClassParametersReferenceScopes.List()))\r\n                } else {\r\n\r\n                        if scope == networking.IngressClassParametersReferenceScopeNamespace {\r\n                                if namespace == \"\" {\r\n                                        allErrs = append(allErrs, field.Required(fldPath.Child(\"namespace\"), \"namespace is required when spec.parameters.scope is set to Namespace\"))\r\n                                } else {\r\n                                       // performs namespace validation only when needed\r\n                                        for _, msg := range apivalidation.ValidateNamespaceName(namespace, false) {\r\n                                                allErrs = append(allErrs, field.Invalid(fldPath.Child(\"namespace\"), namespace, msg))\r\n                                        }\r\n                                }\r\n                        }\r\n\r\n                        if scope == networking.IngressClassParametersReferenceScopeCluster && namespace != \"\" {\r\n                                allErrs = append(allErrs, field.Forbidden(fldPath.Child(\"namespace\"), \"namespace is forbidden when spec.parameters.scope is set to Cluster\"))\r\n                        }\r\n                }\r\n        }\r\n```\r\n\r\nHow does that sound?",
+        "createdAt" : "2021-03-05T18:12:56Z",
+        "updatedAt" : "2021-03-06T19:15:50Z",
+        "lastEditedBy" : "8c4abb2c-47c2-4493-9f04-1ade33e6b980",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a7fc92089a42aff0c2f10d56b0ee290440adfbc4",
+    "line" : 54,
+    "diffHunk" : "@@ -1,1 +586,590 @@\t\tName:     params.Name,\n\t}, fldPath)...)\n\n\tif utilfeature.DefaultFeatureGate.Enabled(features.IngressClassNamespacedParams) && params.Scope == nil {\n\t\tallErrs = append(allErrs, field.Required(fldPath.Child(\"scope\"), \"\"))"
+  },
+  {
+    "id" : "42281f18-c66f-4d97-b32f-b755b47a2232",
+    "prId" : 97058,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97058#pullrequestreview-552738617",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27be3b41-c954-4c2f-976b-aa2f5da764f4",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Can we add unit tests for validating endPort?",
+        "createdAt" : "2020-12-14T21:55:17Z",
+        "updatedAt" : "2021-02-01T21:20:58Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fbb9831f-bf89-47d0-9de6-e46e845902b6",
+        "parentId" : "27be3b41-c954-4c2f-976b-aa2f5da764f4",
+        "authorId" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "body" : "Added a bunch of them, can add more if necessary ",
+        "createdAt" : "2020-12-15T18:16:51Z",
+        "updatedAt" : "2021-02-01T21:20:58Z",
+        "lastEditedBy" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3a687357b6ccb8491a1cb2c76d3f226a00966f3c",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +73,77 @@\t\t\t}\n\t\t} else {\n\t\t\tif port.EndPort != nil {\n\t\t\t\tallErrs = append(allErrs, field.Invalid(portPath.Child(\"endPort\"), *port.EndPort, \"may not be specified when `port` is non-numeric\"))\n\t\t\t}"
+  },
+  {
+    "id" : "81deaccd-83af-4474-a0d4-c48fe00c7d3d",
+    "prId" : 97058,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97058#pullrequestreview-581615005",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8dc355f1-16d8-4fa7-86a7-8419bb3234d5",
+        "parentId" : null,
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "```suggestion\r\n\t\t\tif port.EndPort != nil && *port.EndPort < port.Port.IntVal || *port.EndPort > 65535 {\r\n```\r\n\r\n",
+        "createdAt" : "2021-02-02T02:18:29Z",
+        "updatedAt" : "2021-02-02T02:18:30Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d6873067-4212-4864-8da1-a5659615342f",
+        "parentId" : "8dc355f1-16d8-4fa7-86a7-8419bb3234d5",
+        "authorId" : "8949719e-3713-4a40-b764-2966b123797e",
+        "body" : "rather use validation.IsValidPortNum ?",
+        "createdAt" : "2021-02-02T02:25:15Z",
+        "updatedAt" : "2021-02-02T02:25:56Z",
+        "lastEditedBy" : "8949719e-3713-4a40-b764-2966b123797e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a289988e-ffcd-4a0c-b259-3a71ec1199ea",
+        "parentId" : "8dc355f1-16d8-4fa7-86a7-8419bb3234d5",
+        "authorId" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "body" : "We can make this a follow up PR? For me no problem at all ;) ",
+        "createdAt" : "2021-02-02T02:43:26Z",
+        "updatedAt" : "2021-02-02T02:43:26Z",
+        "lastEditedBy" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09f3e1df-83ee-4bd7-8a26-ed90e437e203",
+        "parentId" : "8dc355f1-16d8-4fa7-86a7-8419bb3234d5",
+        "authorId" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "body" : "@cpanato will move with the follow up :D",
+        "createdAt" : "2021-02-02T17:49:57Z",
+        "updatedAt" : "2021-02-02T17:49:57Z",
+        "lastEditedBy" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3a687357b6ccb8491a1cb2c76d3f226a00966f3c",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +69,73 @@\t\t\t\tallErrs = append(allErrs, field.Invalid(portPath.Child(\"port\"), port.Port.IntVal, msg))\n\t\t\t}\n\t\t\tif port.EndPort != nil && *port.EndPort < port.Port.IntVal {\n\t\t\t\tallErrs = append(allErrs, field.Invalid(portPath.Child(\"endPort\"), port.Port.IntVal, \"must be greater than or equal to `port`\"))\n\t\t\t}"
+  },
+  {
+    "id" : "7e27ce2e-7470-4a81-a382-0ee875dd02c0",
+    "prId" : 97058,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97058#pullrequestreview-580931840",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dc6c31f1-cea7-47ee-b9d7-5122ceb85e0a",
+        "parentId" : null,
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "```suggestion\r\n\t\t\t\tallErrs = append(allErrs, field.Invalid(portPath.Child(\"endPort\"), port.Port.IntVal, \"must be greater than or equal to `port`, not higher then 65535\"))\r\n```",
+        "createdAt" : "2021-02-02T02:19:13Z",
+        "updatedAt" : "2021-02-02T02:19:13Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3a687357b6ccb8491a1cb2c76d3f226a00966f3c",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +70,74 @@\t\t\t}\n\t\t\tif port.EndPort != nil && *port.EndPort < port.Port.IntVal {\n\t\t\t\tallErrs = append(allErrs, field.Invalid(portPath.Child(\"endPort\"), port.Port.IntVal, \"must be greater than or equal to `port`\"))\n\t\t\t}\n\t\t} else {"
+  },
+  {
+    "id" : "ff34ec4c-590c-415c-87d7-ade0a97623a8",
+    "prId" : 93929,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/93929#pullrequestreview-465946908",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "afcdc76d-e9ec-4ea6-8968-c2ead6543626",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "This makes sense to me, but the doc on the .secretName field is vague. it's not clear whether it must be a kube secret ref or if it can be a reference to nearly anything and we should only enforce some large length limit.\r\n\r\nIf the latter, the field doc needs to be improved to make it clear that consumers need to defend against traversal attacks.",
+        "createdAt" : "2020-08-12T13:57:19Z",
+        "updatedAt" : "2020-08-12T14:13:36Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "acbfcdbe-53d7-4bca-9a4f-36fce9c02555",
+        "parentId" : "afcdc76d-e9ec-4ea6-8968-c2ead6543626",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "It's definitely a kubernetes secret. A separate field to indicate a named credential managed by the ingress controller was discussed as an alternative to the requests for cluster-scoped secrets, but was not accepted.",
+        "createdAt" : "2020-08-12T14:02:19Z",
+        "updatedAt" : "2020-08-12T14:13:36Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f87a846e65fc25757fbbfc5c9a7e39d003816476",
+    "line" : 94,
+    "diffHunk" : "@@ -1,1 +557,561 @@\t\treturn nil\n\t}\n\treturn apivalidation.ValidateSecretName(name, false)\n}"
+  },
+  {
+    "id" : "762b0859-8671-4127-8f56-6ef45a9e3ec3",
+    "prId" : 91034,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91034#pullrequestreview-410349864",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6d5f0f22-fa66-49b2-9ae2-dcb51554a82d",
+        "parentId" : null,
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "Why leave these options at all? Just in case we make any post-v1 additions to Ingress? Could we choose to add them back at that point instead?",
+        "createdAt" : "2020-05-12T19:18:22Z",
+        "updatedAt" : "2020-05-12T19:38:33Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "feff0322-37ce-4b1a-8723-dad487fd0012",
+        "parentId" : "6d5f0f22-fa66-49b2-9ae2-dcb51554a82d",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "mostly to limit the scope of changes and conflicts between this and other ingress PRs... once all the work is done, we can clean up signatures if we end up not needing options",
+        "createdAt" : "2020-05-12T19:20:01Z",
+        "updatedAt" : "2020-05-12T19:38:33Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1758d176899c3cef671eb4a3bb77df852280eb95",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +211,215 @@\tallErrs := field.ErrorList{}\n\tvar opts IngressValidationOptions\n\topts = IngressValidationOptions{}\n\tallErrs = append(allErrs, validateIngress(ingress, opts, requestGV)...)\n\tannotationVal, annotationIsSet := ingress.Annotations[annotationIngressClass]"
+  },
+  {
+    "id" : "ff7b6512-6940-4f1a-8050-1b4d4af2d68c",
+    "prId" : 89778,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89778#pullrequestreview-399415332",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d52dc1c2-b872-41b1-9f71-527eddc6b7da",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "need validation ensuring they specify exactly one of port.Number and port.Name (cannot specify both, must specify one)",
+        "createdAt" : "2020-04-23T19:58:24Z",
+        "updatedAt" : "2020-05-22T15:58:09Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2b091f60ca09d3d03923a26b7cd02fb3dc6c47e2",
+    "line" : 179,
+    "diffHunk" : "@@ -1,1 +449,453 @@\t\t} else {\n\t\t\tallErrs = append(allErrs, field.Required(fldPath, \"port name or number is required\"))\n\t\t}\n\tdefault:\n\t\tallErrs = append(allErrs, field.Invalid(fldPath, \"\", \"resource or service backend is required\"))"
+  },
+  {
+    "id" : "05564875-ffc5-4890-adfe-d1c7d3dff1b4",
+    "prId" : 89778,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89778#pullrequestreview-410374077",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cab750c3-799e-4f48-895f-cf748183aaaf",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "structure this to validate service name and port individually, and to accumulate as many errors as possible:\r\n\r\n```go\r\ncase hasServiceBackend:\r\n\r\n  if len(backend.Service.Name) == 0 {\r\n    allErrs = append(allErrs, field.Required(serviceNameFieldPath(fldPath, requestGV), \"\"))\r\n  } else {\r\n    for _, msg := range apivalidation.ValidateServiceName(backend.ServiceName, false) {\r\n      allErrs = append(allErrs, field.Invalid(serviceNameFieldPath(fldPath, requestGV), backend.Service.Name, msg))\r\n    }\r\n  }\r\n\r\n  hasPortName := len(backend.Service.Port.Name) > 0\r\n  hasPortNumber := backend.Service.Port.Number != 0\r\n  if hasPortName && hasPortNumber {\r\n    allErrs = append(allErrs, ... error that only one of port name and number can be specified\r\n  } else if hasPortName {\r\n    for _, msg := range validation.IsValidPortName(backend.Service.Port.Name) {\r\n      allErrs = append(allErrs, field.Invalid(servicePortNameFieldPath(fldPath, requestGV), backend.Service.Port.Name, msg))\r\n    }\r\n  } else if hasPortNumber {\r\n    for _, msg := range validation.IsValidPortNum(int(backend.Service.Port.Number)) {\r\n      allErrs = append(allErrs, field.Invalid(servicePortNumberFieldPath(fldPath, requestGV), backend.Service.Port.Number, msg))\r\n    }\r\n  } else {\r\n    allErrs = append(allErrs, ... error that one of port name and number is required\r\n  }\r\n```",
+        "createdAt" : "2020-05-12T19:54:26Z",
+        "updatedAt" : "2020-05-22T15:58:09Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2b091f60ca09d3d03923a26b7cd02fb3dc6c47e2",
+    "line" : 154,
+    "diffHunk" : "@@ -1,1 +425,429 @@\tcase hasResourceBackend:\n\t\tallErrs = append(allErrs, validateIngressTypedLocalObjectReference(backend.Resource, fldPath.Child(\"resource\"))...)\n\tcase hasServiceBackend:\n\n\t\tif len(backend.Service.Name) == 0 {"
+  },
+  {
+    "id" : "79cfb648-8d91-475b-bd9c-f03ae5575611",
+    "prId" : 88775,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88775#pullrequestreview-369175540",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b63a7e82-9d9c-4311-8a58-f7e77b581042",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "also need to iterate over paths to see if any of them point at a resource backend (like the iteration in allPathsPassRegexValidation)\r\n\r\nadd a unit test of resourceBackendPresent covering these scenarios:\r\n* nil spec.Backend and no paths -> false\r\n* nil spec.Backend.Resource and no paths -> false\r\n* non-nil spec.Backend.Resource and no paths -> true\r\n* nil spec.Backend, one rule with nil HTTP -> false\r\n* nil spec.Backend, one rule with non-nil HTTP, no paths -> false\r\n* nil spec.Backend, one rule with non-nil HTTP, one path with nil Backend.Resource -> false\r\n* nil spec.Backend, one rule with non-nil HTTP, one path with non-nil Backend.Resource -> true\r\n",
+        "createdAt" : "2020-03-04T22:39:34Z",
+        "updatedAt" : "2020-03-05T21:09:59Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "912f05bafbb07ec8c296adaa7dc4d722e57b3ea6",
+    "line" : 121,
+    "diffHunk" : "@@ -1,1 +519,523 @@\t\t}\n\t}\n\treturn false\n}"
+  },
+  {
+    "id" : "7b69d4f3-b2b3-4769-b4d2-6eb18c69773d",
+    "prId" : 88587,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88587#pullrequestreview-366019907",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f5da6f4e-1fb5-4f87-bcf7-b1921f37532e",
+        "parentId" : null,
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "A comment describing the type and field(s) within would be good here.",
+        "createdAt" : "2020-02-27T21:51:12Z",
+        "updatedAt" : "2020-03-03T19:12:23Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f38904d6f48a94b1f33ca05e8e7867fb65197ebb",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +199,203 @@// IngressValidationOptions cover beta to GA transitions for HTTP PathType\ntype IngressValidationOptions struct {\n\trequireRegexPath bool\n}\n"
+  },
+  {
+    "id" : "748111be-2cfb-4fcc-8b6b-e4c3d305a306",
+    "prId" : 88587,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88587#pullrequestreview-368253501",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "629c3dd3-9599-401a-a3d0-ba0ed68077a1",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "add TODO to remove for 1.19",
+        "createdAt" : "2020-03-03T16:54:08Z",
+        "updatedAt" : "2020-03-03T19:12:23Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a836a784-220f-4e1e-b390-018e18c098b6",
+        "parentId" : "629c3dd3-9599-401a-a3d0-ba0ed68077a1",
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "Updated, thanks!",
+        "createdAt" : "2020-03-03T19:17:21Z",
+        "updatedAt" : "2020-03-03T19:17:21Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f38904d6f48a94b1f33ca05e8e7867fb65197ebb",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +215,219 @@\topts = IngressValidationOptions{\n\t\t// TODO(robscott): Remove regex validation for 1.19.\n\t\trequireRegexPath: true,\n\t}\n\tallErrs = append(allErrs, validateIngress(ingress, opts, requestGV)...)"
+  },
+  {
+    "id" : "e24cbd54-300f-4703-a481-2ed84b7fde72",
+    "prId" : 88509,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88509#pullrequestreview-364572283",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "aedf42e4-b2ff-43c3-8014-919742e81e7a",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this ensures that someone can't `kubectl apply` an update to an ingressclass that changes the controller. is that what we want? xref https://docs.google.com/document/d/1ZpCHE4yrOXoawai8Ldz49A4t9ni-QsHSuoy71VhBTLw/edit#heading=h.qw1hx6rkmxvk\r\n\r\nupdate also needs to validate parameters",
+        "createdAt" : "2020-02-25T22:21:47Z",
+        "updatedAt" : "2020-03-02T02:17:30Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b5441ff2-fb56-465b-9898-7162f5e00a04",
+        "parentId" : "aedf42e4-b2ff-43c3-8014-919742e81e7a",
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "Update now validates parameters as well - will leave the conversation around immutability to the other comment.",
+        "createdAt" : "2020-02-26T01:40:18Z",
+        "updatedAt" : "2020-03-02T02:17:30Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "132d2afca0794b4bcaedb6dbbefe4e9d66e80239",
+    "line" : 116,
+    "diffHunk" : "@@ -1,1 +374,378 @@// valid.\nfunc validateIngressClassSpecUpdate(newSpec, oldSpec *networking.IngressClassSpec, fldPath *field.Path) field.ErrorList {\n\treturn apivalidation.ValidateImmutableField(newSpec.Controller, oldSpec.Controller, fldPath.Child(\"controller\"))\n}\n"
+  },
+  {
+    "id" : "84462bbb-cc95-49a0-90c0-9e674a8727df",
+    "prId" : 51351,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/51351#pullrequestreview-59943057",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c9537f21-da65-4d98-b00e-b772ae6b404b",
+        "parentId" : null,
+        "authorId" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "body" : "Other things we probably want to validate here:\r\n- PolicyTypes is not empty\r\n- The correct PolicyTypes are present for the given Ingress / Egress rules (i.e. can't have egress rules with no \"Egress\" item in the PolicyTypes list. ",
+        "createdAt" : "2017-08-31T18:17:42Z",
+        "updatedAt" : "2017-09-05T17:10:38Z",
+        "lastEditedBy" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "84290ce35c4c5edfe2d1fdb0a105d30f00e2c5de",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +83,87 @@\t\t}\n\t}\n\t// Validate egress rules\n\tfor i, egress := range spec.Egress {\n\t\tegressPath := fldPath.Child(\"egress\").Index(i)"
+  }
+]

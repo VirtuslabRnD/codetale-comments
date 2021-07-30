@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "a13d6762-cc07-47f7-a8dd-219dbcd8a0e0",
+    "prId" : 64105,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64105#pullrequestreview-123474933",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4d39fadd-ebbe-4cd4-98fc-ace63aab082b",
+        "parentId" : null,
+        "authorId" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "body" : "@luxas @stealthybox I want to draw your attention to this code as I'm now making the assumption that any failure of `crictl inspecti` or `docker inspect` means the image does not exist.\r\n\r\nWe know the binary exists because if we need the binary, we make sure it exists before returning the `CRInterfacer`.\r\n\r\nThe  other option is doing Stderr/Stdout parsing and that is a guess (albeit we could be reasonably smart about it).",
+        "createdAt" : "2018-05-23T22:38:54Z",
+        "updatedAt" : "2018-05-25T18:26:36Z",
+        "lastEditedBy" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9eb2bafb-c45c-4793-8603-50f4816450f0",
+        "parentId" : "4d39fadd-ebbe-4cd4-98fc-ace63aab082b",
+        "authorId" : "bf66f693-b705-46d8-a378-3750b55f033c",
+        "body" : "@chuckha I think passing up whatever the error is when the commands fail sounds fine.\r\nThis if statement could probably use a little hardening though:\r\n```golang\r\nif cri.criSocket != kubeadmapiv1alpha2.DefaultCRISocket {\r\n  // cri -r <socket> inspecti\r\n  // this if statement assumes that cri.crictlPath exists -- should probably be more explicit\r\n} else if cri.crictlPath != \"\" {\r\n  // this case looks like it's missing? currently falls back to docker if default CRI socket\r\n  // a comment should probably be here to explain that this is expected\r\n} else if cri.dockerPath != \"\" {\r\n  // docker inspect\r\n}\r\n// should return friendly error message here that we don't have a supported image checker and that the user can skip this check\r\n```",
+        "createdAt" : "2018-05-24T16:15:16Z",
+        "updatedAt" : "2018-05-25T18:26:36Z",
+        "lastEditedBy" : "bf66f693-b705-46d8-a378-3750b55f033c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2228a4fc-6139-49e5-8381-245c1bdcec2b",
+        "parentId" : "4d39fadd-ebbe-4cd4-98fc-ace63aab082b",
+        "authorId" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "body" : "We do a check for the binary existence in the NewCRInterfacer function.\r\n\r\nFilling out the snippet would look like this:\r\n\r\n```go\r\nif cri.criSocket != kubeadmapiv1alpha2.DefaultCRISocket {\r\n  // cri -r <socket> inspecti\r\n} else if cri.crictlPath != \"\" {\r\n  // cri -r <socket> inspecti\r\n} else if cri.dockerPath != \"\" {\r\n  // docker inspect\r\n}\r\n// should return friendly error message here that we don't have a supported image checker and that the user can skip this check\r\n```\r\n\r\nOne thing to note is that the `cri.exec.Command` will return a specific `exec.ErrExecutableNotFound` if the binary is not found that will get bubbled up to the user. I could see an argument for wrapping it, but also we do that check already in the constructor so I'm not sure it makes sense to do it again.",
+        "createdAt" : "2018-05-25T12:41:39Z",
+        "updatedAt" : "2018-05-25T18:26:36Z",
+        "lastEditedBy" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "085e5c0c-ff87-4c12-a144-8293eaef2de8",
+        "parentId" : "4d39fadd-ebbe-4cd4-98fc-ace63aab082b",
+        "authorId" : "bf66f693-b705-46d8-a378-3750b55f033c",
+        "body" : "After the small change to the interfacer constructor, I understand the code-path much better.\r\nI'm cool with this :)",
+        "createdAt" : "2018-05-25T18:37:12Z",
+        "updatedAt" : "2018-05-25T18:37:12Z",
+        "lastEditedBy" : "bf66f693-b705-46d8-a378-3750b55f033c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f2de31d3d76ea8659a96771eaababdd091c83c2",
+    "line" : 85,
+    "diffHunk" : "@@ -1,1 +83,87 @@// Returns an error if the image is not found.\nfunc (cri *CRInterfacer) Exists(image string) error {\n\tif cri.criSocket != kubeadmapiv1alpha2.DefaultCRISocket {\n\t\treturn cri.exec.Command(cri.crictlPath, \"-r\", cri.criSocket, \"inspecti\", image).Run()\n\t}"
+  },
+  {
+    "id" : "16969a86-48ec-402e-b7eb-b6fcd1cdc522",
+    "prId" : 64105,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64105#pullrequestreview-123132982",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "08f2d581-9cee-4782-96ed-3256da1d99fe",
+        "parentId" : null,
+        "authorId" : "bf66f693-b705-46d8-a378-3750b55f033c",
+        "body" : "Are these errors a new addition?\r\nThey seem to halt the method preventing the new struct from being created.\r\nIt looks like you would not be able to use this with any other runtime than docker (and only with crictl also on the path).\r\n\r\nIs this the expected behavior?",
+        "createdAt" : "2018-05-24T16:19:16Z",
+        "updatedAt" : "2018-05-25T18:26:36Z",
+        "lastEditedBy" : "bf66f693-b705-46d8-a378-3750b55f033c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7195535f-9b52-4a8f-bcfd-b84669921a5d",
+        "parentId" : "08f2d581-9cee-4782-96ed-3256da1d99fe",
+        "authorId" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "body" : "The docker bit is a necessary hack that we'd like to eventually totally replace with crictl. We don't want to get into the business of writing this kind of logic for every container runtime tool, so we are only supporting crictl.\r\n\r\nAlso I have a ticket (holy cow i have a lot of tickets i need to do) to include crictl with the system packages so we can start depending on it more. \r\n\r\nThe reason for the docker hack is that since the kubelet is the thing that hosts the cri dockershim and the kubelet isn't necessarily running by the time preflights run (I believe that is still true), we have to use the docker binary IF and only if we know we're using docker as a runtime (which we assert criSocket == default means we're using docker as the runtime). \r\n\r\nThe longterm goal is to only use crictl.",
+        "createdAt" : "2018-05-24T19:09:53Z",
+        "updatedAt" : "2018-05-25T18:26:36Z",
+        "lastEditedBy" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f2de31d3d76ea8659a96771eaababdd091c83c2",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +55,59 @@\tif criSocket != kubeadmapiv1alpha2.DefaultCRISocket {\n\t\tif crictlPath, err = execer.LookPath(\"crictl\"); err != nil {\n\t\t\treturn nil, fmt.Errorf(\"crictl is required for non docker container runtimes: %v\", err)\n\t\t}\n\t} else {"
+  }
+]

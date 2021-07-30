@@ -1,0 +1,211 @@
+[
+  {
+    "id" : "0d0d9927-2c6b-4a30-aa8f-fb91b22650c8",
+    "prId" : 81602,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81602#pullrequestreview-276873293",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a175a2c3-064d-478c-a6e0-d6fea62e557b",
+        "parentId" : null,
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "Should we need handle `DeadlineExceeded` or `Canceled` differently? `Dispatch` calls this function from a loop over all hooks, maybe drop out of that loop if we're timing out or canceling the whole request?",
+        "createdAt" : "2019-08-19T23:24:05Z",
+        "updatedAt" : "2019-08-21T02:23:48Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "621ba10f-0d42-42e2-9050-b26f43a114a6",
+        "parentId" : "a175a2c3-064d-478c-a6e0-d6fea62e557b",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I'll break the loop if the context is done and ensure we exit with an error",
+        "createdAt" : "2019-08-20T00:02:24Z",
+        "updatedAt" : "2019-08-21T02:23:48Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c63284b1f3996e7830c1aca85281d349d0091c82",
+    "line" : 47,
+    "diffHunk" : "@@ -1,1 +214,218 @@\n\tif err := r.Do().Into(response); err != nil {\n\t\treturn false, &webhookutil.ErrCallingWebhook{WebhookName: h.Name, Reason: err}\n\t}\n\ttrace.Step(\"Request completed\")"
+  },
+  {
+    "id" : "62e46bf8-bb8e-4281-a146-89022ef25296",
+    "prId" : 78610,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78610#pullrequestreview-246747537",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "36b1344c-b05f-4feb-980f-59194871c97d",
+        "parentId" : null,
+        "authorId" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "body" : "Ditto",
+        "createdAt" : "2019-06-06T18:40:45Z",
+        "updatedAt" : "2019-08-05T19:33:53Z",
+        "lastEditedBy" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "237b16d9d99d1eaf9ef762ddeb4ccec247b2ba8c",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +189,193 @@\t\treturn false, &webhookutil.ErrCallingWebhook{WebhookName: h.Name, Reason: err}\n\t}\n\ttrace.Step(\"Request completed\")\n\n\tresult, err := webhookrequest.VerifyAdmissionResponse(uid, true, response)"
+  },
+  {
+    "id" : "4c2bc64a-0187-4fd7-bfde-d20a53fab14e",
+    "prId" : 77824,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/77824#pullrequestreview-276866207",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6bf12c20-f078-4b30-9cad-bc47eb1012e6",
+        "parentId" : null,
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "I did some research and there are fundamental problems with how the annotation keys should look like. Sorry I couldn't make the following shorter.\r\n\r\nThe goal is to uniquely capture a webhook invocation event, and the json patch being applied in audit annotations. \r\n\r\n**Background**:\r\n\r\nIn Kubernetes we have the restriction that an annotation key must be a [qualified name](https://github.com/kubernetes/kubernetes/blob/2974adff27619bb27a27a78bd61de772a2d65bef/staging/src/k8s.io/apiserver/pkg/admission/attributes.go#L191) in format of:\r\n- `{optional DNS subdomain prefix with no more than 253 characters}/{a qualified name that consists of alphanumeric characters, '-', '_' or '.', with no more than 63 characters}`\r\n\r\nand the semantics is:\r\n- `{plugin}.{org}/{key}`\r\n\r\n**This PR**:\r\n\r\nThe original idea was to use `webhook.admission.k8s.io` as `{org}` and webhook name as `{key}`, so that we know there will be no key conflict against [custom annotations](https://github.com/kubernetes/kubernetes/blob/2974adff27619bb27a27a78bd61de772a2d65bef/staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/mutating/dispatcher.go#L198-L203), and it's clear from the prefix that the annotation is added by the apiserver (admission webhook org). \r\n\r\nHowever, [webhook names](https://github.com/kubernetes/kubernetes/blob/2974adff27619bb27a27a78bd61de772a2d65bef/pkg/apis/admissionregistration/validation/validation.go#L261) are allowed to be DNS subdomain with no more than 253 characters, which means webhook name > 63 characters won't get logged. \r\n\r\n**New proposal:**\r\n\r\nI propose we use the following semantics for the annotation keys:\r\n- `{webhook name}/k8s_{patch|mutation}_{pass}_{webhook config UID}`\r\n\r\nand if in future we want to expose the order of webhook invocation within one pass, we can append the order to the end:\r\n- `{webhook name}/k8s_{patch|mutation}_{pass}_{webhook config UID}_{order}`\r\n\r\nPros: \r\n- UID is a 36 character string in current [k8s implementation](https://github.com/kubernetes/kubernetes/blob/2974adff27619bb27a27a78bd61de772a2d65bef/staging/src/k8s.io/apimachinery/pkg/util/uuid/uuid.go#L26). We are mostly certain that we won't hit the 63-char limit\r\n- The qualified name segment allows `_`, which is not used by any of the IDs that we are using, makes it easy to parse the name\r\n\r\nCons:\r\n- The prefix is in the webhook name org. Potentially the key name can conflict with a custom annotation (not likely)\r\n- Analyzing the annotations require filtering out the custom annotations, either by doing it manually or through a regex\r\n\r\n**Alternatives considered:**\r\n1. We could put less information to the annotation keys and more information to the values, if audit annotations are allowed to be overwritten. Overwriting was designed to be not allowed: https://github.com/kubernetes/kubernetes/pull/58806#discussion_r163921756\r\n2. We can still use `webhook.admission.k8s.io` as `{org}` in the prefix, if we can have an identifier for each webhook which is shorter than the full webhook name (e.g. add a new UID field in the [webhook API](https://github.com/kubernetes/kubernetes/blob/2974adff27619bb27a27a78bd61de772a2d65bef/staging/src/k8s.io/api/admissionregistration/v1/types.go#L302-L309), and have the key be `patch.webhook.admission.k8s.io/{webhook UID}_{webhook config UID}`). Problem with this approach is that it's hard to locate a webhook from the webhook UID, and the UID can be fragile to webhook configuration updates.\r\n\r\n@jpbetz @sttts WDYT?",
+        "createdAt" : "2019-08-16T00:42:04Z",
+        "updatedAt" : "2019-08-23T18:09:13Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7df15a9c-d634-4256-b7f4-08bc015e13a3",
+        "parentId" : "6bf12c20-f078-4b30-9cad-bc47eb1012e6",
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "Another idea: use \r\n- `{patch|mutation}.webhooks.admission.k8s.io/pass_{pass id}_order_{order id}`\r\n\r\nas annotation key, and put {`webhook name`, `configuration name` and `existence or patch`} into the annotation value (better if in a structural format that's easy to parse)\r\n\r\nThe webhook name was put in the key before because we need something unique for each audit event (each invocation), so that we don't violate the no-overwriting rule. I think a combination of `pass id` + `order id` serves the purpose better.\r\n\r\nA disadvantage of this approach is that if someone is analyzing a specific webhook's behavior, they cannot just filter the annotation keys, but need to check the annotation values. The extra effort seems reasonable.",
+        "createdAt" : "2019-08-16T18:17:35Z",
+        "updatedAt" : "2019-08-23T18:09:13Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c1e6c91-0375-418f-83c0-2b13a58e45ed",
+        "parentId" : "6bf12c20-f078-4b30-9cad-bc47eb1012e6",
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "Yes, using `webhooks.admission.k8s.io` as the key prefix is what I was expecting.\r\n\r\nHaving the pass and order field named clearly makes it easy to read the annotations and order them into a chronology of webhook calls so I like how they are presented.\r\n\r\nI'm okay with webhook name being in the value.\r\n\r\nThe only alternative I thought about was doing something like:\r\n\r\nkey: `{patch|mutation}.webhooks.admission.k8s.io/pass_{pass id}`, value: `{webhook_UID_1},{webhook_UID_2}`\r\n\r\nBut that might be more cumbersome to parse? And I don't know if the value has a size limit. And I don't know where the patches would fit in.",
+        "createdAt" : "2019-08-16T19:35:54Z",
+        "updatedAt" : "2019-08-23T18:09:13Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c6a3bd7f-77a0-4944-a792-b7a276b22563",
+        "parentId" : "6bf12c20-f078-4b30-9cad-bc47eb1012e6",
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "I didn't see a limit for the value size. I want to structure the value as a JSON payload, so we could aggregate all the webhooks into a list. I don't feel strongly either way. ",
+        "createdAt" : "2019-08-19T23:34:17Z",
+        "updatedAt" : "2019-08-23T18:09:13Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "98ad20cc8fbdd1cbbdb0fe934d7b2d330b8b1ee5",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +52,56 @@\t// Since mutating webhook patches the request body, audit level must be greater or equal to Request\n\t// for the annotation to be logged\n\tPatchAuditAnnotationPrefix = \"patch.webhook.admission.k8s.io/\"\n\t// MutationAuditAnnotationPrefix is a prefix for presisting webhook mutation existence in audit annotation.\n\tMutationAuditAnnotationPrefix = \"mutation.webhook.admission.k8s.io/\""
+  },
+  {
+    "id" : "dc0fc07c-c7db-49ae-b302-8d0bd6062126",
+    "prId" : 67099,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67099#pullrequestreview-146251723",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c545e367-076d-4961-b35b-ea9e129083e3",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "nice catch",
+        "createdAt" : "2018-08-14T21:05:24Z",
+        "updatedAt" : "2018-08-14T21:11:34Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3a506be626398f927049c3ce735fd29ac0efd5f1",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +85,89 @@\tif attr.IsDryRun() {\n\t\t// TODO: support this\n\t\treturn webhookerrors.NewDryRunUnsupportedErr(h.Name)\n\t}\n"
+  },
+  {
+    "id" : "e57d46b3-3961-42b8-9dad-52b0e7fd9748",
+    "prId" : 64255,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64255#pullrequestreview-127484186",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3e380c4-1cb4-4405-8824-20da961efe72",
+        "parentId" : null,
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "can you assign directly to `attr.VersionedObject` above?",
+        "createdAt" : "2018-06-08T09:07:09Z",
+        "updatedAt" : "2018-06-11T09:22:46Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49d734f8-3e9c-4502-a273-b502bf5b0e1b",
+        "parentId" : "b3e380c4-1cb4-4405-8824-20da961efe72",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I actually prefer waiting to overwrite attr.VersionedObject until the decode succeeds\r\n\r\ndo we still have a problem when converting `attr.VersionedObject` back into `attr.Attributes.GetObject()` if conversion doesn't necessarily clear/reset the original internal object?\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/a7a081b5410fcf711b1f85169225974040051204/staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/mutating/dispatcher.go#L75-L76",
+        "createdAt" : "2018-06-08T14:09:30Z",
+        "updatedAt" : "2018-06-11T09:22:46Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "563e619b-ea95-484f-bd28-1a7019c50dbb",
+        "parentId" : "b3e380c4-1cb4-4405-8824-20da961efe72",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "> do we still have a problem when ...\r\n\r\nYou mean \"a similar problem in addition\", right?",
+        "createdAt" : "2018-06-08T14:53:26Z",
+        "updatedAt" : "2018-06-11T09:22:46Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22a3c8d5-b417-4fa2-bbba-e085d41e395c",
+        "parentId" : "b3e380c4-1cb4-4405-8824-20da961efe72",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> You mean \"a similar problem in addition\", right?\r\n\r\nyes",
+        "createdAt" : "2018-06-08T14:57:13Z",
+        "updatedAt" : "2018-06-11T09:22:46Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3e1450ab-7776-46b5-a294-139fa582a30d",
+        "parentId" : "b3e380c4-1cb4-4405-8824-20da961efe72",
+        "authorId" : "1f3d109e-1a23-4a7a-b130-47d557e30286",
+        "body" : "I would leave this `newVersionedObject` as it is too, but my rationale is different. With the brand new empty variable it's clearer that the call `a.plugin.jsonSerializer.Decode()` is supposed to update the variable and not to update the internal state of the called object. For me it took a while to understand where exactly attr.VersionedObject gets updated when I saw the code for the first time.",
+        "createdAt" : "2018-06-11T08:52:38Z",
+        "updatedAt" : "2018-06-11T09:22:46Z",
+        "lastEditedBy" : "1f3d109e-1a23-4a7a-b130-47d557e30286",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac195208-2829-4fbe-b001-e88e7a87e889",
+        "parentId" : "b3e380c4-1cb4-4405-8824-20da961efe72",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "> do we still have a problem when converting attr.VersionedObject back into attr.Attributes.GetObject() if conversion doesn't necessarily clear/reset the original internal object?\r\n\r\nThis needs a follow-up investigation.",
+        "createdAt" : "2018-06-11T09:01:17Z",
+        "updatedAt" : "2018-06-11T09:22:46Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a72e17bd227b79ed89981735691af3601043bf9",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +132,136 @@\t\treturn apierrors.NewInternalError(err)\n\t}\n\tattr.VersionedObject = newVersionedObject\n\ta.plugin.scheme.Default(attr.VersionedObject)\n\treturn nil"
+  }
+]

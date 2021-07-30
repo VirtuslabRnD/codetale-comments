@@ -1,0 +1,915 @@
+[
+  {
+    "id" : "b162ae30-8665-4678-979c-88b39189ffa8",
+    "prId" : 92860,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92860#pullrequestreview-444946014",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f5d60d63-6329-4287-9a56-cc1bae6510a5",
+        "parentId" : null,
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "another  option I think may work is not using the runner lock here and rely on the iptables lock. I prefer this one, this operation should not take long now, we fail fast and still control from the runner the iptables operations. \r\nalso the iptables-nft does not have this external lock , so don't know how this will look like in the future :shrug: ",
+        "createdAt" : "2020-07-08T08:56:22Z",
+        "updatedAt" : "2020-07-08T16:39:47Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "93c54408-0591-485c-8af1-5eaf8c2eaf99",
+        "parentId" : "f5d60d63-6329-4287-9a56-cc1bae6510a5",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "I don't think there's any need to rewrite this function. If it takes long to run then that's a problem, and it's good that it causes problems in that case, because then we'll notice the problem and fix it.",
+        "createdAt" : "2020-07-08T13:40:49Z",
+        "updatedAt" : "2020-07-08T16:39:47Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d6f7c14e-7a20-412d-9ef4-a82be3733b87",
+        "parentId" : "f5d60d63-6329-4287-9a56-cc1bae6510a5",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "Actually... I don't think `iptables.runner` needs a mutex at all. None of its own fields are mutable after creation, and we don't need to serialize calls to the iptables binary, because it has its own lock.",
+        "createdAt" : "2020-07-08T13:46:43Z",
+        "updatedAt" : "2020-07-08T16:39:47Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d76b0d91-61fc-4e60-9ab3-99de1ad4e744",
+        "parentId" : "f5d60d63-6329-4287-9a56-cc1bae6510a5",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "I left it as is, adding a trace so it logs the time to execute",
+        "createdAt" : "2020-07-08T16:41:12Z",
+        "updatedAt" : "2020-07-08T16:41:12Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "924553b7ee11b3275e430953d944967761c0e62f",
+    "line" : 1,
+    "diffHunk" : "@@ -1,1 +605,609 @@\tfullArgs := makeFullArgs(table, chain)\n\n\trunner.mu.Lock()\n\tdefer runner.mu.Unlock()\n"
+  },
+  {
+    "id" : "f09d0873-2828-441e-bb24-fb021e5b86f6",
+    "prId" : 92860,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92860#pullrequestreview-445021348",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d77d1670-2f2e-47e7-a072-c2c44637e430",
+        "parentId" : null,
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "`-S` is better than `-nL` and I think is doing the same, without the dns reverse lookups",
+        "createdAt" : "2020-07-08T09:00:13Z",
+        "updatedAt" : "2020-07-08T16:39:47Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd1f431d-d40b-461f-9bc2-bda19176da92",
+        "parentId" : "d77d1670-2f2e-47e7-a072-c2c44637e430",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "So there's some trickiness here which is that iptables-nft 1.8.3 is not consistent with iptables-legacy about error codes in some edge cases. So you need to confirm that `iptables-nft -S NON-EXISTENT-CHAIN` and `iptables-legacy -S NON-EXISTENT-CHAIN` return the same thing... (Originally the monitoring code had used `-F` to check if the chain existed (since it's empty anyway, flushing would be a no-op if the chain existed, but would return an error if it didn't). But that didn't work because iptables-nft didn't actually return an error if the chain didn't exist..)",
+        "createdAt" : "2020-07-08T13:38:04Z",
+        "updatedAt" : "2020-07-08T16:39:47Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "63e67329-66de-481f-9567-1d331b81feca",
+        "parentId" : "d77d1670-2f2e-47e7-a072-c2c44637e430",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "seems is consistent, and seems iptables -S is  what is being used in go-iptables\r\n```\r\nroot@kind-control-plane:/# iptables-legacy\r\niptables v1.8.3 (legacy): no command specified\r\nTry `iptables -h' or 'iptables --help' for more information.\r\nroot@kind-control-plane:/# iptables-legacy -t nat -L NON\r\niptables: No chain/target/match by that name.\r\nroot@kind-control-plane:/# echo $?\r\n1\r\nroot@kind-control-plane:/# iptables-nft\r\niptables v1.8.3 (nf_tables): no command specified\r\nTry `iptables -h' or 'iptables --help' for more information.\r\nroot@kind-control-plane:/# iptables-nft -t nat -L NON\r\n# Warning: iptables-legacy tables present, use iptables-legacy to see them\r\niptables: No chain/target/match by that name.\r\nroot@kind-control-plane:/# echo $?\r\n1\r\n```",
+        "createdAt" : "2020-07-08T16:43:21Z",
+        "updatedAt" : "2020-07-08T17:00:45Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01b4735d-b8e0-4869-8c80-ddb21ea3f5a0",
+        "parentId" : "d77d1670-2f2e-47e7-a072-c2c44637e430",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : ">     root@kind-control-plane:/# iptables-nft -t nat -L NON\r\n\r\n`-L` is not `-S` :slightly_smiling_face: \r\n",
+        "createdAt" : "2020-07-08T17:53:12Z",
+        "updatedAt" : "2020-07-08T17:53:12Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e6d8ad4-c795-4a7d-a086-70e123671ab0",
+        "parentId" : "d77d1670-2f2e-47e7-a072-c2c44637e430",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "```\r\nroot@kind-control-plane:/#  iptables-legacy -t nat -S NON\r\niptables: No chain/target/match by that name.\r\nroot@kind-control-plane:/# echo $?\r\n1\r\nroot@kind-control-plane:/# iptables-nft -t nat -S NON\r\n# Warning: iptables-legacy tables present, use iptables-legacy to see them\r\niptables: No chain/target/match by that name.\r\nroot@kind-control-plane:/# echo $?\r\n1\r\n```\r\n:facepalm: ",
+        "createdAt" : "2020-07-08T18:22:12Z",
+        "updatedAt" : "2020-07-08T18:22:12Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "924553b7ee11b3275e430953d944967761c0e62f",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +621,625 @@\topFlushChain  operation = \"-F\"\n\topDeleteChain operation = \"-X\"\n\topListChain   operation = \"-S\"\n\topAppendRule  operation = \"-A\"\n\topCheckRule   operation = \"-C\""
+  },
+  {
+    "id" : "31335a9a-a8bd-4ac7-b261-a980e1e58af8",
+    "prId" : 87002,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/87002#pullrequestreview-340347477",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2d67dcd-d0cc-4fbc-849b-0ebb49ebaf06",
+        "parentId" : null,
+        "authorId" : "e7b8fd7e-f93b-44b6-b6d0-4331207d901c",
+        "body" : "```\r\ndo not pass a nil Context, even if a function permits it; pass context.TODO if you are unsure about which Context to use (SA1012)\r\n```",
+        "createdAt" : "2020-01-09T08:17:53Z",
+        "updatedAt" : "2020-01-09T08:17:54Z",
+        "lastEditedBy" : "e7b8fd7e-f93b-44b6-b6d0-4331207d901c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "51c742c1dd0ffe124b9573ee5c6daf26867c3025",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +433,437 @@\nfunc (runner *runner) run(op operation, args []string) ([]byte, error) {\n\treturn runner.runContext(context.TODO(), op, args)\n}\n"
+  },
+  {
+    "id" : "0934b293-2691-451c-806f-3ef5b69617e3",
+    "prId" : 85771,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85771#pullrequestreview-326286302",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d703eab6-a4c9-45b0-89da-e088915dc9fd",
+        "parentId" : null,
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "It looks like `-W` wasn't added until 1.6.1 so you'll need another case here.\r\n(For iptables-restore both flags were added at the same time, in 1.6.2, so no change is needed there.)",
+        "createdAt" : "2019-12-03T13:09:04Z",
+        "updatedAt" : "2019-12-03T16:40:49Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49c1408b-9d8e-46bc-b12f-d4808200ccc2",
+        "parentId" : "d703eab6-a4c9-45b0-89da-e088915dc9fd",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "done",
+        "createdAt" : "2019-12-03T16:41:56Z",
+        "updatedAt" : "2019-12-03T16:41:56Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "51814ae189ff53d9903826f6a9df98d1d6197e1f",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +649,653 @@\tswitch {\n\tcase version.AtLeast(WaitIntervalMinVersion):\n\t\treturn []string{WaitString, WaitSecondsValue, WaitIntervalString, WaitIntervalUsecondsValue}\n\tcase version.AtLeast(WaitSecondsMinVersion):\n\t\treturn []string{WaitString, WaitSecondsValue}"
+  },
+  {
+    "id" : "3d2d608f-2947-482b-acdc-848ff86d9010",
+    "prId" : 83402,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83402#pullrequestreview-297585597",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ac42c28e-7c61-48b7-8a3b-972f3880b23a",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Should we be checking more affirmatively that the error returned matched \"No chain/target/match by that name\" rather than handling all errors this way?",
+        "createdAt" : "2019-10-04T16:29:05Z",
+        "updatedAt" : "2019-10-04T16:29:06Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f89c03c63a7b62b782f0e79495856301d37dd10",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +521,525 @@\t\t\t\treturn false, nil\n\t\t\t}\n\t\t\tklog.V(2).Infof(\"iptables canary %s/%s deleted\", string(tables[0]), string(canary))\n\n\t\t\t// Wait for the other canaries to be deleted too before returning"
+  },
+  {
+    "id" : "a7b36280-c3c1-48f6-abc1-4996231c1ebd",
+    "prId" : 81517,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81517#pullrequestreview-277434623",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bbea0190-d2dd-4fd0-b24b-89365e8aed5e",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "This probably needs to be parametric too.  Maybe pass in a whole heuristic config struct, saying which table is the trigger, what the canary's name is, and which other tables are post-trigger blockers, plus the timeout. and period",
+        "createdAt" : "2019-08-20T17:55:39Z",
+        "updatedAt" : "2019-09-17T14:20:00Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "64dc1d07-5c92-4b52-976d-ccb3cf669c80",
+        "parentId" : "bbea0190-d2dd-4fd0-b24b-89365e8aed5e",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "How would the caller know what a good timeout and period are though? How can the caller, in isolation, know what a good \"low-impact\" table is, given that this depends on what rules *other people* are creating? What the caller wants is just \"if iptables gets flushed, call me\", and `utiliptables` should be responsible for figuring out the best way to implement that for them.\r\n\r\nSo of the parameters:\r\n- polling interval: I made this an argument to `Monitor` mostly because if I didn't then kube-proxy's `iptablesSyncPeriod` would become a no-op. But still, I think unlike the other stuff, this *is* something the caller might care about. Different callers might have different tolerances for how long they're willing to be out of sync.\r\n- trigger table (`\"mangle\"`) - This needs to be decided based on the system as a whole. We could autodetect a good table by scanning `iptables-save` output, or we could add kubelet and kube-proxy config arguments to let the admin configure it based on their knowledge of their system. But mostly, the problem we're trying to work around is that kubernetes itself makes the `nat` and `filter` tables get huge, and I haven't heard of any systems where that's also a problem with `mangle`, `raw`, or `security`. I picked `mangle` somewhat at random from the three. (`security` seemed like a bad idea.) If we always used `mangle` now and that turned out to be a problem we could do the autodetect thing later.\r\n- canary chain name (`KUBE-CANARY-XXXXXX`) - We don't let people rename any of our other chains... I guess maybe you're arguing that `pkg/util/iptables` is too low-level to be imposing the `KUBE-` prefix on the caller, and maybe that's true...\r\n- post-trigger-table-flush poll interval (`100ms`) and timeout (`5s`) - I totally pulled these numbers out of my ass. I'm happy to revisit them but I don't think we need to make them configurable. All callers want the same behavior here (\"respond quickly; don't get stuck if something goes wrong\").\r\n\r\n  FTR, basically all of the firewall managers do the same thing when reloading:\r\n\r\n      for table in $(cat /proc/net/ip_tables_names); do\r\n          iptables -F -t $table\r\n          iptables -X -t $table\r\n      done\r\n\r\n  So we're just trying to wait for that loop to complete, which normally should happen very quickly, but maybe sometimes might take a bit longer, but shouldn't ever take *very* long.\r\n- other tables to wait for (`[\"nat\", \"filter\"]`) - OK, you got me, I am totally cheating there. But we could fix this without the caller having to pass any more information; the `runner` already knows what tables the user cares about based on the `EnsureChain`/`EnsureRule`/`Restore` commands they have run, so we can just figure out what tables to wait for based on that.",
+        "createdAt" : "2019-08-20T19:17:57Z",
+        "updatedAt" : "2019-09-17T14:20:00Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a9bc1d2-e31d-4f6e-8337-5af483474a82",
+        "parentId" : "bbea0190-d2dd-4fd0-b24b-89365e8aed5e",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "> trigger table (`\"mangle\"`) - This needs to be decided based on the system as a whole. \r\n> We could autodetect a good table by scanning `iptables-save` output, or we could add \r\n> kubelet and kube-proxy config arguments to let the admin configure it based on their \r\n> knowledge of their system. But mostly, the problem we're trying to work around is that \r\n> kubernetes itself makes the `nat` and `filter` tables get huge, and I haven't heard of any \r\n> systems where that's also a problem with `mangle`, `raw`, or `security`. I picked `mangle` \r\n> somewhat at random from the three. (`security` seemed like a bad idea.) If we always used \r\n> `mangle` now and that turned out to be a problem we could do the autodetect thing later.\r\n\r\nMy thinking here was that the knowledge that \"kubernetes itself makes the `nat` and `filter` tables get huge\" doesn't belong in a nearly-general-purpose lib like this.  I could easily see moving this lib to a new repo k/iptables or just k/utils/iptables.  At least kube-proxy and kubelet know that kubernetes (ab)uses nat and filter, so they are in a position to give a hint.  Maybe the hint is \"use mangle\" or \"use anything except nat or filter\" instead? \r\n\r\nAuto-detecting sounds good, but I worry a little about point-in-time samples (e.g. at machine boot time, nat might be a good choice, because kube-proxy hasn't spun up yet.  So I'd still say we need a hint, at least.  \"not nat, not filter.\"\r\n\r\n> canary chain name (`KUBE-CANARY-XXXXXX`) - We don't let people rename any of our \r\n> other chains... I guess maybe you're arguing that `pkg/util/iptables` is too low-level to be \r\n> imposing the `KUBE-` prefix on the caller, and maybe that's true...\r\n\r\nYes, I don't think this should have \"KUBE\" coded in, and I assume the rand is because you can have multiple agents Monitor()ing, but I thin rand is kind of busted (as I said elsewhere).\r\n\r\nThe rest I don't care so much :)\r\n\r\n> other tables to wait for (`[\"nat\", \"filter\"]`) - OK, you got me, I am totally cheating there. But we \r\n> could fix this without the caller having to pass any more information; the `runner` already \r\n> knows what tables the user cares about based on the `EnsureChain`/`EnsureRule`/`Restore` > commands they have run, so we can just figure out what tables to wait for based on that.\r\n\r\nI would expect Monitor() to be called very early, so kube-proxy might not have called any Ensure yet.  Parsing Restore blobs seems clunky to me.  It could be that the \"blockers list\" *is* the canary-table hint.  Don't canary in blocker tables.",
+        "createdAt" : "2019-08-20T20:55:04Z",
+        "updatedAt" : "2019-09-17T14:20:00Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3948f16ff4060955b7f25d26d261b99589963ade",
+    "line" : 147,
+    "diffHunk" : "@@ -1,1 +519,523 @@\t\t\t// Wait for the other canaries to be deleted too before returning\n\t\t\t// so we don't start reloading too soon.\n\t\t\terr := utilwait.PollImmediate(iptablesFlushPollTime, iptablesFlushTimeout, func() (bool, error) {\n\t\t\t\tfor i := 1; i < len(tables); i++ {\n\t\t\t\t\tif runner.chainExists(tables[i], canary) {"
+  },
+  {
+    "id" : "47156b86-f8c0-4515-9c69-cbab906e8178",
+    "prId" : 81517,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81517#pullrequestreview-288905732",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b239da32-08e9-493a-aa8c-f9d8c3d836b3",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Document error handling (it early-returns on error, etc)",
+        "createdAt" : "2019-09-16T21:16:28Z",
+        "updatedAt" : "2019-09-17T14:20:00Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3948f16ff4060955b7f25d26d261b99589963ade",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +74,78 @@\t// rules. If it is unable to create the canary chains (either initially or after\n\t// a reload) it will log an error and stop monitoring.\n\t// (This function should be called from a goroutine.)\n\tMonitor(canary Chain, tables []Table, reloadFunc func(), interval time.Duration, stopCh <-chan struct{})\n\t// HasRandomFully reveals whether `-j MASQUERADE` takes the"
+  },
+  {
+    "id" : "02c6e7ab-ab96-4912-933e-d88cf5249350",
+    "prId" : 81517,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81517#pullrequestreview-289663293",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab9acd06-c442-4b92-b3ab-45f8d54f3b1a",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "It seems if len(tables) == 1, this call can be skipped.",
+        "createdAt" : "2019-09-18T04:24:11Z",
+        "updatedAt" : "2019-09-18T04:24:11Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3948f16ff4060955b7f25d26d261b99589963ade",
+    "line" : 147,
+    "diffHunk" : "@@ -1,1 +519,523 @@\t\t\t// Wait for the other canaries to be deleted too before returning\n\t\t\t// so we don't start reloading too soon.\n\t\t\terr := utilwait.PollImmediate(iptablesFlushPollTime, iptablesFlushTimeout, func() (bool, error) {\n\t\t\t\tfor i := 1; i < len(tables); i++ {\n\t\t\t\t\tif runner.chainExists(tables[i], canary) {"
+  },
+  {
+    "id" : "8657a365-bbe7-47b7-8314-236478e30e57",
+    "prId" : 80368,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80368#pullrequestreview-265630783",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d6827d00-a4ca-4f0b-b90e-e1259d7f0173",
+        "parentId" : null,
+        "authorId" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "body" : "Why switch this from a const?",
+        "createdAt" : "2019-07-22T20:05:36Z",
+        "updatedAt" : "2019-08-01T16:05:53Z",
+        "lastEditedBy" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b7c7366-e670-47ef-86c1-aa53814c1c06",
+        "parentId" : "d6827d00-a4ca-4f0b-b90e-e1259d7f0173",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "Can't do a function call to set a const",
+        "createdAt" : "2019-07-23T19:35:54Z",
+        "updatedAt" : "2019-08-01T16:05:53Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "81cd27a51e0a414f80a275b2cb156c923a7f9ef4",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +120,124 @@// Versions of iptables less than this do not support the -C / --check flag\n// (test whether a rule exists).\nvar MinCheckVersion = utilversion.MustParseGeneric(\"1.4.11\")\n\n// Minimum iptables versions supporting the -w and -w<seconds> flags"
+  },
+  {
+    "id" : "639394da-569c-4630-b132-474357435ca5",
+    "prId" : 80368,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80368#pullrequestreview-265633408",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "af482376-beb8-43a1-b3f1-486fe1ff84f9",
+        "parentId" : null,
+        "authorId" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "body" : "It might be useful to spit out an expected version for comparison or crosslink what we're expecting with more text in the error message",
+        "createdAt" : "2019-07-23T19:26:38Z",
+        "updatedAt" : "2019-08-01T16:05:53Z",
+        "lastEditedBy" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a064c03-e607-4f7a-90b8-390082286539",
+        "parentId" : "af482376-beb8-43a1-b3f1-486fe1ff84f9",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "It's a \"can't happen\" situation anyway; we only reach this point if we regex-matched a version number in the output already, so it has to parse. If it doesn't, there's a bug in the code and the only thing a user could do would be to file a bug.",
+        "createdAt" : "2019-07-23T19:41:21Z",
+        "updatedAt" : "2019-08-01T16:05:53Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "81cd27a51e0a414f80a275b2cb156c923a7f9ef4",
+    "line" : 133,
+    "diffHunk" : "@@ -1,1 +550,554 @@\tversion, err := utilversion.ParseGeneric(match[1])\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"iptables version %q is not a valid version string: %v\", match[1], err)\n\t}\n"
+  },
+  {
+    "id" : "b02999d8-f9f4-4411-99cc-502ccea7f98e",
+    "prId" : 78428,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78428#pullrequestreview-243319295",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f2f22ba9-15d5-44b8-bf87-fdc6eae6f386",
+        "parentId" : null,
+        "authorId" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "body" : "@luksa do we want a buffer.Reset() here? If we don't, then the error output will be appended to the end of the stdout buffer, right?",
+        "createdAt" : "2019-05-29T14:47:46Z",
+        "updatedAt" : "2019-05-29T14:47:46Z",
+        "lastEditedBy" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26ad7d0e-4db7-4818-b9f9-5b009160ad1d",
+        "parentId" : "f2f22ba9-15d5-44b8-bf87-fdc6eae6f386",
+        "authorId" : "d83924dd-d70f-4da4-95ce-d99172a9d6f1",
+        "body" : "I thought it was best to leave anything that came in through stdout intact. I can add the reset if you think it makes more sense. The current callers never use the buffer if an error occurs, so it doesn't matter much right now. ",
+        "createdAt" : "2019-05-29T14:56:23Z",
+        "updatedAt" : "2019-05-29T14:56:23Z",
+        "lastEditedBy" : "d83924dd-d70f-4da4-95ce-d99172a9d6f1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "93a549679fcdc949a0fcddb296a70b25197698ae",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +333,337 @@\terr := cmd.Run()\n\tif err != nil {\n\t\tstderrBuffer.WriteTo(buffer) // ignore error, since we need to return the original error\n\t}\n\treturn err"
+  },
+  {
+    "id" : "1fb2acfb-7b13-4b39-83a9-99a6d342710b",
+    "prId" : 78428,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78428#pullrequestreview-243903301",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "16f32c82-b0bc-479d-a3a8-30271cf649f5",
+        "parentId" : null,
+        "authorId" : "4138710b-380a-4011-917f-70ce4f4b9717",
+        "body" : "It would be nice to explicitly call this `stdoutBuffer`.\r\n",
+        "createdAt" : "2019-05-30T01:58:32Z",
+        "updatedAt" : "2019-05-30T02:14:40Z",
+        "lastEditedBy" : "4138710b-380a-4011-917f-70ce4f4b9717",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dba35585-2bb2-46a4-9a4f-87fb7acd6541",
+        "parentId" : "16f32c82-b0bc-479d-a3a8-30271cf649f5",
+        "authorId" : "d83924dd-d70f-4da4-95ce-d99172a9d6f1",
+        "body" : "But if the command fails, stderr is written to the buffer, so renaming it would be misleading.",
+        "createdAt" : "2019-05-30T06:23:44Z",
+        "updatedAt" : "2019-05-30T06:23:45Z",
+        "lastEditedBy" : "d83924dd-d70f-4da4-95ce-d99172a9d6f1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c4438c52-30ab-41bd-bca7-02f56c86610d",
+        "parentId" : "16f32c82-b0bc-479d-a3a8-30271cf649f5",
+        "authorId" : "4138710b-380a-4011-917f-70ce4f4b9717",
+        "body" : "Ah, gotcha.",
+        "createdAt" : "2019-05-30T16:47:16Z",
+        "updatedAt" : "2019-05-30T16:47:17Z",
+        "lastEditedBy" : "4138710b-380a-4011-917f-70ce4f4b9717",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "93a549679fcdc949a0fcddb296a70b25197698ae",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +327,331 @@\tklog.V(4).Infof(\"running %s %v\", iptablesSaveCmd, args)\n\tcmd := runner.exec.Command(iptablesSaveCmd, args...)\n\tcmd.SetStdout(buffer)\n\tstderrBuffer := bytes.NewBuffer(nil)\n\tcmd.SetStderr(stderrBuffer)"
+  },
+  {
+    "id" : "186ab174-07a9-4491-b279-31497b274da4",
+    "prId" : 65216,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/65216#pullrequestreview-130254587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b8d1044d-bb62-4632-8bd8-46b405a58ef3",
+        "parentId" : null,
+        "authorId" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "body" : "@wojtek-t curious how does this work ? is this running the iptables save command or that is just naming the trace ?",
+        "createdAt" : "2018-06-20T06:22:50Z",
+        "updatedAt" : "2018-06-20T06:43:54Z",
+        "lastEditedBy" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9189abbf-211a-4221-814a-d4d0f256e390",
+        "parentId" : "b8d1044d-bb62-4632-8bd8-46b405a58ef3",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "It just adds a trace and ensures that if whole operation took more than 2s, it will be logged.",
+        "createdAt" : "2018-06-20T06:32:16Z",
+        "updatedAt" : "2018-06-20T06:43:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0f9df22616f9d96ab80f2096c861ad1123203f07",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +320,324 @@\n\ttrace := utiltrace.New(\"iptables save\")\n\tdefer trace.LogIfLong(2 * time.Second)\n\n\t// run and return"
+  },
+  {
+    "id" : "7a18ef3a-1fa8-45e9-9a33-5f23282e583a",
+    "prId" : 63332,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/63332#pullrequestreview-116743794",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9c160a74-b55e-44a6-a5d8-4fe41775fc3f",
+        "parentId" : null,
+        "authorId" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "body" : "Should we not check if we timed out? `ctx.Err() == context.DeadlineExceeded`",
+        "createdAt" : "2018-05-01T21:27:42Z",
+        "updatedAt" : "2018-05-03T14:27:17Z",
+        "lastEditedBy" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "223b1f8c-8ddf-476e-a00f-1155cca76589",
+        "parentId" : "9c160a74-b55e-44a6-a5d8-4fe41775fc3f",
+        "authorId" : "948c8bee-49af-46ed-93a8-309275b51d61",
+        "body" : "@dims: We should, but in the place where the context object is constructed, see L504 in the same file.",
+        "createdAt" : "2018-05-01T23:50:36Z",
+        "updatedAt" : "2018-05-03T14:27:17Z",
+        "lastEditedBy" : "948c8bee-49af-46ed-93a8-309275b51d61",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33074399-1fc3-40b7-ab35-eabb117f9d08",
+        "parentId" : "9c160a74-b55e-44a6-a5d8-4fe41775fc3f",
+        "authorId" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "body" : "Ah thanks! @zhouhaibing089 ",
+        "createdAt" : "2018-05-02T00:35:33Z",
+        "updatedAt" : "2018-05-03T14:27:17Z",
+        "lastEditedBy" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f0d0f0165a68ceba29b50ff2f1375dc0ff5183eb",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +427,431 @@\t\treturn runner.exec.Command(iptablesCmd, fullArgs...).CombinedOutput()\n\t}\n\treturn runner.exec.CommandContext(ctx, iptablesCmd, fullArgs...).CombinedOutput()\n\t// Don't log err here - callers might not think it is an error.\n}"
+  },
+  {
+    "id" : "357d23fa-3262-4b5b-b936-e354237c0923",
+    "prId" : 55153,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55153#pullrequestreview-76683122",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5f690e19-d0a3-497a-9d48-e64937c65e2b",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Why is this part of the same PR?  Seems unrelated?",
+        "createdAt" : "2017-11-15T05:40:09Z",
+        "updatedAt" : "2017-11-15T07:15:31Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f2700ae-001e-4b5d-9be8-bae8c309856f",
+        "parentId" : "5f690e19-d0a3-497a-9d48-e64937c65e2b",
+        "authorId" : "38428f84-e217-4cb8-8916-cc4e674102d6",
+        "body" : "It's used by `NewFakeIPTables` to cache builtin chains.",
+        "createdAt" : "2017-11-15T06:10:20Z",
+        "updatedAt" : "2017-11-15T07:15:31Z",
+        "lastEditedBy" : "38428f84-e217-4cb8-8916-cc4e674102d6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c6375c20b711eef0434495b0a77accef23a96920",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +83,87 @@\tTableNAT    Table = \"nat\"\n\tTableFilter Table = \"filter\"\n\tTableMangle Table = \"mangle\"\n)\n"
+  },
+  {
+    "id" : "f3bc9983-a34a-49f1-8e59-23344f1450ea",
+    "prId" : 54763,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/54763#pullrequestreview-72955424",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "42c70826-9757-4195-b0ea-f3c2b7ed6e3a",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Really, this should be parameterized, but I'm OK to leave that until it is needed.",
+        "createdAt" : "2017-10-30T19:18:23Z",
+        "updatedAt" : "2017-10-30T19:18:23Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c5740a37379aa4905c9505082212610a1ac022c6",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +123,127 @@const WaitSecondsMinVersion = \"1.4.22\"\nconst WaitString = \"-w\"\nconst WaitSecondsString = \"-w5\"\n\nconst LockfilePath16x = \"/run/xtables.lock\""
+  },
+  {
+    "id" : "d7112504-7763-45ff-9e9f-a885c45c2738",
+    "prId" : 12839,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I don't understand why this is correct.  You're unpacking single args like \"foo bar bat\" into multiple args.  How is this correct?  I'm not saying it's not, but I have no way to repro it, so I can't understand it.  can you show me an example output that this parses properly that was wrong before?\n",
+        "createdAt" : "2015-08-18T06:24:13Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "264f3464-3e68-43a8-8459-1cd2fd8030bb",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "body" : "This is because, \nwhile the `args` supplied to checkRuleWithoutCheck function has multi-word comment strings as _ONE_ string, (eg: `\"handle ClusterIPs; NOTE: this must be before the NodePort rules\"` is 1 string),  \nstringset from `strings.Fields(`iptables-save -t nat`)` splits at whitespace boundary, and has such multi-word comment as multiple strings. (eg: `\"handle ClusterIPs; NOTE: this must be before the NodePort rules\"` will be a set of 10 strings each consisting [\"handle, ClusterIPs;, NOTE, ...]```)\n\nSo, the len(fields) would never equal len(args)+2 when there were multi-word comments, and this would result in duplicate rules added every few seconds.\n",
+        "createdAt" : "2015-08-18T06:44:33Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4cf4c91d-1c27-4ca6-8ffc-f5c1dd5a0dea",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "body" : "which is why i've implemented to unpack every word at whitespace boundary into multiple args.\n",
+        "createdAt" : "2015-08-18T06:53:38Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "14692277-2108-465a-8804-7b7705a2dff9",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Sorry, this did not explain to me why you're unpacking every word.  Can you show me a literal iptables output string that is driving this?  This code is known to have worked at some point in the past - what is different?\n",
+        "createdAt" : "2015-08-18T22:02:11Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ea63c6d-1b3a-4663-b214-d03b506e56e7",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "body" : "well... I'm not sure this has worked at all. (at least on the iptables version i'm using...)\n\nUsing master version of kube-proxy, (same results for the 1.0 version too)\nthis is the output of iptables-save -t nat right after executing kube-proxy\n\n```\n# Generated by iptables-save v1.4.7 on Wed Aug 19 09:38:41 2015\n*nat\n:PREROUTING ACCEPT [2953865:238247467]\n:INPUT ACCEPT [3115:142808]\n:OUTPUT ACCEPT [4330:299904]\n:POSTROUTING ACCEPT [4330:299904]\n:DOCKER - [0:0]\n:KUBE-NODEPORT-CONTAINER - [0:0]\n:KUBE-NODEPORT-HOST - [0:0]\n:KUBE-PORTALS-CONTAINER - [0:0]\n:KUBE-PORTALS-HOST - [0:0]\n-A PREROUTING -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-CONTAINER \n-A PREROUTING -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-CON\nTAINER \n-A OUTPUT -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-HOST \n-A OUTPUT -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-HOST \n-A KUBE-NODEPORT-CONTAINER -p tcp -m comment --comment \"default/my-nginx:\" -m tcp --dport 32749 -j REDIRECT --to-ports 39018 \n-A KUBE-NODEPORT-HOST -p tcp -m comment --comment \"default/my-nginx:\" -m tcp --dport 32749 -j DNAT --to-destination 10.101.61.147:39018 \n-A KUBE-PORTALS-CONTAINER -d 192.168.20.135/32 -p tcp -m comment --comment \"kube-system/kube-ui:\" -m tcp --dport 80 -j REDIRECT --to-ports 60074 \n-A KUBE-PORTALS-CONTAINER -d 192.168.20.1/32 -p tcp -m comment --comment \"default/kubernetes:\" -m tcp --dport 443 -j REDIRECT --to-ports 40516 \n-A KUBE-PORTALS-CONTAINER -d 192.168.20.160/32 -p tcp -m comment --comment \"default/my-nginx:\" -m tcp --dport 80 -j REDIRECT --to-ports 39018 \n-A KUBE-PORTALS-HOST -d 192.168.20.135/32 -p tcp -m comment --comment \"kube-system/kube-ui:\" -m tcp --dport 80 -j DNAT --to-destination 10.101.61.147:60074 \n-A KUBE-PORTALS-HOST -d 192.168.20.1/32 -p tcp -m comment --comment \"default/kubernetes:\" -m tcp --dport 443 -j DNAT --to-destination 10.101.61.147:40516 \n-A KUBE-PORTALS-HOST -d 192.168.20.160/32 -p tcp -m comment --comment \"default/my-nginx:\" -m tcp --dport 80 -j DNAT --to-destination 10.101.61.147:39018 \nCOMMIT\n# Completed on Wed Aug 19 09:38:41 2015\n```\n\nand.. this is what happens after a few seconds.\n\n```\n# Generated by iptables-save v1.4.7 on Wed Aug 19 09:39:01 2015\n*nat\n:PREROUTING ACCEPT [53:4287]\n:INPUT ACCEPT [0:0]\n:OUTPUT ACCEPT [0:0]\n:POSTROUTING ACCEPT [0:0]\n:DOCKER - [0:0]\n:KUBE-NODEPORT-CONTAINER - [0:0]\n:KUBE-NODEPORT-HOST - [0:0]\n:KUBE-PORTALS-CONTAINER - [0:0]\n:KUBE-PORTALS-HOST - [0:0]\n-A PREROUTING -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-CONTAINER \n-A PREROUTING -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-CONTAINER \n-A PREROUTING -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-CONTAINER \n-A PREROUTING -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-CONTAINER \n-A PREROUTING -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-CONTAINER \n-A PREROUTING -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-CONTAINER \n-A PREROUTING -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-CONTAINER \n-A PREROUTING -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-CONTAINER \n-A PREROUTING -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-CONTAINER \n-A PREROUTING -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-CONTAINER \n-A OUTPUT -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-HOST \n-A OUTPUT -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-HOST \n-A OUTPUT -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-HOST \n-A OUTPUT -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-HOST \n-A OUTPUT -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rules\" -j KUBE-PORTALS-HOST \n-A OUTPUT -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-HOST \n-A OUTPUT -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-HOST \n-A OUTPUT -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-HOST \n-A OUTPUT -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-HOST \n-A OUTPUT -m addrtype --dst-type LOCAL -m comment --comment \"handle service NodePorts; NOTE: this must be the last rule in the chain\" -j KUBE-NODEPORT-HOST \n-A KUBE-NODEPORT-CONTAINER -p tcp -m comment --comment \"default/my-nginx:\" -m tcp --dport 32749 -j REDIRECT --to-ports 53444 \n-A KUBE-NODEPORT-HOST -p tcp -m comment --comment \"default/my-nginx:\" -m tcp --dport 32749 -j DNAT --to-destination 10.101.61.147:53444 \n-A KUBE-PORTALS-CONTAINER -d 192.168.20.1/32 -p tcp -m comment --comment \"default/kubernetes:\" -m tcp --dport 443 -j REDIRECT --to-ports 42922 \n-A KUBE-PORTALS-CONTAINER -d 192.168.20.160/32 -p tcp -m comment --comment \"default/my-nginx:\" -m tcp --dport 80 -j REDIRECT --to-ports 53444 \n-A KUBE-PORTALS-CONTAINER -d 192.168.20.135/32 -p tcp -m comment --comment \"kube-system/kube-ui:\" -m tcp --dport 80 -j REDIRECT --to-ports 48642 \n-A KUBE-PORTALS-HOST -d 192.168.20.1/32 -p tcp -m comment --comment \"default/kubernetes:\" -m tcp --dport 443 -j DNAT --to-destination 10.101.61.147:42922 \n-A KUBE-PORTALS-HOST -d 192.168.20.160/32 -p tcp -m comment --comment \"default/my-nginx:\" -m tcp --dport 80 -j DNAT --to-destination 10.101.61.147:53444 \n-A KUBE-PORTALS-HOST -d 192.168.20.135/32 -p tcp -m comment --comment \"kube-system/kube-ui:\" -m tcp --dport 80 -j DNAT --to-destination 10.101.61.147:48642 \nCOMMIT\n# Completed on Wed Aug 19 09:39:01 2015\n```\n\nAll the rules containing quoted comments get duped..\n",
+        "createdAt" : "2015-08-19T00:42:29Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37d90992-de7c-4dd5-9f5f-26dc95b70a1c",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "body" : "Actually just the rules that have quoted multi-word comments get duped..\n\nand this is why I've unquoted and unpacked every word.. \n",
+        "createdAt" : "2015-08-19T00:47:00Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "edff6be5-b238-4399-94a2-ec92b9147365",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I appreciate you bearing with me on this - I'm very wary of changes that I\ncan't explain.  I totally believe that there is a problem.\n\nThere's a debug log at line 358 - can you turn that on and send me the\noutput when it fails?  You can either make it unconditional or set V(1) or\njust set --v=5 on your kube-proxy.\n\nOn Tue, Aug 18, 2015 at 5:47 PM, Jihoon Chung notifications@github.com\nwrote:\n\n> In pkg/util/iptables/iptables.go\n> https://github.com/kubernetes/kubernetes/pull/12839#discussion_r37370453\n> :\n> \n> > @@ -328,10 +328,11 @@ func (runner *runner) checkRuleWithoutCheck(table Table, chain Chain, args ...st\n> > \n> > ```\n> > // Sadly, iptables has inconsistent quoting rules for comments.\n> > // Just unquote any arg that is wrapped in quotes.\n> > ```\n> > -   argsCopy := make([]string, len(args))\n> > -   copy(argsCopy, args)\n> > -   for i := range argsCopy {\n> > -       unquote(&argsCopy[i])\n> > -   var argsCopy []string\n> > -   for i := range args {\n> > -       tmpField := args[i]\n> > -       unquote(&tmpField)\n> > -       argsCopy = append(argsCopy, strings.Fields(tmpField)...)\n> \n> Actually just the rules that have quoted multi-word comments get duped..\n> \n> and this is why I've unquoted and unpacked every word..\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/12839/files#r37370453.\n",
+        "createdAt" : "2015-08-19T05:18:26Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0dcf9bcb-19ce-43c8-87f8-8aa7145244be",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "body" : "No problem. Glad I can help.\n\nFYI, I do not think the dupe rules reach line 358.\nI think they break out of the loop around line 343 where len(fields) != len(args)+2.\n\nFollowing is log of kube-proxy --v=5 when adding dupe rules.\n\n```\nI0819 16:12:46.112720     534 iptables.go:193] running iptables -N [KUBE-PORTALS-CONTAINER -t nat]\nI0819 16:12:46.118800     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.125400     534 iptables.go:193] running iptables -I [PREROUTING -t nat -m comment --comment handle ClusterIPs; NOTE: this must be before the No\ndePort rules -j KUBE-PORTALS-CONTAINER]\nI0819 16:12:46.128778     534 iptables.go:193] running iptables -N [KUBE-PORTALS-HOST -t nat]\nI0819 16:12:46.134010     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.139270     534 iptables.go:193] running iptables -I [OUTPUT -t nat -m comment --comment handle ClusterIPs; NOTE: this must be before the NodePo\nrt rules -j KUBE-PORTALS-HOST]\nI0819 16:12:46.142075     534 iptables.go:193] running iptables -N [KUBE-NODEPORT-CONTAINER -t nat]\nI0819 16:12:46.147363     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.152393     534 iptables.go:193] running iptables -A [PREROUTING -t nat -m addrtype --dst-type LOCAL -m comment --comment handle service NodePorts; NOTE: this must be the last rule in the chain -j KUBE-NODEPORT-CONTAINER]\nI0819 16:12:46.159039     534 iptables.go:193] running iptables -N [KUBE-NODEPORT-HOST -t nat]\nI0819 16:12:46.164323     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.169335     534 iptables.go:193] running iptables -A [OUTPUT -t nat -m addrtype --dst-type LOCAL -m comment --comment handle service NodePorts; NOTE: this must be the last rule in the chain -j KUBE-NODEPORT-HOST]\nI0819 16:12:46.176321     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.181607     534 iptables.go:251] DBG: fields is not a superset of args: fields=[-A KUBE-PORTALS-CONTAINER -d 192.168.20.1/32 -p tcp -m comment --comment default/kubernetes: -m tcp --dport 443 -j REDIRECT --to-ports 33995]  args=[-m comment --comment kube-system/kube-ui: -p tcp -m tcp --dport 80 -d 192.168.20.135/32 -j REDIRECT --to-ports 39301]\nI0819 16:12:46.181698     534 iptables.go:251] DBG: fields is not a superset of args: fields=[-A KUBE-PORTALS-CONTAINER -d 192.168.20.160/32 -p tcp -m comment --comment default/my-nginx: -m tcp --dport 80 -j REDIRECT --to-ports 52592]  args=[-m comment --comment kube-system/kube-ui: -p tcp -m tcp --dport 80 -d 192.168.20.135/32 -j REDIRECT --to-ports 39301]\nI0819 16:12:46.184776     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.190756     534 iptables.go:251] DBG: fields is not a superset of args: fields=[-A KUBE-PORTALS-HOST -d 192.168.20.1/32 -p tcp -m comment --comment default/kubernetes: -m tcp --dport 443 -j DNAT --to-destination 10.101.61.147:33995]  args=[-m comment --comment kube-system/kube-ui: -p tcp -m tcp --dport 80 -d 192.168.20.135/32 -j DNAT --to-destination 10.101.61.147:39301]\nI0819 16:12:46.190885     534 iptables.go:251] DBG: fields is not a superset of args: fields=[-A KUBE-PORTALS-HOST -d 192.168.20.160/32 -p tcp -m comment --comment default/my-nginx: -m tcp --dport 80 -j DNAT --to-destination 10.101.61.147:52592]  args=[-m comment --comment kube-system/kube-ui: -p tcp -m tcp --dport 80 -d 192.168.20.135/32 -j DNAT --to-destination 10.101.61.147:39301]\nI0819 16:12:46.194931     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.203319     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.211753     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.217282     534 iptables.go:251] DBG: fields is not a superset of args: fields=[-A KUBE-PORTALS-CONTAINER -d 192.168.20.1/32 -p tcp -m comment --comment default/kubernetes: -m tcp --dport 443 -j REDIRECT --to-ports 33995]  args=[-m comment --comment default/my-nginx: -p tcp -m tcp --dport 80 -d 192.168.20.160/32 -j REDIRECT --to-ports 52592]\nI0819 16:12:46.220289     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.225824     534 iptables.go:251] DBG: fields is not a superset of args: fields=[-A KUBE-PORTALS-HOST -d 192.168.20.1/32 -p tcp -m comment --comment default/kubernetes: -m tcp --dport 443 -j DNAT --to-destination 10.101.61.147:33995]  args=[-m comment --comment default/my-nginx: -p tcp -m tcp --dport 80 -d 192.168.20.160/32 -j DNAT --to-destination 10.101.61.147:52592]\nI0819 16:12:46.228792     534 iptables.go:217] running iptables-save -t nat\nI0819 16:12:46.237128     534 iptables.go:217] running iptables-save -t nat\n```\n",
+        "createdAt" : "2015-08-19T07:17:07Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2eea247-1baa-44f0-9006-8aaa28ba296c",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "body" : "I've added following debug code right at the beginning of for loop in `checkRuleWithoutCheck()` (around line 341)\n\n``` go\n glog.V(5).Infof(\"DBG: fields=%v  args=%v  len(fields)=%d  len(args)+2=%d\", fields, args, len(fields), len(args)+2)\n```\n\ncheck out following log.\n\n```\nI0819 16:26:39.397647    7288 iptables.go:341] DBG: fields=[-A PREROUTING -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rule\ns\" -j KUBE-PORTALS-CONTAINER]  args=[-m comment --comment handle ClusterIPs; NOTE: this must be before the NodePort rules -j KUBE-PORTALS-CONTAINER]  len(fiel\nds)=17  len(args)+2=8\n```\n\nlen(fields) != len(args)+2  \nbecause `\"handle ClusterIPs; NOTE: this must be before the NodePort rules\"` counts as one string in args,\nwhereas it's 10 strings (each word counting as one) in fields.\n",
+        "createdAt" : "2015-08-19T07:31:34Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "97e41cf8-2d98-41c0-bd43-a0083500ecae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1dee5218-cbb8-44ff-91f7-f0ba2629bcac",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I see.  Yes.  That could never have worked properly - we must have only had\nsingle-word comments when it last worked, and nobody on CentOS6 has yelled\nat us.  I'll look at your PR with fresh eyes now.\n\nOn Wed, Aug 19, 2015 at 12:32 AM, Jihoon Chung notifications@github.com\nwrote:\n\n> In pkg/util/iptables/iptables.go\n> https://github.com/kubernetes/kubernetes/pull/12839#discussion_r37386572\n> :\n> \n> > @@ -328,10 +328,11 @@ func (runner *runner) checkRuleWithoutCheck(table Table, chain Chain, args ...st\n> > \n> > ```\n> > // Sadly, iptables has inconsistent quoting rules for comments.\n> > // Just unquote any arg that is wrapped in quotes.\n> > ```\n> > -   argsCopy := make([]string, len(args))\n> > -   copy(argsCopy, args)\n> > -   for i := range argsCopy {\n> > -       unquote(&argsCopy[i])\n> > -   var argsCopy []string\n> > -   for i := range args {\n> > -       tmpField := args[i]\n> > -       unquote(&tmpField)\n> > -       argsCopy = append(argsCopy, strings.Fields(tmpField)...)\n> \n> I've added following debug code right at the beginning of for loop in\n> checkRuleWithoutCheck() (around line 341)\n> \n>  glog.V(5).Infof(\"DBG: fields=%v  args=%v  len(fields)=%d  len(args)+2=%d\", fields, args, len(fields), len(args)+2)\n> \n> check out following log.\n> \n> I0819 16:26:39.397647    7288 iptables.go:341] DBG: fields=[-A PREROUTING -m comment --comment \"handle ClusterIPs; NOTE: this must be before the NodePort rule\n> s\" -j KUBE-PORTALS-CONTAINER]  args=[-m comment --comment handle ClusterIPs; NOTE: this must be before the NodePort rules -j KUBE-PORTALS-CONTAINER]  len(fiel\n> ds)=17  len(args)+2=8\n> \n> len(fields) != len(args+2)\n> \n> because \"handle ClusterIPs; NOTE: this must be before the NodePort rules\"\n> counts as one string in args,\n> whereas it's 10 strings (each word counting as one) in fields.\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/12839/files#r37386572.\n",
+        "createdAt" : "2015-08-19T18:45:05Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67184f1f-de6a-4afe-97c7-93a81529aa83",
+        "parentId" : "647c7d32-4dd9-448f-95a0-3186f18853d9",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "can you add a comment here explaining why we're doing this?\n",
+        "createdAt" : "2015-08-19T18:51:42Z",
+        "updatedAt" : "2015-08-20T05:24:55Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "837edf850d58baf613610c73d9afc94b731ed06c",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +335,339 @@\tfor i := range args {\n\t\ttmpField := strings.Trim(args[i], \"\\\"\")\n\t\targsCopy = append(argsCopy, strings.Fields(tmpField)...)\n\t}\n\targset := util.NewStringSet(argsCopy...)"
+  },
+  {
+    "id" : "71fd5853-be5c-48a6-b6a6-b1e31d6e7785",
+    "prId" : 12416,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4221ef0b-f1d7-4b49-8a58-740da10399b4",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Does the addition of these methods break any other call-sites that assume they are implementing iptables.Interface ?\n",
+        "createdAt" : "2015-08-07T22:09:15Z",
+        "updatedAt" : "2015-08-07T23:08:29Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d5a8f85-4eaf-4048-8f6a-6345579d13aa",
+        "parentId" : "4221ef0b-f1d7-4b49-8a58-740da10399b4",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "argument to createProxier:\n*fakeIptables does not implement iptables.Interface (missing Restore method)\n_output/local/go/src/k8s.io/kubernetes/pkg/proxy/proxier_test.go:508: cannot use fakeIptables literal (type *fakeIptables) as type iptables.Interface in argument to createProxier:\n*fakeIptables does not implement iptables.Interface (missing Restore method)\n_output/local/go/src/k8s.io/kubernetes/pkg/proxy/proxier_test.go:560: cannot use fakeIptables literal (type *fakeIptables) as type iptables.Interface in argument to createProxier:\n*fakeIptables does not implement iptables.Interface (missing Restore method)\n_output/local/go/src/k8s.io/kubernetes/pkg/proxy/proxier_test.go:560: too many errors\nFAIL    k8s.io/kubernetes/pkg/proxy [build failed]\n",
+        "createdAt" : "2015-08-07T22:09:55Z",
+        "updatedAt" : "2015-08-07T23:08:29Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af9d9c32-8e55-4358-8b0f-c7d888e2e061",
+        "parentId" : "4221ef0b-f1d7-4b49-8a58-740da10399b4",
+        "authorId" : "46e1ba13-482b-4bcd-8fb1-be821bac3b04",
+        "body" : "Ah yes, one callsite that mocks it in the userspace proxier tests, will\npatch that in shortly. Forgot that, quick-release built fine, tests break\nfrom this.\n\nOn Fri, Aug 7, 2015 at 6:09 PM, Tim Hockin notifications@github.com wrote:\n\n> In pkg/util/iptables/iptables.go\n> https://github.com/GoogleCloudPlatform/kubernetes/pull/12416#discussion_r36565795\n> :\n> \n> > @@ -49,6 +51,18 @@ type Interface interface {\n> >     DeleteRule(table Table, chain Chain, args ...string) error\n> >     // IsIpv6 returns true if this is managing ipv6 tables\n> >     IsIpv6() bool\n> > -   // Save calls `iptables-save` for table.\n> > -   Save(table Table) ([]byte, error)\n> \n> Does the addition of these methods break any other call-sites that assume\n> they are implementing iptables.Interface ?\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/GoogleCloudPlatform/kubernetes/pull/12416/files#r36565795\n> .\n",
+        "createdAt" : "2015-08-07T22:11:07Z",
+        "updatedAt" : "2015-08-07T23:08:29Z",
+        "lastEditedBy" : "46e1ba13-482b-4bcd-8fb1-be821bac3b04",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20059001-632e-44cb-9c57-2c51f7b48b37",
+        "parentId" : "4221ef0b-f1d7-4b49-8a58-740da10399b4",
+        "authorId" : "46e1ba13-482b-4bcd-8fb1-be821bac3b04",
+        "body" : "the code for this exists in the iptables proxy branch, just need to pull over here.\n",
+        "createdAt" : "2015-08-07T22:48:22Z",
+        "updatedAt" : "2015-08-07T23:08:29Z",
+        "lastEditedBy" : "46e1ba13-482b-4bcd-8fb1-be821bac3b04",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5867fca8bffcf8f0a4f34f7d30b4299aa8baab57",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +54,58 @@\t// TODO: (BenTheElder) Unit-Test Save/SaveAll, Restore/RestoreAll\n\t// Save calls `iptables-save` for table.\n\tSave(table Table) ([]byte, error)\n\t// SaveAll calls `iptables-save`.\n\tSaveAll() ([]byte, error)"
+  },
+  {
+    "id" : "82866f8e-a60e-48ba-aa37-2eda18fec69a",
+    "prId" : 12416,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "574989fb-4077-4383-8198-76963223794b",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "These really should have unit tests.  I will accept a TODO as long as you promise to do them :)\n\nThe tests won't be hard, but they will ensure that what happens is what we expect.\n",
+        "createdAt" : "2015-08-07T22:10:56Z",
+        "updatedAt" : "2015-08-07T23:08:29Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5867fca8bffcf8f0a4f34f7d30b4299aa8baab57",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +56,60 @@\tSave(table Table) ([]byte, error)\n\t// SaveAll calls `iptables-save`.\n\tSaveAll() ([]byte, error)\n\t// Restore runs `iptables-restore` passing data through a temporary file.\n\t// table is the Table to restore"
+  },
+  {
+    "id" : "48327776-2179-4b85-b417-69fb058b31ed",
+    "prId" : 9679,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b7ae5f8f-8d49-4d51-9d29-d886277f20fa",
+        "parentId" : null,
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "Can you add a properly formatted godoc comment to this now that it is public?\n",
+        "createdAt" : "2015-06-12T21:09:16Z",
+        "updatedAt" : "2015-06-12T21:13:59Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ea28dad-d080-403e-9a39-ef536e5df7e3",
+        "parentId" : "b7ae5f8f-8d49-4d51-9d29-d886277f20fa",
+        "authorId" : "46e1ba13-482b-4bcd-8fb1-be821bac3b04",
+        "body" : "Done, pushing.\n",
+        "createdAt" : "2015-06-12T21:13:30Z",
+        "updatedAt" : "2015-06-12T21:13:59Z",
+        "lastEditedBy" : "46e1ba13-482b-4bcd-8fb1-be821bac3b04",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c5baf1f284da1e5fa00ab9ca618e11ea7f829bbb",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +346,350 @@// GetIptablesVersion returns the major minor and patch version of iptables\n// which will all be zero in case of error, and any error encountered.\nfunc GetIptablesVersion(exec utilexec.Interface) (int, int, int, error) {\n\ts, err := getIptablesVersionString(exec)\n\tif err != nil {"
+  },
+  {
+    "id" : "ea4b088f-2aa5-4028-bcfd-07748a266662",
+    "prId" : 2147,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "254ef1df-ffbd-4693-9d7b-5e533e480a72",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "please use int or byte rather than bool - bool will just encourage implicit truth testing.\n",
+        "createdAt" : "2014-11-04T21:54:11Z",
+        "updatedAt" : "2014-11-07T14:34:24Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b19170f33576c7d0dc64f9ff70faa44718bf2ba8",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +39,43 @@}\n\ntype Protocol bool\n\nconst ("
+  },
+  {
+    "id" : "245c9598-2eaa-4fde-ae1a-28ebde9a7429",
+    "prId" : 1597,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "abb6e9d7-4d10-4686-8ea4-ecb19d470b91",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Is the caller responsible for handling the inherent raciness of iptables, or should this interface provide that?\n",
+        "createdAt" : "2014-10-06T22:21:11Z",
+        "updatedAt" : "2014-10-07T18:37:24Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff036370-7712-4d7b-b75d-5f370fe6e8ab",
+        "parentId" : "abb6e9d7-4d10-4686-8ea4-ecb19d470b91",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Specifically that multiple programs can be iptabling at the same time on the machine?  I don't see how this can solve that problem.\n",
+        "createdAt" : "2014-10-06T23:57:58Z",
+        "updatedAt" : "2014-10-07T18:37:24Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "589e81c0-1894-490a-b340-89aae9081de6",
+        "parentId" : "abb6e9d7-4d10-4686-8ea4-ecb19d470b91",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Multiple goroutines is at least under our control.  If it's not worth handling in proc races I'd add a comment to the package doc to that effect.\n\n> On Oct 6, 2014, at 7:58 PM, Tim Hockin notifications@github.com wrote:\n> \n> In pkg/util/iptables/iptables.go:\n> \n> > +\n> > +// FlushChain is part of Interface.\n> > +func (runner *runner) FlushChain(table Table, chain Chain) error {\n> > -   fullArgs := makeFullArgs(table, chain)\n> >   +\n> > -   out, err := runner.run(opFlushChain, fullArgs)\n> > -   if err != nil {\n> > -       glog.Errorf(\"Error flushing chain %q: %s: %s\", chain, err, out)\n> > -       return err\n> > -   }\n> > -   return nil\n> >   +}\n> >   +\n> >   +// EnsureRule is part of Interface.\n> >   +func (runner *runner) EnsureRule(table Table, chain Chain, args ...string) (bool, error) {\n> > -   fullArgs := makeFullArgs(table, chain, args...)\n> >   Specifically that multiple programs can be iptabling at the same time on the machine? I don't see how this can solve that problem.\n> \n> —\n> Reply to this email directly or view it on GitHub.\n",
+        "createdAt" : "2014-10-07T00:21:02Z",
+        "updatedAt" : "2014-10-07T18:37:24Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a196f0c7-7dfa-4cf3-b59f-67ee778b2173",
+        "parentId" : "abb6e9d7-4d10-4686-8ea4-ecb19d470b91",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Ahh, easy fix.  Done.\n",
+        "createdAt" : "2014-10-07T00:30:12Z",
+        "updatedAt" : "2014-10-07T18:37:24Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4bbe6a10ffe7943034ad88cadace81178698db07",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +96,100 @@// EnsureRule is part of Interface.\nfunc (runner *runner) EnsureRule(table Table, chain Chain, args ...string) (bool, error) {\n\tfullArgs := makeFullArgs(table, chain, args...)\n\n\trunner.mu.Lock()"
+  },
+  {
+    "id" : "812565ba-dc27-4313-8627-22fbd1c6801a",
+    "prId" : 1402,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4a09da12-8fe3-4ea2-9098-0abcd6df7a60",
+        "parentId" : null,
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "Given that we're logging that we're running iptables, wouldn't it be more useful to also info log the exist status / message?\n",
+        "createdAt" : "2014-10-06T20:35:38Z",
+        "updatedAt" : "2014-10-16T15:37:00Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6f22fcfc-59c3-4ef7-a0dd-651ef631c313",
+        "parentId" : "4a09da12-8fe3-4ea2-9098-0abcd6df7a60",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "We run iptables in a loop.  Logging an error message, when it isn't an error, will cause log bloat and more importantly consternation from anyone who reads the log and wonders why it is getting an error.  I know because it bothered me enough to fix this.\n\nSadly, that is the iptables interface :(\n",
+        "createdAt" : "2014-10-06T20:53:37Z",
+        "updatedAt" : "2014-10-16T15:37:00Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c4bd552730fb2a4ca6d5c85230aed4f37734e7e",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +142,146 @@\tglog.V(1).Infof(\"running iptables %s %v\", string(op), args)\n\treturn runner.exec.Command(iptablesCmd, fullArgs...).CombinedOutput()\n\t// Don't log err here - callers might not think it is an error.\n}\n"
+  }
+]

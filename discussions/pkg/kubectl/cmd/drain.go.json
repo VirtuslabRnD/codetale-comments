@@ -1,0 +1,959 @@
+[
+  {
+    "id" : "ca8b7f74-d6ca-440e-8e24-339eee7691ad",
+    "prId" : 64378,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64378#pullrequestreview-123694864",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3bfed825-a77c-4453-8003-aa9f38e88aca",
+        "parentId" : null,
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "Does it make any difference with the previous implementation?",
+        "createdAt" : "2018-05-28T09:35:19Z",
+        "updatedAt" : "2018-05-28T09:35:19Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5cfdcfe5-f679-4834-ba7c-d6c20d0d2687",
+        "parentId" : "3bfed825-a77c-4453-8003-aa9f38e88aca",
+        "authorId" : "c0943bbd-757a-4d4f-8b7f-d7c680fb80f7",
+        "body" : "Yes, in the previous implementation it's basically a timeout per pod.\r\n\r\nRun the following code locally and notice it never ends because the timer gets reset on each for loop iteration: https://play.golang.org/p/uq1I8nLx5Af",
+        "createdAt" : "2018-05-28T10:02:29Z",
+        "updatedAt" : "2018-05-28T10:02:29Z",
+        "lastEditedBy" : "c0943bbd-757a-4d4f-8b7f-d7c680fb80f7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bace8a68-b6cd-424d-8bd1-1a733661e6c5",
+        "parentId" : "3bfed825-a77c-4453-8003-aa9f38e88aca",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "> The length of time to wait before giving up, zero means infinite\r\n\r\nUmm, yes. The timeout here refreshes every time when a pod is successfully evicted which is inconsistent with the docs.",
+        "createdAt" : "2018-05-28T10:33:30Z",
+        "updatedAt" : "2018-05-28T10:33:31Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1e0591364563fe062ede8639531537c293331fc",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +621,625 @@\t\t\t\treturn nil\n\t\t\t}\n\t\tcase <-globalTimeoutCh:\n\t\t\treturn fmt.Errorf(\"Drain did not complete within %v\", globalTimeout)\n\t\t}"
+  },
+  {
+    "id" : "640f59c5-622d-4827-983a-7cd33f4dd741",
+    "prId" : 62820,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/62820#pullrequestreview-115116865",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0eee3268-bc23-4914-b4b9-a4b2c2d1694a",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "Can we construct appropriate printer once based on different set of input parameters and print once as well, instead of having 3 calls? Btw. each is differently reporting error, which is wrong. ",
+        "createdAt" : "2018-04-24T14:09:47Z",
+        "updatedAt" : "2018-04-25T20:35:51Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "764dedd4-4c43-4f6a-8fd9-f6bb52107bf8",
+        "parentId" : "0eee3268-bc23-4914-b4b9-a4b2c2d1694a",
+        "authorId" : "0385dfd1-e8a7-41a8-8213-eabe697d14cd",
+        "body" : "I am not sure I understand, do you mean passing the `operation` message to the printer as part of its `PrintObj` method?",
+        "createdAt" : "2018-04-24T17:03:14Z",
+        "updatedAt" : "2018-04-25T20:35:51Z",
+        "lastEditedBy" : "0385dfd1-e8a7-41a8-8213-eabe697d14cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c26d4a95-befb-43e7-ab5c-4a7ddc365fdf",
+        "parentId" : "0eee3268-bc23-4914-b4b9-a4b2c2d1694a",
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "I mean move this entire block down:\r\n```go\r\nprinter, err := o.ToPrinter(<here goes the only thing that changes>)\r\nif err != nil {\r\n    fmt.Fprintf(o.ErrOut, \"%v\", err)\r\n    continue\r\n}\r\nprinter.PrintObj(nodeInfo.AsVersioned(), o.Out)\r\n```\r\nSo that we invoke this only once and the only parameter is what you pass to `o.ToPrinter` method. ",
+        "createdAt" : "2018-04-25T10:25:51Z",
+        "updatedAt" : "2018-04-25T20:35:51Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ac6ca38dd72c0a503310818606baebcbe1558292",
+    "line" : 244,
+    "diffHunk" : "@@ -1,1 +736,740 @@\t\t\tunsched := node.Spec.Unschedulable\n\t\t\tif unsched == desired {\n\t\t\t\tprinter, err := o.ToPrinter(already(desired))\n\t\t\t\tif err != nil {\n\t\t\t\t\tfmt.Printf(\"error: %v\", err)"
+  },
+  {
+    "id" : "f817fff2-fca8-425c-8565-3297272990d7",
+    "prId" : 56713,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/56713#pullrequestreview-80636750",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c656ff39-58b8-4c90-a9af-a8bdab648c81",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "Wow, terse (read unhelpful) names make review of a pull like this a real pain.  What are `w`, `f`, `ws`, and `fs`?\r\n\r\nIgnore @smarterclayton and make variable names that tell little stories in them. :)  Or just give me a translation.",
+        "createdAt" : "2017-12-01T21:51:48Z",
+        "updatedAt" : "2018-01-08T16:51:31Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed63bf21-021d-4a32-bc4e-537e269952dc",
+        "parentId" : "c656ff39-58b8-4c90-a9af-a8bdab648c81",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "go standard is that loop vars and core things are single letter, but normal use structs and other types should be one or two words.  This is too short.",
+        "createdAt" : "2017-12-01T22:15:02Z",
+        "updatedAt" : "2018-01-08T16:51:31Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f7269b1-d2b3-40f7-88be-8f209edc025d",
+        "parentId" : "c656ff39-58b8-4c90-a9af-a8bdab648c81",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Sorry, loop vars and local object references (`func (a *Assembler) ...`) are one letter",
+        "createdAt" : "2017-12-01T22:15:26Z",
+        "updatedAt" : "2018-01-08T16:51:31Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d4e17cb7b4b3a655d11d9a1739189548b47628a1",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +475,479 @@\t\t\t}\n\t\t\tif f != nil {\n\t\t\t\tfs[f.string] = append(fs[f.string], pod.Name)\n\t\t\t}\n"
+  },
+  {
+    "id" : "acd783e9-5eb1-4601-8a49-995b50f2a36f",
+    "prId" : 56713,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/56713#pullrequestreview-81696635",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a21e5651-0e82-4e08-a5d8-628aab2524a0",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "Ok, if I'm understanding this filter chain, the idea is that you'll fail the command on a pod that you're trying to evict that can't safely be evicted.  Because daemonsets live and die with nodes, you don't really care if the pod doesn't fail over.\r\n\r\nRather trying to bake knowledge of various workload controllers into this command (which won't as third parties start creating these concepts), why not create an annotation or label that indicates that it is ok to kill a particular pod?  DaemonSets and any other workload controller in that category could describe its pods that way.  Since it is strictly downgrading reliability, there's no need to secure such an annotation or label.",
+        "createdAt" : "2017-12-01T21:55:33Z",
+        "updatedAt" : "2018-01-08T16:51:31Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25d317c5-c71e-4337-b4e8-7cb93e31827a",
+        "parentId" : "a21e5651-0e82-4e08-a5d8-628aab2524a0",
+        "authorId" : "0385dfd1-e8a7-41a8-8213-eabe697d14cd",
+        "body" : "Proposal for this: https://docs.google.com/document/d/1t7nuQVouwEnYgNaZBbfk_HJXqAGEPQ6EC0d7Ry1ml3Q/edit#heading=h.ke1hbaqugq1u",
+        "createdAt" : "2017-12-06T22:52:02Z",
+        "updatedAt" : "2018-01-08T16:51:31Z",
+        "lastEditedBy" : "0385dfd1-e8a7-41a8-8213-eabe697d14cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d4e17cb7b4b3a655d11d9a1739189548b47628a1",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +467,471 @@\tfor _, pod := range podList.Items {\n\t\tpodOk := true\n\t\tfor _, filt := range []podFilter{o.daemonsetFilter, mirrorPodFilter, o.localStorageFilter, o.unreplicatedFilter} {\n\t\t\tfilterOk, w, f := filt(pod)\n"
+  },
+  {
+    "id" : "191ceb06-d639-40ba-b6c0-6f9b669eacb6",
+    "prId" : 56713,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/56713#pullrequestreview-80632378",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e6c33364-6962-48ae-a6f6-33f67802373c",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "@smarterclayton its a good bet that something in this chain is causing the downstream bug too.",
+        "createdAt" : "2017-12-01T21:55:56Z",
+        "updatedAt" : "2018-01-08T16:51:31Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d4e17cb7b4b3a655d11d9a1739189548b47628a1",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +467,471 @@\tfor _, pod := range podList.Items {\n\t\tpodOk := true\n\t\tfor _, filt := range []podFilter{o.daemonsetFilter, mirrorPodFilter, o.localStorageFilter, o.unreplicatedFilter} {\n\t\t\tfilterOk, w, f := filt(pod)\n"
+  },
+  {
+    "id" : "3e0304a2-4d5c-4e45-8116-a9027eb44c54",
+    "prId" : 48529,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/48529#pullrequestreview-48228361",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bd524a9f-b7e6-4b37-8d73-1573602da553",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "do we already have that dependency? (I don't see a corresponding bazel BUILD file change)",
+        "createdAt" : "2017-07-06T03:29:41Z",
+        "updatedAt" : "2017-07-06T03:29:44Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb68882b-f5fe-4ba8-8f44-0d79d7b24d10",
+        "parentId" : "bd524a9f-b7e6-4b37-8d73-1573602da553",
+        "authorId" : "cdb05f24-d700-4d96-a683-3e4de7effbf5",
+        "body" : "Yes we already have that. And depending on `k8s.io/api` is considered `good` dependency. ",
+        "createdAt" : "2017-07-06T03:36:39Z",
+        "updatedAt" : "2017-07-06T03:36:39Z",
+        "lastEditedBy" : "cdb05f24-d700-4d96-a683-3e4de7effbf5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b336691ca3436600dc05930a99893e827e499010",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +29,33 @@\t\"github.com/spf13/cobra\"\n\n\tcorev1 \"k8s.io/api/core/v1\"\n\tapierrors \"k8s.io/apimachinery/pkg/api/errors\"\n\t\"k8s.io/apimachinery/pkg/api/meta\""
+  },
+  {
+    "id" : "b5a1ac61-f280-439a-b34e-5052e8cc529f",
+    "prId" : 37604,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/37604#pullrequestreview-10485077",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2b464f8d-47ca-46b2-9231-cbce5f47d7cb",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "is there some way to return the pod name in the error?",
+        "createdAt" : "2016-11-29T09:31:40Z",
+        "updatedAt" : "2016-11-29T22:25:11Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b358b2df022d078bc3e8a17993b9f97a2765fd6b",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +508,512 @@\tfor {\n\t\tselect {\n\t\tcase err := <-errCh:\n\t\t\treturn err\n\t\tcase <-doneCh:"
+  },
+  {
+    "id" : "0ebbed02-4301-4fd7-a0db-e4b270f34531",
+    "prId" : 36211,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36211#pullrequestreview-7459410",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "104c18d9-f24b-4f8f-99c2-8f0dd7b5335d",
+        "parentId" : null,
+        "authorId" : "cdb05f24-d700-4d96-a683-3e4de7effbf5",
+        "body" : "If we worry about that there may be a race. Why don't we use PATCH like `edit` and `apply`\n",
+        "createdAt" : "2016-11-07T17:08:03Z",
+        "updatedAt" : "2016-11-07T17:08:03Z",
+        "lastEditedBy" : "cdb05f24-d700-4d96-a683-3e4de7effbf5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "55f031e16767906be18acc1ff8e56676f4fbb3b1",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +466,470 @@\t\t\t\t\tbreak\n\t\t\t\t}\n\t\t\t\t// It's a race, no need to sleep\n\t\t\t}\n\t\t\tif err != nil {"
+  },
+  {
+    "id" : "b840658d-276a-46ee-a45e-dde11c6f9395",
+    "prId" : 35483,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/35483#pullrequestreview-7082194",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "32344e92-2350-48c3-a654-bc305ea653bb",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "What if a server doesn't support yet eviction?\n",
+        "createdAt" : "2016-11-03T12:59:46Z",
+        "updatedAt" : "2016-11-08T00:13:43Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7c285855-be90-4d10-a1d5-1c4595059917",
+        "parentId" : "32344e92-2350-48c3-a654-bc305ea653bb",
+        "authorId" : "cdb05f24-d700-4d96-a683-3e4de7effbf5",
+        "body" : "How about this: Let the `kubectl` talk to the API server to find out the server version. If the server is too old to support eviction, we use Delete instead.\n",
+        "createdAt" : "2016-11-03T15:24:55Z",
+        "updatedAt" : "2016-11-08T00:13:43Z",
+        "lastEditedBy" : "cdb05f24-d700-4d96-a683-3e4de7effbf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6c190f20-d1dc-46b0-98d4-d008979aeb64",
+        "parentId" : "32344e92-2350-48c3-a654-bc305ea653bb",
+        "authorId" : "e535b047-00fc-4269-992a-b8d65bd7c57b",
+        "body" : "I think that sounds reasonable. \n",
+        "createdAt" : "2016-11-03T19:11:40Z",
+        "updatedAt" : "2016-11-08T00:13:43Z",
+        "lastEditedBy" : "e535b047-00fc-4269-992a-b8d65bd7c57b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b73fae6c5594c26fb28fca397ef82c663f1e4f83",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +450,454 @@\t}\n\t// Remember to change change the URL manipulation func when Evction's version change\n\treturn o.client.Policy().Evictions(eviction.Namespace).Evict(eviction)\n}\n"
+  },
+  {
+    "id" : "90a00f6b-ff4e-4196-946b-0abb0da6cf28",
+    "prId" : 35483,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/35483#pullrequestreview-7256325",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d54ef4b4-5b25-4322-99f8-d5ddfbe5c972",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "add the TODO in `IsTooManyRequests()` also?\n",
+        "createdAt" : "2016-11-04T21:52:55Z",
+        "updatedAt" : "2016-11-08T00:13:43Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b73fae6c5594c26fb28fca397ef82c663f1e4f83",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +232,236 @@\n\terr := o.deleteOrEvictPodsSimple()\n\t// TODO: update IsTooManyRequests() when the TooManyRequests(429) error returned from the API server has a non-empty Reason field\n\tfor i := 1; i <= maxPatchRetry && apierrors.IsTooManyRequests(err); i++ {\n\t\tif i > triesBeforeBackOff {"
+  },
+  {
+    "id" : "2c80341a-28eb-4497-a0a8-f7312064780d",
+    "prId" : 26667,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0af7df77-2a49-4209-84c2-423c49a3cb82",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "should this be true?\n",
+        "createdAt" : "2016-06-03T19:27:26Z",
+        "updatedAt" : "2016-06-08T21:59:11Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7cd6517f-0bc1-44dc-93f8-e4640c441a46",
+        "parentId" : "0af7df77-2a49-4209-84c2-423c49a3cb82",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "No.  No matter what, we never delete the daemonset pods because the DS controller doesn't respect unschedulable.  The flag only toggles whether we consider their presence an error or not.\n\nI will add a comment that clarifies this.\n",
+        "createdAt" : "2016-06-03T20:24:44Z",
+        "updatedAt" : "2016-06-08T21:59:11Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d09af4a1d6d27b766c37c747ba95bf6a43fdbd6a",
+    "line" : 143,
+    "diffHunk" : "@@ -1,1 +279,283 @@\t\treturn false, nil, &fatal{kDaemonsetFatal}\n\t}\n\treturn false, &warning{kDaemonsetWarning}, nil\n}\n"
+  },
+  {
+    "id" : "0c826615-511d-4a9f-a147-c117c62c5cf4",
+    "prId" : 26667,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e61108d3-5fdc-4504-9fd1-a97d1d26957b",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "I think the second sentence here is just describing one part of the error behavior (only covers unmanaged pods, not also mirror pods, local storage, etc.). I would just change this to something like \"If there are any pods we're not going to delete, we return that list in an error.\"\n",
+        "createdAt" : "2016-06-03T19:30:57Z",
+        "updatedAt" : "2016-06-08T21:59:11Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66e89172-8dad-48cc-b7df-5ab0b124fea6",
+        "parentId" : "e61108d3-5fdc-4504-9fd1-a97d1d26957b",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Actually, AFAICT the function doesn't actually return the pods you're not going to delete. \n",
+        "createdAt" : "2016-06-03T19:38:54Z",
+        "updatedAt" : "2016-06-08T21:59:11Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1813de45-e052-4f1b-bc0f-7f6d5cb60a48",
+        "parentId" : "e61108d3-5fdc-4504-9fd1-a97d1d26957b",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "Ha!  I think I got that part right.  Haven't checked the code, but I'll just add a unit test.\n",
+        "createdAt" : "2016-06-03T20:22:19Z",
+        "updatedAt" : "2016-06-08T21:59:11Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7bacc83-7823-404c-8d5e-1b91897c7a22",
+        "parentId" : "e61108d3-5fdc-4504-9fd1-a97d1d26957b",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "Strictly speaking, it's not the pods we're \"not going to delete\", but any pods that caused a fatal error.  Pods we intentionally don't delete don't end up here.  Anyway, updated the comment.\n",
+        "createdAt" : "2016-06-03T21:53:54Z",
+        "updatedAt" : "2016-06-08T21:59:11Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d09af4a1d6d27b766c37c747ba95bf6a43fdbd6a",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +321,325 @@}\n\n// getPodsForDeletion returns all the pods we're going to delete.  If there are\n// any pods preventing us from deleting, we return that list in an error.\nfunc (o *DrainOptions) getPodsForDeletion() (pods []api.Pod, err error) {"
+  },
+  {
+    "id" : "bcd425b7-07dd-4a30-8a13-2d4673afce87",
+    "prId" : 26667,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5eec97a4-fb2a-4a32-a8a4-01b1c50a0235",
+        "parentId" : null,
+        "authorId" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "body" : "What about `hostPath`?\n",
+        "createdAt" : "2016-06-10T10:14:37Z",
+        "updatedAt" : "2016-06-10T10:14:37Z",
+        "lastEditedBy" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "160bdf24-c9ff-47ee-ae0f-d8d0c05a2109",
+        "parentId" : "5eec97a4-fb2a-4a32-a8a4-01b1c50a0235",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Matt and I discussed this and eventually decided to leave it out. We don't know what people are going to do after the drain. They might be doing something that doesn't delete all the data (for example, upgrade OS and reboot). Arguably we should have yet another flag to control whether to consider hostPath, but for simplicity we decided to just block on the case we know for sure will be deleted, namely emptyDir. \n\nFor cluster scale-down, the node goes away \"forever\" so it makes sense to block on hostPath. But for `kubectl drain` I think it's not necessary. \n",
+        "createdAt" : "2016-06-10T19:14:25Z",
+        "updatedAt" : "2016-06-10T19:14:25Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d09af4a1d6d27b766c37c747ba95bf6a43fdbd6a",
+    "line" : 159,
+    "diffHunk" : "@@ -1,1 +291,295 @@func hasLocalStorage(pod api.Pod) bool {\n\tfor _, volume := range pod.Spec.Volumes {\n\t\tif volume.EmptyDir != nil {\n\t\t\treturn true\n\t\t}"
+  },
+  {
+    "id" : "db5c70bd-d0aa-4817-b810-29305c34ac4a",
+    "prId" : 24923,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "80577f7b-b22b-41db-b461-2b8d78913cc2",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "`return pods, unreplicatedPodNames, daemonSetPodNames, err` \n",
+        "createdAt" : "2016-05-03T23:26:28Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a559ad3a-250f-4c4a-8d53-0b24c942c859",
+        "parentId" : "80577f7b-b22b-41db-b461-2b8d78913cc2",
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "actually, we can change `err` to `finalError` and just `return`\n",
+        "createdAt" : "2016-05-03T23:31:42Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "041a74d0-95e2-4eb3-88d0-aa9c1d968fda",
+        "parentId" : "80577f7b-b22b-41db-b461-2b8d78913cc2",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "However, for clarity I would be better to return empty arrays expliciteley.\n",
+        "createdAt" : "2016-05-04T08:32:09Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "60f13391385378c8d76ddf3b2185df9f8b08968d",
+    "line" : 65,
+    "diffHunk" : "@@ -1,1 +243,247 @@\tpodList, err := client.Pods(api.NamespaceAll).List(api.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{\"spec.nodeName\": nodename})})\n\tif err != nil {\n\t\treturn []api.Pod{}, []string{}, []string{}, err\n\t}\n"
+  },
+  {
+    "id" : "ad37b05b-4c5d-49ef-9162-67e04090b451",
+    "prId" : 24923,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bf72dbc1-f252-484d-a9f9-71253a7d1730",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "aren't these named return args already?\n",
+        "createdAt" : "2016-05-03T23:26:55Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "089f3c6f-36a5-4a5b-aaa1-02ecc9dfbd49",
+        "parentId" : "bf72dbc1-f252-484d-a9f9-71253a7d1730",
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "never mind\n",
+        "createdAt" : "2016-05-03T23:27:25Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "60f13391385378c8d76ddf3b2185df9f8b08968d",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +240,244 @@\tpods = []api.Pod{}\n\tunreplicatedPodNames = []string{}\n\tdaemonSetPodNames = []string{}\n\tpodList, err := client.Pods(api.NamespaceAll).List(api.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{\"spec.nodeName\": nodename})})\n\tif err != nil {"
+  },
+  {
+    "id" : "86a8c31d-b324-4f21-86b7-4d2f53e21e91",
+    "prId" : 24923,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "91ac9588-ae60-4d51-a993-5abdea333d95",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "ditto, just `return`\n",
+        "createdAt" : "2016-05-03T23:31:52Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4af3146-3a4b-439d-9b92-be4fe0581990",
+        "parentId" : "91ac9588-ae60-4d51-a993-5abdea333d95",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "I don't want to return non-empty arrays in case of an error.\n",
+        "createdAt" : "2016-05-04T08:18:53Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "60f13391385378c8d76ddf3b2185df9f8b08968d",
+    "line" : 79,
+    "diffHunk" : "@@ -1,1 +260,264 @@\t\t\tvar sr api.SerializedReference\n\t\t\tif err := runtime.DecodeInto(decoder, []byte(creatorRef), &sr); err != nil {\n\t\t\t\treturn []api.Pod{}, []string{}, []string{}, err\n\t\t\t}\n\t\t\tif sr.Reference.Kind == \"ReplicationController\" {"
+  },
+  {
+    "id" : "b4df171f-74e6-4ee6-91a6-c9726e59fc4c",
+    "prId" : 24923,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f1bd4110-3a58-432b-81d2-075fc9e2cb18",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "ditto; `return`\n",
+        "createdAt" : "2016-05-03T23:36:16Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3af33af7-c38b-4460-814e-a56c4cf7d354",
+        "parentId" : "f1bd4110-3a58-432b-81d2-075fc9e2cb18",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "I don't want to return non-empty arrays in case of an error.\n",
+        "createdAt" : "2016-05-04T08:19:04Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "60f13391385378c8d76ddf3b2185df9f8b08968d",
+    "line" : 147,
+    "diffHunk" : "@@ -1,1 +316,320 @@\t\t}\n\t}\n\treturn pods, unreplicatedPodNames, daemonSetPodNames, nil\n}\n"
+  },
+  {
+    "id" : "c073072c-d2e6-459a-bcc3-3ea683963108",
+    "prId" : 24923,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4c65d393-cdc5-4215-9525-aed927fbc6bf",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "`return pods, err`\n",
+        "createdAt" : "2016-05-03T23:36:51Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "60f13391385378c8d76ddf3b2185df9f8b08968d",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +208,212 @@\t)\n\tif err != nil {\n\t\treturn []api.Pod{}, err\n\t}\n"
+  },
+  {
+    "id" : "4a71f536-e01c-40bb-b0fc-6fce2506274a",
+    "prId" : 24923,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ee57b939-c2b2-4a4a-9cd0-3026db29b93a",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "Can we combine these two?\n",
+        "createdAt" : "2016-05-03T23:39:04Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01acadba-5283-49fd-9b98-b3238d169dce",
+        "parentId" : "ee57b939-c2b2-4a4a-9cd0-3026db29b93a",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "This code was already there.\n",
+        "createdAt" : "2016-05-04T08:19:53Z",
+        "updatedAt" : "2016-05-04T08:43:45Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "60f13391385378c8d76ddf3b2185df9f8b08968d",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +227,231 @@\t}\n\tif len(daemonSetPodNames) > 0 {\n\t\tfmt.Fprintf(o.out, \"WARNING: Skipping %s\\n\", unmanagedMsg([]string{}, daemonSetPodNames, false))\n\t}\n"
+  },
+  {
+    "id" : "f556bcad-68a9-4563-b6d1-b81898ae3376",
+    "prId" : 20232,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3c7eef97-60a6-4571-aea3-5e585a676546",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "This should not say DaemonSet, right?\n",
+        "createdAt" : "2016-02-02T21:38:20Z",
+        "updatedAt" : "2016-02-02T21:38:20Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f27b3f99-6d23-4259-ac08-07192120bc67",
+        "parentId" : "3c7eef97-60a6-4571-aea3-5e585a676546",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "Wrong.  These are pods with no created-by ref, so they aren't managed by RC, Job, or DS.\n",
+        "createdAt" : "2016-02-02T22:11:22Z",
+        "updatedAt" : "2016-02-02T22:11:22Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4f19085b-f6da-41f1-924a-30ee9c13ea6d",
+        "parentId" : "3c7eef97-60a6-4571-aea3-5e585a676546",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Oh yeah, the thing I missed was that you only append to unreplicatedPodNames in a case branch that comes after daemonset_pods, thus daemonset is never in unreplicatedPodNames.\n",
+        "createdAt" : "2016-02-02T23:11:19Z",
+        "updatedAt" : "2016-02-02T23:11:19Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2d5375bc0497d10252d9ef240dc80416597eea7",
+    "line" : 122,
+    "diffHunk" : "@@ -1,1 +293,297 @@\tmsgs := []string{}\n\tif len(unreplicatedNames) > 0 {\n\t\tmsg := fmt.Sprintf(\"pods not managed by ReplicationController, Job, or DaemonSet: %s\", strings.Join(unreplicatedNames, \",\"))\n\t\tif include_guidance {\n\t\t\tmsg += \" (use --force to override)\""
+  },
+  {
+    "id" : "c5553b50-c74d-410c-9e5b-6f4d376782b6",
+    "prId" : 16698,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e7799cff-6ecc-4373-a57c-998c56f651fc",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Add a `cmdutil.PrintSuccess(mapper, shortOutput, out, info.Mapping.Resource, info.Name, \"drained\")` in case everything got deleted w/o error.\n",
+        "createdAt" : "2015-11-03T10:49:19Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb14e06a-96b6-4721-b640-6cf8cb5231a3",
+        "parentId" : "e7799cff-6ecc-4373-a57c-998c56f651fc",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "Done.  I should also go back through and do this where I successfully \"marked schedulable\" and deleted each pod.\n",
+        "createdAt" : "2015-11-03T18:18:00Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c6e9ad066eff9378761da5804797a9eb5d4c6790",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +173,177 @@\tif err := o.RunCordonOrUncordon(true); err != nil {\n\t\treturn err\n\t}\n\n\tpods, err := o.getPodsForDeletion()"
+  },
+  {
+    "id" : "965d6cb7-1c1b-409c-802c-99c68af40085",
+    "prId" : 16698,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "116e03da-bfa5-400e-9d28-3c47183debf0",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "It'd be great to have more details on \"what does drain nodes mean and what happens after I drain my nodes.\"\n",
+        "createdAt" : "2015-11-04T00:45:43Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c6e9ad066eff9378761da5804797a9eb5d4c6790",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +102,106 @@managed by a ReplicationController or DaemonSet, then drain will not delete any\npods unless you use --force.\n\nWhen you are ready to put the node back into service, use kubectl uncordon, which\nwill make the node schedulable again."
+  },
+  {
+    "id" : "75923577-b5f3-4dba-a260-949c477deb49",
+    "prId" : 16698,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a51031fe-60d7-400c-8637-fa6b8c734ec1",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "I would suggest calling this drainmachine or something like that, so that you don't have to worry about backward compatibility when you implement the more sophisticated features you plan to implement in the future (e.g. automatically iterate through the machines, respect SLOs, move the logic to the server, etc.) -- you could call that command drain, and still keep drainmachine around.\n",
+        "createdAt" : "2015-11-12T22:56:52Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c6e9ad066eff9378761da5804797a9eb5d4c6790",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +118,122 @@\n\tcmd := &cobra.Command{\n\t\tUse:     \"drain NODE\",\n\t\tShort:   \"Drain node in preparation for maintenance\",\n\t\tLong:    drain_long,"
+  },
+  {
+    "id" : "ddb5039a-9cb9-4def-8574-830bfa4d5626",
+    "prId" : 16698,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "880e9b9b-d6ad-4c15-9037-eaaf200ecec8",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Mind renaming this to `Complete`? We follow this pattern [downstream](https://github.com/openshift/origin/blob/master/docs/cli_hacking_guide.adoc#command-structure) and would like to see it used in kubectl too.\n",
+        "createdAt" : "2015-11-14T14:35:37Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0d29ccd4-1360-4b12-b00e-9baa93133132",
+        "parentId" : "880e9b9b-d6ad-4c15-9037-eaaf200ecec8",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Michail, please open a PR to the code conventions doc that describes the\noptions pattern for kubectl command.\n\nOn Nov 14, 2015, at 9:35 AM, Michail Kargakis notifications@github.com\nwrote:\n\nIn pkg/kubectl/cmd/drain.go\nhttps://github.com/kubernetes/kubernetes/pull/16698#discussion_r44859088:\n\n> -     Short:   \"Drain nodes in preparation for maintenance\",\n> -     Long:    drain_long,\n> -     Example: drain_example,\n> -     Run: func(cmd *cobra.Command, args []string) {\n> -         cmdutil.CheckErr(options.SetupDrain(cmd, args))\n> -         cmdutil.CheckErr(options.RunDrain(cmd))\n> -     },\n> - }\n> - cmd.Flags().BoolVar(&options.Force, \"force\", false, \"Delete unreplicated pods.\")\n> - cmd.Flags().IntVar(&options.GracePeriodSeconds, \"grace-period\", -1, \"Period of time in seconds given to each pod to terminate gracefully. Ignored if negative.\")\n> - return cmd\n>   +}\n>   +\n>   +// SetupDrain populates some fields from the factory, grabs command line\n>   +// arguments and looks up the node using Builder\n>   +func (o *DrainOptions) SetupDrain(cmd *cobra.Command, args []string) error {\n\nMind renaming this to Complete? We follow this pattern downstream\nhttps://github.com/openshift/origin/blob/master/docs/cli_hacking_guide.adoc#command-structure\nand would like to see it used in kubectl too.\n\n—\nReply to this email directly or view it on GitHub\nhttps://github.com/kubernetes/kubernetes/pull/16698/files#r44859088.\n",
+        "createdAt" : "2015-11-16T05:03:52Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c6e9ad066eff9378761da5804797a9eb5d4c6790",
+    "line" : 136,
+    "diffHunk" : "@@ -1,1 +134,138 @@// SetupDrain populates some fields from the factory, grabs command line\n// arguments and looks up the node using Builder\nfunc (o *DrainOptions) SetupDrain(cmd *cobra.Command, args []string) error {\n\tvar err error\n\tif len(args) != 1 {"
+  },
+  {
+    "id" : "840bc2dd-b38c-41a9-a64c-dd2a284ff0c3",
+    "prId" : 16698,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b8643428-696f-4524-be46-3e44a01c0957",
+        "parentId" : null,
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "For kubectl, I prefer duration:\nhttps://github.com/kubernetes/kubernetes/blob/master/pkg/kubectl/cmd/rollingupdate.go#L92\n",
+        "createdAt" : "2015-11-17T23:14:51Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "42de51fc-7344-402c-b5d3-3dfdce84c412",
+        "parentId" : "b8643428-696f-4524-be46-3e44a01c0957",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "We are currently using -1 as a magic value that means \"don't specify a\ngrace period\", and I can't see how to do that directly with Duration().\nhttps://github.com/kubernetes/kubernetes/blob/master/pkg/kubectl/cmd/delete.go#L98\n\nOn Tue, Nov 17, 2015 at 3:15 PM, Brian Grant notifications@github.com\nwrote:\n\n> In pkg/kubectl/cmd/drain.go\n> https://github.com/kubernetes/kubernetes/pull/16698#discussion_r45137381\n> :\n> \n> > +\n> > +func NewCmdDrain(f *cmdutil.Factory, out io.Writer) *cobra.Command {\n> > -   options := &DrainOptions{factory: f, out: out}\n> >   +\n> > -   cmd := &cobra.Command{\n> > -       Use:     \"drain NODE\",\n> > -       Short:   \"Drain nodes in preparation for maintenance\",\n> > -       Long:    drain_long,\n> > -       Example: drain_example,\n> > -       Run: func(cmd *cobra.Command, args []string) {\n> > -           cmdutil.CheckErr(options.SetupDrain(cmd, args))\n> > -           cmdutil.CheckErr(options.RunDrain(cmd))\n> > -       },\n> > -   }\n> > -   cmd.Flags().BoolVar(&options.Force, \"force\", false, \"Delete unreplicated pods.\")\n> > -   cmd.Flags().IntVar(&options.GracePeriodSeconds, \"grace-period\", -1, \"Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.\")\n> \n> For kubectl, I prefer duration:\n> \n> https://github.com/kubernetes/kubernetes/blob/master/pkg/kubectl/cmd/rollingupdate.go#L92\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/16698/files#r45137381.\n",
+        "createdAt" : "2015-11-18T17:26:23Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e1b3c4b-474c-481a-ae95-7faae742f77b",
+        "parentId" : "b8643428-696f-4524-be46-3e44a01c0957",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "Duration accepts negative values:\nhttps://golang.org/pkg/time/#ParseDuration\n",
+        "createdAt" : "2015-11-19T04:10:17Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c6e9ad066eff9378761da5804797a9eb5d4c6790",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +128,132 @@\t}\n\tcmd.Flags().BoolVar(&options.Force, \"force\", false, \"Continue even if there are pods not managed by a ReplicationController or DaemonSet.\")\n\tcmd.Flags().IntVar(&options.GracePeriodSeconds, \"grace-period\", -1, \"Period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used.\")\n\treturn cmd\n}"
+  },
+  {
+    "id" : "81b87381-cdf4-4906-b5d9-08e78db7e963",
+    "prId" : 16698,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3bd97752-4e98-4a00-8a40-bb34869da06e",
+        "parentId" : null,
+        "authorId" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "body" : "DrainOptions should contain only Force and GracePeriodSeconds as it refers to command's options. Other fields as client, factory, mapper, etc. are related to working with resources. What about to rename the struct into DrainConfig struct? This way it is clear all fields are configuration related.\n",
+        "createdAt" : "2015-12-03T14:02:12Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce220d6e-2960-4249-8dca-5889899d00dd",
+        "parentId" : "3bd97752-4e98-4a00-8a40-bb34869da06e",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "+1\n",
+        "createdAt" : "2015-12-13T04:11:25Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df8eeabb-85cd-45ed-86e0-b6c7cfec2b87",
+        "parentId" : "3bd97752-4e98-4a00-8a40-bb34869da06e",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "> DrainOptions should contain only Force and GracePeriodSeconds as it refers to command's options. Other fields as client, factory, mapper, etc. are related to working with resources. What about to rename the struct into DrainConfig struct? This way it is clear all fields are configuration related.\n\nWe are following this pattern elsewhere, so if we decide on a name it should be the same in all places. The rest of the fields are used so that parts like validation and run of the command won't actually need to access cobra, factory, or other machinery. If you have opinions on this, please comment in https://github.com/kubernetes/kubernetes/pull/17366.\n",
+        "createdAt" : "2015-12-14T09:45:30Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "575a5555-74a2-4de3-8f3b-3dd5f82dcc84",
+        "parentId" : "3bd97752-4e98-4a00-8a40-bb34869da06e",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "Yeah, other verbs currently follow the pattern here (e.g. annotate.go).  #17366 does seem the right place to address a new convention.\n",
+        "createdAt" : "2016-01-05T23:48:06Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c6e9ad066eff9378761da5804797a9eb5d4c6790",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +42,46 @@\tForce              bool\n\tGracePeriodSeconds int\n\tmapper             meta.RESTMapper\n\tnodeInfo           *resource.Info\n\tout                io.Writer"
+  },
+  {
+    "id" : "9e535110-1b6d-486c-b9b6-5b9dd7c92a92",
+    "prId" : 16698,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "45d614b8-3b69-4868-bf50-f01ee267e126",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "I think you need to wrap the string with api.Kind\n",
+        "createdAt" : "2016-01-06T11:31:59Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c6e9ad066eff9378761da5804797a9eb5d4c6790",
+    "line" : 216,
+    "diffHunk" : "@@ -1,1 +214,218 @@\t\t\t\treturn pods, err\n\t\t\t}\n\t\t\tif sr.Reference.Kind == \"ReplicationController\" {\n\t\t\t\trc, err := o.client.ReplicationControllers(sr.Reference.Namespace).Get(sr.Reference.Name)\n\t\t\t\t// Assume the only reason for an error is because the RC is"
+  },
+  {
+    "id" : "0e665fb1-11b6-416e-a0a3-e433e4e4fd53",
+    "prId" : 16698,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3aa5f40f-989f-419c-81b0-3af8f925db7a",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "I think you need to wrap the string with api.Kind\n",
+        "createdAt" : "2016-01-06T11:32:07Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fcef2c87-8387-4d57-8b6e-e5a2b93e3a70",
+        "parentId" : "3aa5f40f-989f-419c-81b0-3af8f925db7a",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "> I think you need to wrap the string with api.Kind\n\nthe type of sr.Reference.Kind is String.  See https://github.com/kubernetes/kubernetes/blob/master/pkg/api/types.go#L1829\n",
+        "createdAt" : "2016-01-06T22:03:28Z",
+        "updatedAt" : "2016-01-07T01:29:48Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c6e9ad066eff9378761da5804797a9eb5d4c6790",
+    "line" : 224,
+    "diffHunk" : "@@ -1,1 +222,226 @@\t\t\t\t\treplicated = true\n\t\t\t\t}\n\t\t\t} else if sr.Reference.Kind == \"DaemonSet\" {\n\t\t\t\tds, err := o.client.DaemonSets(sr.Reference.Namespace).Get(sr.Reference.Name)\n"
+  }
+]

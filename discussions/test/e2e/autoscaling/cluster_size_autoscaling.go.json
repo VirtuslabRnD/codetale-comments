@@ -1,0 +1,805 @@
+[
+  {
+    "id" : "1174d93c-29de-49e5-aedc-636d5177cbe3",
+    "prId" : 79879,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79879#pullrequestreview-263244025",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "59f22744-45e4-4ae8-ab54-b4e097a2c3e7",
+        "parentId" : null,
+        "authorId" : "9df64fa3-0a5c-4488-b8c7-8fca4ef36432",
+        "body" : "I got the error from prow `pull-kubernetes-verify` after the change in `getPoolNodes()`:\r\n\r\n`The above files need to use framework.ExpectNoError(err) instead of \r\nExpect(err).NotTo(HaveOccurred()) or gomega.Expect(err).NotTo(gomega.HaveOccurred())`\r\n\r\nThought that we can ignore this?",
+        "createdAt" : "2019-07-17T00:39:16Z",
+        "updatedAt" : "2019-07-18T06:19:09Z",
+        "lastEditedBy" : "9df64fa3-0a5c-4488-b8c7-8fca4ef36432",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5365246c-45e1-4e32-8b4a-8d732dfd1d15",
+        "parentId" : "59f22744-45e4-4ae8-ab54-b4e097a2c3e7",
+        "authorId" : "d3b9ec12-6001-425a-940b-b74c57282ba6",
+        "body" : "The reason for this seems to have been [hack/verify-test-code.sh](https://github.com/kubernetes/kubernetes/blob/master/hack/verify-test-code.sh) which I didn't know it existed.\r\nI don't know if there is a broader conversation about instances where we can ignore this as it seems rather arbitrary.\r\n\r\nUnder the premise that we keep `hack/verify-test-cdoe.sh` as is we can:\r\n1. Create a wrapper in the framework for `gomega.Expect(err).NotTo(gomega.HaveOccurred())`, something like:\r\n```go\r\nfunc ExpectNoErrorToOccur(err error, explain ...interface{}) {\r\n\tExpectNoErrorWithOffset(0, err, explain...)\r\n}\r\n```\r\n2. Call `framework. ExpectNoErrorWithOffset(0, err)`\r\n\r\nI'd vote for the latter right now",
+        "createdAt" : "2019-07-17T18:20:42Z",
+        "updatedAt" : "2019-07-18T06:19:09Z",
+        "lastEditedBy" : "d3b9ec12-6001-425a-940b-b74c57282ba6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be19c39a-2592-4a1f-9dd9-fbd714b07115",
+        "parentId" : "59f22744-45e4-4ae8-ab54-b4e097a2c3e7",
+        "authorId" : "9df64fa3-0a5c-4488-b8c7-8fca4ef36432",
+        "body" : "I'd like to use the second way and leave a TODO in the comment. I was thinking open a tracking issue to track all the PRs will a TODO after we moving and renaming. ",
+        "createdAt" : "2019-07-17T18:29:44Z",
+        "updatedAt" : "2019-07-18T06:19:09Z",
+        "lastEditedBy" : "9df64fa3-0a5c-4488-b8c7-8fca4ef36432",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2fa523e8-b550-4f41-b9ea-4accac383453",
+        "parentId" : "59f22744-45e4-4ae8-ab54-b4e097a2c3e7",
+        "authorId" : "d3b9ec12-6001-425a-940b-b74c57282ba6",
+        "body" : "+1 to that!",
+        "createdAt" : "2019-07-17T18:39:11Z",
+        "updatedAt" : "2019-07-18T06:19:09Z",
+        "lastEditedBy" : "d3b9ec12-6001-425a-940b-b74c57282ba6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e24a9628210cf47b18874db4695638282fb63c1a",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +1233,1237 @@\t// TODO: write a wrapper for ExpectNoErrorWithOffset()\n\tframework.ExpectNoErrorWithOffset(0, err)\n\tfor _, node := range nodeList.Items {\n\t\tif node.Labels[gkeNodepoolNameKey] == poolName {\n\t\t\tnodes = append(nodes, &node)"
+  },
+  {
+    "id" : "5e12c9e4-e480-4f26-bf5f-c132e1b5b799",
+    "prId" : 71362,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/71362#pullrequestreview-177914214",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c4f1a8f1-8e77-419a-892b-e626de3e80df",
+        "parentId" : null,
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "Sleeps with hardcoded values are rarely the best choice in tests. Can we do in a more robust way?",
+        "createdAt" : "2018-11-23T12:13:20Z",
+        "updatedAt" : "2018-11-23T12:47:44Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85d77dcb-a249-4a71-af39-503652580447",
+        "parentId" : "c4f1a8f1-8e77-419a-892b-e626de3e80df",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "If node's ready condition transitions less than 2 minutes after it was created, Cluster Autoscaler will consider this node as upcoming (= not yet started), not as unready. I don't see an easy way to work around this without fixing how node readiness works across the system. Assuming this is how we want to handle readiness for now, autoscaler's behavior is correct - we don't want to back-off from scaling cluster just because we've added some nodes. Before, this test probably worked because nodes started slowly (so by the time they were ready, they were older than 2 minutes). \r\n\r\nWhat do you propose?",
+        "createdAt" : "2018-11-23T12:35:31Z",
+        "updatedAt" : "2018-11-23T12:47:44Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "44a97a4d-95be-46d0-b0f4-4f15943997bf",
+        "parentId" : "c4f1a8f1-8e77-419a-892b-e626de3e80df",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "I suggest expanding the comment explaining why we are doing this. And please explain why 2 minute sleep is more than enough to avoid flakes.",
+        "createdAt" : "2018-11-23T12:39:26Z",
+        "updatedAt" : "2018-11-23T12:47:44Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "efc12994-1bf8-46c1-8358-1ad369c5dbf7",
+        "parentId" : "c4f1a8f1-8e77-419a-892b-e626de3e80df",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "Done",
+        "createdAt" : "2018-11-23T12:48:06Z",
+        "updatedAt" : "2018-11-23T12:48:06Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f278a316f488c1dae008a305412264ae74f0d50",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +893,897 @@\t\t// readiness condition transition) should be sufficient, while\n\t\t// making no assumptions about minimal node startup time.\n\t\ttime.Sleep(2 * time.Minute)\n\n\t\tBy(\"Block network connectivity to some nodes to simulate unhealthy cluster\")"
+  },
+  {
+    "id" : "8a339fd9-f66c-4466-aa7f-039fa1a7f50d",
+    "prId" : 71362,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/71362#pullrequestreview-178004964",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6d07d1d2-2955-4387-b63e-728305673c2c",
+        "parentId" : null,
+        "authorId" : "b108b194-9765-407b-abc0-82ae1e7e172b",
+        "body" : "healthy",
+        "createdAt" : "2018-11-23T16:19:22Z",
+        "updatedAt" : "2018-11-23T16:19:51Z",
+        "lastEditedBy" : "b108b194-9765-407b-abc0-82ae1e7e172b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88ee0fcd-0ff2-4ab6-bf88-c94293a0b985",
+        "parentId" : "6d07d1d2-2955-4387-b63e-728305673c2c",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "We want the cluster to become unhealthy in this scenario, to test back-off from adding more nodes",
+        "createdAt" : "2018-11-23T18:17:37Z",
+        "updatedAt" : "2018-11-23T18:17:37Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f278a316f488c1dae008a305412264ae74f0d50",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +883,887 @@\n\t\t// If new nodes are disconnected too soon, they'll be considered not started\n\t\t// instead of unready, and cluster won't be considered unhealthy.\n\t\t//\n\t\t// More precisely, Cluster Autoscaler compares last transition time of"
+  },
+  {
+    "id" : "d55d28af-d867-4e9e-8fff-2f8ef25938d0",
+    "prId" : 64748,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64748#pullrequestreview-125903472",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f2349ee4-9cb4-41ff-b66a-0d19ad9eb3c3",
+        "parentId" : null,
+        "authorId" : "3c1422a0-6358-4857-8f56-961979171514",
+        "body" : "This does not make any sense.",
+        "createdAt" : "2018-06-05T10:06:35Z",
+        "updatedAt" : "2018-06-05T10:06:41Z",
+        "lastEditedBy" : "3c1422a0-6358-4857-8f56-961979171514",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca7542ed-5330-44f3-bf24-a24e9528633c",
+        "parentId" : "f2349ee4-9cb4-41ff-b66a-0d19ad9eb3c3",
+        "authorId" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "body" : "Actually it does. I am not golang fan :)\r\n\r\nhttps://stackoverflow.com/questions/26692844/captured-closure-for-loop-variable-in-go",
+        "createdAt" : "2018-06-05T10:10:34Z",
+        "updatedAt" : "2018-06-05T10:10:34Z",
+        "lastEditedBy" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1c4f31b3747ced1d652e0892315578f80aca8547",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +210,214 @@\tsupportedGpuTypes := []string{\"nvidia-tesla-k80\", \"nvidia-tesla-v100\", \"nvidia-tesla-p100\"}\n\tfor _, gpuType := range supportedGpuTypes {\n\t\tgpuType := gpuType // create new variable for each iteration step\n\n\t\tIt(fmt.Sprintf(\"Should scale up GPU pool from 0 [GpuType:%s] [Feature:ClusterSizeAutoscalingGpu]\", gpuType), func() {"
+  },
+  {
+    "id" : "f390b45e-d1fa-4919-9adc-dbd867640e53",
+    "prId" : 64356,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64356#pullrequestreview-125782323",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "parentId" : null,
+        "authorId" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "body" : "This is problematic. Currently all the projects have k80 and p100 quota but v100 quota is only available in one project. So, there is no project that can successfully run this.\r\n\r\nCan you instead take the gpu type as argument that is passed by the test-infra job? Then we can have three jobs that each run the tests for different gpu type. This will also ensure that we can easily add new gpu types (just a test-infra config change instead of change in k/k) and run them at different frequency (run v100 tests less frequently as they are more expensive) etc.",
+        "createdAt" : "2018-05-28T22:17:05Z",
+        "updatedAt" : "2018-05-28T22:17:10Z",
+        "lastEditedBy" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "51935262-3691-4d2d-84e7-f629113a07e9",
+        "parentId" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "authorId" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "body" : "Thanks for comment.\r\n\r\nActually I thought about it. Note that the loop over the supported gpu types is only for generating testcases. As part of this PR the name of each testcase is changed so it contains `[GpuType:%s]` with `%s` being `nvidia-tesla-k80`, `nvidia-tesla-p100`, ... . This then testcases can be easily used for filtering out/split into multiple test jobs using `--ginkgo.focus`.",
+        "createdAt" : "2018-05-29T07:35:18Z",
+        "updatedAt" : "2018-05-29T07:35:18Z",
+        "lastEditedBy" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "68515eeb-811a-4ebd-81fb-7d14b1f44b7a",
+        "parentId" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "authorId" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "body" : "Take a look at this PR please: https://github.com/kubernetes/test-infra/pull/8144",
+        "createdAt" : "2018-05-29T08:00:03Z",
+        "updatedAt" : "2018-05-29T08:00:04Z",
+        "lastEditedBy" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a411381-eb22-44a6-bd19-139c174125c2",
+        "parentId" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "authorId" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "body" : "What is the advantage of generating test cases like this instead of just passing the gpuType from test-infra?\r\n\r\nWith this approach, when adding a new GPU type you would still need two PRs, one in kubernetes/kubernetes and another in kubernetes/test-infra.",
+        "createdAt" : "2018-05-29T15:08:47Z",
+        "updatedAt" : "2018-05-29T15:08:47Z",
+        "lastEditedBy" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b90e7aa0-2305-4e81-b722-924bb1f4f2b4",
+        "parentId" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "authorId" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "body" : "I did it this way because I feel it is better to have all tests statically defined within project repo (kubernetes/kubernetes). \r\nAnd test job's (defined within kubernetes/test-infra) responsibility is merely selecting subset of tests to be run. \r\nThen the test coverage do not depend (or depend to lesser extent) on external parametrization. If we do not pass any filters in `--ginkgo.focus` we will run all the tests. They still may fail (e.g if used project does not have quota for GPUs), yet we see that something is wrong - and we can act upon that. \r\n\r\nIf set of tested GPU types depend on external parametrization we can easily skip coverage of GPU+CA interoperability just by forgetting to pass the list of accelerator types.\r\n\r\nIMHO additional safety is worth extra effort when new GPU type is added.",
+        "createdAt" : "2018-05-29T18:06:33Z",
+        "updatedAt" : "2018-05-29T18:06:33Z",
+        "lastEditedBy" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3bfabaf-0a2c-4f10-94a8-2cfb3801b23a",
+        "parentId" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "authorId" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "body" : "> If set of tested GPU types depend on external parametrization we can easily skip coverage of GPU+CA interoperability just by forgetting to pass the list of accelerator types.\r\n\r\nThis can still happen. You can add a new gpu type here but forget to add it in test-infra and then it will not get tested. So, I don't agree this is more safe. It's just twice the work.",
+        "createdAt" : "2018-05-30T06:09:05Z",
+        "updatedAt" : "2018-05-30T06:09:06Z",
+        "lastEditedBy" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e65c79c-5664-458e-bc29-edf605770a04",
+        "parentId" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "authorId" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "body" : "It is mostly about having single ropository (kubernetes/kubernetes) being source of truth in the matter what tests are defined. \r\nBut I will not fight for that.\r\n\r\nWe can change:\r\n```golang\r\nsupportedGpuTypes := []string{\"nvidia-tesla-k80\", \"nvidia-tesla-v100\", \"nvidia-tesla-p100\"}\r\nfor _, gpuType := range supportedGpuTypes {\r\n```\r\n\r\nto sth like\r\n```golang\r\ngpuTypes := getTestedGpuTypesPassedViaTestJobParameters()\r\nfor _, gpuType := range gpuTypes {\r\n```\r\n\r\nAre you aware how `getTestedGpuTypesPassedViaTestJobParameters` should be implemented? We need to pass the information from `kubernetes_e2e.py` params to tests code. Is someone already doing that?\r\n\r\nBtw. Maybe it is worthy to merge the new dashboards in the meantime as the old one is failing now due to timeout.",
+        "createdAt" : "2018-05-30T12:01:01Z",
+        "updatedAt" : "2018-05-30T12:01:01Z",
+        "lastEditedBy" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0edfe550-cc92-40f1-8e3d-987ffc9c7f94",
+        "parentId" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "authorId" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "body" : "Yeah, let's merge the new dashboards in the meantime.\r\n\r\nI was thinking that we remove the for loop altogether and just have `gpuType` passed from test-infra.\r\n\r\nYou can do something like: https://github.com/kubernetes/test-infra/blob/02d3520f35c16efd494253ca074d9cad0826f84a/jobs/config.json#L7423 to pass the gpuType and then https://github.com/kubernetes/kubernetes/blob/99ebcd94c9404ae6c00498712b095ad132b8d447/test/e2e/scheduling/nvidia-gpus.go#L123 to read it in this file.\r\n\r\n",
+        "createdAt" : "2018-05-30T18:14:12Z",
+        "updatedAt" : "2018-05-30T18:14:12Z",
+        "lastEditedBy" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5aa4c442-720a-4ee4-8eb5-bd8a6bc71218",
+        "parentId" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "authorId" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "body" : "Sorry for dealy. I was OOO couple of days.\r\n\r\n> I was thinking that we remove the for loop altogether and just have gpuType passed from test-infra.\r\n\r\nThat would enforce separate test job for each gpu test. I guess this is fine. I am still not fine with having test definitions split between repositories.\r\nI will change it though as you insist.",
+        "createdAt" : "2018-06-04T07:08:15Z",
+        "updatedAt" : "2018-06-04T07:08:16Z",
+        "lastEditedBy" : "e346c770-7799-476e-a860-ed14eed94c66",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "517828c0-06e6-4b87-9db2-d540d7819294",
+        "parentId" : "3aa1411f-295c-4fa7-85a5-ef97e46eebb1",
+        "authorId" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "body" : "Thank you!",
+        "createdAt" : "2018-06-05T00:05:12Z",
+        "updatedAt" : "2018-06-05T00:05:12Z",
+        "lastEditedBy" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3c8bd9ae24296b0cf9625416330bed47fd8ae027",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +208,212 @@\t\tfunc() { simpleScaleUpTest(0) })\n\n\tsupportedGpuTypes := []string{\"nvidia-tesla-k80\", \"nvidia-tesla-v100\", \"nvidia-tesla-p100\"}\n\tfor _, gpuType := range supportedGpuTypes {\n"
+  },
+  {
+    "id" : "8c3828f8-d420-4ba9-9155-4d709db9a8eb",
+    "prId" : 61941,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/61941#pullrequestreview-108361772",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "308a61d0-5a9a-4cf3-b56e-177632a4a0d7",
+        "parentId" : null,
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "nit: we should probably fail the test which triggered clean-up after the last attempt failed. This won't prevent disrupting subsequent tests, but if the same one is causing this problem across runs, at least we'll see the trend on the test-grid",
+        "createdAt" : "2018-03-30T14:57:42Z",
+        "updatedAt" : "2018-04-04T13:56:43Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5ce9f7dd-0bf1-4b57-9e09-199301ce46e7",
+        "parentId" : "308a61d0-5a9a-4cf3-b56e-177632a4a0d7",
+        "authorId" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "body" : "Makes sense, will do. Although currently in regional tests I'm seeing time-outs when this happens, as all the subsequent tests wait for a lower number of nodes to be available both at the beginning of the test (5 minutes) and at the end of the test (20 minutes). That's something to consider fixing too (at least skip the second wait if the first one fails), but in a next PR.",
+        "createdAt" : "2018-03-30T15:12:49Z",
+        "updatedAt" : "2018-04-04T13:56:43Z",
+        "lastEditedBy" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d2bb7e96-9bf6-460c-abb3-bb2c530400cf",
+        "parentId" : "308a61d0-5a9a-4cf3-b56e-177632a4a0d7",
+        "authorId" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "body" : "Done.",
+        "createdAt" : "2018-03-30T15:46:04Z",
+        "updatedAt" : "2018-04-04T13:56:43Z",
+        "lastEditedBy" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b0f44e3bee8a61e1cf713bd4f325c178cf51031a",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +1311,1315 @@\t\t\tif err != nil {\n\t\t\t\tglog.Warningf(\"Error deleting nodegroup - error:%v, output: %s\", err, output)\n\t\t\t\treturn false, nil\n\t\t\t}\n\t\t\tglog.Infof(\"Node-pool deletion output: %s\", output)"
+  },
+  {
+    "id" : "abbb1488-5040-4e9b-82ab-60d66a231146",
+    "prId" : 60290,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/60290#pullrequestreview-98865122",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ad88dc11-e0de-41fb-a111-5ccb20a65ac6",
+        "parentId" : null,
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "Comment above this function is no longer true:\r\n\r\n`// Returns size of the newly added node pool`",
+        "createdAt" : "2018-02-23T10:09:05Z",
+        "updatedAt" : "2018-02-23T10:10:43Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d28578af-ef36-4594-8f27-b04e410c38f1",
+        "parentId" : "ad88dc11-e0de-41fb-a111-5ccb20a65ac6",
+        "authorId" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "body" : "Done",
+        "createdAt" : "2018-02-23T10:11:04Z",
+        "updatedAt" : "2018-02-23T10:11:04Z",
+        "lastEditedBy" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1d22cb5d6a4c9623d09dbec97a318474ea1dc3a3",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +1298,1302 @@\toutput, err := execCmd(getGcloudCommand(args)...).CombinedOutput()\n\tglog.Infof(\"Creating node-pool %s: %s\", name, output)\n\tframework.ExpectNoError(err, string(output))\n}\n"
+  },
+  {
+    "id" : "fa819f51-0238-4270-8a96-f91e6620fc38",
+    "prId" : 59913,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59913#pullrequestreview-97138476",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "76ae0373-718e-4c18-aad4-9da52a6f7909",
+        "parentId" : null,
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "I think I understand what this function does, but is there any reason we can't use `getPoolSize` instead? Since we create node-pool synchronously using gcloud command, nodes should register even before the operation ends, so they'd already be there.",
+        "createdAt" : "2018-02-15T13:06:45Z",
+        "updatedAt" : "2018-02-15T14:58:49Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2c40d04-49fa-4691-90e6-01a780aa8c04",
+        "parentId" : "76ae0373-718e-4c18-aad4-9da52a6f7909",
+        "authorId" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "body" : "What if we hit quota in the test and only one out of three nodes registers? We will probably get error from gcloud.\r\n\r\nHm, I guess this would indeed work, but does that mean all our WaitForReadyNodes after adding node pools are completely redundant? (see for example line 689).",
+        "createdAt" : "2018-02-15T13:35:09Z",
+        "updatedAt" : "2018-02-15T14:58:49Z",
+        "lastEditedBy" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "206c5bfd-2cd9-47a3-a2a5-499f904afb25",
+        "parentId" : "76ae0373-718e-4c18-aad4-9da52a6f7909",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "Good point. Let me check this - I think it was changed some time ago from using API calls (asynchronous), so this may be now redundant. \r\n\r\nA couple of minutes (I've observed ~1.5m) after a new node-pool is added, GKE may resize master, but I don't think those waits protect against this as they would usually succeed before the resize is triggered (as would get nodes request)",
+        "createdAt" : "2018-02-15T14:56:54Z",
+        "updatedAt" : "2018-02-15T14:58:49Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d4457803-bccd-4ad8-8bd7-6d8ce717e148",
+        "parentId" : "76ae0373-718e-4c18-aad4-9da52a6f7909",
+        "authorId" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "body" : "I don't like the idea of removing those waits in this PR, since I am changing a lot of other things. So how about I put this PR on hold, remove the waits from the tests in another PR, watch if the tests are healthy and then submit this one with the changes you suggested?",
+        "createdAt" : "2018-02-15T15:13:08Z",
+        "updatedAt" : "2018-02-15T15:13:08Z",
+        "lastEditedBy" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f0c4af1-2611-4ddb-8323-159bb6905bbc",
+        "parentId" : "76ae0373-718e-4c18-aad4-9da52a6f7909",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "Sure, didn't mean to ask you to do more than intended in this PR! We can also maybe merge this, and create an issue for investigating/cleaning up those waits?",
+        "createdAt" : "2018-02-15T15:20:03Z",
+        "updatedAt" : "2018-02-15T15:20:04Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc50d5af-6df6-4d40-92e9-d35bf0025611",
+        "parentId" : "76ae0373-718e-4c18-aad4-9da52a6f7909",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "Follow-up tracked in kubernetes/autoscaler#666",
+        "createdAt" : "2018-02-16T10:41:56Z",
+        "updatedAt" : "2018-02-16T10:41:56Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "329feee0e9628d0315e8ab57b3adfade2679fe23",
+    "line" : 241,
+    "diffHunk" : "@@ -1,1 +1323,1327 @@// account that it may span multiple zones. In that case, node pool consists of\n// multiple migs all containing initialNodeCount nodes.\nfunc getPoolInitialSize(poolName string) int {\n\t// get initial node count\n\targs := []string{\"container\", \"node-pools\", \"describe\", poolName, \"--quiet\","
+  },
+  {
+    "id" : "7f809bf6-e97b-46cd-b5c9-773ab1bb1c8a",
+    "prId" : 59913,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59913#pullrequestreview-96876756",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5e17fc7e-95c9-442c-8410-f9aae67dbb26",
+        "parentId" : null,
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "For consistency, can we either edit it in all affected tests, or in none?",
+        "createdAt" : "2018-02-15T13:09:05Z",
+        "updatedAt" : "2018-02-15T14:58:49Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f5b8c82-56cc-404b-87f4-75a51b392ed0",
+        "parentId" : "5e17fc7e-95c9-442c-8410-f9aae67dbb26",
+        "authorId" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "body" : "Done.",
+        "createdAt" : "2018-02-15T14:59:21Z",
+        "updatedAt" : "2018-02-15T14:59:21Z",
+        "lastEditedBy" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "329feee0e9628d0315e8ab57b3adfade2679fe23",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +247,251 @@\t\tframework.SkipUnlessProviderIs(\"gke\")\n\n\t\tBy(\"Creating new node-pool with n1-standard-4 machines\")\n\t\tconst extraPoolName = \"extra-pool\"\n\t\textraNodes := addNodePool(extraPoolName, \"n1-standard-4\", 1)"
+  },
+  {
+    "id" : "22e74f4f-5016-4d86-9ef0-077c7b58cc29",
+    "prId" : 55394,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55394#pullrequestreview-75428449",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "de14f9c1-aacd-41f1-ac9e-5cd2f87db273",
+        "parentId" : null,
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "~time.Sleep(scaleUpTimeout)~ nevermind, not necessary",
+        "createdAt" : "2017-11-09T12:56:41Z",
+        "updatedAt" : "2017-11-10T09:07:35Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d3ff0bd0-da2e-4316-9369-8e04435cc403",
+        "parentId" : "de14f9c1-aacd-41f1-ac9e-5cd2f87db273",
+        "authorId" : "4c38359a-cb09-4276-8b40-2237ef82c2b9",
+        "body" : "Not needed here as we wait till expendable are preempted and non expendable pods are scheduled.",
+        "createdAt" : "2017-11-09T12:59:38Z",
+        "updatedAt" : "2017-11-10T09:07:35Z",
+        "lastEditedBy" : "4c38359a-cb09-4276-8b40-2237ef82c2b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "20e5b896e93c55e100ca84f1bcfb3f2276cb50d5",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +895,899 @@\t\t// Create nodesCountAfterResize pods allocating 0.7 allocatable on present nodes - one pod per node. Pods created here should preempt pods created above.\n\t\tcleanupFunc2 := ReserveMemoryWithPriority(f, \"memory-reservation2\", nodeCount, int(float64(nodeCount)*float64(0.7)*float64(memAllocatableMb)), true, defaultTimeout, highPriorityClassName)\n\t\tdefer cleanupFunc2()\n\t\tframework.ExpectNoError(WaitForClusterSizeFunc(f.ClientSet,\n\t\t\tfunc(size int) bool { return size == nodeCount }, time.Second))"
+  },
+  {
+    "id" : "7de62835-7276-48b3-9b62-fffb44312e1f",
+    "prId" : 55061,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55061#pullrequestreview-74424773",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "60bf99fd-0b25-434f-8337-24091d146953",
+        "parentId" : null,
+        "authorId" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "body" : "Probably map for resources could work nicer, but no strong feelings.",
+        "createdAt" : "2017-11-03T15:23:06Z",
+        "updatedAt" : "2017-11-07T09:17:06Z",
+        "lastEditedBy" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b698529e-bda6-4cdd-a3f5-f64a4765645c",
+        "parentId" : "60bf99fd-0b25-434f-8337-24091d146953",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "+1",
+        "createdAt" : "2017-11-03T16:39:15Z",
+        "updatedAt" : "2017-11-07T09:17:06Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e29632b1-0872-4096-8020-101ba03d08f1",
+        "parentId" : "60bf99fd-0b25-434f-8337-24091d146953",
+        "authorId" : "4c38359a-cb09-4276-8b40-2237ef82c2b9",
+        "body" : "I don't think that it would be very helpful as we will not used this function in many places. Anyway there is {resource name, min , max} so I would have to create some structure containing min and max and then use it in a map. I think this is not worth.",
+        "createdAt" : "2017-11-06T14:04:25Z",
+        "updatedAt" : "2017-11-07T09:17:06Z",
+        "lastEditedBy" : "4c38359a-cb09-4276-8b40-2237ef82c2b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c8b807837a381003981f75b9dff5d8cd79e7750d",
+    "line" : 135,
+    "diffHunk" : "@@ -1,1 +1026,1030 @@}\n\nfunc enableAutoprovisioning(resourceLimits string) error {\n\tBy(\"Using API to enable autoprovisioning.\")\n\tvar body string"
+  },
+  {
+    "id" : "83d04a8a-425e-4cdf-9b8d-ed2442f3b260",
+    "prId" : 55061,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55061#pullrequestreview-74425278",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e0bc270b-7901-474f-8805-8ab5962e7889",
+        "parentId" : null,
+        "authorId" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "body" : "Are we sure this should always be exactly 1 new node pool?",
+        "createdAt" : "2017-11-03T15:24:14Z",
+        "updatedAt" : "2017-11-07T09:17:06Z",
+        "lastEditedBy" : "f9af27d1-0db5-440a-9fbe-25f430076fa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c52111dd-9d49-48a7-b394-7440c3052666",
+        "parentId" : "e0bc270b-7901-474f-8805-8ab5962e7889",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "+1\r\nThere shouldn't be more than one if there's only one 1 replica, but there may be none if memory request was set too low (i.e. there was a node group with larger nodes available for scale up.)",
+        "createdAt" : "2017-11-03T16:38:09Z",
+        "updatedAt" : "2017-11-07T09:17:06Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "98e6b0c1-1442-4a68-9bf1-f9ac5c0a130a",
+        "parentId" : "e0bc270b-7901-474f-8805-8ab5962e7889",
+        "authorId" : "4c38359a-cb09-4276-8b40-2237ef82c2b9",
+        "body" : "Yes, I'm sure as there should be only one new node added.",
+        "createdAt" : "2017-11-06T14:06:08Z",
+        "updatedAt" : "2017-11-07T09:17:06Z",
+        "lastEditedBy" : "4c38359a-cb09-4276-8b40-2237ef82c2b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c8b807837a381003981f75b9dff5d8cd79e7750d",
+    "line" : 117,
+    "diffHunk" : "@@ -1,1 +850,854 @@\t\t\tfunc(size int) bool { return size == nodeCount+1 }, scaleUpTimeout))\n\t\tBy(\"Check if NAP group was created\")\n\t\tExpect(getNAPNodePoolsNumber()).Should(Equal(1))\n\t})\n})"
+  },
+  {
+    "id" : "68f0faa7-cc4c-47a9-acc5-bd7b56f3b440",
+    "prId" : 55061,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55061#pullrequestreview-74729185",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3de34b09-92c8-4ea1-8c3d-40a81d8669d0",
+        "parentId" : null,
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "nit: we don't need to iterate over all the resources, but can access CPU directly by key. Sorry for not catching it earlier",
+        "createdAt" : "2017-11-07T12:25:12Z",
+        "updatedAt" : "2017-11-07T12:25:12Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c8b807837a381003981f75b9dff5d8cd79e7750d",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +107,111 @@\t\tcoreCount = 0\n\t\tfor _, node := range nodes.Items {\n\t\t\tfor resourceName, value := range node.Status.Capacity {\n\t\t\t\tif resourceName == v1.ResourceCPU {\n\t\t\t\t\tcoreCount += value.Value()"
+  },
+  {
+    "id" : "1f628a60-cb05-4032-b308-4330bfd37727",
+    "prId" : 54991,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/54991#pullrequestreview-73876606",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "56fb2815-72be-4788-96a6-376b20ae057d",
+        "parentId" : null,
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "Can you add ```framework.SkipUnlessProviderIs(\"gke\")```? Let's not rely on selectors in current test-infra jobs for this.",
+        "createdAt" : "2017-11-02T16:37:39Z",
+        "updatedAt" : "2017-11-02T17:34:21Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a6e9bf0-f382-422f-95d0-f63df4bb31e4",
+        "parentId" : "56fb2815-72be-4788-96a6-376b20ae057d",
+        "authorId" : "4c38359a-cb09-4276-8b40-2237ef82c2b9",
+        "body" : "Done",
+        "createdAt" : "2017-11-02T17:35:08Z",
+        "updatedAt" : "2017-11-02T17:35:08Z",
+        "lastEditedBy" : "4c38359a-cb09-4276-8b40-2237ef82c2b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9c1e6d7de84d2ed8416655b546e36ac28b91d185",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +758,762 @@\t})\n\n\tIt(\"should add new node and new node pool on too big pod [Feature:ClusterSizeAutoscalingScaleWithNAP]\", func() {\n\t\tframework.SkipUnlessProviderIs(\"gke\")\n\t\tExpect(getNAPNodePoolsNumber()).Should(Equal(0))"
+  },
+  {
+    "id" : "d6e82152-9aae-4e69-9d5e-1e53ef57694f",
+    "prId" : 52905,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/52905#pullrequestreview-64887042",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cd305c7f-1364-4a33-b9b9-2c3e953d1a20",
+        "parentId" : null,
+        "authorId" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "body" : "@aleksandra-malinowska for my own curiosity, do you mind sharing why you used the `len(timestampMatch) < 2` check instead of `len(timestampMatch) == nil`? My understanding is `FindStringSubmatch` returns nil if no match is found. Thanks :)",
+        "createdAt" : "2017-09-25T13:02:22Z",
+        "updatedAt" : "2017-09-25T13:02:22Z",
+        "lastEditedBy" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "88da2c1c70b538d12c0496c8c83284eec7321078",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +1367,1371 @@\n\ttimestampMatch := timestampMatcher.FindStringSubmatch(status)\n\tif len(timestampMatch) < 2 {\n\t\treturn time.Time{}, fmt.Errorf(\"Failed to parse CA status timestamp, raw status: %v\", status)\n\t}"
+  },
+  {
+    "id" : "cc2ae039-3567-46d0-948d-099b79215768",
+    "prId" : 52844,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/52844#pullrequestreview-64742505",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "705b416c-c0df-4605-8b4a-a39c2f9902f4",
+        "parentId" : null,
+        "authorId" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "body" : "Nit: Could this be replaced with `timestampMatcher.FindStringSubmatch`? I think it would save you the writing `timestampMatches[0]` in the `timestamp, err := time.Parse(timestampFormat, timestampMatches[0][1]) line.\r\n\r\nThe `if len(timestampMatches) < 1` could be replaced with `if timestampMatch == nil`.\r\n\r\nEntirely up to you though!",
+        "createdAt" : "2017-09-21T13:08:57Z",
+        "updatedAt" : "2017-09-21T13:16:38Z",
+        "lastEditedBy" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d5a8d8b-ffae-4a77-a9f5-fc9acfe8a2e8",
+        "parentId" : "705b416c-c0df-4605-8b4a-a39c2f9902f4",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "Good point, thanks:) This was already approved and merged before I could change this, so I'll probably submit another PR",
+        "createdAt" : "2017-09-22T07:24:25Z",
+        "updatedAt" : "2017-09-22T07:24:25Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb33d8dc-6ea7-47d3-ac05-e2eb6b194740",
+        "parentId" : "705b416c-c0df-4605-8b4a-a39c2f9902f4",
+        "authorId" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "body" : "Sweet :) I'm happy to submit a pr as well if you'd like @aleksandra-malinowska - I think it could be a great way for me to get more familiar with the autoscaling e2e tests. But also, no worries if you already have plans to do it!",
+        "createdAt" : "2017-09-23T14:03:01Z",
+        "updatedAt" : "2017-09-23T14:40:56Z",
+        "lastEditedBy" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4335849b-a1ad-4f63-bd4b-fef71b4b61a9",
+        "parentId" : "705b416c-c0df-4605-8b4a-a39c2f9902f4",
+        "authorId" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "body" : "PR here - https://github.com/kubernetes/kubernetes/pull/52944",
+        "createdAt" : "2017-09-23T15:51:02Z",
+        "updatedAt" : "2017-09-23T15:51:02Z",
+        "lastEditedBy" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "14dfeecd47959e752e360e5bc43d247c11b42b27",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +1366,1370 @@\t}\n\n\ttimestampMatches := timestampMatcher.FindAllStringSubmatch(status, -1)\n\tif len(timestampMatches) < 1 {\n\t\treturn time.Time{}, fmt.Errorf(\"Failed to parse CA status timestamp, raw status: %v\", status)"
+  },
+  {
+    "id" : "96d31d0c-778c-4e83-a305-d247af75b5aa",
+    "prId" : 52844,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/52844#pullrequestreview-64277337",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "96cd9158-0c97-42b6-98a7-7f0c40a50dc4",
+        "parentId" : null,
+        "authorId" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "body" : "I like this refactoring a lot - it makes `waitForScaleUpStatus` much more flexible imo.",
+        "createdAt" : "2017-09-21T13:15:31Z",
+        "updatedAt" : "2017-09-21T13:16:38Z",
+        "lastEditedBy" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "14dfeecd47959e752e360e5bc43d247c11b42b27",
+    "line" : 120,
+    "diffHunk" : "@@ -1,1 +1429,1433 @@}\n\nfunc waitForScaleUpStatus(c clientset.Interface, cond func(s *scaleUpStatus) bool, timeout time.Duration) (*scaleUpStatus, error) {\n\tvar finalErr error\n\tvar status *scaleUpStatus"
+  },
+  {
+    "id" : "be21a9f1-75f3-4164-afbe-ea7d663208a1",
+    "prId" : 52796,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/52796#pullrequestreview-64033873",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5d782bc6-a963-49c7-bd39-4b2f6804a6f4",
+        "parentId" : null,
+        "authorId" : "3f00d8a9-68e2-438c-85da-b03590361276",
+        "body" : "Are you sure all of those can be safely restarted? I am rather worried about restarting heapster (or any other critical system pod) in e2e. We had enough pain with rescheduler tainting our nodes already.",
+        "createdAt" : "2017-09-20T15:40:52Z",
+        "updatedAt" : "2017-09-20T15:40:52Z",
+        "lastEditedBy" : "3f00d8a9-68e2-438c-85da-b03590361276",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9cd88953-7080-498c-a492-8734db12a410",
+        "parentId" : "5d782bc6-a963-49c7-bd39-4b2f6804a6f4",
+        "authorId" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "body" : "It's hard to be sure, but:\r\n1. in tests with broken nodes, we don't select a node based on any of those pods, so we sometimes accidentally cause them to become unavailable and rescheduled anyway,\r\n2. we have timeouts and retry logic which should be enough to cover these scenarios if everything works as expected,\r\n3. if it doesn't work as expected, I think we should fail, even if it's not CA that is responsible.",
+        "createdAt" : "2017-09-20T16:08:12Z",
+        "updatedAt" : "2017-09-20T16:08:13Z",
+        "lastEditedBy" : "e739420e-d5c5-4f38-b9a7-7f3f738b886f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2d36182-2c30-4aca-beab-f0d51d084da7",
+        "parentId" : "5d782bc6-a963-49c7-bd39-4b2f6804a6f4",
+        "authorId" : "3f00d8a9-68e2-438c-85da-b03590361276",
+        "body" : "I don't necessarily agree with point 3 above. However, we discussed offline with @aleksandra-malinowska and it looks like restarting heapster should no longer break tests.",
+        "createdAt" : "2017-09-20T16:18:27Z",
+        "updatedAt" : "2017-09-20T16:18:27Z",
+        "lastEditedBy" : "3f00d8a9-68e2-438c-85da-b03590361276",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fbeb4de996942ed2748b30a1020d37e4330c7edc",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +1426,1430 @@\t\t{label: \"kubernetes-dashboard\", min_available: 0},\n\t\t{label: \"l7-default-backend\", min_available: 0},\n\t\t{label: \"heapster\", min_available: 0},\n\t}\n\tfor _, pdbData := range pdbsToAdd {"
+  }
+]

@@ -1,0 +1,387 @@
+[
+  {
+    "id" : "84a155dd-c112-4a2e-8c52-aba02e22b6e6",
+    "prId" : 11746,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "parentId" : null,
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "If one of the use cases is \"Be able to specify the number of instances performing a job\", shouldn't this struct have a field to specify a max parallelism (i.e. number of tasks to run at any given time). This could be targeted by a resize verb.\n",
+        "createdAt" : "2015-07-25T01:21:37Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c74cbc5f-aab7-4a37-a916-399ed2adb47e",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Yeah, I was generally confused about this issue too. Earlier the doc says \"Job is responsible for keeping the desired number of Pods to a completion of a task\" which seems to simultaneously imply a static and dynamic number of Pods.\n\nIt seems there are two choices\n- specify a count that is the initial number of Pods created; they are restarted on failure (of the container or the machine) but not restarted when they exit successfully; so the total number of Pods goes from that count to zero over time\n- specify a max parallelism (as @mikedanese suggests; also see \"Completions\" field in #7380) with the understanding that the system will decide how many replicas should be running at any time (bounded by that number)\n",
+        "createdAt" : "2015-07-27T01:12:15Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0d0835bd-efbe-429b-ac21-feca9828d1cc",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "In my thinking I went with the first choice, iow. specify the initial number of Pods created and proceed until successful completion, only failing pods will be restarted. Since we are trying to address a use case of performing a certain batch task my understanding was that we want static amount of Pods that will be running a task. Can you guys provide me with examples where you'll be interested in resizing? I don't see Jobs as a candidate for such, I'm seeing resizing as an option for RC, which is targeted to run all the time and restarting one would mean a undesirable down time, which is totally different to what Jobs are for.\n",
+        "createdAt" : "2015-07-27T12:01:21Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35b7e470-0680-4063-99c4-c6ce19c97a32",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "Choice 1 is restrictive. The total number of completions required should not be conflated with the total number of tasks running.\n\nHere is an example. I have a data refresh job that runs over a database and each task is assigned a partition. Partition assignment is built into the application so a Job works for me. There are 500 or 1000 completions to finish this job. During peak hours, I only have resource capacity to run max 5 tasks in parallel, but during off peak hours I want to resize the job to run max 25 tasks in parallel. At no point do I want to run a task for every completion at the same time.\n",
+        "createdAt" : "2015-07-27T16:43:55Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c433ae40-4a89-4e07-ac90-d8c6ba3f28fa",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "@mikedanese You might be able to get that behavior with Choice 1 + something running on top that dynamically adjusts the # tasks in the Spec?\n",
+        "createdAt" : "2015-07-27T16:47:46Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5297e6d7-cf6e-42af-a40d-91e16ebed831",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "@davidopp I think that's the wrong point of control. If I understand you, I would be dynamically adding to the number of .spec.completions as the job runs. It would be extremely racy. What if all tasks transitioned to phase complete (and thus the job transitioned to phase complete) before my controller had a chance to increment the number of completions. Can a phase complete job transition to a phase running job? If I wanted a job to run with MaxParallelism=1, this scenario would happen every time. This is not impossible to implement but It seems really nasty.\n\nIf I were to design a controller that does what the example describes, it would operate on Task not Job. And that controller's resource would probably have a superset of the functionality of Job.\n",
+        "createdAt" : "2015-07-27T17:10:07Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e102bf9-3ccf-4f50-98da-521a267abd73",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "It sounds like you are trying to implement admission control - shouldn't the apiserver do that?  Obviously, we don't want to bury the apiserver, but it's purpose in life is to figure out what can be run where and when, shouldn't we just let it do its thing?  At least until we have evidence that it can't..\n",
+        "createdAt" : "2015-07-28T04:06:45Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53093311-53a9-49a3-bc8c-30bd6f015870",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "I don't think it can do it's thing without a way to preempt job pods when I need to scale up a replication controller. IIUC, the only admission control mechanism that could conceivably do this now is the ResourceQuota. Going with implementing this in admission control, assume I restrict batch workloads to a specific namespace. If I update the namespace's ResourceQuota, will pods be killed or will no new pods be admitted? Suppose pods are killed (which I don't know is the case). Which ones? Do I need a namespace per batch job? Suppose I'm at the limit of my ResourceQuota, which job's pods get admitted? The first request to go through as resource becomes available? Implementation wise this also doesn't work well with the current ControllerExpectation mechanism (think spinlock vs notify). There's a lot to figure out for something that could be solved with a MaxParallelism in the controller manager.\n\nI feel that MaxParallelism attached to a job is the correct place for this responsibility. Can't any argument for admission control apply to replication controller as well? I could be overruled/persuaded by the api experts on this and I'm also happy to live this out of the first draft of the Job proposal.\n",
+        "createdAt" : "2015-07-28T04:49:18Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "248534b1-148c-44cb-be0b-e6d96f52992c",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "In the light of @mikedanese's example I think there are two use cases to consider, one is regarding the actual control over a Job (iow. the MaxParallelism) and the other thing is the ResourceQuota being applied. In my understanding the RQ is a mechanism for a cluster admin to restrict user capabilities, whereas the MaxParallelism is mine (as a user) possibility to drive the job execution, similarly to what you do with RC today. \n",
+        "createdAt" : "2015-07-28T11:53:55Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "232050f5-83e3-4b50-958b-8c325e647358",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "> RQ is a mechanism for a cluster admin\n\nAnother good argument for MaxParallelism vs Admission Control :)\n",
+        "createdAt" : "2015-07-28T17:08:01Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f246ed71-977e-44a3-b89c-379bf6bb47a9",
+        "parentId" : "8dc7ba41-160a-4bc7-b850-0a055321cdf2",
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "Admission control and RQ would just result in a bunch of forbidden messages being returned.  +1 for MaxParallelism\n",
+        "createdAt" : "2015-07-29T00:27:43Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "688f3da8391dd91f750ad00d189376c8c21cb43a",
+    "line" : 103,
+    "diffHunk" : "@@ -1,1 +101,105 @@```go\n// JobSpec describes how the job execution will look like.\ntype JobSpec struct {\n\n    // Parallelism specifies the maximum desired number of pods the job should"
+  },
+  {
+    "id" : "fc082dc7-f484-4ee7-b4d6-89bb3444d0bc",
+    "prId" : 11746,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "795210dc-4d51-44f9-ae37-f2c496c60836",
+        "parentId" : null,
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "If the user did not specify a `Selector` at creation time, could the Job Controller pick a selector for the user and update the object to fill in this field? We could reserve a label key for use by Job Controller, such as `kubernetes.io/job-uid`, and the Job Controller could pick a unique key for all the pods of a given job.\n",
+        "createdAt" : "2015-08-04T20:08:55Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd55f58f-3c72-46a6-83aa-237c8c765b5e",
+        "parentId" : "795210dc-4d51-44f9-ae37-f2c496c60836",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "Selector should be defaulted from PodTemplate labels, like ReplicationController. We could create a default label if no labels were specified in the PodTemplate. If we wanted to inject a new label by default in addition to user-specified labels, we'd need another field to specify that key name, as we plan to do for Deployment.\n",
+        "createdAt" : "2015-08-04T22:22:24Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be59b515-0d93-4b08-91b0-503166dcbdef",
+        "parentId" : "795210dc-4d51-44f9-ae37-f2c496c60836",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "Why are you doing it differently for Deployment than ReplicationController, and what makes Job more like ReplicationController than Deployment?\n",
+        "createdAt" : "2015-08-04T23:45:09Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6f127db7-2937-464b-9aa4-c93bad519a54",
+        "parentId" : "795210dc-4d51-44f9-ae37-f2c496c60836",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "Deployment will generate replication controllers, much like \"simplified rolling update\":\nhttps://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/design/simple-rolling-update.md\n\nIt needs to generate a new resource name, label set, and label selector matching that set for each new RC. \n\nJob does not need to generate another controller to manage a distinct subset. It just needs to produce one set of pods. In that respect, it is more similar to RC.\n",
+        "createdAt" : "2015-08-05T00:20:33Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e2df4e2c-5d3f-4419-9ed9-718061943bed",
+        "parentId" : "795210dc-4d51-44f9-ae37-f2c496c60836",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "#12298 is result of further conversation on this topic.\n",
+        "createdAt" : "2015-08-05T23:16:09Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08d713eb-e434-45ae-92d9-eea00d293e10",
+        "parentId" : "795210dc-4d51-44f9-ae37-f2c496c60836",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "But we don't need to make any changes to this PR for the above thread.  This should mimic replicationController, as you have suggested.  We can add the #12298 feature to this and replicationController later.\n",
+        "createdAt" : "2015-08-05T23:28:38Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "688f3da8391dd91f750ad00d189376c8c21cb43a",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +114,118 @@\n    // Selector is a label query over pods running a job.\n    Selector map[string]string\n\n    // Template is the object that describes the pod that will be created when"
+  },
+  {
+    "id" : "07f9a2fa-f186-49e7-91f4-0051e889a247",
+    "prId" : 11746,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b8007a5a-28c4-445e-bca2-30526178e87c",
+        "parentId" : null,
+        "authorId" : "498aade9-b8f0-4e29-8055-89afa6f5fcc8",
+        "body" : "What about cancelling a job?  The first thing many people are going to ask for once you give them jobs is the ability to cancel them.\n",
+        "createdAt" : "2015-08-05T19:24:45Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "498aade9-b8f0-4e29-8055-89afa6f5fcc8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9cb649ec-d3ee-4aef-912a-1962657f57d9",
+        "parentId" : "b8007a5a-28c4-445e-bca2-30526178e87c",
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "I viewed canceling as `kubectl delete ... --cascade=true`\n",
+        "createdAt" : "2015-08-05T19:27:29Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48333f3b-2abc-41be-85b5-e5a9f0f22b64",
+        "parentId" : "b8007a5a-28c4-445e-bca2-30526178e87c",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Also note that `cascade` is true by default so it's really `kubectl delete job/one`\n",
+        "createdAt" : "2015-08-11T11:47:34Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "688f3da8391dd91f750ad00d189376c8c21cb43a",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +52,56 @@1. Be able to specify the number of instances performing a job at any one time.\n1. Be able to specify the number of successfully finished instances required to finish a job.\n\n\n## Motivation"
+  },
+  {
+    "id" : "6fd565c7-5211-429c-ac27-30289412762c",
+    "prId" : 11746,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d9b6079-0b6d-4835-a9a7-ab47ef848eb5",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "I think something else for the future would be to think about how a user can easily understand what happened to each pod, especially in the RestartPolicyNever case. I think there are multiple ways to do this. One is to keep a list of pointers to pods in the Job (job controller would make sure not to delete them prematurely; it's creating the pods so it should also be the one that deltees them). Another is to store active and failed (and maybe also successful) in []JobCondition not just active.\n",
+        "createdAt" : "2015-08-16T06:44:11Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a6e597a-7e9e-41b4-9de2-afb00da952ec",
+        "parentId" : "7d9b6079-0b6d-4835-a9a7-ab47ef848eb5",
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "Good idea! Thanks, will add them.\n",
+        "createdAt" : "2015-08-17T11:08:04Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e506cfa-3098-456c-bcce-338f26389725",
+        "parentId" : "7d9b6079-0b6d-4835-a9a7-ab47ef848eb5",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "I think `kubectl describe job` could join a list of the Pods created by the Job controller with events from those pods, which removes the need to keep the Pod themselves.\n",
+        "createdAt" : "2015-08-17T19:30:15Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9bce25ae-ba1c-4bd9-86c5-c38f36ad839d",
+        "parentId" : "7d9b6079-0b6d-4835-a9a7-ab47ef848eb5",
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "Yeah and that should be easily doable, imho.\n",
+        "createdAt" : "2015-08-17T20:05:05Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3bf837f9-8a20-4bd2-b194-c300ff237580",
+        "parentId" : "7d9b6079-0b6d-4835-a9a7-ab47ef848eb5",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "I agree with @erictune. I don't want any O(N) data in JobStatus itself.\n",
+        "createdAt" : "2015-08-17T20:26:48Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "688f3da8391dd91f750ad00d189376c8c21cb43a",
+    "line" : 178,
+    "diffHunk" : "@@ -1,1 +176,180 @@* JobFinish\n\n## Future evolution\n\nBelow are the possible future extensions to the Job controller:"
+  },
+  {
+    "id" : "4c39b949-eb50-491b-b81e-a456d4a637f2",
+    "prId" : 11746,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "96f1234c-7ac1-45f2-902a-178567b2d4e7",
+        "parentId" : null,
+        "authorId" : "498aade9-b8f0-4e29-8055-89afa6f5fcc8",
+        "body" : "@soltysh Having only a single condition reads a little weird to me.  Do we at least need to have another constant for an in-progress job?\n",
+        "createdAt" : "2015-08-17T16:06:17Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "498aade9-b8f0-4e29-8055-89afa6f5fcc8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "937d9382-c6f2-4a3d-92c9-649c03b430af",
+        "parentId" : "96f1234c-7ac1-45f2-902a-178567b2d4e7",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "I don't mind this. I like the idea that someone could define a state machine (i.e. derive Phase) on top of orthogonal conditions. If we add \"in-progress\" then condition is just a repackaging of Phase.\n",
+        "createdAt" : "2015-08-17T16:16:22Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3adb3d64-a808-48ff-b578-ffcabf7b95c9",
+        "parentId" : "96f1234c-7ac1-45f2-902a-178567b2d4e7",
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "My initial proposal after switching to Conditions was exactly mapping all of the Phases. But after reading #7856 and #12015 I agree with @mikedanese that having just single termination condition is sufficient.\n",
+        "createdAt" : "2015-08-17T19:57:48Z",
+        "updatedAt" : "2015-08-17T20:33:59Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "688f3da8391dd91f750ad00d189376c8c21cb43a",
+    "line" : 158,
+    "diffHunk" : "@@ -1,1 +156,160 @@const (\n    // JobSucceeded means the job has successfully completed its execution.\n    JobSucceeded JobConditionType = \"Complete\"\n)\n"
+  },
+  {
+    "id" : "c7bd3a45-81d9-4445-b6be-70817271075e",
+    "prId" : 11746,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0a884115-fc7d-40d0-8094-4079178d92ab",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "should remove \"any\" b/c - workflow DAGs or graphs are not supported. \n",
+        "createdAt" : "2015-08-24T20:19:31Z",
+        "updatedAt" : "2015-08-24T20:19:31Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "688f3da8391dd91f750ad00d189376c8c21cb43a",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +57,61 @@\nJobs are needed for executing multi-pod computation to completion; a good example\nhere would be the ability to implement any type of batch oriented tasks.\n\n"
+  }
+]

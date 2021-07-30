@@ -1,0 +1,156 @@
+[
+  {
+    "id" : "40cf5b9c-215f-4891-88c2-8caa2b6e9cc7",
+    "prId" : 62308,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/62308#pullrequestreview-113690082",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "014a2410-2d61-4c21-97f6-86600785d9ed",
+        "parentId" : null,
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "This function should be idempotent. If portworx volume already has the user requested size, `ExpandVolumeDevice` should be a `no-op` followed by a successful response. Please see other volume plugins as an example.",
+        "createdAt" : "2018-04-17T13:04:22Z",
+        "updatedAt" : "2018-04-19T19:15:08Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7255b98-6405-4b53-a9be-b9e0eada141e",
+        "parentId" : "014a2410-2d61-4c21-97f6-86600785d9ed",
+        "authorId" : "137889cb-cbfa-494b-994e-071dbd8d3ffc",
+        "body" : "@gnufied the Portworx driver implementation on the server side is already idempotent. So invoking it multiple times will have the same effect as it internally checks if the volume has the size. So I don't need any logic here on the client side. Best to keep it simple.",
+        "createdAt" : "2018-04-18T18:15:15Z",
+        "updatedAt" : "2018-04-19T19:15:08Z",
+        "lastEditedBy" : "137889cb-cbfa-494b-994e-071dbd8d3ffc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "068030c8-e342-42d4-bc04-63d9f33d91f7",
+        "parentId" : "014a2410-2d61-4c21-97f6-86600785d9ed",
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "There is another reason for keeping this idempotent in Kubernetes rather than in Portworx server side. Lets say:\r\n\r\n1. User created a PVC of 5GB size and is matched with a PV which is of 7GiB size.\r\n2. Later on User edits the PVC to be 6GiB. Kuberenetes may still call `ExpandVolumeDevice`  even though underlying PV already matches the requested size.\r\n3. What happens in portworx server side now? Will it shrink existing 7GiB disk to 6GiB or will it return an error?\r\n\r\nObviously shrinking will be bad. We never shrink volumes in Kubernetes. Returning an error will be bad too. Even if theoretically Portworx in Server side does the \"right thing\" and returns successful response - there is no guarantee that the behaviour will remain the same always.  That is why - it is important to not rely on Portworx behaviour in server side.\r\n\r\n\r\n",
+        "createdAt" : "2018-04-19T13:31:37Z",
+        "updatedAt" : "2018-04-19T19:15:08Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e8e520a6-5917-4884-a7f2-381a7a9be05e",
+        "parentId" : "014a2410-2d61-4c21-97f6-86600785d9ed",
+        "authorId" : "137889cb-cbfa-494b-994e-071dbd8d3ffc",
+        "body" : "@gnufied good point ! Updated the review with check to see if existing volume is already equal or greater than requested size.",
+        "createdAt" : "2018-04-19T16:50:29Z",
+        "updatedAt" : "2018-04-19T19:15:08Z",
+        "lastEditedBy" : "137889cb-cbfa-494b-994e-071dbd8d3ffc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "adc71854e2c58394333abe15af29e964ab183760",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +182,186 @@\toldSize resource.Quantity) (resource.Quantity, error) {\n\tglog.V(4).Infof(\"Expanding: %s from %v to %v\", spec.Name(), oldSize, newSize)\n\terr := plugin.util.ResizeVolume(spec, newSize, plugin.host)\n\tif err != nil {\n\t\treturn oldSize, err"
+  },
+  {
+    "id" : "7569c1e4-053e-42b7-98f5-5abd0973c9c1",
+    "prId" : 48898,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/48898#pullrequestreview-49908504",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d7f063f-9ee5-4869-9fd1-5b59de28bcca",
+        "parentId" : null,
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "Do we really want to log these messages *always* in the log files? Looks to me that, older logging priority was more accurate.",
+        "createdAt" : "2017-07-13T20:01:39Z",
+        "updatedAt" : "2017-07-14T20:20:48Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "abfdbd8e-d2b5-4fc1-8ee9-ede52171cdba",
+        "parentId" : "3d7f063f-9ee5-4869-9fd1-5b59de28bcca",
+        "authorId" : "137889cb-cbfa-494b-994e-071dbd8d3ffc",
+        "body" : "We have found tracking down events for volume setup and teardown very important in debugging field issues and hence I've changed the logging level. `SetupAt` and `TearDownAt` get invoked only when pods get scheduled on a new node (new pod or existing pod getting re-scheduled). So these logs entries won't be very chatty.",
+        "createdAt" : "2017-07-13T21:15:50Z",
+        "updatedAt" : "2017-07-14T20:20:48Z",
+        "lastEditedBy" : "137889cb-cbfa-494b-994e-071dbd8d3ffc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "90919e3e4ec7ff4cac55b72b1d0314c24399bac0",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +267,271 @@func (b *portworxVolumeMounter) SetUpAt(dir string, fsGroup *int64) error {\n\tnotMnt, err := b.mounter.IsLikelyNotMountPoint(dir)\n\tglog.Infof(\"Portworx Volume set up. Dir: %s %v %v\", dir, !notMnt, err)\n\tif err != nil && !os.IsNotExist(err) {\n\t\tglog.Errorf(\"Cannot validate mountpoint: %s\", dir)"
+  },
+  {
+    "id" : "cedf2a12-584d-4084-9a2a-8aaa7a21cb3c",
+    "prId" : 39535,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/39535#pullrequestreview-17518017",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f27a5492-30d6-4379-b993-fd93080ae242",
+        "parentId" : null,
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "use `util.UnmountPath`  in `pkg/volume/util`",
+        "createdAt" : "2017-01-19T18:16:36Z",
+        "updatedAt" : "2017-02-28T23:27:39Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "28df55fc31f658648681749e8545771c314b2bfd",
+    "line" : 305,
+    "diffHunk" : "@@ -1,1 +303,307 @@// resource was the last reference to that disk on the kubelet.\nfunc (c *portworxVolumeUnmounter) TearDownAt(dir string) error {\n\tglog.V(4).Infof(\"Portworx Volume TearDown of %s\", dir)\n\t// Unmount the bind mount inside the pod\n\tif err := util.UnmountPath(dir, c.mounter); err != nil {"
+  },
+  {
+    "id" : "c7b363a4-1d0b-4907-8549-79c3dca7e733",
+    "prId" : 39535,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/39535#pullrequestreview-23792554",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ccec9505-8822-4c27-9da5-a2e96eea3555",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Why not implement the attacher interface?",
+        "createdAt" : "2017-02-24T01:54:42Z",
+        "updatedAt" : "2017-02-28T23:27:39Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8b94e7e2-7e15-4662-bf5e-f2c433a9f02b",
+        "parentId" : "ccec9505-8822-4c27-9da5-a2e96eea3555",
+        "authorId" : "20686892-cdc6-4cf5-a52e-f6a8921fef93",
+        "body" : "The attach operation for Portworx volumes is instantaneous. Hence I did not find it necessary to implement the Attacher interface especially the WaitForAttach. The following would simply send a REST call and attach the volume. ",
+        "createdAt" : "2017-02-24T02:57:46Z",
+        "updatedAt" : "2017-02-28T23:27:39Z",
+        "lastEditedBy" : "20686892-cdc6-4cf5-a52e-f6a8921fef93",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d34fcae2-bfab-444e-a0a1-0d316516025c",
+        "parentId" : "ccec9505-8822-4c27-9da5-a2e96eea3555",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "The benefit of implementing the attacher interface is that the attach/detach operation are handled by the attach/detach controller instead of kubelet. Two benefits of this are 1) credentials required for attach/detach do not need to be available on node machines (for kubelet), and 2) if a node/kubelet becomes inaccessible, the master attach/detach controller can still ensure that volumes are detached (volumes are not stranded). For these reasons, you may want to consider refactoring in the future to implement the attacher interface. `WaitForAttach()` can always be a no-op if it is irrelevant.",
+        "createdAt" : "2017-02-24T19:26:44Z",
+        "updatedAt" : "2017-02-28T23:27:39Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "28df55fc31f658648681749e8545771c314b2bfd",
+    "line" : 266,
+    "diffHunk" : "@@ -1,1 +264,268 @@\t}\n\n\tif _, err := b.manager.AttachVolume(b); err != nil {\n\t\treturn err\n\t}"
+  }
+]

@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "1b18ace7-bc4d-4ce7-9b5c-bbc85345204a",
+    "prId" : 68483,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/68483#pullrequestreview-166602663",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e00123fc-92b3-442a-a6c1-9b36b8a8b61e",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "So umm yeah, we need to discuss this.  ",
+        "createdAt" : "2018-10-12T15:36:55Z",
+        "updatedAt" : "2018-10-12T15:39:38Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c05f7f9e-dc8c-4dec-97c0-dc192199fce2",
+        "parentId" : "e00123fc-92b3-442a-a6c1-9b36b8a8b61e",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "SIG storage has already created a sub-framework that abstracts out volume plugin setup/teardown.  I don't think we need to add an additional interface here.  For storage, it is possible to test multiple volume plugins against a single cloud provider.",
+        "createdAt" : "2018-10-15T19:57:07Z",
+        "updatedAt" : "2018-10-15T20:06:15Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb22e214-feaa-4093-9b48-1b01ce3bf875",
+        "parentId" : "e00123fc-92b3-442a-a6c1-9b36b8a8b61e",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "Do you have a pointer to that sub-framework? Have you looked at the original code and whether that can be rewritten to use that sub-framework instead?\r\n\r\nThe original code was in `test/e2e/framework/pv_util.go`:\r\n```\r\nfunc createPD(zone string) (string, error) {\r\n        if zone == \"\" {\r\n                zone = TestContext.CloudConfig.Zone\r\n        }\r\n\r\n        if TestContext.Provider == \"gce\" || TestContext.Provider == \"gke\" {\r\n                pdName := fmt.Sprintf(\"%s-%s\", TestContext.Prefix, string(uuid.NewUUID()))\r\n\r\n                gceCloud, err := GetGCECloud()\r\n                if err != nil {\r\n                        return \"\", err\r\n                }\r\n\r\n                if zone == \"\" && TestContext.CloudConfig.MultiZone {\r\n                        zones, err := gceCloud.GetAllZonesFromCloudProvider()\r\n                        if err != nil {\r\n                                return \"\", err\r\n                        }\r\n                        zone, _ = zones.PopAny()\r\n                }\r\n\r\n                tags := map[string]string{}\r\n                err = gceCloud.CreateDisk(pdName, gcecloud.DiskTypeStandard, zone, 2 /* sizeGb */, tags)\r\n                if err != nil {\r\n                        return \"\", err\r\n                }\r\n                return pdName, nil\r\n        } else if TestContext.Provider == \"aws\" {\r\n                client := newAWSClient(zone)\r\n                request := &ec2.CreateVolumeInput{}\r\n                request.AvailabilityZone = aws.String(zone)\r\n                request.Size = aws.Int64(10)\r\n                request.VolumeType = aws.String(awscloud.DefaultVolumeType)\r\n                response, err := client.CreateVolume(request)\r\n                if err != nil {\r\n                        return \"\", err\r\n                }\r\n\r\n                az := aws.StringValue(response.AvailabilityZone)\r\n                awsID := aws.StringValue(response.VolumeId)\r\n\r\n                volumeName := \"aws://\" + az + \"/\" + awsID\r\n                return volumeName, nil\r\n        } else if TestContext.Provider == \"azure\" {\r\n                pdName := fmt.Sprintf(\"%s-%s\", TestContext.Prefix, string(uuid.NewUUID()))\r\n                azureCloud, err := GetAzureCloud()\r\n\r\n                if err != nil {\r\n                        return \"\", err\r\n                }\r\n\r\n                _, diskURI, _, err := azureCloud.CreateVolume(pdName, \"\" /* account */, \"\" /* sku */, \"\" /* location */, 1 /* sizeGb */)\r\n                if err != nil {\r\n                        return \"\", err\r\n                }\r\n                return diskURI, nil\r\n        } else {\r\n                return \"\", fmt.Errorf(\"provider does not support volume creation\")\r\n        }\r\n}\r\n```\r\n\r\nIt doesn't seem to be used much (`storage/nfs_persistent_volume-disruptive.go`, `upgrades/storage/persistent_volumes.go`, `scheduling/ubernetes_lite_volumes.go` depend on it indirectly). So perhaps this is simply code that can be deleted together with the tests that uses it.\r\n\r\nIt's just not something that I wanted to propose myself, because I don't know which tests are still relevant. I also didn't want to rewrite test logic. IMHO that would be better if that was done by people who actually know the tests.\r\n",
+        "createdAt" : "2018-10-16T06:19:47Z",
+        "updatedAt" : "2018-10-16T06:19:47Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7c97ece-3012-4224-b690-a03bdcaaae33",
+        "parentId" : "e00123fc-92b3-442a-a6c1-9b36b8a8b61e",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "The subframework defines an interface for different volume plugins to implement at test/e2e/storage/drivers/base.go.  I think many of these tests can be converted to use the new framework, it just needs an owner.",
+        "createdAt" : "2018-10-16T18:49:01Z",
+        "updatedAt" : "2018-10-16T18:49:01Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa73e8aa-ac38-4478-81b6-a1b61855580b",
+        "parentId" : "e00123fc-92b3-442a-a6c1-9b36b8a8b61e",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "`base.go` has the interface, `in_tree.go` the implementation. Looking at the implementation for GCE, I find:\r\n```\r\nfunc (g *gcePdDriver) CreateVolume(volType testpatterns.TestVolType) interface{} {\r\n...\r\n        By(\"creating a test gce pd volume\")\r\n        vname, err := framework.CreatePDWithRetry()\r\n...\r\n}\r\n```\r\n\r\n`framework.CreatePDWithRetry` is from `pv_util.go`. In other words, this new API just wraps the existing code. It cannot replace it. Even if the tests were rewritten to not call `CreatePDWithRetry` directly, the problem would still remain.\r\n\r\nEither the new API must be implemented differently (without direct calls to specific implementations) or we keep it as-is and connect it with the actual implementation via the API in this PR.\r\n",
+        "createdAt" : "2018-10-16T19:53:44Z",
+        "updatedAt" : "2018-10-16T19:53:44Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b3497b5-4728-4df8-87de-fd0490d9e690",
+        "parentId" : "e00123fc-92b3-442a-a6c1-9b36b8a8b61e",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "We could reimplement each driver's method to call the cloud provider's methods directly, and then put each driver implementation into its own package.  My main point was I don't think the Provider interface is the right place to put PD/Volume methods because a cloud provider can support multiple volume types.",
+        "createdAt" : "2018-10-16T21:36:02Z",
+        "updatedAt" : "2018-10-16T21:36:02Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a4f99df-36ae-4114-b1ca-cda98dfbe06a",
+        "parentId" : "e00123fc-92b3-442a-a6c1-9b36b8a8b61e",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "I agree that the \"vendor\" interface in this PR isn't ideal and something better could be designed and implemented - over time. Right now the interface closely resembles how the framework previously called vendor-specific code (`createPD` function became the `createPD` interface method). There's still time and opportunities to improve that interface while all affected code is in the same repo, but I'd like to keep that out of the current PR, otherwise it'll never get done.",
+        "createdAt" : "2018-10-19T16:32:19Z",
+        "updatedAt" : "2018-10-19T16:32:19Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "97101a6a86ea54959aa0eb20f3154f2d5fc290d6",
+    "line" : 86,
+    "diffHunk" : "@@ -1,1 +84,88 @@\tDeletePD(pdName string) error\n\tCreatePVSource(zone, diskName string) (*v1.PersistentVolumeSource, error)\n\tDeletePVSource(pvSource *v1.PersistentVolumeSource) error\n\n\tCleanupServiceResources(c clientset.Interface, loadBalancerName, region, zone string)"
+  }
+]

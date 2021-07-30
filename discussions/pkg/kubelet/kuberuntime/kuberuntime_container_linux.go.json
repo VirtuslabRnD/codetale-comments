@@ -1,0 +1,156 @@
+[
+  {
+    "id" : "fe82d820-c03c-4f31-9fba-7c0a0072a3ef",
+    "prId" : 102970,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102970#pullrequestreview-696867081",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "02d3141e-f6de-404c-9888-4a6adafe55fb",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "can we add a comment here to explain logic from KEP:\r\n\r\ni.e.\r\n\r\n> If container sets limits.memory, we set memory.high=pod.spec.containers[i].resources.limits[memory] * memory throttling factor for container level cgroup if memory.high>memory.min\r\n\r\n> If container doesn't set limits.memory, we set memory.high=node allocatable memory * memory throttling factor for container level cgroup",
+        "createdAt" : "2021-06-30T21:00:57Z",
+        "updatedAt" : "2021-06-30T21:59:40Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ff1cc5b-a746-4a53-8242-f15da8492294",
+        "parentId" : "02d3141e-f6de-404c-9888-4a6adafe55fb",
+        "authorId" : "c840f310-2760-4562-b9d3-14db6553a5a6",
+        "body" : "fixed",
+        "createdAt" : "2021-07-01T06:30:30Z",
+        "updatedAt" : "2021-07-01T06:30:30Z",
+        "lastEditedBy" : "c840f310-2760-4562-b9d3-14db6553a5a6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c3d9b10ca834b88516c6e059eb038eae19266ddf",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +125,129 @@\t\t\tunified[cm.MemoryMin] = strconv.FormatInt(memoryRequest, 10)\n\t\t}\n\n\t\t// If container sets limits.memory, we set memory.high=pod.spec.containers[i].resources.limits[memory] * memory_throttling_factor\n\t\t// for container level cgroup if memory.high>memory.min."
+  },
+  {
+    "id" : "d89ca9b3-f64d-4f21-8da2-98f9caa35b01",
+    "prId" : 102823,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102823#pullrequestreview-691096982",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "61012649-db8a-4448-89fc-d42b79869caa",
+        "parentId" : null,
+        "authorId" : "8e9f49fc-1050-4601-b81c-83bf660c5eb8",
+        "body" : "This is the core of the behavior change.\r\n\r\nThe `UnlimitedSwap` case is in alignment with the design and straightforward to me\r\n\r\nhttps://github.com/kubernetes/enhancements/blob/master/keps/sig-node/2400-node-swap/README.md#kubeconfig-addition\r\n\r\nFor the `NoSwap` case, I find `NoSwap` to be misleading as swap _can_ be used by the container; just the sum of resident memory usage + swap usage can't exceed `memory.memsw.limit_in_bytes`.\r\n\r\nIt seems the assumption being made here is that anonymous memory for the cgroup is only swapped due to it approaching its own `memory.limit_in_bytes`.  This is not the only situation that results in swapping though. If there is memory pressure at any parent level, the kernel maybe indeed swap as anonymous pages become reclaimable when swap is enabled and the pressure to reclaim can come from the parent.\r\n\r\nI am not aware of a way to disable swapping for a particular cgroup if swap is available in cgroup v1.  It only does accounting on a `memory` and `memory+swap` basis, not a `swap` only basis.  Unlike cgroup v2 which has `memory.swap.max`.\r\n\r\nMaybe a better name is `LimitedSwap`...\r\n\r\nThe only true `NoSwap` mode is to not enable the `NodeSwapEnabled` feature gate.",
+        "createdAt" : "2021-06-17T00:39:11Z",
+        "updatedAt" : "2021-06-17T01:37:28Z",
+        "lastEditedBy" : "8e9f49fc-1050-4601-b81c-83bf660c5eb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "17c9f0eb-697f-43af-8a1f-eafcda92648f",
+        "parentId" : "61012649-db8a-4448-89fc-d42b79869caa",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "So this change is deliberate, to make the CRI behave like dockershim:\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/24b716673caae31f070b06a337bc12c97ff1d4cb/pkg/kubelet/dockershim/helpers_linux.go#L115-L117\r\n\r\nAnd yeah, the assumption is that there won't be any significant swap usage with these controls set.\r\n\r\n[From the KEP:](https://github.com/kubernetes/enhancements/blob/master/keps/sig-node/2400-node-swap/README.md#just-set---fail-swap-onfalse)\r\n\r\n> Dockershim currently sets swap available for workloads to 0. The CRI does not restrict it at all. This inconsistency makes it difficult or impossible to use swap in production, particularly if a user wants to restrict workloads from using swap when using the CRI rather than dockershim.\r\n\r\nI could update the KEP to use a different name if you think \"NoSwap\" is misleading and we get general agreement. I can also improve the documentation to match.",
+        "createdAt" : "2021-06-17T16:55:17Z",
+        "updatedAt" : "2021-06-17T16:55:18Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9453dcc0-a70a-4ca1-9087-2d5396250a2d",
+        "parentId" : "61012649-db8a-4448-89fc-d42b79869caa",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "(name change is done)",
+        "createdAt" : "2021-06-22T22:01:30Z",
+        "updatedAt" : "2021-06-22T22:01:31Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29495c94-c011-4abc-855a-09072c465db6",
+        "parentId" : "61012649-db8a-4448-89fc-d42b79869caa",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "KEP update is https://github.com/kubernetes/enhancements/pull/2794",
+        "createdAt" : "2021-06-23T20:11:35Z",
+        "updatedAt" : "2021-06-23T20:11:35Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "558472560582a48826a118b1795fc072957412b5",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +104,108 @@\t\t\t// Some swapping is still possible.\n\t\t\t// Note that if memory limit is 0, memory swap limit is ignored.\n\t\t\tlc.Resources.MemorySwapLimitInBytes = lc.Resources.MemoryLimitInBytes\n\t\t}\n\t}"
+  },
+  {
+    "id" : "df5c6f38-82d3-4cfc-9c35-09f4f60d27d7",
+    "prId" : 102823,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102823#pullrequestreview-700345768",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "636299a4-b08c-47ac-8374-82e8009dd74b",
+        "parentId" : null,
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "just recording this as this swaps out of my own mental cache sometimes.\r\n\r\nif a container has a defined memory limit X, it will still have `MemoryLimitInBytes=X`, but it may now use unbounded additional swap by setting `MemorySwapLimitInBytes` if `UnlimitedSwap` is enabled.  This is consistent with existing behavior where --fail-swap-on was false because no kubelet enforced limit was written.",
+        "createdAt" : "2021-07-06T20:17:13Z",
+        "updatedAt" : "2021-07-06T20:30:23Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "558472560582a48826a118b1795fc072957412b5",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +97,101 @@\t\tcase kubelettypes.UnlimitedSwap:\n\t\t\t// -1 = unlimited swap\n\t\t\tlc.Resources.MemorySwapLimitInBytes = -1\n\t\tcase kubelettypes.LimitedSwap:\n\t\t\tfallthrough"
+  },
+  {
+    "id" : "3dbd35c3-a0ce-42e2-a1f5-dba746a20b38",
+    "prId" : 102823,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102823#pullrequestreview-700345768",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bb9ea2a6-bfc1-42c2-8788-16ec647f2240",
+        "parentId" : null,
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "just a minor nit, but can we include the token for case: LimitedSwap and have it passthrough to default: so its clear to future authors/reviewers in this space?",
+        "createdAt" : "2021-07-06T20:22:10Z",
+        "updatedAt" : "2021-07-06T20:30:23Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "558472560582a48826a118b1795fc072957412b5",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +100,104 @@\t\tcase kubelettypes.LimitedSwap:\n\t\t\tfallthrough\n\t\tdefault:\n\t\t\t// memorySwapLimit = total permitted memory+swap; if equal to memory limit, => 0 swap above memory limit\n\t\t\t// Some swapping is still possible."
+  },
+  {
+    "id" : "9eaea62e-3807-4061-a72d-b59018ef3df5",
+    "prId" : 102823,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102823#pullrequestreview-700345768",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a8f09fa4-c174-4dbe-9d64-3ace159fd61b",
+        "parentId" : null,
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "I think we need a similar change in `ResourceConfigForPod` for pod level cgroup settings created by pod cgroup manager.  I would expect them to match the container settings.  I _think_ memory backed volumes could ultimately use swap, but would like @sjenning to confirm.  Either way, the cgroup settings for memory should match pod and container scopes.",
+        "createdAt" : "2021-07-06T20:29:09Z",
+        "updatedAt" : "2021-07-06T20:30:23Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "558472560582a48826a118b1795fc072957412b5",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +91,95 @@\tlc.Resources.HugepageLimits = GetHugepageLimitsFromResources(container.Resources)\n\n\tif utilfeature.DefaultFeatureGate.Enabled(kubefeatures.NodeSwapEnabled) {\n\t\t// NOTE(ehashman): Behaviour is defined in the opencontainers runtime spec:\n\t\t// https://github.com/opencontainers/runtime-spec/blob/1c3f411f041711bbeecf35ff7e93461ea6789220/config-linux.md#memory"
+  }
+]

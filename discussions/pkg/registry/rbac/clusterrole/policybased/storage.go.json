@@ -1,0 +1,35 @@
+[
+  {
+    "id" : "e21ed00d-e675-4420-b634-1c97a0b8158d",
+    "prId" : 54005,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/54005#pullrequestreview-73770199",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3c11282-66a6-4a58-ae4e-29ce11445387",
+        "parentId" : null,
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "Don't you also need to check for the creation or update of a cluster role that will then get aggregated into a different cluster role via an AggregationRule?  I am generally confused about the choice to use labels for this.  Seems like we would want to add two mutually exclusive fields in total to cluster role (and do escalation checks on both):\r\n\r\n1. AggregationRuleImport - this is how you add rules to this role (so `AggregationRule` from this PR)\r\n2. AggregationRuleExport - this is what must be matched by `AggregationRuleImport` for the rules from this role to be imported by another cluster role\r\n\r\nThe situation I am thinking of is:\r\n\r\nCluster Role A { aggregates Cluster Role B and Cluster Role C via label D }\r\nCluster Role B (has label D) = Rule 1\r\nCluster Role C (has label D) = Rule 2\r\n\r\nI only have Rule 2, so I can only pass the escalation check for C.  I remove the label from C.  This causes A to be tightened (which I normally could not do because I do not have Rule 1).  The reverse is also true (if I can create or update a cluster role with label D, I can cause A to be updated even if I would normally not be able to do that).\r\n\r\nI know the intent of a cluster role with an `AggregationRule` set is that its rules are now managed by a controller.  But I think you need to be cluster admin to cause either the importing or exporting of rules (the current validation only protects importing AFAICT).",
+        "createdAt" : "2017-11-01T22:42:47Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ace80005-0a26-41a1-bd3b-ee4d13b495b4",
+        "parentId" : "b3c11282-66a6-4a58-ae4e-29ce11445387",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> Don't you also need to check for the creation or update of a cluster role that will then get aggregated into a different cluster role via an AggregationRule?\r\n\r\nWhen you modify a given ClusterRole, you have to all the permissions you're trying to add.  That means that you have the permission that will eventually be added to the aggregated cluster role and thus added to other users.  We're trying to protect against escalation and I think this does that.  \r\n\r\nIn the other direction, we have to protect against, \"aggregate cluster admin into me\".  Forcing a super-user does that.\r\n\r\n\r\n\r\n> The situation I am thinking of is:\r\n> \r\n> Cluster Role A { aggregates Cluster Role B and Cluster Role C via label D }\r\n> Cluster Role B (has label D) = Rule 1\r\n> Cluster Role C (has label D) = Rule 2\r\n> \r\n> I only have Rule 2, so I can only pass the escalation check for C. I remove the label from C. This causes A to be tightened (which I normally could not do because I do not have Rule 1). The reverse is also true (if I can create or update a cluster role with label D, I can cause A to be updated even if I would normally not be able to do that).\r\n\r\nWe're primarily focused on escalation cases. The idea being, \"if you have the power to mess with some roles, we need to prevent you from adding more permissions to yourself\".  Are you worried about a case where a cluster-admin trusts someone to control what a particular clusterrole can do, but doesn't want that person to be able to control bindings of that role (that's what it sounds like you're describing).  If the role-admin already has the power to perform an action, he could just as easily say \"write to this proxy and I'll perform actions for you\".  What are you really preventing?\r\n\r\nModifying cluster-roles is already pretty privileged and I'm not seeing how it allows a user to escalate himself (which is what we're trying to protect against).  Given how people would handle this today (secondary binding or direct modification), the power seems the same to me.",
+        "createdAt" : "2017-11-02T12:28:35Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f34fb9b0ab37daf71d2d246db7e13a88a41ff359",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +86,90 @@\t\t\treturn nil, apierrors.NewForbidden(groupResource, clusterRole.Name, err)\n\t\t}\n\t\t// to change the aggregation rule, since it can gather anything and prevent tightening, requires * on *.*\n\t\tif hasAggregationRule(clusterRole) || hasAggregationRule(oldClusterRole) {\n\t\t\tif err := rbacregistryvalidation.ConfirmNoEscalation(ctx, s.ruleResolver, fullAuthority); err != nil {"
+  }
+]

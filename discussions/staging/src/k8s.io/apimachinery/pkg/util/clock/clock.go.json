@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "62783cc3-1bd2-44be-af09-829161528f89",
+    "prId" : 98595,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98595#pullrequestreview-602392934",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d8ff6593-a217-48a6-93ba-5e14671868e7",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this also needs a unit test exercising the implementation. suggest something like:\r\n\r\n```go\r\nfunc TestFakeAfterFunc(t *testing.T) {\r\n\ttc := NewFakeClock(time.Now())\r\n\tif tc.HasWaiters() {\r\n\t\tt.Errorf(\"unexpected waiter?\")\r\n\t}\r\n\texpectOneSecTimerFire := false\r\n\toneSecTimerFire := 0\r\n\ttc.AfterFunc(time.Second, func() {\r\n\t\tif !expectOneSecTimerFire {\r\n\t\t\tt.Errorf(\"oneSecTimer func fired\")\r\n\t\t} else {\r\n\t\t\toneSecTimerFire++\r\n\t\t}\r\n\t})\r\n\tif !tc.HasWaiters() {\r\n\t\tt.Errorf(\"unexpected lack of waiter?\")\r\n\t}\r\n\r\n\texpectOneOhOneSecTimerFire := false\r\n\toneOhOneSecTimerFire := 0\r\n\ttc.AfterFunc(time.Second+time.Millisecond, func() {\r\n\t\tif !expectOneOhOneSecTimerFire {\r\n\t\t\tt.Errorf(\"oneOhOneSecTimer func fired\")\r\n\t\t} else {\r\n\t\t\toneOhOneSecTimerFire++\r\n\t\t}\r\n\t})\r\n\r\n\texpectTwoSecTimerFire := false\r\n\ttwoSecTimerFire := 0\r\n\ttwoSecTimer := tc.AfterFunc(2*time.Second, func() {\r\n\t\tif !expectTwoSecTimerFire {\r\n\t\t\tt.Errorf(\"twoSecTimer func fired\")\r\n\t\t} else {\r\n\t\t\ttwoSecTimerFire++\r\n\t\t}\r\n\t})\r\n\r\n\ttc.Step(999 * time.Millisecond)\r\n\r\n\texpectOneSecTimerFire = true\r\n\ttc.Step(time.Millisecond)\r\n\tif oneSecTimerFire != 1 {\r\n\t\tt.Errorf(\"expected oneSecTimerFire=1, got %d\", oneSecTimerFire)\r\n\t}\r\n\texpectOneSecTimerFire = false\r\n\r\n\texpectOneOhOneSecTimerFire = true\r\n\ttc.Step(time.Millisecond)\r\n\tif oneOhOneSecTimerFire != 1 {\r\n\t\t// should not double-trigger!\r\n\t\tt.Errorf(\"expected oneOhOneSecTimerFire=1, got %d\", oneOhOneSecTimerFire)\r\n\t}\r\n\texpectOneOhOneSecTimerFire = false\r\n\r\n\t// ensure a canceled timer doesn't fire\r\n\ttwoSecTimer.Stop()\r\n\ttc.Step(time.Second)\r\n}\r\n```",
+        "createdAt" : "2021-03-02T06:44:18Z",
+        "updatedAt" : "2021-03-03T19:13:30Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "32e109ec-4800-4b3d-8888-77d52d0b00a3",
+        "parentId" : "d8ff6593-a217-48a6-93ba-5e14671868e7",
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "Thank you! Took it verbatim.",
+        "createdAt" : "2021-03-03T00:20:47Z",
+        "updatedAt" : "2021-03-03T19:13:30Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d24ed4ace11338bb2463ddb584c61e0c80feafbc",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +156,160 @@\n// AfterFunc is the Fake version of time.AfterFunc(d, callback).\nfunc (f *FakeClock) AfterFunc(d time.Duration, cb func()) Timer {\n\tf.lock.Lock()\n\tdefer f.lock.Unlock()"
+  },
+  {
+    "id" : "887c98b2-47ad-498f-b743-5c98bd6830fd",
+    "prId" : 78808,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78808#pullrequestreview-255306887",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "49404bb8-8d90-4015-8836-12705421be73",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "Stop() is supposed to return false if it was already stopped, or if the timer had already fired. I'm having a hard time understanding how the channel equality comparison is accomplishing the latter.",
+        "createdAt" : "2019-06-26T14:15:31Z",
+        "updatedAt" : "2019-06-27T15:42:09Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b94d9c1-6739-43be-bcc8-0c5237be9139",
+        "parentId" : "49404bb8-8d90-4015-8836-12705421be73",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "When the timer fires or is stopped, it is removed from the clock's list.  The channel equality test is how the timer's entry is identified in the list.  The fakeClockWaiter does not retain a constant memory address, so a pointer to a fakeClockWaiter can not be used to identify the one belonging to the timer.",
+        "createdAt" : "2019-06-26T18:57:11Z",
+        "updatedAt" : "2019-06-27T15:42:09Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c5ca788b-7fac-4ff1-9bd8-5c24783d42c9",
+        "parentId" : "49404bb8-8d90-4015-8836-12705421be73",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "See if the new revision includes comments that answer this question.",
+        "createdAt" : "2019-06-27T15:26:38Z",
+        "updatedAt" : "2019-06-27T15:42:09Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ed5afd7-4af4-4462-ae2b-7036e10efe1e",
+        "parentId" : "49404bb8-8d90-4015-8836-12705421be73",
+        "authorId" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "body" : "@liggitt if you are confused now, it was even more confusing before @MikeSpreitzer made these improvements. There was a fired attribute on the waiter struct which only ever had one value, which was that it hadn't fired. This iteration seems markedly better to me.",
+        "createdAt" : "2019-06-27T15:28:53Z",
+        "updatedAt" : "2019-06-27T15:42:09Z",
+        "lastEditedBy" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3e898d69210918433fd0cd0aa89392faac61b83a",
+    "line" : 58,
+    "diffHunk" : "@@ -1,1 +310,314 @@\tf.fakeClock.waiters = newWaiters\n\n\treturn stopped\n}\n"
+  }
+]

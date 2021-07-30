@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "4013f52d-5d33-45e9-bfa2-a139828d5632",
+    "prId" : 81903,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81903#pullrequestreview-279560878",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fb647bfb-c63f-4bdc-a3c7-ee76c0e2b33a",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "Keep the checks close one to another:\r\n```golang\r\nclientCAFile := filepath.Join(internalcfg.CertificatesDir, constants.CACertName)\r\nif externalkubeletcfg.Authentication.X509.ClientCAFile == \"\" {\r\n\texternalkubeletcfg.Authentication.X509.ClientCAFile = clientCAFile\r\n} else if externalkubeletcfg.Authentication.X509.ClientCAFile != clientCAFile {\r\n\twarnDefaultComponentConfig(\"client-ca-file\", constants.Kubelet, clientCAFile)\r\n}\r\n```",
+        "createdAt" : "2019-08-26T11:49:43Z",
+        "updatedAt" : "2019-08-28T13:00:56Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f856a933-e23e-4ff6-b064-38802f37489f",
+        "parentId" : "fb647bfb-c63f-4bdc-a3c7-ee76c0e2b33a",
+        "authorId" : "c67fd0c8-b4a0-45e6-b808-28edbb7bc636",
+        "body" : "Thanks, fixed.",
+        "createdAt" : "2019-08-26T12:29:02Z",
+        "updatedAt" : "2019-08-28T13:00:56Z",
+        "lastEditedBy" : "c67fd0c8-b4a0-45e6-b808-28edbb7bc636",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ccc45880a7602ea92523fcef776583857acf7e03",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +136,140 @@\t} else if externalkubeletcfg.Authentication.X509.ClientCAFile != clientCAFile {\n\t\twarnDefaultComponentConfigValue(externalkubeletcfg.Kind, \"client-ca-file\", clientCAFile, externalkubeletcfg.Authentication.X509.ClientCAFile)\n\t}\n\n\tif externalkubeletcfg.Authentication.Anonymous.Enabled == nil {"
+  },
+  {
+    "id" : "eeb5093c-020d-49f0-97c2-134c6479a3d2",
+    "prId" : 81903,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81903#pullrequestreview-280163289",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d3b122bf-bccf-4a22-9ed2-51b129f40e6c",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "Can you add the warning elses for `DefaultKubeProxyConfiguration` too?",
+        "createdAt" : "2019-08-27T10:36:01Z",
+        "updatedAt" : "2019-08-28T13:00:56Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb3319c8-4e16-4a19-a87d-90913f96765d",
+        "parentId" : "d3b122bf-bccf-4a22-9ed2-51b129f40e6c",
+        "authorId" : "c67fd0c8-b4a0-45e6-b808-28edbb7bc636",
+        "body" : "Thanks a lot, fixed.",
+        "createdAt" : "2019-08-27T12:40:10Z",
+        "updatedAt" : "2019-08-28T13:00:56Z",
+        "lastEditedBy" : "c67fd0c8-b4a0-45e6-b808-28edbb7bc636",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ccc45880a7602ea92523fcef776583857acf7e03",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +56,60 @@)\n\n// DefaultKubeProxyConfiguration assigns default values for the kube-proxy ComponentConfig\nfunc DefaultKubeProxyConfiguration(internalcfg *kubeadmapi.ClusterConfiguration) {\n\texternalproxycfg := &kubeproxyconfigv1alpha1.KubeProxyConfiguration{}"
+  },
+  {
+    "id" : "956b0d02-ad95-4ca7-a332-78ddb1c95807",
+    "prId" : 81903,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81903#pullrequestreview-280807807",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "727d0b89-0dbf-40c8-ab26-be63901bc520",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "i think it makes more sense to have the following utility function:\r\n\r\n```go\r\n// warnDefaultComponentConfigValue prints a warning if the user modified a field in a certain\r\n// CompomentConfig from the default recommended value in kubeadm.\r\nfunc warnDefaultComponentConfigValue(componentConfigKind, paramName string, defaultValue, userValue interface{}) {\r\n\tklog.Warningf(\"The recommended value for %q in %q is: %v; the provided value is: %v\",\r\n\t\tparamName, componentConfigKind, defaultValue, userValue)\r\n}\r\n```\r\n\r\n- added comment on top of the function.\r\n- renamed to add `Value` in function name.\r\n- added userValue - this will make it easier for the user to find their value.\r\n- use componentConfigKind; this means that the callers have to pass e.g. `{externalproxycfg| externalkubeletcfg}.Kind`\r\nthis solves the potential problem if the user feeds a value from a certain Kind, but kubeadm supports multiple different Kinds for a certain component. still does not solve the problem if a certain filed name is available multiple times in different nestings under the same Kind.\r\n- adjusted warning to be on two lines.\r\n",
+        "createdAt" : "2019-08-28T11:28:44Z",
+        "updatedAt" : "2019-08-28T13:00:56Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eef2f4d5-e4b3-4125-a0b8-65ba6661a2e4",
+        "parentId" : "727d0b89-0dbf-40c8-ab26-be63901bc520",
+        "authorId" : "c67fd0c8-b4a0-45e6-b808-28edbb7bc636",
+        "body" : "Sure, I will fix this.",
+        "createdAt" : "2019-08-28T11:53:56Z",
+        "updatedAt" : "2019-08-28T13:00:56Z",
+        "lastEditedBy" : "c67fd0c8-b4a0-45e6-b808-28edbb7bc636",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1de00ce3-6907-4eb7-b484-6722c2e15087",
+        "parentId" : "727d0b89-0dbf-40c8-ab26-be63901bc520",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "one final missing item:\r\n> use componentConfigKind; this means that the callers have to pass e.g. {externalproxycfg| externalkubeletcfg}.Kind\r\n\r\nso passing the above instead of `constants.Kubelet` and `constants.KubeProxy`.\r\n\r\n[1]",
+        "createdAt" : "2019-08-28T12:13:55Z",
+        "updatedAt" : "2019-08-28T13:00:56Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8217cf01-e689-4c08-9935-0a9641088aa1",
+        "parentId" : "727d0b89-0dbf-40c8-ab26-be63901bc520",
+        "authorId" : "c67fd0c8-b4a0-45e6-b808-28edbb7bc636",
+        "body" : "Got it",
+        "createdAt" : "2019-08-28T12:57:00Z",
+        "updatedAt" : "2019-08-28T13:00:56Z",
+        "lastEditedBy" : "c67fd0c8-b4a0-45e6-b808-28edbb7bc636",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ccc45880a7602ea92523fcef776583857acf7e03",
+    "line" : 163,
+    "diffHunk" : "@@ -1,1 +196,200 @@\tklog.Warningf(\"The recommended value for %q in %q is: %v; the provided value is: %v\",\n\t\tparamName, componentConfigKind, defaultValue, userValue)\n}"
+  }
+]

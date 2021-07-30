@@ -1,0 +1,1058 @@
+[
+  {
+    "id" : "62c1bff9-e77b-4d14-87b0-ed4d90f348e8",
+    "prId" : 101767,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101767#pullrequestreview-692888069",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "In the KEP it says:\r\n\r\n```\r\nThe metric `deleted_pod_age_ratio` will provide a histogram of the ratio between the \r\nchosen `deleted pod`'s age over the current `youngest pod`'s age, for pods where the sort \r\nalgorithm falls back to age. (Pod age is the final criteria in the sorting algorithm, so we don't \r\nwant to measure this ratio for deletions which don't use this feature, as those may validly fall \r\noutside the desired range).\r\n```\r\n\r\nHowever, it seems like it would be hard to tell. So I'm fine with this implementation.",
+        "createdAt" : "2021-06-10T19:37:33Z",
+        "updatedAt" : "2021-06-10T19:41:30Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3f457a31-cb34-49ad-9eaa-07275439a6a8",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "Yeah, I wanted to make that distinction but looking at the actual implementation we don't have an easy way to single out \"what\" caused a pod to be sorted in that order.\r\n\r\nI do see now you pointed out the metric should be a histogram, so I'll update to that (I just used a gauge)",
+        "createdAt" : "2021-06-11T13:42:19Z",
+        "updatedAt" : "2021-06-11T13:42:20Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8ea6375e-e710-413d-ad89-a0bcfb637acb",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "So the problem is that currently we can have arbitrary values in the histogram in a valid way.\r\nSo that metric won't be useful by any means...\r\n\r\nSo let's try to make it useful:\r\n- what we really care about are ready pods - so let's focus only on those\r\n- so whenever we delete \"ready pod\" report its age compared to the youngest \"ready\" pod.\r\n\r\nThat solves most of the problems with the metric, modulo these two:\r\nhttps://github.com/kubernetes/kubernetes/blob/4aae71695a8dd43918702fafd81e0401721d79d9/pkg/controller/controller_utils.go#L836-L851\r\n- the first one we can ignore pods that set that annotation\r\n- the former we can address by computing the youngest within the pods with the same rank\r\nBut that would make this metric very hard to intuitively explain to anyone. \r\n\r\nI didn't initially realize that the sorting function has so many different branches. And I'm not sure what to do. Up until we were ignoring non-ready pods, that metric still made some sense. But after that point it's becoming too artificial imho.\r\n\r\nAny ideas what to do with this?",
+        "createdAt" : "2021-06-11T14:14:16Z",
+        "updatedAt" : "2021-06-11T14:14:19Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "03404fdb-1bd0-4838-bcc8-7a4d393024a2",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "I'm starting to doubt the usefulness of the metric as a whole. If we are removing several pods, it's likely that some of them will be more than twice older than the youngest.\r\n\r\nAre we simply assuming that most of the times you would do small scale downs so the number should stay below 2?\r\n\r\nIf we want to be 100% accurate, we should be grouping by rank. But I think we would be missing an opportunity for the metric to be useful for users beyond checking that the feature works. For example, if the users see that the metric is well above 2, they can start wondering why, and the reason could be that they are not spreading their pods appropriately.",
+        "createdAt" : "2021-06-11T14:57:54Z",
+        "updatedAt" : "2021-06-11T14:57:55Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "06dff4e6-1545-44c5-99cb-7f03c511532c",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This was the point I was trying to pass above.\r\n\r\nBut at the same time, I would really like to be able to answer if the feature works. But given all of the above, we should maybe be looking at the feature as a whole \"sorting\" function? Or maybe yet a different angle?\r\nI'm looking for ideas what things we may try to report (probably in a wider context) to show that the feature works.",
+        "createdAt" : "2021-06-14T13:42:56Z",
+        "updatedAt" : "2021-06-14T13:42:56Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7c72df44-d2d9-4d1f-ab32-69bbe10fe025",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "So the sorting is trying to balance two goals/heuristics:\r\n1. newer pods are generally safer to delete (hasn't warmed up, has done less work, has less open connections, etc).\r\n2. pods should be spread. This is achieved in 2 ways:\r\n  - deleting pods in nodes where there are other pods of the same replicaset\r\n  - random deletion (the feature being graduated).\r\n\r\nThe proposed metric is trying to make sure we don't bomb 1. Perhaps we should keep it as it is already implemented in this PR.\r\n\r\nNow, can we easily report a metric for 2 without increasing runtime significantly? The only information we have at this point is the node name. To make it really useful we should report the zone spread, but then we would have to add a node lister.",
+        "createdAt" : "2021-06-15T18:12:22Z",
+        "updatedAt" : "2021-06-15T18:12:52Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7df2630-d877-48d1-8178-e0ccf63b330e",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "@wojtek-t @alculquicondor in the interest of keeping this on track for code freeze, could I propose a compromise in that we continue with the metric as implemented in this PR, and add a TODO to continue investigating the other metric (possibly for GA promotion?). The conversation seems to have stalled on this one",
+        "createdAt" : "2021-06-23T13:00:59Z",
+        "updatedAt" : "2021-06-23T13:00:59Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0dfc97d4-8da0-4189-9a94-494985a295cf",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "body" : "I was talking it over with @brancz, it may make more sense to have two metrics, from the gist of this conversation (without knowing too much about what you guys are actually doing), it sounds like you may want a `youngest_ready_pod_age` metric and a `deleted_ready_pod_age` metric, or something like this and do the computation after the fact.",
+        "createdAt" : "2021-06-23T13:15:57Z",
+        "updatedAt" : "2021-06-23T13:16:01Z",
+        "lastEditedBy" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca5d26ba-55d7-44d7-bd68-c3d63cb97871",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "I don't think that would help. The ratio only makes sense at the time of deletion. If you have separate metrics, then you can't match the deleted pod with the \"youngest\" pod to do the division.",
+        "createdAt" : "2021-06-23T15:13:21Z",
+        "updatedAt" : "2021-06-23T15:13:22Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c1d1b719-d69c-48ab-9c6f-8c3148a1c319",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "I think we should be good with the metric as is, except it should be a distribution and only focus on Ready pods, as Wojtek proposed earlier. Any extra filtering sounds like an overkill to me.",
+        "createdAt" : "2021-06-23T15:25:20Z",
+        "updatedAt" : "2021-06-23T15:25:20Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "82083126-06be-4735-ad2f-7b5fcecddecc",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "BTW, I'm proposing to get rid of the rank, in the context of #102949",
+        "createdAt" : "2021-06-23T15:25:53Z",
+        "updatedAt" : "2021-06-23T15:25:53Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f9055ff7-3350-4c3e-921b-bd6414326a8a",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "> The ratio only makes sense at the time of deletion. If you have separate metrics, then you can't match the deleted pod with the \"youngest\" pod to do the division.\r\n\r\nThis was my concern with the proposal for 2 metrics as well. Ultimately I think any measurement of this feature will have some level of awkwardness, that may require refinement. I agree that the metric as written is probably the simplest approach for now.",
+        "createdAt" : "2021-06-23T15:57:09Z",
+        "updatedAt" : "2021-06-23T15:57:09Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bbb49f53-49b0-4f82-844a-ddaa0715a9f7",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "body" : "You can use two Gauge Funcs, these will literally evaluate at scrape time, therefore will always expose only current data.",
+        "createdAt" : "2021-06-23T15:58:24Z",
+        "updatedAt" : "2021-06-23T15:58:24Z",
+        "lastEditedBy" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d2b430b6-772e-48b3-bcc0-5996b497a18e",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "body" : "Okay, I talked to @alculquicondor offline, I think I grok what the metric is actually trying to measure. The name is a bit confusing, I think I prefer `sorting_deletion_age_ratio`, since this metric primarily targets the efficacy of the sorting algorithm. I also retract my suggestion about the two metrics since I believe I understand the point of what this is measuring a bit better.",
+        "createdAt" : "2021-06-23T16:21:36Z",
+        "updatedAt" : "2021-06-23T16:21:42Z",
+        "lastEditedBy" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c22b602-61ff-4f63-bfc7-9ad3bd0264ae",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "@damemi, you missed the name change `sorting_deletion_age_ratio`",
+        "createdAt" : "2021-06-25T14:32:07Z",
+        "updatedAt" : "2021-06-25T14:32:07Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "89b2dc3d-0cc5-455a-b894-52c2d1bf8878",
+        "parentId" : "5bf76d5f-9dae-4b54-9644-a1e5361caf5f",
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "thanks, updated",
+        "createdAt" : "2021-06-25T14:36:27Z",
+        "updatedAt" : "2021-06-25T14:36:27Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4b9230ed27f433c87d2ce93124905e403692be71",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +824,828 @@\n\t// for each pod chosen for deletion, report the ratio of its age to the youngest pod's age\n\tfor _, pod := range filteredPods[:diff] {\n\t\tif !podutil.IsPodReady(pod) {\n\t\t\tcontinue"
+  },
+  {
+    "id" : "3dcd2ae3-dc82-43d1-b4d9-66ce2c05682d",
+    "prId" : 91008,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91008#pullrequestreview-423443953",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6eaf59ea-650b-43d7-bddd-e07754bd836b",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "Squash these two ifs into one.",
+        "createdAt" : "2020-06-03T11:04:55Z",
+        "updatedAt" : "2020-06-04T08:45:34Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "884f94ad92e5710c1f2384c3e1fd7d431e24175f",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +626,630 @@\t\t\t\t\t\tklog.V(2).Infof(\"Failed to delete %v, decremented expectations for %v %s/%s\", podKey, rsc.Kind, rs.Namespace, rs.Name)\n\t\t\t\t\t\terrCh <- err\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}(pod)"
+  },
+  {
+    "id" : "88dab8ea-4a6a-4dd3-811c-ba3817b740f2",
+    "prId" : 84123,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84123#pullrequestreview-311034576",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5a773b0e-91bf-4f8d-b5b2-fa3b8f7216ed",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "Nit: not sure why you need to have two ifs if both return the same, comment for both handled in one should be sufficient.",
+        "createdAt" : "2019-11-04T12:25:05Z",
+        "updatedAt" : "2019-11-04T12:26:30Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd9260711fa09bfdfe95a94c27ab14b95a95cb8a",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +525,529 @@\t\t\terr := rsc.podControl.CreatePodsWithControllerRef(rs.Namespace, &rs.Spec.Template, rs, metav1.NewControllerRef(rs, rsc.GroupVersionKind))\n\t\t\tif err != nil {\n\t\t\t\tif errors.HasStatusCause(err, v1.NamespaceTerminatingCause) {\n\t\t\t\t\t// if the namespace is being terminated, we don't have to do\n\t\t\t\t\t// anything because any creation will fail"
+  },
+  {
+    "id" : "f4f6033b-c34a-4cfc-a001-8efe8122b836",
+    "prId" : 82572,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/82572#pullrequestreview-305007167",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7c6b8927-b79c-4541-8d95-7aeba31a78ed",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "don't we also need to do this in `updateRS` if `oldRS.UID != curRS.UID`? You're not guaranteed to see a deleteRS call for every delete/recreate case.",
+        "createdAt" : "2019-10-21T15:49:51Z",
+        "updatedAt" : "2019-11-11T08:12:06Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01d6ddd3-22a7-495b-90bb-644e0d3171dd",
+        "parentId" : "7c6b8927-b79c-4541-8d95-7aeba31a78ed",
+        "authorId" : "443f9b92-20b0-45c2-a13f-20c6f64f89eb",
+        "body" : "not even tombstone? I thought `DeletionHandlingMetaNamespaceKeyFunc` and the internal queue would generate artificial delete event in case it missed the real delete event and already saw new RS with new UID",
+        "createdAt" : "2019-10-21T16:09:17Z",
+        "updatedAt" : "2019-11-11T08:12:06Z",
+        "lastEditedBy" : "443f9b92-20b0-45c2-a13f-20c6f64f89eb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0fe9d0d-f69a-4312-a2ea-3829bc43bf58",
+        "parentId" : "7c6b8927-b79c-4541-8d95-7aeba31a78ed",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "no, a tombstone is sent if a relist is missing the object entirely. if the relist has the object with the same name with a new uid, an update is sent",
+        "createdAt" : "2019-10-21T16:22:50Z",
+        "updatedAt" : "2019-11-11T08:12:06Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10554a38-13ba-4eaf-adbd-3b4a3d61a7bc",
+        "parentId" : "7c6b8927-b79c-4541-8d95-7aeba31a78ed",
+        "authorId" : "443f9b92-20b0-45c2-a13f-20c6f64f89eb",
+        "body" : "is that intentional?\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/9e4be54/staging/src/k8s.io/client-go/tools/cache/delta_fifo.go#L628-L632\r\n\r\nstates\r\n\r\n```\r\n// DeletedFinalStateUnknown is placed into a DeltaFIFO in the case where\r\n// an object was deleted but the watch deletion event was missed. In this\r\n// case we don't know the final \"resting\" state of the object, so there's\r\n// a chance the included `Obj` is stale.\r\ntype DeletedFinalStateUnknown struct {\r\n```\r\n\r\nyet I see the deltaFIFO code backing what you say in\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/9e4be54/staging/src/k8s.io/client-go/tools/cache/controller.go#L361-L371\r\n\r\nWe could check UIDs there and generate delete event there to match what `DeletedFinalStateUnknown` says",
+        "createdAt" : "2019-10-21T16:59:17Z",
+        "updatedAt" : "2019-11-11T08:12:06Z",
+        "lastEditedBy" : "443f9b92-20b0-45c2-a13f-20c6f64f89eb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b124c58d-adfb-4cb5-b4ef-bc9ac7090ce4",
+        "parentId" : "7c6b8927-b79c-4541-8d95-7aeba31a78ed",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "deltafifo doesn't understand uids, and the cache key doesn't include the uid. a delete/recreate is not the same as a delete/final-state-unknown from deltafifo's perspective",
+        "createdAt" : "2019-10-21T17:04:31Z",
+        "updatedAt" : "2019-11-11T08:12:06Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5cf894f9-b817-47ec-9c5c-02e5425c979d",
+        "parentId" : "7c6b8927-b79c-4541-8d95-7aeba31a78ed",
+        "authorId" : "443f9b92-20b0-45c2-a13f-20c6f64f89eb",
+        "body" : "I guess deltafifo needs to have the same key anyways or it could reorder the events. I meant to fix the processor - let me push the change to be more concrete",
+        "createdAt" : "2019-10-22T07:36:32Z",
+        "updatedAt" : "2019-11-11T08:12:06Z",
+        "lastEditedBy" : "443f9b92-20b0-45c2-a13f-20c6f64f89eb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ce52643f12f63af4a394f85fecefe07d792d77ce",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +312,316 @@\n\t// Delete expectations for the ReplicaSet so if we create a new one with the same name it starts clean\n\trsc.expectations.DeleteExpectations(key)\n\n\trsc.queue.Add(key)"
+  },
+  {
+    "id" : "10ecc73f-fec8-4a07-8ad3-2a158c956b99",
+    "prId" : 80004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80004#pullrequestreview-288986846",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bc249046-94f5-4028-8399-9cc6e3b05a8d",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I would expect a table test for this method",
+        "createdAt" : "2019-09-16T21:28:07Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8112549b-b8c6-42ec-80be-354931f32e31",
+        "parentId" : "bc249046-94f5-4028-8399-9cc6e3b05a8d",
+        "authorId" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "body" : "I made `TestRelatedPodsLookup` table-driven—is that what you had in mind?  https://github.com/kubernetes/kubernetes/pull/80004/commits/de3f4955c09a7159974ccb8479e8edbd87c009e9#diff-16e152a1acd1373ada706d8cb4c099f6R507-R535",
+        "createdAt" : "2019-09-17T02:11:35Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "980b6406b24b41bc0ef061624385f1f420708819",
+    "line" : 70,
+    "diffHunk" : "@@ -1,1 +723,727 @@}\n\n// getIndirectlyRelatedPods returns all pods that are owned by any ReplicaSet\n// that is owned by the given ReplicaSet's owner.\nfunc (rsc *ReplicaSetController) getIndirectlyRelatedPods(rs *apps.ReplicaSet) ([]*v1.Pod, error) {"
+  },
+  {
+    "id" : "a38db418-7b4c-4716-a335-41f6f097f0e0",
+    "prId" : 80004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80004#pullrequestreview-288987374",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e1600dbe-9986-4b99-98c2-c7296be63816",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "this function needs a table driven test",
+        "createdAt" : "2019-09-16T22:28:19Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66bf2f2b-3aee-4d34-8d4e-b653996d8903",
+        "parentId" : "e1600dbe-9986-4b99-98c2-c7296be63816",
+        "authorId" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "body" : "I didn't add it before because I figured the tests in `TestRelatedPodsLookup` for `getIndirectlyRelatedPods` (which uses `getReplicaSetsWithSameController`) would suffice, but I have now added `TestGetReplicaSetsWithSameController`: https://github.com/kubernetes/kubernetes/pull/80004/commits/de3f4955c09a7159974ccb8479e8edbd87c009e9#diff-16e152a1acd1373ada706d8cb4c099f6R351-R411",
+        "createdAt" : "2019-09-17T02:14:23Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "980b6406b24b41bc0ef061624385f1f420708819",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +195,199 @@}\n\n// getReplicaSetsWithSameController returns a list of ReplicaSets with the same\n// owner as the given ReplicaSet.\nfunc (rsc *ReplicaSetController) getReplicaSetsWithSameController(rs *apps.ReplicaSet) []*apps.ReplicaSet {"
+  },
+  {
+    "id" : "09306881-6a09-4f7c-ae98-9dc733791540",
+    "prId" : 80004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80004#pullrequestreview-296141511",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0655a9a7-b3d0-49ae-a6ad-756d90c29719",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "How expensive is this in very large namespaces with either lots of RS or lots of pods under those RS?",
+        "createdAt" : "2019-09-17T02:12:28Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "421669fd-2b04-4310-b39e-6360003b67d9",
+        "parentId" : "0655a9a7-b3d0-49ae-a6ad-756d90c29719",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Does this make a replica set of size 15k potentially extremely expensive to run?  Or if we only had one, it would be fine?",
+        "createdAt" : "2019-09-25T19:00:08Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95f536a2-4d8e-4662-b8bd-09196cd96cd0",
+        "parentId" : "0655a9a7-b3d0-49ae-a6ad-756d90c29719",
+        "authorId" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "body" : "I hope that the use of informers for pods and replica sets will mitigate performance problems, but I have not tested at scale.  Can you recommend a framework, or should I do some rudimentary instrumentation of the controller and perform some manual testing?",
+        "createdAt" : "2019-09-25T19:40:34Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c93e558-0c60-4383-bd9b-f1207ba2f7c7",
+        "parentId" : "0655a9a7-b3d0-49ae-a6ad-756d90c29719",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "So the issue here is that you were given filtered pods (which is presumably your replica set).  You then have to go back and fetch all of those again from the set + a lot more.  That list might be out of sync with the first list.  None of those are particularly expensive at low scale, but at high scale could be.\r\n\r\n@wojtek-t who is the most familiar with the high scale replica set testing and would be able to identify the cost here?",
+        "createdAt" : "2019-10-01T15:03:17Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33720ab6-3b54-401e-953a-646bfff84287",
+        "parentId" : "0655a9a7-b3d0-49ae-a6ad-756d90c29719",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "It's not the cheapest operation, I agree. But I think we're not regressing much here.\r\nSomething similar is already happening in deployment controller:\r\nhttps://github.com/kubernetes/kubernetes/blob/master/pkg/controller/deployment/deployment_controller.go#L536\r\n\r\nIt's important that we operate on pointers here (which are shared with cache), so we don't do that many memory allocations.\r\nSo while it would be better to avoid this, I can probably live with that if the feature is important enough (reliability of rollout seems worth it, though personally I'm not convinced that this will really help much).",
+        "createdAt" : "2019-10-02T10:18:15Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "980b6406b24b41bc0ef061624385f1f420708819",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +733,737 @@\t\t\treturn nil, err\n\t\t}\n\t\tpods, err := rsc.podLister.Pods(relatedRS.Namespace).List(selector)\n\t\tif err != nil {\n\t\t\treturn nil, err"
+  },
+  {
+    "id" : "751fbc18-1f32-4809-89b9-d7efd3e59b59",
+    "prId" : 80004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80004#pullrequestreview-301032444",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0ea7c9a0-fe4e-4249-809c-6aa975b03ac4",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "Is podsWithRanks used in this func ?\r\nI wonder why the sorting is needed.",
+        "createdAt" : "2019-10-13T02:58:29Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e37582e-a5dc-467e-8cfb-2d160a49eb80",
+        "parentId" : "0ea7c9a0-fe4e-4249-809c-6aa975b03ac4",
+        "authorId" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "body" : "`podWithRanks` is a `ActivePodsWithRanks` value that wraps `filteredPods` (i.e., `podWithRanks.Pods` is the same underlying slice value as `filteredPods`), so sorting `podWithRanks` sorts `filteredPods` as well.",
+        "createdAt" : "2019-10-13T04:06:44Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef96bb3c-9004-4d91-aaa2-b6d1c77f1e62",
+        "parentId" : "0ea7c9a0-fe4e-4249-809c-6aa975b03ac4",
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "I see.",
+        "createdAt" : "2019-10-13T04:40:53Z",
+        "updatedAt" : "2019-10-17T15:53:09Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "980b6406b24b41bc0ef061624385f1f420708819",
+    "line" : 112,
+    "diffHunk" : "@@ -1,1 +761,765 @@\tif diff < len(filteredPods) {\n\t\tpodsWithRanks := getPodsRankedByRelatedPodsOnSameNode(filteredPods, relatedPods)\n\t\tsort.Sort(podsWithRanks)\n\t}\n\treturn filteredPods[:diff]"
+  },
+  {
+    "id" : "fdf9993a-5e6b-4943-a607-2240fb168950",
+    "prId" : 80004,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80004#pullrequestreview-303616199",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3ad918fd-ed49-4003-b620-49f86a94e54c",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "It seems a space is missing between the last two parameters: '%s%s'\r\nSee the log on line 753 below",
+        "createdAt" : "2019-10-17T22:52:16Z",
+        "updatedAt" : "2019-10-17T23:01:05Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76fdfb0d-1667-45b4-96aa-5e1acc9fb4b4",
+        "parentId" : "3ad918fd-ed49-4003-b620-49f86a94e54c",
+        "authorId" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "body" : "`related` is either an empty string or a string beginning with `: `, so the message should print as either \"Found 0 related ReplicaSets for ReplicaSet _foo_/_bar_\" or \"Found _n_ related ReplicaSets for ReplicaSet _foo_/_bar_: _x_, _y_, _z_\".",
+        "createdAt" : "2019-10-18T00:38:01Z",
+        "updatedAt" : "2019-10-18T00:38:01Z",
+        "lastEditedBy" : "b3da6e51-33c0-47c8-b02f-5822b5139f82",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "980b6406b24b41bc0ef061624385f1f420708819",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +226,230 @@\t\t\trelated = \": \" + strings.Join(relatedNames, \", \")\n\t\t}\n\t\tklog.Infof(\"Found %d related %vs for %v %s/%s%s\", len(relatedRSs), rsc.Kind, rsc.Kind, rs.Namespace, rs.Name, related)\n\t}\n"
+  },
+  {
+    "id" : "cba4f566-6e45-4028-9666-32feacd61d65",
+    "prId" : 49429,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/49429#pullrequestreview-73319704",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dc06f75b-de39-4e16-a1f4-56e772fe9ee1",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "No need to pass `burstReplicas`. Just set ReplicaSetController.burstReplicas with `const BurstRelicas`.",
+        "createdAt" : "2017-10-24T18:41:41Z",
+        "updatedAt" : "2017-11-07T22:55:56Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b4f8bf95-d20e-4336-80a8-e763aa6bfdbd",
+        "parentId" : "dc06f75b-de39-4e16-a1f4-56e772fe9ee1",
+        "authorId" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "body" : "Do you mean change `NewReplicaSetController`? I'd prefer not to change the public interface of this package in this PR, to keep it a pure refactor.",
+        "createdAt" : "2017-10-31T20:52:47Z",
+        "updatedAt" : "2017-11-07T22:55:56Z",
+        "lastEditedBy" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "97cef269bf7c2ff105071de6047388b367dc767c",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +108,112 @@\n// NewReplicaSetController configures a replica set controller with the specified event recorder\nfunc NewReplicaSetController(rsInformer extensionsinformers.ReplicaSetInformer, podInformer coreinformers.PodInformer, kubeClient clientset.Interface, burstReplicas int) *ReplicaSetController {\n\teventBroadcaster := record.NewBroadcaster()\n\teventBroadcaster.StartLogging(glog.Infof)"
+  },
+  {
+    "id" : "0a82c8f4-c8c5-4862-ab8a-de6801b920fa",
+    "prId" : 42659,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/42659#pullrequestreview-26940273",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5a3b50e3-fa16-436b-894d-de824ae51b7f",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "how is this going to work across versions (we've locked in v1beta1 here, what do we do when we have both v1 and v1beta2)?",
+        "createdAt" : "2017-03-14T19:08:13Z",
+        "updatedAt" : "2017-03-20T16:10:22Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "40a0780e-8438-41ed-8dbb-f82bd847385b",
+        "parentId" : "5a3b50e3-fa16-436b-894d-de824ae51b7f",
+        "authorId" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "body" : "I talked to @caesarxuchao about this and it seems like the answer so far is TBD.\r\n\r\nCurrently the code is a bit conservative. It checks Kind but not APIVersion, then relies on the UID check to make sure we found the right object.",
+        "createdAt" : "2017-03-14T21:17:29Z",
+        "updatedAt" : "2017-03-20T16:10:22Z",
+        "lastEditedBy" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4e20fe5-d72a-4d09-9946-0c5e0c18999d",
+        "parentId" : "5a3b50e3-fa16-436b-894d-de824ae51b7f",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "@liggitt i thought about running an offline upgrade script to modify the objects in etcd directly to update the versions in ownerReferences. How's that sound?",
+        "createdAt" : "2017-03-14T21:37:56Z",
+        "updatedAt" : "2017-03-20T16:10:22Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "160937b2-d56a-4762-850d-e9033d670b79",
+        "parentId" : "5a3b50e3-fa16-436b-894d-de824ae51b7f",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> @liggitt i thought about running an offline upgrade script to modify the objects in etcd directly to update the versions in ownerReferences. How's that sound?\r\n\r\nThat sounds like it won't work well if we surface objects via two API versions at once (which we will). It adds yet another place where everything that interacts with an object has to agree on a particular API version (or parse out the group from the apiVersion and ignore the version portion, which is annoying, or ignore apiVersion altogether, which is concerning)",
+        "createdAt" : "2017-03-14T21:42:00Z",
+        "updatedAt" : "2017-03-20T16:10:22Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c74aab649fc32680bc0afecbe238ff45148e9bdb",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +188,192 @@\t// We can't look up by UID, so look up by Name and then verify UID.\n\t// Don't even try to look up by Name if it's the wrong Kind.\n\tif controllerRef.Kind != controllerKind.Kind {\n\t\treturn nil\n\t}"
+  },
+  {
+    "id" : "8d8479fe-143d-4c73-b5ad-872eb0cc1f92",
+    "prId" : 42659,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/42659#pullrequestreview-27057863",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f7befc59-fd08-4b94-be3a-9c6f5cd1f21b",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "Check deletionTimestamp too.",
+        "createdAt" : "2017-03-15T12:17:38Z",
+        "updatedAt" : "2017-03-20T16:10:22Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c74aab649fc32680bc0afecbe238ff45148e9bdb",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +199,203 @@\t\t// ControllerRef points to.\n\t\treturn nil\n\t}\n\treturn rs\n}"
+  },
+  {
+    "id" : "9128b4a1-b668-465e-888c-71739f42b54c",
+    "prId" : 41984,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/41984#pullrequestreview-24613328",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6e6d8c28-7ee7-4fd5-b218-94764bde4077",
+        "parentId" : null,
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "It was written as a function to make the returned value \"constant\". Is there a reason to change it to a var?",
+        "createdAt" : "2017-03-01T22:41:38Z",
+        "updatedAt" : "2017-03-01T23:44:15Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a4c35f2-a239-407e-888c-4a9a57835a07",
+        "parentId" : "6e6d8c28-7ee7-4fd5-b218-94764bde4077",
+        "authorId" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "body" : "There is unfortunately a lot of similar-but-not-yet-shareable code between all the controllers, and I wanted to introduce a convention of having `controllerKind` in the package so I can copy code between controllers and it would understand how to ask \"what is my kind?\".\r\n\r\nI figured it serves a similar purpose to the `SchemeGroupVersion` variable itself:\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/dd22743b54f280f41e68f206449a13ca949aca4e/pkg/apis/extensions/v1beta1/register.go#L29\r\n\r\nIn that case, not only is the read-only nature merely a convention, but the variable is package public. So I used it as precedent that read-only-by-convention variables are ok. If that's the case, then making it a function seems like unnecessary overhead both cognitively and at runtime.",
+        "createdAt" : "2017-03-01T22:56:10Z",
+        "updatedAt" : "2017-03-01T23:44:15Z",
+        "lastEditedBy" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2c2fc9c707efd66cd4ac98ba918e09fa803578be",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +60,64 @@\n// controllerKind contains the schema.GroupVersionKind for this controller type.\nvar controllerKind = v1beta1.SchemeGroupVersion.WithKind(\"ReplicaSet\")\n\n// ReplicaSetController is responsible for synchronizing ReplicaSet objects stored"
+  },
+  {
+    "id" : "d3704aa7-1ee0-4025-92a7-3dd5156c391b",
+    "prId" : 33092,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/33092#pullrequestreview-766657",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b5e9a548-be3d-47ec-84ba-d45323c082c1",
+        "parentId" : null,
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "``` go\nwait.Forever(rsc.processNextWorkItem, 0)\n```\n\nor\n\n``` go\nfor {\n    rsc.processNextWorkItem()\n}\n```\n\nmight read better\n",
+        "createdAt" : "2016-09-20T14:38:48Z",
+        "updatedAt" : "2016-10-08T08:00:15Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1989bfdd-3071-4754-a69c-16ce56abf4c5",
+        "parentId" : "b5e9a548-be3d-47ec-84ba-d45323c082c1",
+        "authorId" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "body" : "Hmm...\n\n```\nfor rsc.processNextWorkItem() {\n}\n```\n\nis not a dead loop. Since `processNextWorkItem()` may return false and will end the loop.\n",
+        "createdAt" : "2016-09-20T14:54:40Z",
+        "updatedAt" : "2016-10-08T08:00:15Z",
+        "lastEditedBy" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7bb4c1ec-3d59-4a49-9958-14f316586b79",
+        "parentId" : "b5e9a548-be3d-47ec-84ba-d45323c082c1",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "ah ok, thanks for pointing that out.\n",
+        "createdAt" : "2016-09-20T15:01:07Z",
+        "updatedAt" : "2016-10-08T08:00:15Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a76a743ecdeea94f461f713b7ad8b0ff6a3772af",
+    "line" : 116,
+    "diffHunk" : "@@ -1,1 +446,450 @@// It enforces that the syncHandler is never invoked concurrently with the same key.\nfunc (rsc *ReplicaSetController) worker() {\n\tfor rsc.processNextWorkItem() {\n\t}\n}"
+  },
+  {
+    "id" : "8daf0af2-342a-4985-a747-3d6f9b5b8da9",
+    "prId" : 33092,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/33092#pullrequestreview-1067240",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "390bf038-f49b-4a9a-bb47-8720e349399f",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "It's probably worth mentioning that we will requeue the replica set now in case of an error while creating / deleting pods. Seems that we didn't do it prior to this change.\n",
+        "createdAt" : "2016-09-21T11:49:32Z",
+        "updatedAt" : "2016-10-08T08:00:15Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "edde8111-f787-4494-b246-40263cf20964",
+        "parentId" : "390bf038-f49b-4a9a-bb47-8720e349399f",
+        "authorId" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "body" : "Hmm, I agree with you and I will add some lines comments.\n",
+        "createdAt" : "2016-09-21T12:46:25Z",
+        "updatedAt" : "2016-10-08T08:00:15Z",
+        "lastEditedBy" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "edb720de-10ca-4aec-9179-1c7472ecd2a6",
+        "parentId" : "390bf038-f49b-4a9a-bb47-8720e349399f",
+        "authorId" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "body" : "Fixed.\n",
+        "createdAt" : "2016-09-22T00:19:31Z",
+        "updatedAt" : "2016-10-08T08:00:15Z",
+        "lastEditedBy" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a76a743ecdeea94f461f713b7ad8b0ff6a3772af",
+    "line" : 140,
+    "diffHunk" : "@@ -1,1 +470,474 @@\n// manageReplicas checks and updates replicas for the given ReplicaSet.\n// Does NOT modify <filteredPods>.\n// It will requeue the replica set in case of an error while creating/deleting pods.\nfunc (rsc *ReplicaSetController) manageReplicas(filteredPods []*api.Pod, rs *extensions.ReplicaSet) error {"
+  },
+  {
+    "id" : "b6794292-2ae2-40fd-8a8e-10efe9064430",
+    "prId" : 29275,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a5b8b9ba-2db5-4e31-918d-989ee78a80b5",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "Is this used for anything besides `HasSynced`?  If not, how about just pulling that directly from the informer?\n",
+        "createdAt" : "2016-07-20T17:47:40Z",
+        "updatedAt" : "2016-07-20T17:47:40Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a60c03d-d4e7-4f94-a967-5e7823d612af",
+        "parentId" : "a5b8b9ba-2db5-4e31-918d-989ee78a80b5",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I copied it from ReplicationController which is mostly the same code as in ReplicaSet here.\n\nI can remove it, but if you are ok with it, I would prefer doing this in the next PR, which this PR is blocking.\nDoes it sound ok?\n",
+        "createdAt" : "2016-07-20T17:51:57Z",
+        "updatedAt" : "2016-07-20T17:51:57Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09c17cfc-0bae-4b1d-b36f-e460f0761ec4",
+        "parentId" : "a5b8b9ba-2db5-4e31-918d-989ee78a80b5",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> I can remove it, but if you are ok with it, I would prefer doing this in the next PR, which this PR is blocking.\n> Does it sound ok?\n\nSure.\n",
+        "createdAt" : "2016-07-20T17:54:56Z",
+        "updatedAt" : "2016-07-20T17:54:56Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2794cf538cd9a22e34d1ab77125c808e20b8b0a3",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +93,97 @@\tpodStore cache.StoreToPodLister\n\t// Watches changes to all pods\n\tpodController framework.ControllerInterface\n\t// podStoreSynced returns true if the pod store has been synced at least once.\n\t// Added as a member to the struct to allow injection for testing."
+  },
+  {
+    "id" : "d1696feb-24eb-416d-8b25-809cf4c8cbf9",
+    "prId" : 29184,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "76050e08-ffff-46f3-8401-440aabf89221",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "If this is mutating you need to deep-copy the pod beforehand.\n",
+        "createdAt" : "2016-07-20T14:59:05Z",
+        "updatedAt" : "2016-07-21T09:37:00Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9899b518-e886-4f6a-a3ad-7e673a4c053e",
+        "parentId" : "76050e08-ffff-46f3-8401-440aabf89221",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Thanks. I took another look and it's not mutating pod.\n",
+        "createdAt" : "2016-07-20T23:09:03Z",
+        "updatedAt" : "2016-07-21T09:37:00Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a5a7bfa-7f17-49e1-8204-b984576484de",
+        "parentId" : "76050e08-ffff-46f3-8401-440aabf89221",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Same thing for `ReleasePod`?\n",
+        "createdAt" : "2016-07-20T23:30:19Z",
+        "updatedAt" : "2016-07-21T09:37:00Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fc4b23c1-144b-4869-bfd7-b7594c1ef16d",
+        "parentId" : "76050e08-ffff-46f3-8401-440aabf89221",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Yes, both of them builds patch based on the pod and sends the patch to the server.\n",
+        "createdAt" : "2016-07-20T23:32:21Z",
+        "updatedAt" : "2016-07-21T09:37:00Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e21b7109e1a77a3c2a4045531bef0f587aec9c77",
+    "line" : 296,
+    "diffHunk" : "@@ -1,1 +607,611 @@\t\tmatchesAndControlled, matchesNeedsController, controlledDoesNotMatch := cm.Classify(podList.Items)\n\t\tfor _, pod := range matchesNeedsController {\n\t\t\terr := cm.AdoptPod(pod)\n\t\t\t// continue to next pod if adoption fails.\n\t\t\tif err != nil {"
+  },
+  {
+    "id" : "fe0a7f29-c8f1-4ffc-90fc-fdbf5783a237",
+    "prId" : 27415,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27b6619e-b9e3-4358-9165-c69ca42d329a",
+        "parentId" : null,
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "If deletion timestamp is set on the cur pod and old pod has a different rc (i.e we got a single update with deletion timestamp and label change -- this can happen if both updates hit during a relist), we should invoke deletePod with the old one too. It's safe to do this becase deletion timestamp can never be unset.\n",
+        "createdAt" : "2016-06-15T06:27:36Z",
+        "updatedAt" : "2016-06-15T17:34:37Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3776997-a9ae-4ac5-905a-6dc0e9958928",
+        "parentId" : "27b6619e-b9e3-4358-9165-c69ca42d329a",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Yeah, this sounds good. I've updated the code.\n",
+        "createdAt" : "2016-06-15T17:04:00Z",
+        "updatedAt" : "2016-06-15T17:34:37Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "63fb075f0a214be8881908c2f05b8e7c1cb80265",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +329,333 @@\tglog.V(4).Infof(\"Pod %s updated, objectMeta %+v -> %+v.\", curPod.Name, oldPod.ObjectMeta, curPod.ObjectMeta)\n\tlabelChanged := !reflect.DeepEqual(curPod.Labels, oldPod.Labels)\n\tif curPod.DeletionTimestamp != nil {\n\t\t// when a pod is deleted gracefully it's deletion timestamp is first modified to reflect a grace period,\n\t\t// and after such time has passed, the kubelet actually deletes it from the store. We receive an update"
+  },
+  {
+    "id" : "a6bde0b3-4291-4595-8821-143c7a4241c7",
+    "prId" : 22579,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6acbc902-5499-4615-b7c6-8bdc08d3b2ce",
+        "parentId" : null,
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "In the `Pod %s deleted` log message above, it would be useful to also print the namespace and deletion timestamp.\n",
+        "createdAt" : "2016-03-05T22:02:32Z",
+        "updatedAt" : "2016-03-06T02:20:46Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c00dacd9-096d-4440-a33c-b3bf650572df",
+        "parentId" : "6acbc902-5499-4615-b7c6-8bdc08d3b2ce",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "It would be nice to know what type of event it was, also: add, update, delete.\n",
+        "createdAt" : "2016-03-05T22:23:05Z",
+        "updatedAt" : "2016-03-06T02:20:46Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7f5c9bd676de75f113faf39b1a865a4716cfa474",
+    "line" : 97,
+    "diffHunk" : "@@ -1,1 +375,379 @@\t\t\treturn\n\t\t}\n\t\trsc.expectations.DeletionObserved(rsKey, controller.PodKey(pod))\n\t\trsc.enqueueReplicaSet(rs)\n\t}"
+  },
+  {
+    "id" : "2d54787a-e7ef-4a07-95df-fe59ffbeadc7",
+    "prId" : 22579,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7f6789ea-450a-4017-b7f7-c14411d5f6de",
+        "parentId" : null,
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "You changed the comment back from ReplicaSet to rc. :-)\n",
+        "createdAt" : "2016-03-06T06:18:43Z",
+        "updatedAt" : "2016-03-06T06:18:43Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7f5c9bd676de75f113faf39b1a865a4716cfa474",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +74,78 @@\tsyncHandler func(rsKey string) error\n\n\t// A TTLCache of pod creates/deletes each rc expects to see.\n\texpectations *controller.UIDTrackingControllerExpectations\n"
+  },
+  {
+    "id" : "cd1cf1e1-8d62-4d22-aa9c-0455f02d916e",
+    "prId" : 22560,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "680d3fef-3211-4761-8035-c22e340af9d9",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Should also happen in the rc controller.\n",
+        "createdAt" : "2016-03-07T09:46:58Z",
+        "updatedAt" : "2016-03-07T09:46:58Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "31055a40-a1e8-40f6-aece-aa4c7c11ee49",
+        "parentId" : "680d3fef-3211-4761-8035-c22e340af9d9",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "The rc logs pods.labels, do we really need the whole pod? is there something in the annotations we need? if not I'd prefer this also just logged labels to reduce log spam\n",
+        "createdAt" : "2016-03-07T17:50:30Z",
+        "updatedAt" : "2016-03-07T17:50:30Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "59b1f5b8b578a35583fda02c458f4854168e3627",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +290,294 @@func (rsc *ReplicaSetController) addPod(obj interface{}) {\n\tpod := obj.(*api.Pod)\n\tglog.V(4).Infof(\"Pod %s created: %+v.\", pod.Name, pod)\n\n\trs := rsc.getPodReplicaSet(pod)"
+  },
+  {
+    "id" : "7220d61e-8c45-478a-8020-53d163c5ea22",
+    "prId" : 22143,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a9c4d0dd-10fa-43fb-9953-45fd2df61d8c",
+        "parentId" : null,
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "Nit: \"replica set\"\n",
+        "createdAt" : "2016-02-28T16:21:29Z",
+        "updatedAt" : "2016-02-28T16:21:29Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "859f6b13fa3ccb73a3017106ed105a0be0fb951c",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +297,301 @@\trsKey, err := controller.KeyFunc(rs)\n\tif err != nil {\n\t\tglog.Errorf(\"Couldn't get key for replication controller %#v: %v\", rs, err)\n\t\treturn\n\t}"
+  },
+  {
+    "id" : "78f22fd4-dc5a-4804-b826-f9c100c75b7e",
+    "prId" : 22143,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5c234316-8d44-4926-b68f-17a57c6fd3af",
+        "parentId" : null,
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "Subsequent deletes could reduce DeletionGracePeriodSeconds even if DeletionTimestamp were already set, but I don't think the controller would do this, since it doesn't explicitly set the grace period.\n",
+        "createdAt" : "2016-02-28T16:33:42Z",
+        "updatedAt" : "2016-02-28T16:33:42Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d7537c8-b700-4737-a1c5-919aa58e9630",
+        "parentId" : "5c234316-8d44-4926-b68f-17a57c6fd3af",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "They're only allowed to shorten it like you noted. I want to count this as exactly one, irreversible delete. If they created the pod with a timestamp and then shorten it we won't get the nil/non-nil diff but the add method will pick that up. We already exclude deletion timestamped pods from all the filtering/choosing of pods to kill in the controller. Or did I misunderstand your comment? \n",
+        "createdAt" : "2016-02-28T18:31:19Z",
+        "updatedAt" : "2016-02-28T18:31:19Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5bcc923f-2f42-46e5-b987-a52dd23115d5",
+        "parentId" : "5c234316-8d44-4926-b68f-17a57c6fd3af",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "Fyi https://github.com/kubernetes/kubernetes/issues/22150\n",
+        "createdAt" : "2016-02-28T18:41:16Z",
+        "updatedAt" : "2016-02-28T18:41:16Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "859f6b13fa3ccb73a3017106ed105a0be0fb951c",
+    "line" : 63,
+    "diffHunk" : "@@ -1,1 +331,335 @@\n\tif curPod.DeletionTimestamp != nil && oldPod.DeletionTimestamp == nil {\n\t\t// when a pod is deleted gracefully it's deletion timestamp is first modified to reflect a grace period,\n\t\t// and after such time has passed, the kubelet actually deletes it from the store. We receive an update\n\t\t// for modification of the deletion timestamp and expect an rc to create more replicas asap, not wait"
+  },
+  {
+    "id" : "2d532c82-ecb6-4e4a-9366-9b6c38d5ea00",
+    "prId" : 22143,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "723e1531-7f31-4312-bbfe-612351eb6fa5",
+        "parentId" : null,
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "Yes, this could explain the behavior I was seeing. Thanks!\n",
+        "createdAt" : "2016-02-28T16:42:47Z",
+        "updatedAt" : "2016-02-28T16:42:47Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "859f6b13fa3ccb73a3017106ed105a0be0fb951c",
+    "line" : 82,
+    "diffHunk" : "@@ -1,1 +378,382 @@\t\t// This method only manages expectations for the case where a pod is\n\t\t// deleted without a grace period.\n\t\tif pod.DeletionTimestamp == nil {\n\t\t\trsc.expectations.DeletionObserved(rsKey)\n\t\t}"
+  }
+]

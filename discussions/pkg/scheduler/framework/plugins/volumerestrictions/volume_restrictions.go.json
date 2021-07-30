@@ -1,0 +1,310 @@
+[
+  {
+    "id" : "d9da6bb2-eb95-41bf-b9d5-ecbf20e8bebe",
+    "prId" : 103082,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103082#pullrequestreview-692007971",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "check if the error is for NotFound.\r\nIf that is the case, the status should be UnschedulableAndUnresolvable. Otherwise, the status is Error.",
+        "createdAt" : "2021-06-22T17:48:23Z",
+        "updatedAt" : "2021-06-22T17:59:05Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1dd2ffbe-d3ac-4949-86ad-84a440395933",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "When we create a pod and PVC for the first time, we are likely to hit this `NotFoundError` when we lookup the PVC. It looks like the pod then hangs for ~1m until it retries (when `SchedulableAndUnresolvable`).\r\n\r\nWe could use an informer or poll the lister until the PVC is available, however this introduces some extra complexity.\r\n\r\nAlternatively, we could query the PVC lister with the existing PVCs on the node, but that's likely less performant because we'd have to enumerate the pods on the node, find the ones with the matching namespace, and then query the lister with its PVC (overall more queries). From what I can tell this approach removes the benefit of the `PVCRefCount`.",
+        "createdAt" : "2021-06-23T19:40:05Z",
+        "updatedAt" : "2021-06-23T19:43:40Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df9c3be5-7cf5-4f03-8eb4-0634ec21cd42",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Both when there is an Error and when you return Unschedulable or UnschedulableAndUnresolvable, there is a backoff. This is exponential, and it starts at 1 second.\r\n\r\nReturning and leaving it to a retry is the correct thing to do.\r\n\r\nWe should not return Error when the PVC is not found, as that affects metrics.",
+        "createdAt" : "2021-06-23T19:57:28Z",
+        "updatedAt" : "2021-06-23T19:57:28Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a942630-707d-486d-9093-455b4a3cb2ed",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "I'm not able to reproduce this behavior on my kind cluster. This is what the scheduling of a single pod looks like when we return `Error`:\r\n```\r\nEvents:\r\n  Type     Reason                  Age                  From                     Message\r\n  ----     ------                  ----                 ----                     -------\r\n  Warning  FailedScheduling        3m56s                default-scheduler        running PreFilter plugin \"VolumeRestrictions\": error while getting PersistentVolumeClaim\r\n  Normal   Scheduled               3m55s                default-scheduler        Successfully assigned default/web-server to kind-control-plane\r\n  Normal   SuccessfulAttachVolume  3m54s                attachdetach-controller  AttachVolume.Attach succeeded for volume \"pvc-ecbb19b1-d55a-4a58-9b26-bf20b9cf48a5\"\r\n  Normal   Pulling                 3m53s                kubelet                  Pulling image \"nginx\"\r\n  Normal   Pulled                  3m48s                kubelet                  Successfully pulled image \"nginx\" in 5.112477878s\r\n  Normal   Created                 3m46s                kubelet                  Created container web-server\r\n  Normal   Started                 3m46s                kubelet                  Started container web-server\r\n```\r\n\r\nAnd this is what it looks like when it's marked `UnschedulableAndUnresolvable`:\r\n```\r\nEvents:\r\n  Type     Reason                  Age                From                     Message\r\n  ----     ------                  ----               ----                     -------\r\n  Warning  FailedScheduling        111s               default-scheduler        0/1 nodes are available: 1 error while getting PersistentVolumeClaim.\r\n  Normal   Scheduled               30s                default-scheduler        Successfully assigned default/web-server to kind-control-plane\r\n  Normal   SuccessfulAttachVolume  30s                attachdetach-controller  AttachVolume.Attach succeeded for volume \"pvc-597b3026-e66c-4a2d-adac-5e70f1ee86bf\"\r\n  Normal   Pulling                 22s                kubelet                  Pulling image \"nginx\"\r\n  Normal   Pulled                  17s                kubelet                  Successfully pulled image \"nginx\" in 5.289617494s\r\n  Normal   Created                 15s                kubelet                  Created container web-server\r\n  Normal   Started                 15s                kubelet                  Started container web-server\r\n```\r\n\r\nThere is a 1 second difference in the case of `Error`, and an 81s difference for `UnschedulableAndUnresolvable`. Is this expected? Currently checking logs for anything that might explain what I'm seeing.",
+        "createdAt" : "2021-06-23T20:56:59Z",
+        "updatedAt" : "2021-06-23T20:57:36Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "361f250a-d02e-47e8-a7e7-6a1b33d279f1",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "That is because on [PreFilter error we don't record the failing plugin](https://github.com/kubernetes/kubernetes/blob/8955463c178636c82ccd94394507ec1c8b67fe2c/pkg/scheduler/core/generic_scheduler.go#L228), and so on any new event it seems that the pod is being moved back to the active queue [because of this](https://github.com/kubernetes/kubernetes/blob/53592b322211075fa1f1e98217ab6274e9fc3c64/pkg/scheduler/internal/queue/scheduling_queue.go#L554). \r\n\r\nHowever, we set the failing plugin on [unschedulable status](https://github.com/kubernetes/kubernetes/blob/8955463c178636c82ccd94394507ec1c8b67fe2c/pkg/scheduler/core/generic_scheduler.go#L234), but sense VolumeBinding plugin is not registering any events, update/create PVC is not triggering moving the pod out of the unschedulable queue. There is a PR for adding that https://github.com/kubernetes/kubernetes/pull/100003\r\n\r\n/cc @Huang-Wei \r\n\r\nWei, I thought plugins that don't register any events is considered wildcard, isn't that the case? ",
+        "createdAt" : "2021-06-23T22:05:13Z",
+        "updatedAt" : "2021-06-23T22:06:13Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb9ac955-525a-46ca-b8b7-7a045a09e277",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "It looks like I can then register events on the `VolumeRestrictions` plugin to respond on PVC add or update and this should work, is this right?",
+        "createdAt" : "2021-06-23T22:23:16Z",
+        "updatedAt" : "2021-06-23T22:23:16Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95119657-3e07-422b-bf9e-798b92fa1162",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "There is an open PR for that ( #100003), but yes do that in your test with kind to verify that you will get faster response.",
+        "createdAt" : "2021-06-23T22:25:17Z",
+        "updatedAt" : "2021-06-23T22:25:18Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f865699a-7242-480f-9ffb-543def2e6b56",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "It looks like this is adding it to the `VolumeBinding` plugin which is different than `VolumeRestrictions`, maybe I'm misunderstanding",
+        "createdAt" : "2021-06-23T22:26:50Z",
+        "updatedAt" : "2021-06-23T22:26:50Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c25bb6e-ebab-470f-ae24-1a1de2f34200",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "> Wei, I thought plugins that don't register any events is considered wildcard, isn't that the case?\r\n\r\n@ahg-g Plugins that don't register any events will register all default plugins:\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/3a07d96d2560b491ba6072de4b53d2c97f9ca906/pkg/scheduler/framework/runtime/framework.go#L390-L392\r\n\r\nBelow is the default plugin list in 1.22 (comparing to 1.21, Service was removed):\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/3a07d96d2560b491ba6072de4b53d2c97f9ca906/pkg/scheduler/framework/runtime/framework.go#L62-L69",
+        "createdAt" : "2021-06-23T22:29:08Z",
+        "updatedAt" : "2021-06-23T22:29:08Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "96716783-e963-49a4-bf28-45471292f92b",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "> It looks like this is adding it to the VolumeBinding plugin which is different than VolumeRestrictions, maybe I'm misunderstanding\r\n\r\nah sorry. Then yes, you need to add the PVC events to this plugin.",
+        "createdAt" : "2021-06-23T22:41:01Z",
+        "updatedAt" : "2021-06-23T22:41:01Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6aa0a1ca-87a2-4905-bddc-f308d3585200",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "> @ahg-g Plugins that don't register any events will register all default plugins:\r\n\r\nThanks Wei, then this make sense, we just need to add those events to the current set we have in `VolumeRestrictions`, I was mistakenly looking at `VolumeBinding` plugin",
+        "createdAt" : "2021-06-23T22:41:58Z",
+        "updatedAt" : "2021-06-23T22:42:56Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8090a574-5b63-4e7a-9c70-e524b748126f",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "I'm a little confused. It seems like `VolumeRestrictions` should have `PersistentVolumeClaim` events registered by default since it currently register any events. [In this case](https://github.com/kubernetes/kubernetes/blob/53592b322211075fa1f1e98217ab6274e9fc3c64/pkg/scheduler/internal/queue/scheduling_queue.go#L554), I would think we eventually find a matching event (the default `PersistentVolumeClaim` one) and proceed. Testing this now.\r\n\r\nEdit: Nevermind, I see it's registering events below. Scratch this.",
+        "createdAt" : "2021-06-23T23:15:45Z",
+        "updatedAt" : "2021-06-23T23:16:28Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aba4ba0a-128d-440e-939e-1a1202aca30f",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "It's working, thank you everyone! (Marking as `UnschedulableAndUnresolvable`)\r\n```\r\nEvents:\r\n  Type     Reason                  Age                From                     Message\r\n  ----     ------                  ----               ----                     -------\r\n  Warning  FailedScheduling        31s                default-scheduler        0/1 nodes are available: 1 error while getting PersistentVolumeClaim.\r\n  Normal   Scheduled               30s                default-scheduler        Successfully assigned default/web-server to kind-control-plane\r\n  Normal   SuccessfulAttachVolume  30s                attachdetach-controller  AttachVolume.Attach succeeded for volume \"pvc-92c36085-0a26-42f0-b6bd-403abde82cb3\"\r\n  Normal   Pulling                 22s                kubelet                  Pulling image \"nginx\"\r\n  Normal   Pulled                  17s                kubelet                  Successfully pulled image \"nginx\" in 5.181057731s\r\n  Normal   Created                 15s                kubelet                  Created container web-server\r\n  Normal   Started                 15s                kubelet                  Started container web-server\r\n```",
+        "createdAt" : "2021-06-23T23:37:19Z",
+        "updatedAt" : "2021-06-23T23:37:19Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6f45a4c3-4edc-45ea-b511-7f89d3439be4",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "Great, can you resolve this comment? way too long and is making it a bit hard to look at the code :)",
+        "createdAt" : "2021-06-24T01:06:08Z",
+        "updatedAt" : "2021-06-24T01:06:08Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f8bc10e-09fb-4dc6-804d-6f6569bbfc9b",
+        "parentId" : "2004c23b-aa77-4008-9def-3534243ec871",
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "Yes definitely. It's funny, I've always glossed over that button, going to start using it frequently now. When I resolve the conversation, are reviewers notified of this?",
+        "createdAt" : "2021-06-24T16:56:51Z",
+        "updatedAt" : "2021-06-24T16:57:03Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7ad44d04fcedbdd2dba1c2d0a677325edfbab447",
+    "line" : 68,
+    "diffHunk" : "@@ -1,1 +145,149 @@\n\t\tpvc, err := pl.pvcLister.PersistentVolumeClaims(pod.Namespace).Get(volume.PersistentVolumeClaim.ClaimName)\n\t\tif err != nil {\n\t\t\tif apierrors.IsNotFound(err) {\n\t\t\t\treturn framework.NewStatus(framework.UnschedulableAndUnresolvable, err.Error())"
+  },
+  {
+    "id" : "ecedc0e2-55b1-47bb-ad4a-50a2c9b79bb0",
+    "prId" : 103082,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103082#pullrequestreview-692003375",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a7551511-620d-4e4c-b91f-2295c90aff4e",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "You actually need to implement this for preemption to work.\r\n\r\nThis is actually going to be tricky: in preemption, PreFilter doesn't run, for performance reasons. So you have to save some state in `PreFilter`, update it in `AddPod`, `RemovePod` and use that in `Filter`.\r\n\r\nThere are a million ways to implement that, so you'll have to see what is best performance wise.",
+        "createdAt" : "2021-06-22T17:57:10Z",
+        "updatedAt" : "2021-06-22T17:59:06Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "772cb4b3-53c1-49f2-90f8-bc61b4b44f3d",
+        "parentId" : "a7551511-620d-4e4c-b91f-2295c90aff4e",
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "Resolving, will tackle this in beta",
+        "createdAt" : "2021-06-24T16:51:39Z",
+        "updatedAt" : "2021-06-24T16:51:39Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7ad44d04fcedbdd2dba1c2d0a677325edfbab447",
+    "line" : 106,
+    "diffHunk" : "@@ -1,1 +183,187 @@}\n\nfunc (pl *VolumeRestrictions) PreFilterExtensions() framework.PreFilterExtensions {\n\treturn nil\n}"
+  },
+  {
+    "id" : "d6bd18e5-790c-4f06-9eab-68c50f8affe0",
+    "prId" : 103082,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103082#pullrequestreview-696449211",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9b910cdf-d7ff-4f63-851a-591609788338",
+        "parentId" : null,
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "naive question, can a claim be \"reclaimed\"? can a PVC be released for another pod to claim? if so, we need to include the PVC update events too.",
+        "createdAt" : "2021-06-30T11:58:23Z",
+        "updatedAt" : "2021-06-30T11:59:41Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07c8d59f-b230-4876-8f3a-360a51ee6f5e",
+        "parentId" : "9b910cdf-d7ff-4f63-851a-591609788338",
+        "authorId" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "body" : "A user could potentially tweak the pointers on the PVC and PV to change the binding, but these changes to the PVC spec are blocked by immutability protection. I will include responding to updates to future-proof should this change.",
+        "createdAt" : "2021-06-30T17:37:30Z",
+        "updatedAt" : "2021-06-30T17:37:30Z",
+        "lastEditedBy" : "ffc1d568-c5ed-4932-82f4-3ae9d3bee69a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7ad44d04fcedbdd2dba1c2d0a677325edfbab447",
+    "line" : 118,
+    "diffHunk" : "@@ -1,1 +224,228 @@\t\t{Resource: framework.Node, ActionType: framework.Add},\n\t\t// Pods may fail to schedule because the PVC it uses has not yet been created.\n\t\t// This PVC is required to exist to check its access modes.\n\t\t{Resource: framework.PersistentVolumeClaim, ActionType: framework.Add | framework.Update},\n\t}"
+  },
+  {
+    "id" : "06e1308e-1922-4f7d-b642-fc6687c5d51c",
+    "prId" : 93371,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/93371#pullrequestreview-453841446",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "01527256-9cf7-4a03-858a-030d7fece241",
+        "parentId" : null,
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "It's no harm to keep the original `for _, v := range pod.Spec.Volumes` logic, no?",
+        "createdAt" : "2020-07-23T04:24:16Z",
+        "updatedAt" : "2020-07-23T04:24:28Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a75e6b4a-e54c-40c4-a687-ae6939063040",
+        "parentId" : "01527256-9cf7-4a03-858a-030d7fece241",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "wouldn't this avoid copying the object twice (once in the iteration and once when passing it to the function)?",
+        "createdAt" : "2020-07-23T04:33:40Z",
+        "updatedAt" : "2020-07-23T04:45:33Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "028c79b7-2c44-45b0-bf60-d4bba5febced",
+        "parentId" : "01527256-9cf7-4a03-858a-030d7fece241",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "True, but I'd argue the cost (the size of `Volume` is trivial) is trivial.\r\n\r\n/lgtm\r\nanyway",
+        "createdAt" : "2020-07-23T05:20:33Z",
+        "updatedAt" : "2020-07-23T05:20:33Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5e81a2de98897ff9c3d77acf8b191fbca55f9588",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +114,118 @@// - ISCSI forbids if any two pods share at least same IQN and ISCSI volume is read-only\nfunc (pl *VolumeRestrictions) Filter(ctx context.Context, _ *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {\n\tfor i := range pod.Spec.Volumes {\n\t\tv := &pod.Spec.Volumes[i]\n\t\t// fast path if there is no conflict checking targets."
+  },
+  {
+    "id" : "7d88ac55-7597-4438-ae46-5982b84a0bd7",
+    "prId" : 83731,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83731#pullrequestreview-300654138",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "32f635bc-0cdd-4ea6-a11a-666d9f037d72",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "comment for nil namespace here too",
+        "createdAt" : "2019-10-11T12:36:00Z",
+        "updatedAt" : "2019-10-12T00:01:15Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e426a6be1ced72eaf2073d3473c7fe694e1bba6",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +42,46 @@func (pl *VolumeRestrictions) Filter(_ *framework.CycleState, pod *v1.Pod, nodeInfo *nodeinfo.NodeInfo) *framework.Status {\n\t// metadata is not needed for NoDiskConflict\n\t_, reasons, err := predicates.NoDiskConflict(pod, nil, nodeInfo)\n\treturn migration.PredicateResultToFrameworkStatus(reasons, err)\n}"
+  }
+]

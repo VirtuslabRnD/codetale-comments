@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "54337db6-8568-40a4-9eb4-63f2f5dae3e3",
+    "prId" : 23656,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "76ffd5c6-b0a7-4523-a69c-a2ca332258c1",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "If this happens, then the GC, upon a crash, has no way to observe the desired graceful deletion period of D1.  This may be acceptable in some cases (those members should have well defined grace periods of their own).  But it means that setting grace period on those items isn't guaranteed to propagate.\n\nSetting OrphanDependents=false and GracePeriod=0 should apply graceperiod=0 to all descendents in most cases.\n",
+        "createdAt" : "2016-04-29T02:21:37Z",
+        "updatedAt" : "2016-05-04T18:17:08Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a09e7291-4422-402b-b66a-4a9ffb08deba",
+        "parentId" : "76ffd5c6-b0a7-4523-a69c-a2ca332258c1",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "To let client determine when a cascading deletion finished, GC should not delete the owning(i.e., parent) object  until all children are deleted, see Brian's comment:\nhttps://github.com/kubernetes/kubernetes/pull/23656#issuecomment-214941845\n\nThe suggested solution will the solve lost graceful period information problem as well.\n",
+        "createdAt" : "2016-04-29T05:33:53Z",
+        "updatedAt" : "2016-05-04T18:17:08Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f05c36f6-460a-4fdb-8493-d024312dd436",
+        "parentId" : "76ffd5c6-b0a7-4523-a69c-a2ca332258c1",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "@smarterclayton do we need to propagate grace period right now? My understanding is that it doesn't currently propagate.\n",
+        "createdAt" : "2016-05-02T21:56:15Z",
+        "updatedAt" : "2016-05-04T18:17:08Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b3d72973864b423fcfc0c2d738713b502caa3abf",
+    "line" : 223,
+    "diffHunk" : "@@ -1,1 +221,225 @@  ***In case the user wants to cascadingly delete `D1`'s descendants, then***\n\n7. The user deletes the deployment `D1`, with `DeleteOptions.OrphanDependents=false`. API server checks if `D1` has \"orphan\" finalizer in its Finalizers map, if so, it updates `D1` to remove the \"orphan\" finalizer. Then API server deletes `D1`.\n8. The \"orphan\" finalizer does *not* take any action, because the observed deletion shows `D1` has an empty Finalizers map.\n9. The Propagator of the GC observes the deletion of `D1`. It deletes `D1` from the DAG. It adds its dependent object, replicaset `R1`, to the *dirty queue*."
+  },
+  {
+    "id" : "75b795d2-0dc8-475d-85a5-4d60c18c9f5e",
+    "prId" : 23656,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "de296382-8cab-4201-bedf-48738ed74657",
+        "parentId" : null,
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Explicitly listed \"propagating the grace period\" as non goal of this proposal.\n",
+        "createdAt" : "2016-05-02T23:01:48Z",
+        "updatedAt" : "2016-05-04T18:17:08Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b3d72973864b423fcfc0c2d738713b502caa3abf",
+    "line" : 60,
+    "diffHunk" : "@@ -1,1 +58,62 @@Non-goals include:\n* Releasing the name of an object immediately, so it can be reused ASAP.\n* Propagating the grace period in cascading deletion.\n\n# Cascading deletion with Garbage Collector"
+  },
+  {
+    "id" : "564b63fe-dd74-43a5-b6ea-9c3d49625b88",
+    "prId" : 23656,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d74714f4-a519-406d-98c2-b30934910f45",
+        "parentId" : null,
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Moved \"propagating grace period\" to `Open Qeustions` and noted down the tentative solution.\n",
+        "createdAt" : "2016-05-02T23:06:22Z",
+        "updatedAt" : "2016-05-04T18:17:08Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b3d72973864b423fcfc0c2d738713b502caa3abf",
+    "line" : 260,
+    "diffHunk" : "@@ -1,1 +258,262 @@2. How to propagate the grace period in a cascading deletion? For example, when deleting a ReplicaSet with grace period of 5s, a user may expect the same grace period to be applied to the deletion of the Pods controlled the ReplicaSet.\n\n  Propagating grace period in a cascading deletion is a ***non-goal*** of this proposal. Nevertheless, the presented design can be extended to support it. A tentative solution is letting the garbage collector to propagate the grace period when deleting dependent object. To persist the grace period set by the user, the owning object should not be deleted from the registry until all its dependent objects are in the graceful deletion state. This could be ensured by introducing another finalizer, tentatively named as the \"populating graceful deletion\" finalizer. Upon receiving the graceful deletion request, the API server adds this finalizer to the finalizers list of the owning object. Later the GC will remove it when all dependents are in the graceful deletion state.\n\n  [#25055](https://github.com/kubernetes/kubernetes/issues/25055) tracks this problem."
+  }
+]

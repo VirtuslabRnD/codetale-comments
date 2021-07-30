@@ -1,0 +1,959 @@
+[
+  {
+    "id" : "42462775-3cf3-4908-9293-6f560fb05753",
+    "prId" : 55039,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55039#pullrequestreview-77605525",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4c2f801b-6228-432f-8457-5711ef39b150",
+        "parentId" : null,
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "This way of marking pods unschedulable out of scheduler's main thread is risky and could race with the scheduler main thread. Please think about a way of moving this out of the thread and communicate the status back and let the main thread do this.",
+        "createdAt" : "2017-11-17T23:09:34Z",
+        "updatedAt" : "2017-11-22T07:20:19Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0b9eabca-8099-4189-92f9-03ae4c81ad34",
+        "parentId" : "4c2f801b-6228-432f-8457-5711ef39b150",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Could you clarify this?  Are you saying that a separate informer event could cause the pod to be added to back to the queue and be processed in scheduleOne() while we are still binding in another thread?\r\n\r\nWhen I look at scheduleOne() and bind() which is in a separate go routine, I see that bind() is updating the Pod outside of the main thread on error.",
+        "createdAt" : "2017-11-18T01:28:05Z",
+        "updatedAt" : "2017-11-22T07:20:19Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b4054cc-114a-450e-9224-52f54ca0d99f",
+        "parentId" : "4c2f801b-6228-432f-8457-5711ef39b150",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "> Could you clarify this? Are you saying that a separate informer event could cause the pod to be added to back to the queue and be processed in scheduleOne() while we are still binding in another thread?\r\n\r\nYes, it actually does cause this, but my concern is that with this change two threads compete with one another to mark the pod unschedulable. This is a bit of a concern. In case of updating the pod in bind(), scheduler main thread is already done with the pod and may not update it at the same time.",
+        "createdAt" : "2017-11-18T01:38:07Z",
+        "updatedAt" : "2017-11-22T07:20:19Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "30c5771d-359d-4303-af10-e806d0d880b7",
+        "parentId" : "4c2f801b-6228-432f-8457-5711ef39b150",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Which part of the main thread are you concerned that it is competing with?  In `assumeAndBindVolumes`, we do not update the Pod if we queued it to the volume BindQueue.  And if we queued the pod for volume binding, the `assumeAndBindVolumes()` will return an error so that `scheduleOne()` will return immediately and not continue to `assume`.",
+        "createdAt" : "2017-11-18T01:49:47Z",
+        "updatedAt" : "2017-11-22T07:20:19Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1dcd317a-67b5-4b95-85f8-b15eefdf6f78",
+        "parentId" : "4c2f801b-6228-432f-8457-5711ef39b150",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "You are right, @msau42. I thought scheduler would continue and would update the pod in its main thread, but that's not the case. The only problem here is if the pod is updated in the middle of the volume binding process. In that case it may be retried by the scheduler, but that should be fine.",
+        "createdAt" : "2017-11-18T03:17:57Z",
+        "updatedAt" : "2017-11-22T07:20:19Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8656289b-24c2-44be-af5b-62c049f99fe5",
+        "parentId" : "4c2f801b-6228-432f-8457-5711ef39b150",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Thanks for the clarification. I'll add some more comments to try to make it more clear.",
+        "createdAt" : "2017-11-18T03:21:11Z",
+        "updatedAt" : "2017-11-22T07:20:19Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6540850fa2b710060fa94a22e03ff7c39ba652e6",
+    "line" : 139,
+    "diffHunk" : "@@ -1,1 +338,342 @@\t\t}\n\n\t\t// Always fail scheduling regardless of binding success.\n\t\t// The Pod needs to be sent back through the scheduler to:\n\t\t// * Retry volume binding if it fails."
+  },
+  {
+    "id" : "1b16c99d-15e5-4152-8688-9ff9ea4c9f1f",
+    "prId" : 50949,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50949#pullrequestreview-60997369",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "01aa460b-add0-4826-8214-1c6ed3416d81",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Shouldn't we return err here?",
+        "createdAt" : "2017-09-06T11:19:38Z",
+        "updatedAt" : "2017-09-07T22:32:06Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70d465e9-7648-4ec3-a1ad-6ea1c5cfccbd",
+        "parentId" : "01aa460b-add0-4826-8214-1c6ed3416d81",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "We effectively do since node will be nil in case of error. So, the check below will return error, but I added another return here as well to be safe.",
+        "createdAt" : "2017-09-06T18:50:21Z",
+        "updatedAt" : "2017-09-07T22:32:06Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c0b718373befb2168befc0c4579fd9a02155d5bc",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +201,205 @@\tnode, victims, err := sched.config.Algorithm.Preempt(preemptor, sched.config.NodeLister, scheduleErr)\n\tif err != nil {\n\t\tglog.Errorf(\"Error preempting victims to make room for %v/%v.\", preemptor.Namespace, preemptor.Name)\n\t\treturn \"\", err\n\t}"
+  },
+  {
+    "id" : "2664334d-b73c-4c55-9784-9da5f31a86fe",
+    "prId" : 50949,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50949#pullrequestreview-60997369",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4fcf8ca4-ba63-41d2-82f2-3e2fc63c1c10",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Why do we need this?\r\nDoes it give us much value? Even with this there can be race, so I'm not sure what value it introduces.",
+        "createdAt" : "2017-09-06T11:19:42Z",
+        "updatedAt" : "2017-09-07T22:32:06Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e7cd12c-5d0e-489e-945d-732a4abddaa3",
+        "parentId" : "4fcf8ca4-ba63-41d2-82f2-3e2fc63c1c10",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "This is needed to get the most recent version of the object. Initially I didn't have this. When it was not there, updating pod annotations after the preemption, was throwing an error that we were trying to update a stale version of the object, because `schedule` updates pod status before calling preempt. We may want to merge the two updates (the one after `schedule` and the one after `preempt`) when preemption is no longer feature gated.",
+        "createdAt" : "2017-09-06T18:44:56Z",
+        "updatedAt" : "2017-09-07T22:32:06Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c0b718373befb2168befc0c4579fd9a02155d5bc",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +194,198 @@\t\treturn \"\", nil\n\t}\n\tpreemptor, err := sched.config.PodPreemptor.GetUpdatedPod(preemptor)\n\tif err != nil {\n\t\tglog.Errorf(\"Error getting the updated preemptor pod object: %v\", err)"
+  },
+  {
+    "id" : "c05ea2b6-8772-4bd0-8bf3-0060543a6b64",
+    "prId" : 50106,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50106#pullrequestreview-54288751",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "829d41c3-69db-43af-923f-ebb1f63a2082",
+        "parentId" : null,
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "I think we need to `FinisBinding` before `ForgetPod`; if `ForgetPod` failed, the assumed pod maybe still in cache.",
+        "createdAt" : "2017-08-03T23:26:07Z",
+        "updatedAt" : "2017-08-04T21:05:42Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e450b27-ad97-42b6-9d65-23c1c4fe4a23",
+        "parentId" : "829d41c3-69db-43af-923f-ebb1f63a2082",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Agree. There were two problems here. One that we were returning here, the second is what @k82cn pointed at.",
+        "createdAt" : "2017-08-04T06:33:29Z",
+        "updatedAt" : "2017-08-04T21:05:42Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2d9c6dfae813faa4e8ef800750ff1283b75102eb",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +233,237 @@\t\tglog.V(1).Infof(\"Failed to bind pod: %v/%v\", assumed.Namespace, assumed.Name)\n\t\tif err := sched.config.SchedulerCache.ForgetPod(assumed); err != nil {\n\t\t\tglog.Errorf(\"scheduler cache ForgetPod failed: %v\", err)\n\t\t}\n\t\tsched.config.Error(assumed, err)"
+  },
+  {
+    "id" : "5c30a745-2e11-433c-884b-b419b0046c99",
+    "prId" : 50106,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50106#pullrequestreview-54288751",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "34347e0f-a7f6-491b-9cb7-19c4eb3ba044",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This relies on the fact that Error will check if pod was bounded in the meantime and if so will not add it back to the unscheduled pods set (otherwise it would lead to an infinite loop).\r\n\r\nThis is true now, but can you please add a comment about it.",
+        "createdAt" : "2017-08-04T06:31:36Z",
+        "updatedAt" : "2017-08-04T21:05:42Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2d9c6dfae813faa4e8ef800750ff1283b75102eb",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +196,200 @@\n\t\t// This is most probably result of a BUG in retrying logic.\n\t\t// We report an error here so that pod scheduling can be retried.\n\t\t// This relies on the fact that Error will check if the pod has been bound\n\t\t// to a node and if so will not add it back to the unscheduled pods queue"
+  },
+  {
+    "id" : "eab2ce2e-1bdc-4043-ad13-5f0c918ff97c",
+    "prId" : 50028,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50028#pullrequestreview-54181708",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fb95cccb-2d96-4501-95f9-1d3fb632cb63",
+        "parentId" : null,
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "Isn't this the same as before.",
+        "createdAt" : "2017-08-03T01:59:17Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "17ef0730-9d0d-41cf-9076-be6d1ef4e222",
+        "parentId" : "fb95cccb-2d96-4501-95f9-1d3fb632cb63",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "we used pod directly before the fix; and it was assumedPod before the refactor.",
+        "createdAt" : "2017-08-03T03:52:08Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "746d2c32-72b0-4617-beb0-b42af7a81d7b",
+        "parentId" : "fb95cccb-2d96-4501-95f9-1d3fb632cb63",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "It's not the same - assume() method above is modifying the given pod.",
+        "createdAt" : "2017-08-03T07:23:00Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f570665-e02e-4274-9f21-3dbcfc265e32",
+        "parentId" : "fb95cccb-2d96-4501-95f9-1d3fb632cb63",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "I meant this piece of code is logically the same in this PR. ",
+        "createdAt" : "2017-08-03T17:49:25Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "63c9d1e4-7a3c-4814-9c2b-2eae64e6c411",
+        "parentId" : "fb95cccb-2d96-4501-95f9-1d3fb632cb63",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "Is `sched.assume()` going to modify `assumedPod`?",
+        "createdAt" : "2017-08-03T17:51:02Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3e4bb307-bb72-414e-b015-4793ba022d5a",
+        "parentId" : "fb95cccb-2d96-4501-95f9-1d3fb632cb63",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "@bsalamat I don't understand this question. Yes it is modifying. Yes it is what we are trying to achieve.",
+        "createdAt" : "2017-08-03T18:14:42Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eaaf4b50-718d-41aa-9494-a0ffb573e9ef",
+        "parentId" : "fb95cccb-2d96-4501-95f9-1d3fb632cb63",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "Thanks, @wojtek-t! I don't know why I missed it. I guess github UI still confuses me.",
+        "createdAt" : "2017-08-03T18:24:45Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d584bf4d50daa08136cc6df39e497f43fd0c9451",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +274,278 @@\t// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).\n\tgo func() {\n\t\terr := sched.bind(&assumedPod, &v1.Binding{\n\t\t\tObjectMeta: metav1.ObjectMeta{Namespace: assumedPod.Namespace, Name: assumedPod.Name, UID: assumedPod.UID},\n\t\t\tTarget: v1.ObjectReference{"
+  },
+  {
+    "id" : "7fe1be32-e1af-4650-8ae2-faa4df7c81bd",
+    "prId" : 50028,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50028#pullrequestreview-54077724",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fb1629b1-0231-449b-98a9-2a31a313fef4",
+        "parentId" : null,
+        "authorId" : "8f672b1e-0513-4363-b383-ad8d8de0cdb9",
+        "body" : "Why you make a copy here? seems you moved the copy from inside the assume func here.",
+        "createdAt" : "2017-08-03T03:36:27Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "8f672b1e-0513-4363-b383-ad8d8de0cdb9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43eaaa02-4127-4969-8433-e5096c8ccf59",
+        "parentId" : "fb1629b1-0231-449b-98a9-2a31a313fef4",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "we should not use obj from cache directly.",
+        "createdAt" : "2017-08-03T03:42:18Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c563d8cf-5f1a-408b-b63b-e5699e859af9",
+        "parentId" : "fb1629b1-0231-449b-98a9-2a31a313fef4",
+        "authorId" : "2d2ea912-43c8-4a78-9c8b-7fb4f0eec36d",
+        "body" : "Basically we need to make a copy somewhere and @k82cn suggested it would be more clear if we made the copy outside of the assume function. (which I agree with)",
+        "createdAt" : "2017-08-03T12:35:00Z",
+        "updatedAt" : "2017-08-03T20:55:17Z",
+        "lastEditedBy" : "2d2ea912-43c8-4a78-9c8b-7fb4f0eec36d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d584bf4d50daa08136cc6df39e497f43fd0c9451",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +265,269 @@\t// Tell the cache to assume that a pod now is running on a given node, even though it hasn't been bound yet.\n\t// This allows us to keep scheduling without waiting on binding to occur.\n\tassumedPod := *pod\n\t// assume modifies `assumedPod` by setting NodeName=suggestedHost\n\terr = sched.assume(&assumedPod, suggestedHost)"
+  },
+  {
+    "id" : "4a6312e3-c2ca-4633-8ef3-1354babf6dc3",
+    "prId" : 46048,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46048#pullrequestreview-39183278",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5cb7e6dd-789e-40df-8b72-09c6650b7ee7",
+        "parentId" : null,
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "functional change: we measure scheduling latency before the log statement.   ",
+        "createdAt" : "2017-05-19T12:39:44Z",
+        "updatedAt" : "2017-05-19T12:39:44Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ecb962e658585a3a52fab587ec17641953fdcc6e",
+    "line" : 149,
+    "diffHunk" : "@@ -1,1 +272,276 @@\t\t\t},\n\t\t})\n\t\tmetrics.E2eSchedulingLatency.Observe(metrics.SinceInMicroseconds(start))\n\t\tif err != nil {\n\t\t\tglog.Errorf(\"Internal error binding pod: (%v)\", err)"
+  },
+  {
+    "id" : "e7953ae6-aec0-4f12-8ce0-cfc59c517da8",
+    "prId" : 46048,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46048#pullrequestreview-39305616",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d92f0a82-b6a1-4ace-8c44-abd829fc7d84",
+        "parentId" : null,
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "optional:\r\n\r\nAlternatively, you could have written this (and the error below) as:\r\n```\r\nglog.Errorf(\"scheduler cache FinishBinding failed: %v\", err)\r\nreturn err\r\n``` \r\nThen, you could have removed the glogging of `err` inside `ScheduleOne` at line 276 to achieve consistent logging with the old version.",
+        "createdAt" : "2017-05-19T21:33:52Z",
+        "updatedAt" : "2017-05-19T21:34:23Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c84294c-3924-4867-b2f9-645f6a8eff41",
+        "parentId" : "d92f0a82-b6a1-4ace-8c44-abd829fc7d84",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "My suggestion has the downside that you won't achieve your last point on this PR:\r\n\r\n> removes the logging statement to occur outside of the timed portion of the metric measurement.\r\n",
+        "createdAt" : "2017-05-19T21:37:50Z",
+        "updatedAt" : "2017-05-19T21:37:50Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ecb962e658585a3a52fab587ec17641953fdcc6e",
+    "line" : 82,
+    "diffHunk" : "@@ -1,1 +216,220 @@\terr := sched.config.Binder.Bind(b)\n\tif err := sched.config.SchedulerCache.FinishBinding(assumed); err != nil {\n\t\treturn fmt.Errorf(\"scheduler cache FinishBinding failed: %v\", err)\n\t}\n\tif err != nil {"
+  },
+  {
+    "id" : "dff252b2-c7d4-424c-9678-068cd134be34",
+    "prId" : 46048,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46048#pullrequestreview-39309580",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "40f76d2a-04b8-489c-a080-c449ffd4811d",
+        "parentId" : null,
+        "authorId" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "body" : "Shouldn't we return host, nil here?",
+        "createdAt" : "2017-05-19T22:03:55Z",
+        "updatedAt" : "2017-05-19T22:03:55Z",
+        "lastEditedBy" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ecb962e658585a3a52fab587ec17641953fdcc6e",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +178,182 @@\t}\n\treturn host, err\n}\n\n// assume signals to the cache that a pod is already in the cache, so that binding can be asnychronous."
+  },
+  {
+    "id" : "d291f3df-b396-4109-ae63-a147de451574",
+    "prId" : 46048,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46048#pullrequestreview-39314201",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "90f3893e-e783-4fc5-838f-208af1efac5d",
+        "parentId" : null,
+        "authorId" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "body" : "nit, 'fit' instead of suggestedHost? as there is no way that host could be rejected after this?",
+        "createdAt" : "2017-05-19T22:19:06Z",
+        "updatedAt" : "2017-05-19T22:19:06Z",
+        "lastEditedBy" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed99bca4-5912-47c4-ab23-6423845bb216",
+        "parentId" : "90f3893e-e783-4fc5-838f-208af1efac5d",
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "-1 since fit is an adjective, and a verb, and suggestedHost is a noun.",
+        "createdAt" : "2017-05-19T22:42:35Z",
+        "updatedAt" : "2017-05-19T22:42:35Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ecb962e658585a3a52fab587ec17641953fdcc6e",
+    "line" : 117,
+    "diffHunk" : "@@ -1,1 +250,254 @@\t// Synchronously attempt to find a fit for the pod.\n\tstart := time.Now()\n\tsuggestedHost, err := sched.schedule(pod)\n\tmetrics.SchedulingAlgorithmLatency.Observe(metrics.SinceInMicroseconds(start))\n\tif err != nil {"
+  },
+  {
+    "id" : "c80b7cfc-32b7-49eb-84f8-28983c270527",
+    "prId" : 44883,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/44883#pullrequestreview-41141510",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ed08a3a3-b5c0-474a-bdac-cd62e10ff010",
+        "parentId" : null,
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "I think `pod.UID` is not necessary for default binder.",
+        "createdAt" : "2017-05-31T06:24:37Z",
+        "updatedAt" : "2017-06-05T20:24:10Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7f179bf9364e8fafda7164698d3ee9b8360dcfb8",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +272,276 @@\tgo func() {\n\t\terr := sched.bind(pod, &v1.Binding{\n\t\t\tObjectMeta: metav1.ObjectMeta{Namespace: pod.Namespace, Name: pod.Name, UID: pod.UID},\n\t\t\tTarget: v1.ObjectReference{\n\t\t\t\tKind: \"Node\","
+  },
+  {
+    "id" : "86d6129a-b548-47a5-99ad-91e3c4addc12",
+    "prId" : 42087,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/42087#pullrequestreview-25684859",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "df1d92c3-d7e5-4a4d-959f-ee27f99e2239",
+        "parentId" : null,
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "agree with this change although its not strictly necessary.... or is it?  not sure.  Either way its a good change.",
+        "createdAt" : "2017-03-07T14:46:40Z",
+        "updatedAt" : "2017-03-19T16:48:09Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af7123f4-5a70-404e-8dd5-3d0ddad0b948",
+        "parentId" : "df1d92c3-d7e5-4a4d-959f-ee27f99e2239",
+        "authorId" : "1256edc4-2c21-4b50-9371-9c0a50744653",
+        "body" : "The linter caught this, and indicated it should be standardized",
+        "createdAt" : "2017-03-07T19:49:59Z",
+        "updatedAt" : "2017-03-19T16:48:09Z",
+        "lastEditedBy" : "1256edc4-2c21-4b50-9371-9c0a50744653",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aacb5426-e91c-4279-ab58-b971be246d06",
+        "parentId" : "df1d92c3-d7e5-4a4d-959f-ee27f99e2239",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "which version of golint? I think we used this kind of varname in lots of funcs; what's golint's output for others?",
+        "createdAt" : "2017-03-08T01:12:08Z",
+        "updatedAt" : "2017-03-19T16:48:09Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "212dfdbd-f657-4e2f-ac26-e38a77e2b00a",
+        "parentId" : "df1d92c3-d7e5-4a4d-959f-ee27f99e2239",
+        "authorId" : "1256edc4-2c21-4b50-9371-9c0a50744653",
+        "body" : "I'm not even sure how to check the version heh. I'm just installing golint with `go get -u github.com/golang/lint/golint`",
+        "createdAt" : "2017-03-08T02:26:23Z",
+        "updatedAt" : "2017-03-19T16:48:09Z",
+        "lastEditedBy" : "1256edc4-2c21-4b50-9371-9c0a50744653",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ca24afe7788f0712b553594de719afecd5333318",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +148,152 @@\n// Run begins watching and scheduling. It starts a goroutine and returns immediately.\nfunc (sched *Scheduler) Run() {\n\tgo wait.Until(sched.scheduleOne, 0, sched.config.StopEverything)\n}"
+  },
+  {
+    "id" : "d9820a40-df1f-49c4-adf3-0ee31011541a",
+    "prId" : 41541,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/41541#pullrequestreview-24546174",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "998cfd76-6d2d-4f2d-9be0-f0a8a1f349f4",
+        "parentId" : null,
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "can we add a unit test for this optimisitc check logic since its a default behaviour we want to document?  i.e. i assume if this isnt working as intended.......  bad scheduling decisions might be made... ? correct me if im wrong...........",
+        "createdAt" : "2017-03-01T17:20:22Z",
+        "updatedAt" : "2017-03-28T11:26:04Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5f4f8ef-6274-438c-b991-43d81df2eed7",
+        "parentId" : "998cfd76-6d2d-4f2d-9be0-f0a8a1f349f4",
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "deleted last comment, optimistic is correct here, since its from the `bind` perspective.",
+        "createdAt" : "2017-03-01T18:01:28Z",
+        "updatedAt" : "2017-03-28T11:26:04Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "63197e53a111541ef858d94f0f182102f948d81f",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +198,202 @@\t}\n\n\t// Optimistically assume that the binding will succeed, so we need to invalidate affected\n\t// predicates in equivalence cache.\n\t// If the binding fails, these invalidated item will not break anything."
+  },
+  {
+    "id" : "faf5c999-9c75-4a00-b60c-a7aa488f082c",
+    "prId" : 39904,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/39904#pullrequestreview-17293755",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9e6e653b-fd10-47ff-ac39-00818a5a0f78",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "scheduler.Conigurator?  \r\n\r\nI'd almost go java here and call it IConfiguration",
+        "createdAt" : "2017-01-17T22:39:41Z",
+        "updatedAt" : "2017-01-18T20:06:29Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3428c680-6bfa-4ce0-b40b-8ec766676a45",
+        "parentId" : "9e6e653b-fd10-47ff-ac39-00818a5a0f78",
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "ha \"go java\" well.. its a `configurator` because it helps to configure with actually being a configuration data object.",
+        "createdAt" : "2017-01-17T22:45:28Z",
+        "updatedAt" : "2017-01-18T20:06:29Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "187b8546-bf2e-417d-b7a3-60b6cc1800dd",
+        "parentId" : "9e6e653b-fd10-47ff-ac39-00818a5a0f78",
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "in any case, i think IConfiguration is probably a slightly better name....  im happy to modify it if you want... +0 since no name is really that good for this kind of thing.",
+        "createdAt" : "2017-01-17T22:46:54Z",
+        "updatedAt" : "2017-01-18T20:06:29Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "83b7cf7a-7568-4a1b-8dcc-be63e7e2629c",
+        "parentId" : "9e6e653b-fd10-47ff-ac39-00818a5a0f78",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "-1 for IConfiguration (scheduler.Configurator was one of my suggestions, which I'm not super proud of, but I still think it's better than IConfiguration).",
+        "createdAt" : "2017-01-18T18:41:55Z",
+        "updatedAt" : "2017-01-18T20:06:29Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a98d14d2c5275d822889adb5e1b8dcbca8703335",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +54,58 @@// These are the functions which need to be provided in order to build a Scheduler configuration.\n// An implementation of this can be seen in factory.go.\ntype Configurator interface {\n\tGetPriorityFunctionConfigs(priorityKeys sets.String) ([]algorithm.PriorityConfig, error)\n\tGetPriorityMetadataProducer() (algorithm.MetadataProducer, error)"
+  },
+  {
+    "id" : "707d0d83-126e-4a7f-a829-8372ab99a961",
+    "prId" : 39081,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/39081#pullrequestreview-17888758",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a94bed1a-0908-4702-b058-9288ef9d7633",
+        "parentId" : null,
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "Will `factory.go:createUnassignedNonTerminatedPodLW()` return pod with `DeletionTimestamp`?",
+        "createdAt" : "2016-12-21T14:05:20Z",
+        "updatedAt" : "2017-01-24T02:14:05Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53d8ec37-acbf-4cef-8f60-e67a0e304929",
+        "parentId" : "a94bed1a-0908-4702-b058-9288ef9d7633",
+        "authorId" : "30783410-7911-462a-8726-9b8aa9189aa1",
+        "body" : "yes, it will because the `pod.phase` is not `PodSuccessed` or `PodFailed`",
+        "createdAt" : "2017-01-22T02:54:20Z",
+        "updatedAt" : "2017-01-24T02:14:05Z",
+        "lastEditedBy" : "30783410-7911-462a-8726-9b8aa9189aa1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90d754e3-b7f7-45e8-baeb-049ed279c86b",
+        "parentId" : "a94bed1a-0908-4702-b058-9288ef9d7633",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "Great, lgtm too.",
+        "createdAt" : "2017-01-23T10:06:45Z",
+        "updatedAt" : "2017-01-24T02:14:05Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e2a465ae68cc13b09b8e46c1b83ba550740131b4",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +124,128 @@func (s *Scheduler) scheduleOne() {\n\tpod := s.config.NextPod()\n\tif pod.DeletionTimestamp != nil {\n\t\ts.config.Recorder.Eventf(pod, v1.EventTypeWarning, \"FailedScheduling\", \"skip schedule deleting pod: %v/%v\", pod.Namespace, pod.Name)\n\t\tglog.V(3).Infof(\"Skip schedule deleting pod: %v/%v\", pod.Namespace, pod.Name)"
+  },
+  {
+    "id" : "2958dd1c-999f-48c9-92ca-a8978c45ea3f",
+    "prId" : 24459,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "300a0207-10a3-4136-8011-788f40ba2e44",
+        "parentId" : null,
+        "authorId" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "body" : "I wonder if we could make this async? Even though this is error path, having it block/delay scheduling other pods is bad.\n",
+        "createdAt" : "2016-04-19T09:03:42Z",
+        "updatedAt" : "2016-05-12T08:21:28Z",
+        "lastEditedBy" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ae6bd5cf-72d8-4714-9105-81e40badbc11",
+        "parentId" : "300a0207-10a3-4136-8011-788f40ba2e44",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "I think @hongchaodeng has a good point. Is this effectively a synchronous call to client to write to API server? That seems like a bad thing to put in the scheduling loop. Making the update asynchronous would be one approach. Another approach would be to have UpdatePodCondition() only write new pod status if the condition changed, so this would only be called synchronously once for each time a pod goes pending. So you'd have UpdatePodCondition() return a bool indicating whether condition changed; only if it returns true would you call UpdateStatus().\n",
+        "createdAt" : "2016-04-20T08:51:18Z",
+        "updatedAt" : "2016-05-12T08:21:28Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61fe9e2f-62d8-4581-8317-35368e9da242",
+        "parentId" : "300a0207-10a3-4136-8011-788f40ba2e44",
+        "authorId" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "body" : "Done.\n",
+        "createdAt" : "2016-04-20T14:48:59Z",
+        "updatedAt" : "2016-05-12T08:21:28Z",
+        "lastEditedBy" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a80b1798c45f88e6b38261a1657c0dfa787de136",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +101,105 @@\t\ts.config.Error(pod, err)\n\t\ts.config.Recorder.Eventf(pod, api.EventTypeWarning, \"FailedScheduling\", \"%v\", err)\n\t\ts.config.PodConditionUpdater.Update(pod, &api.PodCondition{\n\t\t\tType:    api.PodScheduled,\n\t\t\tStatus:  api.ConditionFalse,"
+  },
+  {
+    "id" : "6b744101-33a3-4fb6-8d29-a4c864b815d7",
+    "prId" : 24459,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "53dd09ab-0755-49b1-8e1f-999bfbc710dc",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "PodConditionUpdate is currently used only to update pod condition in case of scheduling error. That said, if we decide to use it also in case of successful scheduling, binding and changing pod condition will not be atomic. We should probably add an explicit comment about it.\n",
+        "createdAt" : "2016-04-19T11:10:08Z",
+        "updatedAt" : "2016-05-12T08:21:28Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d9d4add-949a-466c-9b87-88e839c2169d",
+        "parentId" : "53dd09ab-0755-49b1-8e1f-999bfbc710dc",
+        "authorId" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "body" : "We are updating pod condition to true atomically together with binding. In scheduler.go there's a comment about that. Where do you suggest to add this comment?\n",
+        "createdAt" : "2016-04-19T11:34:45Z",
+        "updatedAt" : "2016-05-12T08:21:28Z",
+        "lastEditedBy" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48c5f666-8d3b-4270-bf4a-e3976efca749",
+        "parentId" : "53dd09ab-0755-49b1-8e1f-999bfbc710dc",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Yes - I've seen that comment. I meant adding some comment here, to avoid someone using it inappropriately. \n",
+        "createdAt" : "2016-04-19T11:38:25Z",
+        "updatedAt" : "2016-05-12T08:21:28Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e5b48ba3-bb9b-45fd-8df0-d8d6126e46e5",
+        "parentId" : "53dd09ab-0755-49b1-8e1f-999bfbc710dc",
+        "authorId" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "body" : "Done\n",
+        "createdAt" : "2016-04-20T14:48:56Z",
+        "updatedAt" : "2016-05-12T08:21:28Z",
+        "lastEditedBy" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a80b1798c45f88e6b38261a1657c0dfa787de136",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +58,62 @@\t// with scheduling, PodScheduled condition will be updated in apiserver in /bind\n\t// handler so that binding and setting PodCondition it is atomic.\n\tPodConditionUpdater PodConditionUpdater\n\n\t// NextPod should be a function that blocks until the next pod"
+  },
+  {
+    "id" : "474902b6-3476-4442-bf86-c47632ab452d",
+    "prId" : 24197,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9d375699-c49a-426d-b6c7-18c5f3e56cdb",
+        "parentId" : null,
+        "authorId" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "body" : "I can fix it later. But just a note that we should probably get rid of the bind action in `AssumePodIfBindSucceed`\n",
+        "createdAt" : "2016-04-14T01:43:01Z",
+        "updatedAt" : "2016-04-14T07:52:33Z",
+        "lastEditedBy" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "397f14a7-38c4-4b40-9a85-f86be89e2376",
+        "parentId" : "9d375699-c49a-426d-b6c7-18c5f3e56cdb",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "We can fix that later.\n",
+        "createdAt" : "2016-04-14T06:32:36Z",
+        "updatedAt" : "2016-04-14T07:52:33Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "254b05761f21ab20bf9b84b3ccba477ea92fdbea",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +107,111 @@\tassumed := *pod\n\tassumed.Spec.NodeName = dest\n\ts.config.SchedulerCache.AssumePodIfBindSucceed(&assumed, func() bool { return true })\n\n\tgo func() {"
+  },
+  {
+    "id" : "cdc61b7d-a7ba-4b06-bd82-6a140f192547",
+    "prId" : 24197,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d85002a4-6df4-4a86-9ce6-f99fa4af1912",
+        "parentId" : null,
+        "authorId" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "body" : "Should scheduling latency still include binding?\n",
+        "createdAt" : "2016-04-14T01:44:17Z",
+        "updatedAt" : "2016-04-14T07:52:33Z",
+        "lastEditedBy" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa850c33-4b67-4ddc-864a-763ea83a556a",
+        "parentId" : "d85002a4-6df4-4a86-9ce6-f99fa4af1912",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "It should - it's total e2e scheduling latency. If you want to just \"scheduling algorithm latency\" - you should use \"SchedulingAlgorithmLatency\" metric.\n",
+        "createdAt" : "2016-04-14T06:33:06Z",
+        "updatedAt" : "2016-04-14T07:52:33Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "254b05761f21ab20bf9b84b3ccba477ea92fdbea",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +110,114 @@\n\tgo func() {\n\t\tdefer metrics.E2eSchedulingLatency.Observe(metrics.SinceInMicroseconds(start))\n\n\t\tb := &api.Binding{"
+  },
+  {
+    "id" : "dfff9ba0-10cb-4fb7-9a78-571b06103059",
+    "prId" : 24197,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "87a96aae-6c2f-409e-a6f6-5447acab0de5",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Do we have a negative test for this?  \n",
+        "createdAt" : "2016-04-15T16:29:25Z",
+        "updatedAt" : "2016-04-15T16:29:25Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "254b05761f21ab20bf9b84b3ccba477ea92fdbea",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +103,107 @@\t// pods, until the assumption in the internal cache expire (expiration is\n\t// defined as \"didn't read the binding via watch within a given timeout\",\n\t// timeout is currently set to 30s). However, after this timeout, the situation\n\t// will self-repair.\n\tassumed := *pod"
+  },
+  {
+    "id" : "bf2ab826-b571-472b-8b42-3aba4dae4038",
+    "prId" : 19263,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3bdb65de-2837-443e-ae1c-6f76b9fe9ac7",
+        "parentId" : null,
+        "authorId" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "body" : "I guess you should add a metric for errorrs in binding and record the latency here.\n",
+        "createdAt" : "2016-01-04T19:01:27Z",
+        "updatedAt" : "2016-01-04T22:51:08Z",
+        "lastEditedBy" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2744447dbacf8c9462079c22e002a87422f815fd",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +152,156 @@\t\t\ts.config.Recorder.Eventf(pod, api.EventTypeNormal, \"FailedScheduling\", \"Binding rejected: %v\", err)\n\t\t\ts.config.Error(pod, err)\n\t\t\treturn\n\t\t}\n\t\tmetrics.BindingLatency.Observe(metrics.SinceInMicroseconds(bindingStart))"
+  },
+  {
+    "id" : "aba0d1dd-a21c-4878-b46c-e8393c677a90",
+    "prId" : 8261,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "568c7b1e-45b4-4435-b0d5-51129eeabeab",
+        "parentId" : null,
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "This can be pretty disruptive for cpu right? especially since one expects the rc manager to also be heavily active around this time, all posting to the apiserver. Maybe limit to 10pps?\n",
+        "createdAt" : "2015-05-14T18:13:34Z",
+        "updatedAt" : "2015-05-14T18:13:34Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "236674f5-0ecc-44f1-aee4-a9f771708be2",
+        "parentId" : "568c7b1e-45b4-4435-b0d5-51129eeabeab",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "The client has a built in rate limit; it's true that this will (potentially) queue up a ton of goroutines when that rate limit is hit. I'm a lot more worried about the lists kubelets do at the moment, though.\n",
+        "createdAt" : "2015-05-14T18:42:54Z",
+        "updatedAt" : "2015-05-14T18:42:54Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c701436a-f9ee-4906-9ead-6a6d8e94bd40",
+        "parentId" : "568c7b1e-45b4-4435-b0d5-51129eeabeab",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "Hmm, the client ratelimit is shared across all the watch/listing and allows bursts of 100. kubelet updates are at 5qps and bursts of something like 10 iirc. If we did in fact bind 100 pods in a second that would probably lead to a thundering herd from the kubelets. \n",
+        "createdAt" : "2015-05-14T18:45:55Z",
+        "updatedAt" : "2015-05-14T18:48:26Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd83d0f1-eaba-4093-a036-efe9ed6ecdde",
+        "parentId" : "568c7b1e-45b4-4435-b0d5-51129eeabeab",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "Another point to consider is that the assumed pod will expire in 30s, this is probably too little for the sort of relist latencies we're seeing in thundering herd scenarios. \n",
+        "createdAt" : "2015-05-14T19:14:14Z",
+        "updatedAt" : "2015-05-14T19:14:14Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6dff70b6-4dd9-460c-af21-4fdcce04246a",
+        "parentId" : "568c7b1e-45b4-4435-b0d5-51129eeabeab",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I think it's fine to rate-limit it at the level of the whole client (there aren't a lot of other operations done by the scheduler and adding yet another parameter doesn't seem to be that useful).\n\nAlso, I think that having some limit is good (and it's already there at the level of the client). However I'm not sure if 10 is a good value for rate-limit - we should set this value based on results of experiments. So we may want to merge this as is and tweek the value later.\n",
+        "createdAt" : "2015-05-15T13:29:03Z",
+        "updatedAt" : "2015-05-15T13:29:03Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3a7086fd8a0b3e307dc83bcb81b1dba1d9f044ab",
+    "line" : 65,
+    "diffHunk" : "@@ -1,1 +157,161 @@func (s *Scheduler) scheduleOne() {\n\tbind := s.schedule()\n\tgo bind()\n}"
+  },
+  {
+    "id" : "a99fa0af-2e7c-42ec-b9c6-89f94e48e7ee",
+    "prId" : 909,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "73430519-23fa-4735-a005-0f8fc1c4aff4",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Comment wrong / out of date?\n",
+        "createdAt" : "2014-08-19T02:10:50Z",
+        "updatedAt" : "2014-08-20T23:50:08Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c97323cd-c586-46fa-85ad-a8f0652d1c9d",
+        "parentId" : "73430519-23fa-4735-a005-0f8fc1c4aff4",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "No, still remains an outstanding work item. there's still a pkg/scheduler, and it's still used inside registry.\n",
+        "createdAt" : "2014-08-19T20:48:05Z",
+        "updatedAt" : "2014-08-20T23:50:08Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "03cd22d4f4a682dc1a6d87f30bec08d45d4e7ef8",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +19,23 @@import (\n\t\"github.com/GoogleCloudPlatform/kubernetes/pkg/api\"\n\t// TODO: move everything from pkg/scheduler into this package. Remove references from registry.\n\t\"github.com/GoogleCloudPlatform/kubernetes/pkg/scheduler\"\n\t\"github.com/GoogleCloudPlatform/kubernetes/pkg/util\""
+  }
+]

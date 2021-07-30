@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "4389e51e-df80-4165-a18f-dcdb07397fde",
+    "prId" : 98127,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98127#pullrequestreview-603076686",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "89282c32-8fa0-48fa-906d-c7c859d4a2d2",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "Actually, this should drop calling `ValidatePodDisruptionBudgetStatus` entirely. This method is only called from `podDisruptionBudgetStrategy#Validate` and `podDisruptionBudgetStrategy#ValidateUpdate`, which disallow making any changes to status. If ValidatePodDisruptionBudgetStatus returned an error here, the API caller to those endpoints would have no way to correct it.",
+        "createdAt" : "2021-03-03T16:23:24Z",
+        "updatedAt" : "2021-03-05T03:03:16Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b08eb95168a482c315b5c1c9e869ca41325f32c1",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +41,45 @@// ValidatePodDisruptionBudget validates a PodDisruptionBudget and returns an ErrorList\n// with any errors.\nfunc ValidatePodDisruptionBudget(pdb *policy.PodDisruptionBudget) field.ErrorList {\n\tallErrs := ValidatePodDisruptionBudgetSpec(pdb.Spec, field.NewPath(\"spec\"))\n\treturn allErrs"
+  },
+  {
+    "id" : "7b17a028-fa84-4a87-a6ef-5a1ec1e932ce",
+    "prId" : 63717,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/63717#pullrequestreview-126033130",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a9c297e7-e0b6-4573-9e98-9b943c13667c",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "same comment about validation here... we can't get more strict in the future. consider the following:\r\n\r\n* validate format (already done, looks like)\r\n* disallow empty items (already done, but error message could be improved... complains about format when a simple required error would be better)\r\n* if the list contains `\"*\"`, limit it to a single item (it's confusing to allow `\"*\"` and `\"foo\"`... the `\"*\"` covers \"foo\"\r\n* disallow duplicate items\r\n* don't allow something in the forbidden list to cover something in the allowed list. examples:\r\n  * can't put `\"*\"` in forbiddenSysctls and `\"foo\"` in allowedUnsafeSysctls\r\n  * can't put `\"foo\"` in forbiddenSysctls and `\"foo\"` in allowedUnsafeSysctls\r\n  * can't put `\"foo/*\"` in forbiddenSysctls and `\"foo/bar\"` in allowedUnsafeSysctls\r\n",
+        "createdAt" : "2018-06-04T15:39:45Z",
+        "updatedAt" : "2018-06-05T22:26:29Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "761f5bf2-0934-41cb-8c07-d49989dedc29",
+        "parentId" : "a9c297e7-e0b6-4573-9e98-9b943c13667c",
+        "authorId" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "body" : "Imagining the following scenario:\r\nsafe whitelist: `[\"kernel.shm_rmid_forced\", \"net.ipv4.ip_local_port_range\", \"net.ipv4.tcp_syncookies\"]`\r\nforbiddenSysctls: `[\"kernel.*\"]`\r\nallowedUnsafeSysctls: `[\"kernel.shmmax\"]`\r\n\r\nIf the restrictions in the `forbiddenSysctls` apply only to the safe sysctls (meaning forbid all safe sysctls that are `kernel.` prefixed), it's perfectly fine to have `\"kernel.*\"` in `forbiddenSysctls` overlap with the `\"kernel.shmmax\"` in `allowedUnsafeSysctls`.\r\n\r\nHowever as @sttts suggets in https://github.com/kubernetes/kubernetes/pull/63717/files#r193043146, once the `kernel.shmmax` becomes safe, it gets forbidden by default cause the category changes. Which is not backward compatible.",
+        "createdAt" : "2018-06-05T12:18:47Z",
+        "updatedAt" : "2018-06-05T22:26:29Z",
+        "lastEditedBy" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90113807-8b9e-4b2d-ace6-ae2580f77b37",
+        "parentId" : "a9c297e7-e0b6-4573-9e98-9b943c13667c",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "either\r\n1. we change the semantics of `allowedUnsafeSysctls` to also apply to safe sysctls or\r\n2. we disallow intersections of both lists (what @liggitt proposes above).\r\n\r\nIn both cases the incontinuity during upgrade goes away. \r\n\r\nWith (1) we can have  `forbidden: \"*\", allowed: \"foo\"` to easily forbid all sysctls but the explicitly allowed ones. With (2) we cannot express that without knowing the whitelist (or without hundreds of patterns).",
+        "createdAt" : "2018-06-05T12:23:32Z",
+        "updatedAt" : "2018-06-05T22:26:29Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e26166d-9406-4024-a44e-88f1be03336a",
+        "parentId" : "a9c297e7-e0b6-4573-9e98-9b943c13667c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> If the restrictions in the forbiddenSysctls apply only to the safe sysctls (meaning forbid all safe sysctls that are kernel. prefixed), it's perfectly fine to have \"kernel.*\" in forbiddenSysctls overlap with the \"kernel.shmmax\" in allowedUnsafeSysctls.\r\n> \r\n> However as @sttts suggets in https://github.com/kubernetes/kubernetes/pull/63717/files#r193043146, once the kernel.shmmax becomes safe, it gets forbidden by default cause the category changes. Which is not backward compatible.\r\n\r\nThe confusion of contradictory information (\"`x.*` is forbidden\" \"`x.y` is allowed\") and the incompatibility as things move from unsafe to safe (which we expect to happen) makes me think that isn't a great approach",
+        "createdAt" : "2018-06-05T12:32:54Z",
+        "updatedAt" : "2018-06-05T22:26:29Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d0a544f1-2d82-49ed-a342-aeb1c5c91b0c",
+        "parentId" : "a9c297e7-e0b6-4573-9e98-9b943c13667c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "discussed with @sttts and @ingvagabund, and agreed on the following:\r\n\r\n* forbidden means forbidden\r\n* if something is matched by the forbiddenSysctls list, it is forbidden\r\n* to prevent confusion, validation will prevent putting something in the allowedUnsafeSysctls list that is covered by something in the forbidden list\r\n* evaluation will be done as described in https://github.com/kubernetes/kubernetes/pull/63717#discussion_r192778185 (matched by `forbiddenSysctls` forbids, internal \"safe\" list allows, matched by `allowedUnsafeSysctls` allows)\r\n\r\nuse cases this approach addresses well:\r\n1a. forbidding all sysctls: `forbiddenSysctls:[\"*\"]`\r\n1b. forbidding a specific \"safe\" sysctl: `forbiddenSysctls:[\"kernel.shm_rmid_forced\"]`\r\n1c. allowing specific \"unsafe\" sysctls: `allowedUnsafeSysctls: [\"foo\"]`\r\n1d. allowing glob-match \"unsafe\" sysctls: `allowedUnsafeSysctls: [\"foo/*\"]`\r\n1e. allowing all \"unsafe\" sysctls: `allowedUnsafeSysctls: [\"*\"]`\r\n\r\nuse cases this approach accommodates, but not easily:\r\n2a. forbidding all \"safe\" sysctls except for a whitelist (requires tracking changes to what kube considers safe and updating the `forbiddenSysctls` list in PSPs appropriately)\r\n\r\nif the \"forbid all safe except for a whitelist\" use case proves to be important in the future, that could be accomodated with an `allowedSafeSysctls` field that would whitelist which safe sysctls were allowed. we don't expect that to be necessary, but that is a coherent option should we need it.",
+        "createdAt" : "2018-06-05T15:44:07Z",
+        "updatedAt" : "2018-06-05T22:26:29Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1b28f0fce6ed57234372a6c6a2295eba0541669",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +123,127 @@\tallErrs = append(allErrs, validatePSPAllowedFlexVolumes(fldPath.Child(\"allowedFlexVolumes\"), spec.AllowedFlexVolumes)...)\n\tallErrs = append(allErrs, validatePodSecurityPolicySysctls(fldPath.Child(\"allowedUnsafeSysctls\"), spec.AllowedUnsafeSysctls)...)\n\tallErrs = append(allErrs, validatePodSecurityPolicySysctls(fldPath.Child(\"forbiddenSysctls\"), spec.ForbiddenSysctls)...)\n\tallErrs = append(allErrs, validatePodSecurityPolicySysctlListsDoNotOverlap(fldPath.Child(\"allowedUnsafeSysctls\"), fldPath.Child(\"forbiddenSysctls\"), spec.AllowedUnsafeSysctls, spec.ForbiddenSysctls)...)\n"
+  },
+  {
+    "id" : "47b22d1b-d37a-4dcb-bfad-82cf0ef46b15",
+    "prId" : 63717,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/63717#pullrequestreview-126058158",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "df22fbbf-629d-4908-93f9-0131e3a5e81c",
+        "parentId" : null,
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "lower-case sysctls",
+        "createdAt" : "2018-06-05T10:48:40Z",
+        "updatedAt" : "2018-06-05T22:26:29Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f9d2e82-4ab1-4cd0-b2e8-de473d73979e",
+        "parentId" : "df22fbbf-629d-4908-93f9-0131e3a5e81c",
+        "authorId" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "body" : "Done",
+        "createdAt" : "2018-06-05T16:46:06Z",
+        "updatedAt" : "2018-06-05T22:26:29Z",
+        "lastEditedBy" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1b28f0fce6ed57234372a6c6a2295eba0541669",
+    "line" : 93,
+    "diffHunk" : "@@ -1,1 +355,359 @@\n\tif !utilfeature.DefaultFeatureGate.Enabled(features.Sysctls) {\n\t\treturn append(allErrs, field.Forbidden(fldPath, \"Sysctls are disabled by Sysctls feature-gate\"))\n\t}\n"
+  },
+  {
+    "id" : "0c77b28e-3b93-440b-afa1-f4d23e182aae",
+    "prId" : 24697,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8837dea2-6d3f-4509-8b3b-e7fd5befaf0f",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "You can use ValidateLabels() to validate the label selector, see for example\nhttps://github.com/kubernetes/kubernetes/blob/master/pkg/api/validation/validation.go#L1752\n",
+        "createdAt" : "2016-05-06T07:18:00Z",
+        "updatedAt" : "2016-05-07T00:25:23Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1fa2a08e59d17fe58f5e5b47dd3d303d7574a0c",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +30,34 @@\tallErrs = append(allErrs, extensionsvalidation.IsNotMoreThan100Percent(spec.MinAvailable, fldPath.Child(\"minAvailable\"))...)\n\tallErrs = append(allErrs, unversionedvalidation.ValidateLabelSelector(spec.Selector, fldPath.Child(\"selector\"))...)\n\n\treturn allErrs\n}"
+  }
+]

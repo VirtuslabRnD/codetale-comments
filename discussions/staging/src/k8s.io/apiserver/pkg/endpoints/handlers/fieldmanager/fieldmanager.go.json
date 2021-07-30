@@ -1,0 +1,926 @@
+[
+  {
+    "id" : "81b11fea-8368-47b6-9e61-dc3c68295420",
+    "prId" : 98074,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98074#pullrequestreview-601078988",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "82aa120c-f1a0-409f-a8bf-947c1964de00",
+        "parentId" : null,
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "we could send a warning here as well.\r\nlike `\".metadata.managedFields failed to decode; using managedFields from live object instead\"`",
+        "createdAt" : "2021-03-01T19:15:27Z",
+        "updatedAt" : "2021-03-04T23:47:30Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "94149efd8a3b695a6f0945d7b1a8194ffd15f3e9",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +145,149 @@\tmanaged, err := DecodeManagedFields(newAccessor.GetManagedFields())\n\tif err != nil || len(managed.Fields()) == 0 {\n\t\treturn emptyManagedFieldsOnErr(DecodeManagedFields(liveAccessor.GetManagedFields()))\n\t}\n\treturn managed, nil"
+  },
+  {
+    "id" : "5aed59f4-ab8c-4b8c-8ee2-7e090fb2709d",
+    "prId" : 98074,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98074#pullrequestreview-604566702",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab5c2bc4-c483-4a28-bee7-5f16aa9bcf40",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "I haven't look at `internal` yet, but can we get rid of the indirection here? I'd rather avoid having too many \"DecodeManagedFields\" functions if possible :-)",
+        "createdAt" : "2021-03-01T20:54:46Z",
+        "updatedAt" : "2021-03-04T23:47:30Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4072e3fd-d39b-486a-9183-89371b606637",
+        "parentId" : "ab5c2bc4-c483-4a28-bee7-5f16aa9bcf40",
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "I looked at it for a bit, but I didn't want to move too much outside the internal package if not needed.\r\nThere are a few internal types and decoding functions right now, but in theory we could move everything I think.\r\nWe would be splitting up decoding and encoding though, or move encoding as well. But I'm not sure if I want to also expose encoding.\r\nHave a look and tell me what you think, I can do it either way.",
+        "createdAt" : "2021-03-04T21:14:38Z",
+        "updatedAt" : "2021-03-04T23:47:30Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "94149efd8a3b695a6f0945d7b1a8194ffd15f3e9",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +114,118 @@// to the format used by sigs.k8s.io/structured-merge-diff\nfunc DecodeManagedFields(encodedManagedFields []metav1.ManagedFieldsEntry) (Managed, error) {\n\treturn internal.DecodeManagedFields(encodedManagedFields)\n}\n"
+  },
+  {
+    "id" : "92808fa0-e54b-482b-990d-132046c07293",
+    "prId" : 98074,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98074#pullrequestreview-604573755",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b875d8f9-def6-49e3-ac43-ac3e4c673fdf",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "Yes, but somewhat unrelated, shouldn't we do something useful if the managedfields is invalid here?\r\n\r\nShould we replace `emptyManagedFieldsOnErr` method with a `decodeManagedFieldsOrEmpty`, which could be used here?",
+        "createdAt" : "2021-03-01T21:02:04Z",
+        "updatedAt" : "2021-03-04T23:47:30Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4611e449-287d-45ea-87eb-762f933fcc67",
+        "parentId" : "b875d8f9-def6-49e3-ac43-ac3e4c673fdf",
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "Shouldn't we keep returning the error here if decoding fails (it is apply)?\r\nWhat would we want to happen if live is corrupted?\r\nIt could only happen if somebody updates it and then applies would fail in the future.  I'd say we then should prevent invalid managedFields from getting persisted, what this PR tries to at least make harder.",
+        "createdAt" : "2021-03-04T21:20:50Z",
+        "updatedAt" : "2021-03-04T23:47:30Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8d79348e-48c9-421a-a40d-48adf3f6d55b",
+        "parentId" : "b875d8f9-def6-49e3-ac43-ac3e4c673fdf",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "Right, if the managed fields are corrupted in the apiserver, then someone can't apply anymore. The right thing to do is to restart fresh I would say.",
+        "createdAt" : "2021-03-04T21:24:07Z",
+        "updatedAt" : "2021-03-04T23:47:30Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "94149efd8a3b695a6f0945d7b1a8194ffd15f3e9",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +225,229 @@\n\t// Decode the managed fields in the live object, since it isn't allowed in the patch.\n\tmanaged, err := DecodeManagedFields(accessor.GetManagedFields())\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"failed to decode managed fields: %v\", err)"
+  },
+  {
+    "id" : "056a7943-7900-41ab-bd3a-3c89b49d61e0",
+    "prId" : 98074,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98074#pullrequestreview-604567659",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4aa8b415-6c18-4376-adf5-49117546cf2b",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "This always returns nil error, does it need to return that?",
+        "createdAt" : "2021-03-01T21:02:38Z",
+        "updatedAt" : "2021-03-04T23:47:30Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "32399be5-aa80-40a5-b40f-00a9c96e2fcc",
+        "parentId" : "4aa8b415-6c18-4376-adf5-49117546cf2b",
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "Yeah, I made it this way for ease of use so it can just wrap the function call for providing the same return values.\r\nSo no additional error check or anything is required.",
+        "createdAt" : "2021-03-04T21:15:52Z",
+        "updatedAt" : "2021-03-04T23:47:30Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "94149efd8a3b695a6f0945d7b1a8194ffd15f3e9",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +150,154 @@}\n\nfunc emptyManagedFieldsOnErr(managed Managed, err error) (Managed, error) {\n\tif err != nil {\n\t\treturn internal.NewEmptyManaged(), nil"
+  },
+  {
+    "id" : "fbdc1daa-dd28-47d6-9716-1cee4717e39a",
+    "prId" : 91993,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91993#pullrequestreview-451037347",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6afa1b23-c6ac-4469-8bc1-38c844493569",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "I'm not a big fan, but I could move forward with that and then we can try to play with it and see what we like best :-)",
+        "createdAt" : "2020-07-17T16:21:42Z",
+        "updatedAt" : "2020-08-18T11:35:03Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e95580a3-f38e-45a2-ba25-c5da8662e039",
+        "parentId" : "6afa1b23-c6ac-4469-8bc1-38c844493569",
+        "authorId" : "540c9da6-54d6-4aa0-9866-a6aa2187b553",
+        "body" : "No worries, I am very happy to iterate on it :-) I am not super satisfied either",
+        "createdAt" : "2020-07-18T06:55:54Z",
+        "updatedAt" : "2020-08-18T11:35:03Z",
+        "lastEditedBy" : "540c9da6-54d6-4aa0-9866-a6aa2187b553",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c522ee08a3d248ec1097e3673119ffa7a4e1ef7b",
+    "line" : 66,
+    "diffHunk" : "@@ -1,1 +124,128 @@}\n\nfunc decodeLiveManagedFields(liveObj runtime.Object) (Managed, error) {\n\tliveAccessor, err := meta.Accessor(liveObj)\n\tif err != nil {"
+  },
+  {
+    "id" : "ce56ebb3-8e47-49d3-b6af-1e22ebfda987",
+    "prId" : 91993,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91993#pullrequestreview-454803280",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "35bb4ba2-67de-49c8-860b-c24b13f465ba",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "This can also go before constructing the accessor.\r\n\r\n(It's just a little confusing to construct the accessor before we're sure it's going to be needed.)",
+        "createdAt" : "2020-07-23T16:29:51Z",
+        "updatedAt" : "2020-08-18T11:35:03Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49c1434c-3fc0-4c10-abee-33e6303019c8",
+        "parentId" : "35bb4ba2-67de-49c8-860b-c24b13f465ba",
+        "authorId" : "540c9da6-54d6-4aa0-9866-a6aa2187b553",
+        "body" : "I am not sure I understood, I think `newAccessor` should be constructed at this point because `isResetManagedFields` needs to check the managed fields of the new object.",
+        "createdAt" : "2020-07-24T11:07:33Z",
+        "updatedAt" : "2020-08-18T11:35:03Z",
+        "lastEditedBy" : "540c9da6-54d6-4aa0-9866-a6aa2187b553",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c522ee08a3d248ec1097e3673119ffa7a4e1ef7b",
+    "line" : 93,
+    "diffHunk" : "@@ -1,1 +150,154 @@\t}\n\n\tif isResetManagedFields(newAccessor.GetManagedFields()) {\n\t\treturn internal.NewEmptyManaged(), nil\n\t}"
+  },
+  {
+    "id" : "18f9610e-669a-4e01-8401-ce461a6605ac",
+    "prId" : 90187,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90187#pullrequestreview-395613094",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6a7fd9f7-dab3-40d7-a6c5-d36510872bd8",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "I was really expecting to see that, great!",
+        "createdAt" : "2020-04-17T16:46:20Z",
+        "updatedAt" : "2020-07-08T23:14:31Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e4368eb67e363d3d03f81214a8929268d2fe88ff",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +118,122 @@\tf = NewProbabilisticSkipNonAppliedManager(f, objectCreater, kind, DefaultTrackOnCreateProbability)\n\tf = NewLastAppliedManager(f, typeConverter, objectConverter, kind.GroupVersion())\n\tf = NewLastAppliedUpdater(f)\n\n\treturn NewFieldManager(f)"
+  },
+  {
+    "id" : "a62c03f8-0a83-4e55-8a04-fb1d601a0cb5",
+    "prId" : 82553,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/82553#pullrequestreview-289396725",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "93602352-3ce6-461c-abb8-e3c4ff9bd015",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Is it still useful to get / check this error?",
+        "createdAt" : "2019-09-17T16:34:32Z",
+        "updatedAt" : "2019-09-17T16:34:32Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71088a82-2863-4a64-aac8-e86dca621b50",
+        "parentId" : "93602352-3ce6-461c-abb8-e3c4ff9bd015",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "I guess Update does it too; nit: might as well do it all in one line as in that function.",
+        "createdAt" : "2019-09-17T16:35:48Z",
+        "updatedAt" : "2019-09-17T16:35:48Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2c67bf47db8557b6481a5181bdae924e91665988",
+    "line" : 93,
+    "diffHunk" : "@@ -1,1 +183,187 @@func (f *fieldManager) Apply(liveObj runtime.Object, patch []byte, fieldManager string, force bool) (runtime.Object, error) {\n\t// If the object doesn't have metadata, apply isn't allowed.\n\t_, err := meta.Accessor(liveObj)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"couldn't get accessor: %v\", err)"
+  },
+  {
+    "id" : "41f3e694-3be1-4a60-83b6-99c54cd05298",
+    "prId" : 81816,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81816#pullrequestreview-292045999",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1f2114f3-cdaa-4f2a-9834-aaa8c2eca197",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "All of this is so much simpler than before!",
+        "createdAt" : "2019-09-23T20:57:39Z",
+        "updatedAt" : "2019-10-03T23:40:44Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "61b19c729892a150b61dde19359f6fb19e8d61f1",
+    "line" : 127,
+    "diffHunk" : "@@ -1,1 +89,93 @@\n// newDefaultFieldManager is a helper function which wraps a Manager with certain default logic.\nfunc newDefaultFieldManager(f Manager, objectCreater runtime.ObjectCreater, kind schema.GroupVersionKind) *FieldManager {\n\tf = NewStripMetaManager(f)\n\tf = NewBuildManagerInfoManager(f, kind.GroupVersion())"
+  },
+  {
+    "id" : "2035a533-369c-4e1c-b2ac-26ea3d40aa32",
+    "prId" : 78738,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78738#pullrequestreview-278100160",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9080e919-a8e1-4c34-8ef8-2dfec0541c8d",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "I think we can move that before `DecodeObject...`, since we don't need to decode in order to count",
+        "createdAt" : "2019-08-21T21:26:22Z",
+        "updatedAt" : "2019-08-27T22:00:16Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f132d31d-262d-4ae1-815d-240c2885007e",
+        "parentId" : "9080e919-a8e1-4c34-8ef8-2dfec0541c8d",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "Though if it's empty it's pretty fast to decode :-)",
+        "createdAt" : "2019-08-21T22:06:07Z",
+        "updatedAt" : "2019-08-27T22:00:17Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f99252f2c6477852be8bcef7d230123c7461ec50",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +105,109 @@\t\t}\n\t}\n\t// if managed field is still empty, skip updating managed fields altogether\n\tif len(managed.Fields) == 0 {\n\t\treturn newObj, nil"
+  },
+  {
+    "id" : "071f4555-4266-4285-a077-145d8eae2c75",
+    "prId" : 78738,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78738#pullrequestreview-278091668",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ec594d53-93d8-4149-a3a1-fd3d03355d68",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "I don't understand why we have to do that, and the thing with the `New` function?",
+        "createdAt" : "2019-08-21T21:29:16Z",
+        "updatedAt" : "2019-08-27T22:00:16Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0467d48-79a0-4614-8dcd-96072907faa7",
+        "parentId" : "ec594d53-93d8-4149-a3a1-fd3d03355d68",
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "Me too...",
+        "createdAt" : "2019-08-21T21:44:30Z",
+        "updatedAt" : "2019-08-27T22:00:16Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f99252f2c6477852be8bcef7d230123c7461ec50",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +170,174 @@func (f *FieldManager) Apply(liveObj runtime.Object, patch []byte, fieldManager string, force bool) (runtime.Object, error) {\n\t// If the object doesn't have metadata, apply isn't allowed.\n\taccessor, err := meta.Accessor(liveObj)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"couldn't get accessor: %v\", err)"
+  },
+  {
+    "id" : "268d152b-a6b9-45c7-8741-48b7548ecdee",
+    "prId" : 78738,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78738#pullrequestreview-278610540",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b66a8c32-4e0f-4801-b4b1-b9d233c111bb",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "no time?",
+        "createdAt" : "2019-08-21T22:05:07Z",
+        "updatedAt" : "2019-08-27T22:00:16Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b74b11a-061a-4670-81ab-11a99f4e9952",
+        "parentId" : "b66a8c32-4e0f-4801-b4b1-b9d233c111bb",
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "Do we need a time?",
+        "createdAt" : "2019-08-21T22:24:16Z",
+        "updatedAt" : "2019-08-27T22:00:17Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3fe1d5c5-8adf-4a86-b89a-c327c1837cc9",
+        "parentId" : "b66a8c32-4e0f-4801-b4b1-b9d233c111bb",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "No",
+        "createdAt" : "2019-08-22T18:34:03Z",
+        "updatedAt" : "2019-08-27T22:00:17Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f99252f2c6477852be8bcef7d230123c7461ec50",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +219,223 @@\t\t\tManager:    \"before-first-apply\",\n\t\t\tOperation:  metav1.ManagedFieldsOperationUpdate,\n\t\t\tAPIVersion: f.groupVersion.String(),\n\t\t})\n\t\tif err != nil {"
+  },
+  {
+    "id" : "883dd6cc-106e-45f2-afdf-417e87b5557a",
+    "prId" : 77987,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/77987#pullrequestreview-238608209",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7e242db9-57c3-4664-ab1d-8d0dabae4e23",
+        "parentId" : null,
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "This seems mostly safe to me, but if newObjVersioned is just a pointer to newObj (in the case where `f.toVersioned(newObj)` is a no-op) then we would be wiping the managed fields. It wouldn't really be an issue though because this should never happen if managed fields is working correctly",
+        "createdAt" : "2019-05-16T18:35:09Z",
+        "updatedAt" : "2019-05-16T20:03:36Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0b66aa3-113a-4a37-8b3f-9da332972645",
+        "parentId" : "7e242db9-57c3-4664-ab1d-8d0dabae4e23",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "Should we make a copy of the object when it's a no-op?",
+        "createdAt" : "2019-05-16T19:28:32Z",
+        "updatedAt" : "2019-05-16T20:03:36Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "524a3177-72d0-4659-ba15-262df2dd43a1",
+        "parentId" : "7e242db9-57c3-4664-ab1d-8d0dabae4e23",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "Looks like it already does a copy, that seems to be the difference between `ConvertToVersion` and `UnsafeConvertToVersion`",
+        "createdAt" : "2019-05-16T20:01:38Z",
+        "updatedAt" : "2019-05-16T20:03:36Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4e32d183d0257c9f6c7f8342d1f9aa7f28458f2f",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +119,123 @@\t\t// Return newObj and just by-pass fields update. This really shouldn't happen.\n\t\tklog.Errorf(\"[SHOULD NOT HAPPEN] failed to create typed new object: %v\", err)\n\t\treturn newObj, nil\n\t}\n\tliveObjTyped, err := f.typeConverter.ObjectToTyped(liveObjVersioned)"
+  },
+  {
+    "id" : "5483ecb1-a517-465b-9365-3bf980324dc1",
+    "prId" : 75157,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/75157#pullrequestreview-213198276",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "753d6abb-ee94-4131-b635-b43f75cd9371",
+        "parentId" : null,
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "Just thought of something, can you change line 177 below here from\r\n` patchObjTyped, err := f.typeConverter.YAMLToTyped(patch) `\r\nto\r\n` patchObjTyped, err := f.typeConverter.ObjectToTyped(patchObj) `\r\nso we don't have to do the unstructured de-serialization twice",
+        "createdAt" : "2019-03-08T21:26:36Z",
+        "updatedAt" : "2019-03-12T05:08:41Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c78e77ac-cf4f-472c-ad8d-64b0bce9f43c",
+        "parentId" : "753d6abb-ee94-4131-b635-b43f75cd9371",
+        "authorId" : "65274c24-758d-49d6-96bf-a6c0fd7c510b",
+        "body" : "good idea! done",
+        "createdAt" : "2019-03-08T21:32:47Z",
+        "updatedAt" : "2019-03-12T05:08:41Z",
+        "lastEditedBy" : "65274c24-758d-49d6-96bf-a6c0fd7c510b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8afaf54d-6ae8-4856-9685-a492463adc37",
+        "parentId" : "753d6abb-ee94-4131-b635-b43f75cd9371",
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "Sorry, I've thought about this more and it turns out that I was wrong about this suggestion, because we need to create the TypedValue directly from YAML to preserve float/int distinction. The rest of this PR is great, I'll try to get the milestone added here",
+        "createdAt" : "2019-03-12T04:53:53Z",
+        "updatedAt" : "2019-03-12T05:08:41Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f19a02c7-830d-44df-8ece-e94cf480ddba",
+        "parentId" : "753d6abb-ee94-4131-b635-b43f75cd9371",
+        "authorId" : "65274c24-758d-49d6-96bf-a6c0fd7c510b",
+        "body" : "For sure, I've changed it back to:\r\n`patchObjTyped, err := f.typeConverter.YAMLToTyped(patch)`\r\n",
+        "createdAt" : "2019-03-12T05:08:48Z",
+        "updatedAt" : "2019-03-12T05:08:59Z",
+        "lastEditedBy" : "65274c24-758d-49d6-96bf-a6c0fd7c510b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e5634e2-d2df-4011-b37d-09f1cdd3c14f",
+        "parentId" : "753d6abb-ee94-4131-b635-b43f75cd9371",
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "thanks!",
+        "createdAt" : "2019-03-12T05:15:14Z",
+        "updatedAt" : "2019-03-12T05:15:15Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d5bd17cda0c134e5ef5c03c3eac79a9ce4e18003",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +166,170 @@\t\t\t\t\tpatchObj.GetAPIVersion(), f.groupVersion.String()))\n\t}\n\n\tliveObjVersioned, err := f.toVersioned(liveObj)\n\tif err != nil {"
+  },
+  {
+    "id" : "bf3cb1f4-0beb-4233-9de6-66ad8df203d4",
+    "prId" : 75151,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/75151#pullrequestreview-212110677",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c21ac37b-06a0-4bb9-b675-d064da356214",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "Does it need a hub?",
+        "createdAt" : "2019-03-08T01:54:09Z",
+        "updatedAt" : "2019-03-09T06:35:59Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2fdc7e1f35c4cc567b4f67f981821d8b2fb1b7ed",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +73,77 @@\t\thubVersion:      hub,\n\t\tupdater: merge.Updater{\n\t\t\tConverter: internal.NewCRDVersionConverter(internal.DeducedTypeConverter{}, objectConverter, hub),\n\t\t},\n\t}"
+  },
+  {
+    "id" : "1819b337-d267-45f0-a377-959cf26af5e6",
+    "prId" : 74206,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/74206#pullrequestreview-205375069",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8d8bb751-13b9-4ec1-a26a-d259315da3b4",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "We need a test for this method, we don't know if it works for nested fields like this one?",
+        "createdAt" : "2019-02-18T16:23:41Z",
+        "updatedAt" : "2019-02-26T19:23:16Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4a7f8b0-4a25-48fe-be37-2879fadb5baa",
+        "parentId" : "8d8bb751-13b9-4ec1-a26a-d259315da3b4",
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "Do you mean a test that the fields get stripped?\r\nOr that MakePathOrDie works?\r\n\r\nAbout the managedFields in there: @lavalamp you meant that we should rather strip the field here and that I should remove the other place where they get removed.\r\nI think the current way they get removed is better than stripping here afterwards. Also because stripping it later means the fields will get merged which has a cost and complexity.",
+        "createdAt" : "2019-02-19T18:19:13Z",
+        "updatedAt" : "2019-02-26T19:23:16Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26f44d37-4458-4edf-b67d-2bdaa8516d27",
+        "parentId" : "8d8bb751-13b9-4ec1-a26a-d259315da3b4",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "> Do you mean a test that the fields get stripped?\r\n\r\nThis :-)\r\n\r\n`MakePathOrDie` lives somewhere else and should (is?) be tested there.",
+        "createdAt" : "2019-02-19T18:21:03Z",
+        "updatedAt" : "2019-02-26T19:23:16Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8a6a2883f9a38e09ae941b62c14f4e68037b2d21",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +238,242 @@\tfieldpath.MakePathOrDie(\"metadata\", \"clusterName\"),\n\tfieldpath.MakePathOrDie(\"metadata\", \"generation\"),\n\tfieldpath.MakePathOrDie(\"metadata\", \"managedFields\"),\n\tfieldpath.MakePathOrDie(\"metadata\", \"resourceVersion\"),\n)"
+  },
+  {
+    "id" : "cbf7d7eb-f3d3-4348-96ba-d3996baa57e2",
+    "prId" : 73681,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/73681#pullrequestreview-201862645",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e9fab75c-3a86-4e9e-96d4-79681e50be2c",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "I think it's OK. It probably can't happen that we have `manager` in the map but with a `nil` pointer (in which case you would have both `ok == true` and `vs == nil` at the same time).\r\n@jennybuckley ?",
+        "createdAt" : "2019-02-08T17:44:08Z",
+        "updatedAt" : "2019-02-11T22:12:32Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4189540b-eebb-4a2c-b686-7df49941a5c9",
+        "parentId" : "e9fab75c-3a86-4e9e-96d4-79681e50be2c",
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "Right, as far as I saw we always only delete the manager entirely. Couldn't find it being set to nil.\r\nCould happen if somebody changes this in the future and doesn't know, so maybe a check would be safer? But I really wouldn't expect it 🤔",
+        "createdAt" : "2019-02-08T22:46:02Z",
+        "updatedAt" : "2019-02-11T22:12:32Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eadb6e4a-923a-4182-b9b8-6c80d3e07a47",
+        "parentId" : "e9fab75c-3a86-4e9e-96d4-79681e50be2c",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "Yeah, hopefully this would fail in some ways before going anywhere, but still might be better to check ...",
+        "createdAt" : "2019-02-08T22:47:23Z",
+        "updatedAt" : "2019-02-11T22:12:32Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e87fc098-4c1c-45db-973f-2129df3a80d4",
+        "parentId" : "e9fab75c-3a86-4e9e-96d4-79681e50be2c",
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "But I wouldn't make it fail (I think I would want to, but just adding an error for this seems overkill).\r\nWill add this tomorrow I guess.",
+        "createdAt" : "2019-02-08T22:57:21Z",
+        "updatedAt" : "2019-02-11T22:12:32Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7fe2e3f2-becf-40c2-8d29-119435f6be75",
+        "parentId" : "e9fab75c-3a86-4e9e-96d4-79681e50be2c",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "yeah, it's definitely not an error, it's just something that needs to be removed from the list?",
+        "createdAt" : "2019-02-08T22:59:03Z",
+        "updatedAt" : "2019-02-11T22:12:32Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "236b761f-7567-42fb-b057-a0eb4726cf4c",
+        "parentId" : "e9fab75c-3a86-4e9e-96d4-79681e50be2c",
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "So I updated again. But i just leave the managers untouched when i find a nil one.\r\nThis is on purpose as I then would expect other tests to fail if it happens rather than silently solving another developers \"mistake\" once it happens.\r\n\r\nBut I guess another test for this would be good :thinking: if not already covered by the existing integration tests.",
+        "createdAt" : "2019-02-09T13:14:41Z",
+        "updatedAt" : "2019-02-11T22:12:32Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9082cac48240ebc316015dabb466e5b24a113dc1",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +242,246 @@// stripFields removes a predefined set of paths found in typed from managed and returns the updated ManagedFields\nfunc (f *FieldManager) stripFields(managed fieldpath.ManagedFields, manager string) fieldpath.ManagedFields {\n\tvs, ok := managed[manager]\n\tif ok {\n\t\tif vs == nil {"
+  },
+  {
+    "id" : "c1caec5e-2dbc-4386-a8f2-9feb11079972",
+    "prId" : 73681,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/73681#pullrequestreview-202854678",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce39f4b8-8d8c-4b32-9c09-5904672c0986",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Add:\r\n\r\ndeletionTimestamp (but not grace period, I think)\r\ngeneration\r\nclusterName\r\nmanagedFields (?! :) )",
+        "createdAt" : "2019-02-12T19:11:14Z",
+        "updatedAt" : "2019-02-12T19:11:14Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9082cac48240ebc316015dabb466e5b24a113dc1",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +237,241 @@\tfieldpath.MakePathOrDie(\"metadata\", \"selfLink\"),\n\tfieldpath.MakePathOrDie(\"metadata\", \"uid\"),\n\tfieldpath.MakePathOrDie(\"metadata\", \"resourceVersion\"),\n)\n"
+  },
+  {
+    "id" : "2ea26fae-ec82-463b-9de0-f9c0b2318845",
+    "prId" : 72986,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72986#pullrequestreview-193735078",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c6a35c33-b46b-46fd-bab6-7204993b311a",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "I think it is fine to use this version, yes.",
+        "createdAt" : "2019-01-17T17:00:11Z",
+        "updatedAt" : "2019-01-17T18:13:02Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7f01867abdd533c6eb72f84dc55c7b7e13eb227a",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +182,186 @@\t\tprefix = \"unknown\"\n\t}\n\treturn fmt.Sprintf(\"%s-%s@%s\", prefix, f.groupVersion.String(), timestamp)\n}"
+  },
+  {
+    "id" : "a20778a3-c359-4e9a-9e0d-d6c59eb35b74",
+    "prId" : 72986,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72986#pullrequestreview-193768272",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2a50e28f-a1e3-454a-9fcf-406c3934aa37",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "perfect",
+        "createdAt" : "2019-01-17T18:14:26Z",
+        "updatedAt" : "2019-01-17T18:14:53Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7f01867abdd533c6eb72f84dc55c7b7e13eb227a",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +178,182 @@\nfunc (f *FieldManager) buildManagerInfo(prefix string) string {\n\ttimestamp := time.Now().UTC().Format(time.RFC3339)\n\tif prefix == \"\" {\n\t\tprefix = \"unknown\""
+  },
+  {
+    "id" : "bea71598-545f-4364-abfb-8e6abea152a4",
+    "prId" : 72947,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72947#pullrequestreview-198860072",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eb14a257-9bb2-42f8-8339-73442e395fcf",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Why not always look at live object? Why would one be set but not the other?",
+        "createdAt" : "2019-01-30T22:58:48Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2cd54ff8-4fe1-419f-bbda-b27e7e147a2e",
+        "parentId" : "eb14a257-9bb2-42f8-8339-73442e395fcf",
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "This is to protect against clients who don't understand the managedFields field, and strip it from the object",
+        "createdAt" : "2019-01-30T23:35:40Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0492b992-bf2c-4fd9-ace8-2b9b80483f19",
+        "parentId" : "eb14a257-9bb2-42f8-8339-73442e395fcf",
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "Also, if someone needs to update the managedFields directly",
+        "createdAt" : "2019-01-31T19:00:17Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8c68d8d-a569-4b24-8c57-8dcf63c497f1",
+        "parentId" : "eb14a257-9bb2-42f8-8339-73442e395fcf",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "That's subtle and worth adding a comment here.",
+        "createdAt" : "2019-01-31T23:07:59Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fcd4985ce4732be7c4dfa62f8e54d92d53496e15",
+    "line" : 96,
+    "diffHunk" : "@@ -1,1 +94,98 @@\tmanaged, err := internal.DecodeObjectManagedFields(newObj)\n\n\t// If the managed field is empty or we failed to decode it,\n\t// let's try the live object. This is to prevent clients who\n\t// don't understand managedFields from deleting it accidentally."
+  },
+  {
+    "id" : "f38ab735-f7d7-44dc-902e-80342d05cf92",
+    "prId" : 72947,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72947#pullrequestreview-198860072",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3fbd2aba-549e-401c-9ee0-fa2adadcefbf",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Can we somehow fail if this turns out not to be true?",
+        "createdAt" : "2019-01-30T23:03:19Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d43af7a4-ca6b-4952-9f0c-64b3c6968867",
+        "parentId" : "3fbd2aba-549e-401c-9ee0-fa2adadcefbf",
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "Later we do `f.typeConverter.YAMLToTyped(patch)` which gets the version from the patchbytes, and will fail when we attempt to merge the patch into the live object here:\r\nhttps://github.com/kubernetes-sigs/structured-merge-diff/blob/master/typed/typed.go#L171\r\n\r\nWe could definitely put in a more explicit check though",
+        "createdAt" : "2019-01-30T23:48:39Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "660c7979-62d2-4a0c-b86f-85139e516953",
+        "parentId" : "3fbd2aba-549e-401c-9ee0-fa2adadcefbf",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "It would be good to either explicitly check or add that to a comment. Explicit check is maybe more future-proof.",
+        "createdAt" : "2019-01-31T23:09:09Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fcd4985ce4732be7c4dfa62f8e54d92d53496e15",
+    "line" : 154,
+    "diffHunk" : "@@ -1,1 +152,156 @@\t}\n\t// We can assume that patchObj is already on the proper version:\n\t// it shouldn't have to be converted so that it's not defaulted.\n\t// TODO (jennybuckley): Explicitly checkt that patchObj is in the proper version.\n\tliveObjVersioned, err := f.toVersioned(liveObj)"
+  },
+  {
+    "id" : "5b74db09-f5b8-46ee-b577-7792c20b916e",
+    "prId" : 72947,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72947#pullrequestreview-199181527",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a0db51dd-ab79-49a5-a327-59d3e60f674a",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Are we keeping a list somewhere of things that need to be fixed?",
+        "createdAt" : "2019-01-31T23:33:27Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4f7db758-e3a4-4862-81cf-3ce2e35b5eaf",
+        "parentId" : "a0db51dd-ab79-49a5-a327-59d3e60f674a",
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "Yes",
+        "createdAt" : "2019-02-01T00:24:30Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fc332f73-486c-475d-bfcd-ee51c8355457",
+        "parentId" : "a0db51dd-ab79-49a5-a327-59d3e60f674a",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "This list is mostly the spreadsheet that ~we used to~ have. As this gets released to alpha and we work on promoting to beta, I think it'd make sense to move some of the items that we have (and create the new items) in a github umbrella issue for transparency, etc.",
+        "createdAt" : "2019-02-01T17:24:55Z",
+        "updatedAt" : "2019-02-04T21:52:39Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fcd4985ce4732be7c4dfa62f8e54d92d53496e15",
+    "line" : 68,
+    "diffHunk" : "@@ -1,1 +66,70 @@// NewCRDFieldManager creates a new FieldManager specifically for\n// CRDs. This doesn't use openapi models (and it doesn't support the\n// validation field right now).\nfunc NewCRDFieldManager(objectConverter runtime.ObjectConvertor, objectDefaulter runtime.ObjectDefaulter, gv schema.GroupVersion, hub schema.GroupVersion) *FieldManager {\n\treturn &FieldManager{"
+  },
+  {
+    "id" : "d2c7f3c8-0f20-4d33-9c3b-c619372a448a",
+    "prId" : 72947,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72947#pullrequestreview-199859679",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3814a568-8397-48b9-8a4d-e8f21b3916ab",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "Is it possible that managed is empty and err == nil after the call is made ?\r\n",
+        "createdAt" : "2019-02-04T23:30:16Z",
+        "updatedAt" : "2019-02-04T23:44:56Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fcd4985ce4732be7c4dfa62f8e54d92d53496e15",
+    "line" : 100,
+    "diffHunk" : "@@ -1,1 +98,102 @@\t// don't understand managedFields from deleting it accidentally.\n\tif err != nil || len(managed) == 0 {\n\t\tmanaged, err = internal.DecodeObjectManagedFields(liveObj)\n\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"failed to decode managed fields: %v\", err)"
+  },
+  {
+    "id" : "f5e037d0-ceff-487c-9237-697ae3beed3b",
+    "prId" : 72578,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72578#pullrequestreview-190871567",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27c98adf-ea40-412e-a9b1-5ebb09d9e137",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "Who's using this error? Because I suspect this one should be converted to an API error type eventually too. So I don't think it makes sense to be inconsistent here?",
+        "createdAt" : "2019-01-04T17:17:11Z",
+        "updatedAt" : "2019-01-09T18:38:40Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2372200f-10ce-4d1c-8243-e6811a1761d8",
+        "parentId" : "27c98adf-ea40-412e-a9b1-5ebb09d9e137",
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "Test added for this: https://github.com/kubernetes/kubernetes/pull/72578/files#diff-4ac5831d494b1b52c7c7be81e552a458R188",
+        "createdAt" : "2019-01-09T18:40:41Z",
+        "updatedAt" : "2019-01-09T18:40:41Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fc410f07cfa46b7bc69c0ac113f4c12b54edb2e4",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +141,145 @@\t\t\treturn nil, errors.NewApplyConflict(conflicts)\n\t\t}\n\t\treturn nil, err\n\t}\n"
+  },
+  {
+    "id" : "ac61e512-33fa-4666-8182-6474408bab09",
+    "prId" : 72083,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72083#pullrequestreview-185397807",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5d6686be-eb00-4d91-a692-c04f9f448f4d",
+        "parentId" : null,
+        "authorId" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "body" : "This line is the same as 64, is one of them supposed to be different?\r\n\r\nI'm guessing 64 was meant to have not changed",
+        "createdAt" : "2018-12-16T18:13:42Z",
+        "updatedAt" : "2018-12-16T20:16:36Z",
+        "lastEditedBy" : "37324129-fa96-456d-92ea-e5f9b41f8c7f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5699325cd43c83e6e2f98045e67d65315298693",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +66,70 @@\t// let's try the live object\n\tif err != nil || len(managed) == 0 {\n\t\tmanaged, err = internal.DecodeObjectManagedFields(liveObj)\n\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"failed to decode managed fields: %v\", err)"
+  }
+]

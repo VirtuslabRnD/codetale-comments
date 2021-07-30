@@ -1,0 +1,343 @@
+[
+  {
+    "id" : "f1d4bea2-b247-4c6a-a5c1-1190476e4b29",
+    "prId" : 80144,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80144#pullrequestreview-268415719",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6bbcea90-3902-4c24-bd67-d05d638a7874",
+        "parentId" : null,
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "it seems that feature gate value gets reset to its original value at then, if that is the case wouldn't just executing ApplyFeatureGates again be sufficient? something like defer ApplyFeatureGates()",
+        "createdAt" : "2019-07-29T19:59:30Z",
+        "updatedAt" : "2019-07-30T18:42:16Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4309f38d-3272-40a2-ba0a-d298067d54fa",
+        "parentId" : "6bbcea90-3902-4c24-bd67-d05d638a7874",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "We can do it that way, but that needs to accomplish `else` block for each `if` block in this function. Which could be error-prone. And in caller side, when you call it twice, you can't simply `defer ApplyFeatureGates()`, you have to change the call chain like this:\r\n\r\n```go\r\nf := featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.TaintNodesByCondition, true)\r\nApplyFeatureGates()\r\n\r\ndefer func() {\r\n\tf()\r\n\tApplyFeatureGates()\r\n}\r\n```\r\n\r\nIMO this's not easy reading. And this style of code will violate a CI check: hack/verify-test-featuregates.sh. You have to fix that as well...",
+        "createdAt" : "2019-07-30T01:19:27Z",
+        "updatedAt" : "2019-07-30T18:42:16Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1a27818-11ff-44ce-8cff-d1325a122ad3",
+        "parentId" : "6bbcea90-3902-4c24-bd67-d05d638a7874",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "oh, defer is stacked so we can't just defer the ApplyFeatureGates. OK, keeping the current approach sounds good then.",
+        "createdAt" : "2019-07-30T14:12:38Z",
+        "updatedAt" : "2019-07-30T18:42:16Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eb3ed248533d52fa426510b5393ddf87218f09dd",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +516,520 @@\n\t\t\t// Start Scheduler\n\t\t\tdefer setupScheduler(t, clientset, informers, stopCh)()\n\n\t\t\tinformers.Start(stopCh)"
+  },
+  {
+    "id" : "bc92759e-8dff-490f-8dac-7f6a172bc24e",
+    "prId" : 69566,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69566#pullrequestreview-164142951",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b91aeed4-bc74-4f3c-813c-9840af0be99b",
+        "parentId" : null,
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "Do we have any tests for kubelet 1.10?",
+        "createdAt" : "2018-10-10T17:56:36Z",
+        "updatedAt" : "2018-10-16T02:31:38Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8106db97-c33e-4479-be68-fde6552c2d2f",
+        "parentId" : "b91aeed4-bc74-4f3c-813c-9840af0be99b",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "nop, let me add one for this case. There is a discussion at #69346 to include 2 version upgrade check in e2e.",
+        "createdAt" : "2018-10-11T00:59:42Z",
+        "updatedAt" : "2018-10-16T02:31:38Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca780bc1-59da-45bd-a7f2-188fb03707cb",
+        "parentId" : "b91aeed4-bc74-4f3c-813c-9840af0be99b",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "done. mix the kubelet with 1.10 and 1.11 :)",
+        "createdAt" : "2018-10-12T08:28:07Z",
+        "updatedAt" : "2018-10-16T02:31:38Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "73d252d0064277f13df2b43b6cbbd1a0b15974f7",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +285,289 @@\t\t\tAllocatable: v1.ResourceList{v1.ResourcePods: resource.MustParse(\"100\")},\n\t\t\t// minimum version required to use matchFields\n\t\t\tNodeInfo: v1.NodeSystemInfo{KubeletVersion: \"v1.11.0\"},\n\t\t},\n\t}"
+  },
+  {
+    "id" : "0c9f38a5-8313-4f99-ad79-859670c17430",
+    "prId" : 69504,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69504#pullrequestreview-197879586",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d47c885c-87f1-4e52-adc9-f6771f5932a8",
+        "parentId" : null,
+        "authorId" : "5f2c1de8-4266-42c0-b343-ba247af3578f",
+        "body" : "Should we require external callers to know that they must call two functions to get a valid scheduler? Preferably, they should only call `scheduler.New`",
+        "createdAt" : "2019-01-14T22:46:33Z",
+        "updatedAt" : "2019-01-30T01:53:58Z",
+        "lastEditedBy" : "5f2c1de8-4266-42c0-b343-ba247af3578f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1e38ba97-7953-4651-891a-d2c85089805e",
+        "parentId" : "d47c885c-87f1-4e52-adc9-f6771f5932a8",
+        "authorId" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "body" : "Absolutely not. This is temporary  and i plan to fix this in subsequent PR.  Currently if i change this to call scheduler.New(). it will require a some more boiler plate to allocate schedulerAlgorithmSource and i would need to fix a lot of the integration tests. ",
+        "createdAt" : "2019-01-15T05:29:20Z",
+        "updatedAt" : "2019-01-30T01:53:58Z",
+        "lastEditedBy" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61590358-0b08-48e7-9cc2-31747a976caa",
+        "parentId" : "d47c885c-87f1-4e52-adc9-f6771f5932a8",
+        "authorId" : "5f2c1de8-4266-42c0-b343-ba247af3578f",
+        "body" : "Sounds reasonable. Could you add a TODO in the code so we don't lose track of that?",
+        "createdAt" : "2019-01-18T23:15:24Z",
+        "updatedAt" : "2019-01-30T01:53:58Z",
+        "lastEditedBy" : "5f2c1de8-4266-42c0-b343-ba247af3578f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e9a1931c-0049-4b25-896e-37085d7c73ee",
+        "parentId" : "d47c885c-87f1-4e52-adc9-f6771f5932a8",
+        "authorId" : "33ab9fbe-6f55-45c0-a58d-be01aec201d9",
+        "body" : "@krmayankk This seems to work, but for others it is necessary to understand it. I think that once the current PR is merged, you can start the work. And I strongly recommend completing it in a version cycle, ie the current modification and subsequent improvements are in one version.\r\n",
+        "createdAt" : "2019-01-30T02:25:43Z",
+        "updatedAt" : "2019-01-30T02:26:01Z",
+        "lastEditedBy" : "33ab9fbe-6f55-45c0-a58d-be01aec201d9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e0a7d96632b9b4daa5133df63f1ed16c93cbee6f",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +125,129 @@\t// all test/integration tests.\n\tsched := scheduler.NewFromConfig(schedulerConfig)\n\tscheduler.AddAllEventHandlers(sched,\n\t\tv1.DefaultSchedulerName,\n\t\tinformerFactory.Core().V1().Nodes(),"
+  },
+  {
+    "id" : "e70458cf-3d87-4344-ad50-ad659d6e5786",
+    "prId" : 66476,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/66476#pullrequestreview-143268833",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fd4f2b85-b7f7-43b6-abeb-703b2c34781c",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "It's possible that the CR haven't been created yet after the DS is created, so wait for CR to be created to avoid possible test flake. ",
+        "createdAt" : "2018-08-03T17:29:43Z",
+        "updatedAt" : "2018-08-08T20:54:52Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a93ea43e15bb44b8eccde3a8380dd1761b382bb2",
+    "line" : 131,
+    "diffHunk" : "@@ -1,1 +847,851 @@\t// Look up the ControllerRevision for the DaemonSet\n\t_, name := hashAndNameForDaemonSet(ds)\n\trevision, err := clientset.AppsV1().ControllerRevisions(ds.Namespace).Get(name, metav1.GetOptions{})\n\tif err != nil || revision == nil {\n\t\tt.Fatalf(\"Failed to look up ControllerRevision: %v\", err)"
+  },
+  {
+    "id" : "827d7879-ae5f-4520-99e1-4bd260dd28aa",
+    "prId" : 66476,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/66476#pullrequestreview-143268833",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cadec4b8-43a5-4507-812e-24924f6d0a4e",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "nit: save `ds`'s collision count here for comparison later. The count should be count+1 at the end of this test. ",
+        "createdAt" : "2018-08-03T18:01:42Z",
+        "updatedAt" : "2018-08-08T20:54:52Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a93ea43e15bb44b8eccde3a8380dd1761b382bb2",
+    "line" : 157,
+    "diffHunk" : "@@ -1,1 +873,877 @@\t\tt.Fatalf(\"Failed to create ControllerRevision: %v\", err)\n\t}\n\n\t// Make an update of the DaemonSet which we know will create a hash collision when\n\t// the next ControllerRevision is created."
+  },
+  {
+    "id" : "00ba2d31-517c-4683-8da9-52464256f30d",
+    "prId" : 64954,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64954#pullrequestreview-152488005",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "07955761-4c0b-4fa7-afb3-a14a0f17644a",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "Why not create the node and wait for it to be tainted?",
+        "createdAt" : "2018-09-05T01:07:15Z",
+        "updatedAt" : "2018-09-07T08:54:14Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa960812-fdc2-469e-a5ee-51c225767aa3",
+        "parentId" : "07955761-4c0b-4fa7-afb3-a14a0f17644a",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "hm... as we do not need to test TaintNodesByCondition here in DaemonSet's integration test, and we need to start nodelifecycle controller for this case. So I simulate it here :)",
+        "createdAt" : "2018-09-05T13:15:46Z",
+        "updatedAt" : "2018-09-07T08:54:14Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e39b510726113581c6f6a9c2db1753d794aa9cce",
+    "line" : 115,
+    "diffHunk" : "@@ -1,1 +1047,1051 @@\t\t\t\t\tEffect: v1.TaintEffectNoSchedule,\n\t\t\t\t},\n\t\t\t}\n\n\t\t\t_, err = nodeClient.Create(node)"
+  },
+  {
+    "id" : "60506645-6fa4-4dad-9800-8761fa939190",
+    "prId" : 64954,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64954#pullrequestreview-152301700",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "038d9621-f386-4e6c-9942-ae1cef86e511",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "Same comment here. ",
+        "createdAt" : "2018-09-05T01:07:24Z",
+        "updatedAt" : "2018-09-07T08:54:14Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e39b510726113581c6f6a9c2db1753d794aa9cce",
+    "line" : 133,
+    "diffHunk" : "@@ -1,1 +1065,1069 @@\t\t\t\t\tEffect: v1.TaintEffectNoSchedule,\n\t\t\t\t},\n\t\t\t}\n\n\t\t\t_, err = nodeClient.Create(nodeNU)"
+  },
+  {
+    "id" : "8769db11-9600-429f-883a-ff2bf45bc22f",
+    "prId" : 64954,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64954#pullrequestreview-152485899",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ed737cf1-0e66-400b-b964-9c7c2803a1d9",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "It seems that TaintNodesByCondition and ScheduleDaemonSetPods features are decoupled now, i.e. users don't need to enable them together, right? If so, please update doc for 1.12 https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/#scheduled-by-default-scheduler",
+        "createdAt" : "2018-09-05T01:10:59Z",
+        "updatedAt" : "2018-09-07T08:54:14Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "778cca45-4c33-410a-b3e3-fb23247b782f",
+        "parentId" : "ed737cf1-0e66-400b-b964-9c7c2803a1d9",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "Nop :(  When `ScheduleDaemonSetPods` is enabled, it need to enable `TaintNodesByCondition` to skip unschedule predicate and use toleration/taint predicates.",
+        "createdAt" : "2018-09-05T13:10:46Z",
+        "updatedAt" : "2018-09-07T08:54:14Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e39b510726113581c6f6a9c2db1753d794aa9cce",
+    "line" : 63,
+    "diffHunk" : "@@ -1,1 +995,999 @@\n// TestUnschedulableNodeDaemonDoesLaunchPod tests that the DaemonSet Pods can still be scheduled\n// to the Unschedulable nodes when TaintNodesByCondition are enabled.\nfunc TestUnschedulableNodeDaemonDoesLaunchPod(t *testing.T) {\n\tenabledTaint := utilfeature.DefaultFeatureGate.Enabled(features.TaintNodesByCondition)"
+  },
+  {
+    "id" : "499fc359-2860-4165-aafb-7e4e79bd5b33",
+    "prId" : 63223,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/63223#pullrequestreview-124618486",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d8967d81-156d-4999-9163-8f3d526ce170",
+        "parentId" : null,
+        "authorId" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "body" : "Create another node here with enough resource to schedule, and the scheduler should schedule a pod on it. ",
+        "createdAt" : "2018-05-29T23:05:50Z",
+        "updatedAt" : "2018-06-02T00:39:49Z",
+        "lastEditedBy" : "01c14569-b640-48af-98cc-aa9dd12da7b6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b957322d-b252-4f5e-9dc1-d8970bf37559",
+        "parentId" : "d8967d81-156d-4999-9163-8f3d526ce170",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "done.",
+        "createdAt" : "2018-05-30T22:36:33Z",
+        "updatedAt" : "2018-06-02T00:39:49Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9fd848e5ec31720f099feb4d5e918975a3a0eb99",
+    "line" : 448,
+    "diffHunk" : "@@ -1,1 +715,719 @@\t\t\tt.Fatalf(\"Failed to create node: %v\", err)\n\t\t}\n\n\t\tif err := waitForPodsCreated(podInformer, 1); err != nil {\n\t\t\tt.Errorf(\"Failed to wait for pods created: %v\", err)"
+  },
+  {
+    "id" : "805f5345-fa8e-4db3-b19e-32626cfd5ad8",
+    "prId" : 59013,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59013#pullrequestreview-103579930",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e68bc3ff-5aa8-4b5c-b143-827f332d0163",
+        "parentId" : null,
+        "authorId" : "e535b047-00fc-4269-992a-b8d65bd7c57b",
+        "body" : "validate the daemonset status here using `validateDaemonSetStatus`?\r\n",
+        "createdAt" : "2018-03-13T19:04:25Z",
+        "updatedAt" : "2018-03-14T21:01:05Z",
+        "lastEditedBy" : "e535b047-00fc-4269-992a-b8d65bd7c57b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80d9c2a3-ae93-4722-9e47-1fabdadf379b",
+        "parentId" : "e68bc3ff-5aa8-4b5c-b143-827f332d0163",
+        "authorId" : "a3d6d690-2601-4c58-a5bc-a3eaa025f8e0",
+        "body" : "Yes, I will add another step to validate the DS's status.",
+        "createdAt" : "2018-03-13T19:29:20Z",
+        "updatedAt" : "2018-03-14T21:01:05Z",
+        "lastEditedBy" : "a3d6d690-2601-4c58-a5bc-a3eaa025f8e0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "92070eba3d39aa33a43d5033d8bfbb7fe59c1e40",
+    "line" : 367,
+    "diffHunk" : "@@ -1,1 +250,254 @@\n\t// Wait for pods and history to be adopted by 2nd daemonset\n\twaitDaemonSetAdoption(podClient, controllerRevisionClient, podInformer, ds2, ds.Name, t)\n\tvalidateDaemonSetStatus(dsClient, ds2.Name, ds2.Namespace, 1, t)\n}"
+  }
+]

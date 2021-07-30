@@ -1,0 +1,519 @@
+[
+  {
+    "id" : "9772a921-32f6-4323-93be-bdfb3580d858",
+    "prId" : 102840,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102840#pullrequestreview-683911045",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7ead8abd-daac-4d45-b6c5-a7b0d96a231f",
+        "parentId" : null,
+        "authorId" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "body" : "should the reason could be simply `NodeShutdown`? as the reason for pod termination is node shutdown.",
+        "createdAt" : "2021-06-15T09:50:46Z",
+        "updatedAt" : "2021-06-15T09:51:20Z",
+        "lastEditedBy" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fccd26c5-f5f1-48c5-8f32-2f9c8c01e1b1",
+        "parentId" : "7ead8abd-daac-4d45-b6c5-a7b0d96a231f",
+        "authorId" : "454f0bf4-e643-4a14-ac50-1628ba89acb1",
+        "body" : "Sure, that's a good change;\r\n\r\nI also changed the message to reflect the new reason:\r\n\tnodeShutdownReason             = \"Terminated\"\r\n\tnodeShutdownMessage            = \"Pod was terminated in response to node shutdown.\"\r\n\tnodeShutdownNotAdmittedReason  = \"NodeShutdown\"\r\n\tnodeShutdownNotAdmittedMessage = \"Pod was rejected as the node is shutting down.\"\r\n",
+        "createdAt" : "2021-06-15T12:00:01Z",
+        "updatedAt" : "2021-06-15T12:00:48Z",
+        "lastEditedBy" : "454f0bf4-e643-4a14-ac50-1628ba89acb1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f1de598233e3f725016c820e2bf8b7ed78005705",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +95,99 @@\t\treturn lifecycle.PodAdmitResult{\n\t\t\tAdmit:   false,\n\t\t\tReason:  nodeShutdownNotAdmittedReason,\n\t\t\tMessage: nodeShutdownNotAdmittedMessage,\n\t\t}"
+  },
+  {
+    "id" : "5847f54e-46bf-4550-898c-19c4bfe313de",
+    "prId" : 100369,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/100369#pullrequestreview-616901734",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "80591115-691f-4891-a69a-dc6c22dd98da",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "i'm a little confused here on use of `wait.Forever` + the blocking stop. Since the inner go routine will be blocking (due to waiting for stop `<-stop`) how does that interact with the retryPeriod?\r\n\r\nMy understanding is `wait.Forever` with fixed interval is used when we want to call the function periodically but I'm not sure how this works when that function is blocked... i.e. my concern is when it will be unblocked, will it be called many times for those times that it was blocked?",
+        "createdAt" : "2021-03-20T02:02:55Z",
+        "updatedAt" : "2021-03-20T02:08:13Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "93c41088-9aa0-466c-9050-71a94664a1e4",
+        "parentId" : "80591115-691f-4891-a69a-dc6c22dd98da",
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "Yes, after the dbus is disconnected, it will unblock here, and then try to restart.",
+        "createdAt" : "2021-03-20T10:31:29Z",
+        "updatedAt" : "2021-03-20T10:31:29Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "202a0120937ef46cf7e9e8632b50f7bdc58f9d2a",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +113,117 @@\t\tfor {\n\t\t\tif stop != nil {\n\t\t\t\t<-stop\n\t\t\t}\n"
+  },
+  {
+    "id" : "98572809-b5c8-430c-ba25-78698ba70a47",
+    "prId" : 100369,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/100369#pullrequestreview-657580849",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d65cfda-c4fb-467f-8793-58d909033186",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "IMO, This loop has a bit too many cases to consider (i.e. the first restart is special vs second is handled differently).\r\n\r\nMaybe we can we simplify this loop to something like this instead?\r\n\r\n```\r\ngo func() {\r\n        for {\r\n               if stop != nil {\r\n                    <-stop\r\n                }\r\n                \r\n                time.Sleep(retryPeriod)\r\n                klog.V(1).InfoS(\"Restarting watch for node shutdown events\")\r\n                stop, err := m.start()\r\n                if err != nil {\r\n                        klog.ErrorS(err, \"Unable to watch the node for shutdown events\")\r\n                }\r\n        }\r\n}\r\n```",
+        "createdAt" : "2021-05-12T08:03:56Z",
+        "updatedAt" : "2021-05-14T01:11:17Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "202a0120937ef46cf7e9e8632b50f7bdc58f9d2a",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +113,117 @@\t\tfor {\n\t\t\tif stop != nil {\n\t\t\t\t<-stop\n\t\t\t}\n"
+  },
+  {
+    "id" : "16e5b9f9-0d1d-4cb3-8d11-789b7712deeb",
+    "prId" : 100369,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/100369#pullrequestreview-663403630",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9ab31029-837e-4a50-b05b-40017fc45cf6",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "can we add a unit test somehow for this retry loop to validate that after the dbus shutdown channel is closed the retry loop will restart manager successfully? ",
+        "createdAt" : "2021-05-18T22:31:34Z",
+        "updatedAt" : "2021-05-18T22:31:34Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "75a2bce8-90c8-43a8-8eb1-a7606cf64243",
+        "parentId" : "9ab31029-837e-4a50-b05b-40017fc45cf6",
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "Updated. before, I sent test as a separate pr #101932, because the vendor was not updated. \r\n",
+        "createdAt" : "2021-05-19T02:04:17Z",
+        "updatedAt" : "2021-05-19T02:27:55Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a8c57483-2dea-4953-81bf-a867b550d9aa",
+        "parentId" : "9ab31029-837e-4a50-b05b-40017fc45cf6",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "Thanks @wzshiming for adding this to e2e test!\r\n\r\nI was more asking if it's possible to add some type of **unit** (as opposed to integration/e2e test) for the retry loop functionality. I'm not sure if it would be easily possible, but it would be nice if possible just to validate this retry loop.",
+        "createdAt" : "2021-05-19T16:07:08Z",
+        "updatedAt" : "2021-05-19T16:07:08Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "202a0120937ef46cf7e9e8632b50f7bdc58f9d2a",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +111,115 @@\t}\n\tgo func() {\n\t\tfor {\n\t\t\tif stop != nil {\n\t\t\t\t<-stop"
+  },
+  {
+    "id" : "357a21d5-750d-4ca7-a300-e87be2ab67f2",
+    "prId" : 99735,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99735#pullrequestreview-604774736",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "de256595-fb87-4fe1-ad5d-94e74c273eb9",
+        "parentId" : null,
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "Maybe have to judge `m.shutdownGracePeriodCriticalPods > 0 && m.shutdownGracePeriodCriticalPods < m.shutdownGracePeriodRequested`",
+        "createdAt" : "2021-03-05T02:12:00Z",
+        "updatedAt" : "2021-03-05T23:25:31Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f69c08b1-7b66-4179-8c6f-f5ace1654d3c",
+        "parentId" : "de256595-fb87-4fe1-ad5d-94e74c273eb9",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "This should already be covered in the kubelet config validation I think where an error is returned if `ShutdownGracePeriodCriticalPods ` > `ShutdownGracePeriod`\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/102124464a994946e151c976775cf751423b14f7/pkg/kubelet/apis/config/validation/validation.go#L143-L156",
+        "createdAt" : "2021-03-05T02:22:16Z",
+        "updatedAt" : "2021-03-05T23:25:31Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cfb5afd7-3624-416f-8e77-9bc05514fb4d",
+        "parentId" : "de256595-fb87-4fe1-ad5d-94e74c273eb9",
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "It looks good, it is best to add a verification of `kc.ShutdownGracePeriodCriticalPods.Duration >= kc.ShutdownGracePeriodRequested.Duration`",
+        "createdAt" : "2021-03-05T02:29:38Z",
+        "updatedAt" : "2021-03-05T23:25:31Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6581d0d8-1bc3-4b35-989a-09ce3452ceb8",
+        "parentId" : "de256595-fb87-4fe1-ad5d-94e74c273eb9",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "I might not fully understand your comment, we already have a check that if `kc.ShutdownGracePeriodCriticalPods.Duration > kc.ShutdownGracePeriod.Duration` an error is returned in the validation.  \r\n\r\nAs a result, I'm not clear why it would make sense to add inside `isFeatureEnabled` since if someone specifies `CriticalPods.Duration` > `ShutdownGracePeriod` kubelet config validation will fail, so kubelet won't startup (and thus this code won't even run).\r\n\r\n ",
+        "createdAt" : "2021-03-05T02:42:35Z",
+        "updatedAt" : "2021-03-05T23:25:31Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07b1658e-4508-4e4d-a1b4-2a7ff7d8eb06",
+        "parentId" : "de256595-fb87-4fe1-ad5d-94e74c273eb9",
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "Oh I see. looks great!",
+        "createdAt" : "2021-03-05T03:28:52Z",
+        "updatedAt" : "2021-03-05T23:25:31Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "893f5fd4f007775d48536cae192d79f209eeeac2",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +202,206 @@// Returns if the feature is enabled\nfunc (m *Manager) isFeatureEnabled() bool {\n\treturn utilfeature.DefaultFeatureGate.Enabled(features.GracefulNodeShutdown) && m.shutdownGracePeriodRequested > 0\n}\n"
+  },
+  {
+    "id" : "5419fce0-2884-4e30-b50a-598b697207e6",
+    "prId" : 98005,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98005#pullrequestreview-570835330",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "384ac8fa-f9c3-495f-91bb-f691677639e8",
+        "parentId" : null,
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "Since the dependencies changed, you need to run the update-bazel.sh script. This is why the tests are failing.",
+        "createdAt" : "2021-01-19T00:34:53Z",
+        "updatedAt" : "2021-01-21T03:01:28Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d9df265af028a5de58e58b1366a6d5c903c7242b",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +32,36 @@\t\"k8s.io/kubernetes/pkg/features\"\n\t\"k8s.io/kubernetes/pkg/kubelet/eviction\"\n\t\"k8s.io/kubernetes/pkg/kubelet/lifecycle\"\n\t\"k8s.io/kubernetes/pkg/kubelet/nodeshutdown/systemd\"\n\tkubelettypes \"k8s.io/kubernetes/pkg/kubelet/types\""
+  },
+  {
+    "id" : "9536f505-63f7-4199-9a08-c79342de16c6",
+    "prId" : 98005,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98005#pullrequestreview-571874063",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1f0d5016-73e9-44e9-8397-a3d20aa0846f",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "can we please add a unit test that exercises this functionality and tests:\r\n\r\n1. pods are not admitted when `nodeShuttingDownNow == true`\r\n2. pods are admitted when `nodeShuttingDownNow == false`",
+        "createdAt" : "2021-01-20T05:12:16Z",
+        "updatedAt" : "2021-01-21T03:01:28Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d9df265af028a5de58e58b1366a6d5c903c7242b",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +93,97 @@\n// Admit rejects all pods if node is shutting\nfunc (m *Manager) Admit(attrs *lifecycle.PodAdmitAttributes) lifecycle.PodAdmitResult {\n\tnodeShuttingDown := m.ShutdownStatus() != nil\n"
+  },
+  {
+    "id" : "440f913c-5622-47a1-a59b-ac1fafcae82a",
+    "prId" : 96129,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96129#pullrequestreview-525587165",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "76180ef4-d27e-48a7-a15e-fe699ce6e40c",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "is this lock needed to only call `processShutdownEvent ` once? If so, how is it working?",
+        "createdAt" : "2020-11-05T19:40:53Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ae143765-de56-43f4-9d5d-ffcb5a07dd3c",
+        "parentId" : "76180ef4-d27e-48a7-a15e-fe699ce6e40c",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "the `nodeShuttingDownMutex` is used to protect the `nodeShuttingDownNow` bool. The issue there is that the bool is read in `ShutdownStatus()` function and written in the go routine watching for shutdown events.\r\n\r\nThe   `ShutdownStatus` function is called by kubelet as part of the fetching the ready status in `pkg/kubelet/kubelet_node_status.go` in a seperate go routine. \r\n\r\nThe issue is that the reading and writing to that bool can be done in two separate go routines, so to avoid data race I used the mutex. ",
+        "createdAt" : "2020-11-07T03:03:32Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16f71c6d47843c359e78c0eea2f34814f4cf055b",
+    "line" : 156,
+    "diffHunk" : "@@ -1,1 +154,158 @@\t\t\t\tklog.V(1).Infof(\"Shutdown manager detected new shutdown event, isNodeShuttingDownNow: %t\", isShuttingDown)\n\n\t\t\t\tm.nodeShuttingDownMutex.Lock()\n\t\t\t\tm.nodeShuttingDownNow = isShuttingDown\n\t\t\t\tm.nodeShuttingDownMutex.Unlock()"
+  },
+  {
+    "id" : "18a2002e-7294-443e-b145-fec398b2dc95",
+    "prId" : 96129,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96129#pullrequestreview-525587168",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "294083c2-48c6-4ee2-a994-5558048dd2d8",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "what happens if this is acquired multiple times?",
+        "createdAt" : "2020-11-05T19:42:48Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b49b1380-2ec4-475a-980f-70425352ffac",
+        "parentId" : "294083c2-48c6-4ee2-a994-5558048dd2d8",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "This is intended, the idea is that the user can cancel a pending shutdown. So the use case is that you schedule a shutdown in 5 minutes and then decide to cancel it. \r\n\r\nThe recommend approach to deal with this case is on the systemd inhibit documentation: https://www.freedesktop.org/wiki/Software/systemd/inhibit/\r\n\r\nIt states:\r\n\r\n> Here's the basic scheme for applications which need delay locks such as a web browser or office suite:\r\n> 1. As you open a document, take the delay lock\r\n> 2. As soon as you see PrepareForSleep(true), save your data, then release the lock\r\n> 3. As soon as you see PrepareForSleep(false), take the delay lock again, continue as before.\r\n\r\nThat's kinda the same idea I'm trying to follow here:\r\n\r\n1. When the shutdown manager starts up, we take the delay lock. \r\n2. When shutdown manager gets shutdown event (true), we evict all the pods and the release the lock. That's the job of the `processShutdownEvent()` function which is blocking call. Since it's a blocking call, we can guarantee that eventually when the `processShutdownEvent()` function returns, the inhibit lock will be released. \r\n3. If we ever get shutdown event false, we take the inhibit lock again. ",
+        "createdAt" : "2020-11-07T03:03:35Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16f71c6d47843c359e78c0eea2f34814f4cf055b",
+    "line" : 163,
+    "diffHunk" : "@@ -1,1 +161,165 @@\t\t\t\t\tm.processShutdownEvent()\n\t\t\t\t} else {\n\t\t\t\t\tm.aquireInhibitLock()\n\t\t\t\t}\n\t\t\t}"
+  },
+  {
+    "id" : "5d5eae71-943b-48f0-a1e9-71e18fcb6be1",
+    "prId" : 96129,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96129#pullrequestreview-526760497",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "451e7226-91bd-4134-bd1c-8a679edfde58",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "so there is a trust that events will be sent properly and there will not be situation when `nodeShuttingDownNow ` was recovered back after already reported as shutting down? ",
+        "createdAt" : "2020-11-05T19:43:53Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "945cfff1-87ac-4b15-8e43-a3b064066167",
+        "parentId" : "451e7226-91bd-4134-bd1c-8a679edfde58",
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "should code protect from this happenning?",
+        "createdAt" : "2020-11-05T19:44:14Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5c94198d-ad06-44b0-a94b-b7faf846fee8",
+        "parentId" : "451e7226-91bd-4134-bd1c-8a679edfde58",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "This can happen, e.g. shutdown event (true) event is sent, but then shutdown is cancelled. See comment above. ",
+        "createdAt" : "2020-11-07T03:03:38Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e6868c70-3b7a-4f4d-b666-d6df3d1a43ea",
+        "parentId" : "451e7226-91bd-4134-bd1c-8a679edfde58",
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "this definitely needs to be explained explicitly in the comment. I would not guess this =)",
+        "createdAt" : "2020-11-07T07:13:50Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "59dbe23d-37e7-4d8e-af98-e154439ce1e8",
+        "parentId" : "451e7226-91bd-4134-bd1c-8a679edfde58",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "Added a comment here to describe this in more detail. ",
+        "createdAt" : "2020-11-10T00:26:26Z",
+        "updatedAt" : "2020-11-12T21:48:28Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16f71c6d47843c359e78c0eea2f34814f4cf055b",
+    "line" : 157,
+    "diffHunk" : "@@ -1,1 +155,159 @@\n\t\t\t\tm.nodeShuttingDownMutex.Lock()\n\t\t\t\tm.nodeShuttingDownNow = isShuttingDown\n\t\t\t\tm.nodeShuttingDownMutex.Unlock()\n"
+  },
+  {
+    "id" : "079f4986-de14-4c08-ba80-662bae2877c2",
+    "prId" : 96129,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96129#pullrequestreview-525634061",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4ff4f53b-59a2-477e-bf2e-4b9a1f6cd738",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "should this be a proper event, not just a log message?",
+        "createdAt" : "2020-11-05T19:46:03Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20162d9e-36c3-47f8-8a1f-39f6ce0d3953",
+        "parentId" : "4ff4f53b-59a2-477e-bf2e-4b9a1f6cd738",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "Hmm, I'm not sure. There will already be an event emitted as part of the node going to not ready here: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/nodestatus/setters.go#L575, so I'm not sure if an additional one here makes sense. ",
+        "createdAt" : "2020-11-07T03:03:40Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fd912408-7d5f-436e-afc6-24e33976b16c",
+        "parentId" : "4ff4f53b-59a2-477e-bf2e-4b9a1f6cd738",
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "makes sense",
+        "createdAt" : "2020-11-07T07:15:31Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16f71c6d47843c359e78c0eea2f34814f4cf055b",
+    "line" : 196,
+    "diffHunk" : "@@ -1,1 +194,198 @@\nfunc (m *Manager) processShutdownEvent() error {\n\tklog.V(1).Infof(\"Shutdown manager processing shutdown event\")\n\tactivePods := m.getPods()\n"
+  },
+  {
+    "id" : "63fb576b-c1f7-4801-85b9-4331416153e9",
+    "prId" : 96129,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96129#pullrequestreview-526760392",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9adf7779-288a-49b2-a2e6-17f9be858b02",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "so this may be `0` is duration was less than 1 second. Should this be checked on input so this config will be treated as invalid?",
+        "createdAt" : "2020-11-05T19:54:26Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd6a4fc4-2618-42f0-9004-73da3c1ce43d",
+        "parentId" : "9adf7779-288a-49b2-a2e6-17f9be858b02",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "hmm, can you explain, I don't follow. `shutdownGracePeriodCriticalPods` can be zero, but I don't understand what you mean by \"less than 1 second\"...",
+        "createdAt" : "2020-11-07T03:04:00Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dfc040d5-9681-4bb5-8956-be26ad202c56",
+        "parentId" : "9adf7779-288a-49b2-a2e6-17f9be858b02",
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "`gracePeriodOverride` casts `float` number of seconds to `int64`. So if configuration (which is Duration) was configured with millisecond duration, this value will be `0`. ",
+        "createdAt" : "2020-11-07T07:17:44Z",
+        "updatedAt" : "2020-11-12T21:48:27Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e5fb8580-2b2a-4811-af9d-76642beee8a7",
+        "parentId" : "9adf7779-288a-49b2-a2e6-17f9be858b02",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "ah I see what you mean, nice catch. I added some validation as you suggested to ` pkg/kubelet/apis/config/validation/validation.go` to catch this case. \r\n\r\nBasically `ShutdownGracePeriod` and `ShutdownGracePeriodCriticalPods` must either be zero or if they're >= 0 they should be at least one second. ",
+        "createdAt" : "2020-11-10T00:26:07Z",
+        "updatedAt" : "2020-11-12T21:48:28Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16f71c6d47843c359e78c0eea2f34814f4cf055b",
+    "line" : 209,
+    "diffHunk" : "@@ -1,1 +207,211 @@\t\t\tvar gracePeriodOverride int64\n\t\t\tif kubelettypes.IsCriticalPod(pod) {\n\t\t\t\tgracePeriodOverride = int64(m.shutdownGracePeriodCriticalPods.Seconds())\n\t\t\t\tm.clock.Sleep(nonCriticalPodGracePeriod)\n\t\t\t} else {"
+  },
+  {
+    "id" : "d18f9c27-4453-461a-8c04-68958db2c453",
+    "prId" : 96129,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96129#pullrequestreview-579653111",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c26d306a-62cd-47b0-a500-41f109b3fe46",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I commented in the KEP https://github.com/kubernetes/enhancements/pull/2001/files#r565507971 but I don't think this is appropriate.  It forces an administrator deploying a system infrastructure pod to use one of these two priority classes to get this behavior, which means you can't create new priority classes for your critical infrastructure pods to control the order of eviction.  \r\n\r\nAlso, I expect all static pods to be covered by this logic, because it is impossible to drain a static pod correctly outside the kubelet (since kubelet controls the lifecycle, not an outside entity).",
+        "createdAt" : "2021-01-27T17:48:06Z",
+        "updatedAt" : "2021-01-27T17:48:07Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed0b88f4-565c-4f6b-a12f-f6f4e2717804",
+        "parentId" : "c26d306a-62cd-47b0-a500-41f109b3fe46",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "kube-apiserver depends on SDN (for aggregation and for webhooks). If both are implemented as static pods, and SDN is able to go through a LB to reach an apiserver on another node, how can we make sure SDN stays up longer than the static kube-apiserver pod?",
+        "createdAt" : "2021-01-28T12:27:23Z",
+        "updatedAt" : "2021-01-28T12:27:23Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f1ce06e-8123-4a7e-ae37-b14426292388",
+        "parentId" : "c26d306a-62cd-47b0-a500-41f109b3fe46",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "see thread on KEP https://github.com/kubernetes/enhancements/pull/2001#issuecomment-770072076 regarding this discussion ",
+        "createdAt" : "2021-01-29T22:09:25Z",
+        "updatedAt" : "2021-01-29T22:09:45Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16f71c6d47843c359e78c0eea2f34814f4cf055b",
+    "line" : 208,
+    "diffHunk" : "@@ -1,1 +206,210 @@\n\t\t\tvar gracePeriodOverride int64\n\t\t\tif kubelettypes.IsCriticalPod(pod) {\n\t\t\t\tgracePeriodOverride = int64(m.shutdownGracePeriodCriticalPods.Seconds())\n\t\t\t\tm.clock.Sleep(nonCriticalPodGracePeriod)"
+  }
+]

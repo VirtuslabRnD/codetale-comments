@@ -1,0 +1,178 @@
+[
+  {
+    "id" : "99ab2385-b017-47d6-a9bd-fde98544dcf8",
+    "prId" : 101618,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101618#pullrequestreview-649302027",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "88fea145-bafd-4e1c-906b-da9178802cea",
+        "parentId" : null,
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "Both `sec` and `nsec` can be negative. Please see https://play.golang.org/p/fNwU8lLMYZB this example.",
+        "createdAt" : "2021-04-29T20:56:07Z",
+        "updatedAt" : "2021-04-30T15:38:43Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d33cf85d-fdee-4b72-bee4-8bc86718ee64",
+        "parentId" : "88fea145-bafd-4e1c-906b-da9178802cea",
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "https://play.golang.org/p/4OWCx6sWRoa\r\n\r\n```\r\n# min int32\r\nparsing time: -2147483648, 0\r\nparsed: 1901-12-13 20:45:52 +0000 UTC\r\n\r\n# max int32\r\nparsing time: 2147483647, 0\r\nparsed: 2038-01-19 03:14:07 +0000 UTC\r\n\r\n# min int32 * 10\r\nparsing time: -21474836480, 0\r\nparsed: 1289-06-27 15:38:40 +0000 UTC\r\n\r\n# max int32 * 10\r\nparsing time: 21474836470, 0\r\nparsed: 2650-07-06 08:21:10 +0000 UTC\r\n\r\n# min int64\r\nparsing time: -9223372036854775808, 0\r\nfailed to parse time: parsing time \"292277026596-12-04T15:30:08Z\" as \"2006-01-02T15:04:05Z07:00\": cannot parse \"77026596-12-04T15:30:08Z\" as \"-\"\r\nparsed: 0001-01-01 00:00:00 +0000 UTC\r\n\r\n# max int64\r\nparsing time: 9223372036854775807, 0\r\nfailed to parse time: parsing time \"292277026596-12-04T15:30:07Z\" as \"2006-01-02T15:04:05Z07:00\": cannot parse \"77026596-12-04T15:30:07Z\" as \"-\"\r\nparsed: 0001-01-01 00:00:00 +0000 UTC\r\n```",
+        "createdAt" : "2021-04-29T21:01:20Z",
+        "updatedAt" : "2021-04-30T15:38:43Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2008af7a-4bb1-4d8b-81d0-c8c4f2ec7033",
+        "parentId" : "88fea145-bafd-4e1c-906b-da9178802cea",
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "In summary, I think negative int64 values can be valid Unix time, but there is some limit where any value beyond won't be parsable and will become \"null\" when we parse it https://github.com/kubernetes/kubernetes/blob/204ff6caeb8229e6d12b54809108e7f32c19502f/staging/src/k8s.io/apimachinery/pkg/apis/meta/v1/time.go#L93\r\nThe same applies to too large int64 values. \r\n\r\nWe cannot change the Rfc3339Copy function because it's a public interface, and the issue only applies to tests that provide unreasonable unix time. \r\n\r\nI think an easy fix is to make [sec and nsec](https://github.com/kubernetes/kubernetes/blob/204ff6caeb8229e6d12b54809108e7f32c19502f/staging/src/k8s.io/apimachinery/pkg/apis/meta/fuzzer/fuzzer.go#L189) int32 instead of int64. The fuzz result will fall in the range of `1901-12-13`~`2038-01-19` (roughly, I didn't calculate `nsec`), which is probably good enough. \r\n\r\nA more accurate fix if you're interested in is to find out the upper and lower limits of valid sec and nsec, and make the fuzzer generating values within that range. \r\n\r\nAfter you fix the fuzzer, please re-run `hack/update-generated-api-compatibility-data.sh` with `UPDATE_COMPATIBILITY_FIXTURE_DATA=true` so that we have valid timestamps in our [test data](https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/api/testdata/README.md). ",
+        "createdAt" : "2021-04-29T21:17:33Z",
+        "updatedAt" : "2021-04-30T15:38:43Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0d267f14-234d-463a-ac23-ba3bd309a7a3",
+        "parentId" : "88fea145-bafd-4e1c-906b-da9178802cea",
+        "authorId" : "b96ad0c0-2a60-4c16-8bc3-b946a54b9481",
+        "body" : "Thanks @roycaihw for the in depth details and the reproducible playground. I'll update the fixture data in a bit. ",
+        "createdAt" : "2021-04-30T14:55:59Z",
+        "updatedAt" : "2021-04-30T15:38:43Z",
+        "lastEditedBy" : "b96ad0c0-2a60-4c16-8bc3-b946a54b9481",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "93a5330aff1976dd2084052e43ac02ce91b93297",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +192,196 @@\t\t\tc.Fuzz(&sec)\n\t\t\tc.Fuzz(&nsec)\n\t\t\tj.CreationTimestamp = metav1.Unix(int64(sec), int64(nsec)).Rfc3339Copy()\n\n\t\t\tif j.DeletionTimestamp != nil {"
+  },
+  {
+    "id" : "5452bbcc-767f-4103-9599-2efbf0e75959",
+    "prId" : 101618,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101618#pullrequestreview-650454853",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d331fc5-a393-44b7-a3d8-9f092dc7479a",
+        "parentId" : null,
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "I was thinking `int32`, but `uint32` is fine. Could you add a comment \"Fuzzing sec and nsec in a smaller range (uint32 instead of int64), so that the result Unix time is a valid date and can be parsed into RFC3339 format\".",
+        "createdAt" : "2021-04-30T21:07:17Z",
+        "updatedAt" : "2021-04-30T21:23:33Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a321d987-ade1-42d9-8505-1cd0c22e4617",
+        "parentId" : "3d331fc5-a393-44b7-a3d8-9f092dc7479a",
+        "authorId" : "b96ad0c0-2a60-4c16-8bc3-b946a54b9481",
+        "body" : "Done, thanks — good catch!",
+        "createdAt" : "2021-05-03T15:22:49Z",
+        "updatedAt" : "2021-05-03T15:22:49Z",
+        "lastEditedBy" : "b96ad0c0-2a60-4c16-8bc3-b946a54b9481",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "93a5330aff1976dd2084052e43ac02ce91b93297",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +189,193 @@\t\t\t// Fuzzing sec and nsec in a smaller range (uint32 instead of int64),\n\t\t\t// so that the result Unix time is a valid date and can be parsed into RFC3339 format.\n\t\t\tvar sec, nsec uint32\n\t\t\tc.Fuzz(&sec)\n\t\t\tc.Fuzz(&nsec)"
+  },
+  {
+    "id" : "26c4c1d6-4eae-458e-b29a-4b00b8e7adfb",
+    "prId" : 101618,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101618#pullrequestreview-650513009",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f31ed8f7-4376-4651-a7ec-8bbe09162550",
+        "parentId" : null,
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "nit: you don't need to specify`int64(...)`",
+        "createdAt" : "2021-04-30T21:07:58Z",
+        "updatedAt" : "2021-04-30T21:23:33Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85c09b83-0470-4e15-bcd8-68b1d63c2ddf",
+        "parentId" : "f31ed8f7-4376-4651-a7ec-8bbe09162550",
+        "authorId" : "b96ad0c0-2a60-4c16-8bc3-b946a54b9481",
+        "body" : "Seems the compiler throws an error locally if I don't",
+        "createdAt" : "2021-05-03T15:21:46Z",
+        "updatedAt" : "2021-05-03T15:21:46Z",
+        "lastEditedBy" : "b96ad0c0-2a60-4c16-8bc3-b946a54b9481",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df89426d-e53c-40ab-96d4-5173e36a0b4a",
+        "parentId" : "f31ed8f7-4376-4651-a7ec-8bbe09162550",
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "ah I must be wrong. Thanks!",
+        "createdAt" : "2021-05-03T16:29:58Z",
+        "updatedAt" : "2021-05-03T16:29:58Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "93a5330aff1976dd2084052e43ac02ce91b93297",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +197,201 @@\t\t\t\tc.Fuzz(&sec)\n\t\t\t\tc.Fuzz(&nsec)\n\t\t\t\tt := metav1.Unix(int64(sec), int64(nsec)).Rfc3339Copy()\n\t\t\t\tj.DeletionTimestamp = &t\n\t\t\t}"
+  },
+  {
+    "id" : "06c52465-ad6c-4c1f-a36c-2aa4c05d8f22",
+    "prId" : 71548,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/71548#pullrequestreview-207200145",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a1a61a49-7244-4302-99ac-01f2d8321f13",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "a comment explaining why this pins to false would be good (non-serialized, always round-trips as false, etc)",
+        "createdAt" : "2019-02-25T03:18:51Z",
+        "updatedAt" : "2019-03-08T18:04:12Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3230a0b4fd14a6166f8362d4732e199e8779c426",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +289,293 @@\t\t\t// NoHeaders is not serialized to the wire but is allowed within the versioned\n\t\t\t// type because we don't use meta internal types in the client and API server.\n\t\t\tr.NoHeaders = false\n\t\t},\n\t\tfunc(r *metav1beta1.TableRow, c fuzz.Continue) {"
+  },
+  {
+    "id" : "6d5456cd-8b67-49ab-b115-2a30e0440e10",
+    "prId" : 48287,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/48287#pullrequestreview-59418547",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2a9c0135-c90e-455c-8063-a59b198ba3ee",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "yay",
+        "createdAt" : "2017-08-30T00:28:45Z",
+        "updatedAt" : "2017-09-01T06:31:22Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e2fccd1de5384a6ecadf54849f612a10ecfe93a",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +146,150 @@\t\t\t\t\tr.Cells[i] = c.RandBool()\n\t\t\t\tcase 3:\n\t\t\t\t\tx := map[string]interface{}{}\n\t\t\t\t\tfor j := c.Intn(10) + 1; j >= 0; j-- {\n\t\t\t\t\t\tx[c.RandString()] = c.RandString()"
+  }
+]

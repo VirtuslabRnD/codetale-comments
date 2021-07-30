@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "995aa292-c843-441d-a20c-08eda883f20d",
+    "prId" : 98515,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98515#pullrequestreview-599410800",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cbcf48d4-9b42-4b79-969b-5b78b00de072",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "does anything check for the following:\r\n* pageSize > 0\r\n* pageSize is a whole number\r\n* pageSize.Value() >= 1",
+        "createdAt" : "2021-02-22T13:45:41Z",
+        "updatedAt" : "2021-03-05T09:36:57Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "375197ce-a71a-4a7b-be33-a53173816e45",
+        "parentId" : "cbcf48d4-9b42-4b79-969b-5b78b00de072",
+        "authorId" : "5fcdc717-54e1-453d-b59d-1ebc30e5755b",
+        "body" : "resource value is checked by ValidateResourceQuantityValue, while huge page size is not checked. Add now.",
+        "createdAt" : "2021-02-26T09:46:51Z",
+        "updatedAt" : "2021-03-05T09:36:57Z",
+        "lastEditedBy" : "5fcdc717-54e1-453d-b59d-1ebc30e5755b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e162fcc1bf56e2eb7e978dc411dfc370c1d95c5a",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +47,51 @@\t\treturn false\n\t}\n\n\tif pageSize.Sign() <= 0 || pageSize.MilliValue()%int64(1000) != int64(0) {\n\t\treturn false"
+  },
+  {
+    "id" : "86da0685-41a3-4628-b100-ab5859cc2446",
+    "prId" : 61498,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/61498#pullrequestreview-108805769",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4e7bbf7d-96e4-4bdf-850f-7b0ffc57dec5",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this is used in validation. this is used in the kubelet, which is allowed to skew two versions older than the apiserver. can we verify that a 1.10-level kubelet fails in a reasonable way if you specify the alpha resource on a pod with overcommit?",
+        "createdAt" : "2018-03-27T03:54:34Z",
+        "updatedAt" : "2018-04-03T03:18:17Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "15757b25-cb08-47a6-9277-976064db9088",
+        "parentId" : "4e7bbf7d-96e4-4bdf-850f-7b0ffc57dec5",
+        "authorId" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "body" : "If I understand correctly, this is used while validating the pod spec. So, from 1.11 (assuming this PR is merged), the API server will treat `alpha.kubernetes.io/nvidia-gpu` like any other `*kubernetes.io` prefixed resource (`IsDefaultNamespaceResource()`) and will allow pod specs with unequal requests and limits for this resource.\r\n\r\nI would hope that when people upgrade their API server to 1.11, they won't submit any new pods using this resource.\r\n\r\nBut let's say we have a situation with API server running 1.11, kubelet running <1.11 with this alpha feature gate on, and the user submits a pod requesting this resource. In that case, the API server won't check whether requests=limits for this resource. And while assigning resources, kubelet will only look at the limits for this resource (like it does now).",
+        "createdAt" : "2018-03-27T21:41:27Z",
+        "updatedAt" : "2018-04-03T03:18:17Z",
+        "lastEditedBy" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dcccb4ce-6d48-4b7f-87a7-0b4555dc509c",
+        "parentId" : "4e7bbf7d-96e4-4bdf-850f-7b0ffc57dec5",
+        "authorId" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "body" : "The only thing to keep in mind would be that currently the scheduler would schedule a pod requesting `*kubernetes.io/` prefixed resources to any node whether that node is exposing that resource or not (I don't know why this is the case). [#50658 Scenario B](https://github.com/kubernetes/kubernetes/issues/50658)\r\n\r\nOnce we remove the special case for `alpha.kubernetes.io/nvidia-gpu`, this behavior will apply to `alpha.kubernetes.io/nvidia-gpu` as well. So, a pod requesting `alpha.kubernetes.io/nvidia-gpu` could be scheduled to any node.\r\n\r\nNote that this is not because of updating `IsOvercommitAllowed()` but because of removing the special case predicate from the scheduler below.",
+        "createdAt" : "2018-03-27T21:52:18Z",
+        "updatedAt" : "2018-04-03T03:18:17Z",
+        "lastEditedBy" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bacf485c-b424-40a8-8770-15dd5d76e5cf",
+        "parentId" : "4e7bbf7d-96e4-4bdf-850f-7b0ffc57dec5",
+        "authorId" : "611b3189-700b-4eda-8a2a-2c4280218d7c",
+        "body" : "As @mindprince mentioned, the current scheduler behavior is to ignore resource request on non-existing resources in the kubernetes.io/ domain. This would cause the pod to be scheduled on a node without that requested resource. On the node, because Kubelet also runs GeneralPredicate, it would fail the pod during admission if it is running 1.10, which is actually the desired behavior for alpha.kubernetes.io/nvidia-gpu. However, if it is running 1.11, the pod would be started without proper gpu device setup.\r\n\r\n@mindprince has initiated the discussion on whether we want to change this scheduler behavior on kubernetes.io/ domain resources in #50658 discussion. For now, I wonder whether we want to fail loudly during validation for resource request on alpha.kubernetes.io/nvidia-gpu to make sure that any users who haven't been aware of the deprecation of Accelerators feature can get the clear signal and move to the device plugin based solution. Then maybe after one or two releases, when #50658 is fully resolved, we can remove this special validation logic. Of course, Accelerators is an alpha feature, so it is debatable whether we want to add this special logic in resource validation code.",
+        "createdAt" : "2018-03-28T18:13:58Z",
+        "updatedAt" : "2018-04-03T03:18:17Z",
+        "lastEditedBy" : "611b3189-700b-4eda-8a2a-2c4280218d7c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7bf845b-f90c-4bbb-8e46-4f61e32e815a",
+        "parentId" : "4e7bbf7d-96e4-4bdf-850f-7b0ffc57dec5",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> the current scheduler behavior is to ignore resource request on non-existing resources in the kubernetes.io/ domain.\r\n\r\nthat doesn't seem forward compatible, does it? if a new resource comes along and is requested by a pod, only kubelets that know about and declare they satisfy that resource should be running that pod, right?\r\n\r\n> For now, I wonder whether we want to fail loudly during validation for resource request on alpha.kubernetes.io/nvidia-gpu to make sure that any users who haven't been aware of the deprecation of Accelerators feature can get the clear signal and move to the device plugin based solution. \r\n\r\ntightening validation brings a host of issues we want to avoid. it is better to let a pod in and it sit unscheduled than to prevent API writes because of stricter validation that can disrupt cleaning up the very resources that are newly considered invalid.",
+        "createdAt" : "2018-03-28T18:31:55Z",
+        "updatedAt" : "2018-04-03T03:18:17Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a3832ef9-78fb-4f68-a3f7-15835289ebe8",
+        "parentId" : "4e7bbf7d-96e4-4bdf-850f-7b0ffc57dec5",
+        "authorId" : "611b3189-700b-4eda-8a2a-2c4280218d7c",
+        "body" : "Agree the desired behavior should be leaving the pod pending till the requested resource showing up, which is #50658 is about. I think @mindprince is working on a change to resolve  #50658 Scenario B. Agree it should be fine to leave the validation part out if both changes are merged in 1.11.",
+        "createdAt" : "2018-03-28T18:50:48Z",
+        "updatedAt" : "2018-04-03T03:18:17Z",
+        "lastEditedBy" : "611b3189-700b-4eda-8a2a-2c4280218d7c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a5046482-33ce-45f3-a9b4-1ee0cbd8cadd",
+        "parentId" : "4e7bbf7d-96e4-4bdf-850f-7b0ffc57dec5",
+        "authorId" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "body" : "https://github.com/kubernetes/kubernetes/pull/61860",
+        "createdAt" : "2018-03-28T21:11:12Z",
+        "updatedAt" : "2018-04-03T03:18:17Z",
+        "lastEditedBy" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37f885e8-4769-4cd1-bb61-080056a8fa2c",
+        "parentId" : "4e7bbf7d-96e4-4bdf-850f-7b0ffc57dec5",
+        "authorId" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "body" : "@liggitt This is addressed.",
+        "createdAt" : "2018-04-03T03:29:12Z",
+        "updatedAt" : "2018-04-03T03:29:12Z",
+        "lastEditedBy" : "87a378b9-1941-4a57-a346-cf12dbb73416",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "87dda3375b6155dca7679440321836e8ea0a6871",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +175,179 @@// IsOvercommitAllowed returns true if the resource is in the default\n// namespace and is not hugepages.\nfunc IsOvercommitAllowed(name core.ResourceName) bool {\n\treturn IsNativeResource(name) &&\n\t\t!IsHugePageResourceName(name)"
+  },
+  {
+    "id" : "8daae41d-ef3e-4d7d-bc53-dd399a25445c",
+    "prId" : 57302,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/57302#pullrequestreview-97347070",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7017ab61-f528-476a-80fa-f6f5f036e396",
+        "parentId" : null,
+        "authorId" : "c4b970b3-3b9c-4773-bc9b-f8d005b15fd1",
+        "body" : "Are there any unit tests for this method? If so can you add test cases for each of the scenario you mention in the comment, including maximum length validation?",
+        "createdAt" : "2018-02-15T21:49:32Z",
+        "updatedAt" : "2018-02-15T21:49:32Z",
+        "lastEditedBy" : "c4b970b3-3b9c-4773-bc9b-f8d005b15fd1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10534b14-ce91-4864-9e85-7cb07f514ba8",
+        "parentId" : "7017ab61-f528-476a-80fa-f6f5f036e396",
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "a follow-on w/ tests would be good for this.",
+        "createdAt" : "2018-02-16T23:30:49Z",
+        "updatedAt" : "2018-02-16T23:34:55Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9ea565e352c6cd2c60a05a7435385ac9b3ad261f",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +153,157 @@// to avoid confusion with the convention in quota\n// 3. it satisfies the rules in IsQualifiedName() after converted into quota resource name\nfunc IsExtendedResourceName(name core.ResourceName) bool {\n\tif IsDefaultNamespaceResource(name) || strings.HasPrefix(string(name), core.DefaultResourceRequestsPrefix) {\n\t\treturn false"
+  }
+]

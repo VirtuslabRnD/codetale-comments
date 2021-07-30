@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "3b5b5514-9a56-4481-b0f1-4924e153227d",
+    "prId" : 102791,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102791#pullrequestreview-683603363",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "62627bf3-ba42-48aa-89da-dcc277ab6f7c",
+        "parentId" : null,
+        "authorId" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "body" : "Not sure 1s -> 5s will be enough. We can try and see how it goes.",
+        "createdAt" : "2021-06-10T20:26:32Z",
+        "updatedAt" : "2021-06-10T20:26:32Z",
+        "lastEditedBy" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1013082f-5db1-47eb-9471-c40d4ed2754c",
+        "parentId" : "62627bf3-ba42-48aa-89da-dcc277ab6f7c",
+        "authorId" : "905607ce-2e79-4e24-aab7-dcad86af4371",
+        "body" : "That's just reducing agent volume (for 5k cluster, change from 5k qps to 1k qps). The other file unsets proxy-server client-go throttling altogether (-1 means no qps limit). The auth requests seem very cheap and fast to handle, and this is local to the controlplane node.\r\n",
+        "createdAt" : "2021-06-10T20:29:02Z",
+        "updatedAt" : "2021-06-10T20:29:02Z",
+        "lastEditedBy" : "905607ce-2e79-4e24-aab7-dcad86af4371",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ad25a564-de8d-4419-bf8f-fbb3924d0248",
+        "parentId" : "62627bf3-ba42-48aa-89da-dcc277ab6f7c",
+        "authorId" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "body" : "Agreed but 1k QPS is still a lot of extra QPS. Especially in the KAS was bounced case when we know the KAS can be load sensitive. At a minimum we may want to also increase the sync-interval-cap equivalently.",
+        "createdAt" : "2021-06-10T20:43:15Z",
+        "updatedAt" : "2021-06-10T20:43:15Z",
+        "lastEditedBy" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e7f13d4-6f85-47fe-af1e-94c28d105af9",
+        "parentId" : "62627bf3-ba42-48aa-89da-dcc277ab6f7c",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Wait - are you saying that konnectivity agent can generate 1k QPS (i.e. request per sync-interval per agent)?\r\n\r\nI don't think that's acceptable - that actually more-or-less doubles the number of requests. What are those requests? Why they need to be so frequent?\r\n\r\n@mborsz @kubernetes/sig-scalability @jkaniuk ",
+        "createdAt" : "2021-06-11T09:25:30Z",
+        "updatedAt" : "2021-06-11T09:25:30Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b4dc61d3-498e-4f21-9b34-20b4ed7a1819",
+        "parentId" : "62627bf3-ba42-48aa-89da-dcc277ab6f7c",
+        "authorId" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "body" : "To be clear we are talking about burst traffic and not sustained. The ANP agent tries to maintain a tunnel to each ANP Server. In a HA env I would expect there to be 3 ANP Servers. For this config we are using DS, so I would expect 1 agent per Node. When the ANP agent connects to a ANP server (for this config), the agent sends a token to authenticate itself. The ANP server will then validate that token with the KAS. Once validated the tunnel is established for that pair and a new request will not be needed unless the tunnel breaks. However when you have thousands of Nodes, this means thousands of agents and a lot of tunnels to establish. So we end up with an initial burst of validation requests from the ANP Server to the KAS.",
+        "createdAt" : "2021-06-11T16:25:39Z",
+        "updatedAt" : "2021-06-11T16:25:39Z",
+        "lastEditedBy" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b8e96219-54f6-4b62-b1aa-162c7c9956b6",
+        "parentId" : "62627bf3-ba42-48aa-89da-dcc277ab6f7c",
+        "authorId" : "905607ce-2e79-4e24-aab7-dcad86af4371",
+        "body" : "In GKE we switched away from DS to limit the max number of agents and for other reasons. We could always choose to do similar (Deployment with horizontal pod autoscaler) in this config.\r\n\r\nConsiderations with DS / large number of agents:\r\n- Cluster bootstrap or scale-up can produce tall but short spikes, for which burst may help.\r\n- During times when some ANP servers is down for maintenance/upgrade, there can be a shorter spike but lasting for minutes.\r\n- We cannot have any one agent wait too long to sync, to be sure that small clusters can bootstrap quickly/reliably.\r\n\r\nI opened https://github.com/kubernetes-sigs/apiserver-network-proxy/issues/237 to track ideas.",
+        "createdAt" : "2021-06-11T20:04:29Z",
+        "updatedAt" : "2021-06-11T20:04:29Z",
+        "lastEditedBy" : "905607ce-2e79-4e24-aab7-dcad86af4371",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dbd2ff3c-907d-470a-bee1-658f6258447e",
+        "parentId" : "62627bf3-ba42-48aa-89da-dcc277ab6f7c",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "> Once validated the tunnel is established for that pair and a new request will not be needed unless the tunnel breaks. However when you have thousands of Nodes, this means thousands of agents and a lot of tunnels to establish. So we end up with an initial burst of validation requests from the ANP Server to the KAS.\r\n\r\nOK - thanks Walter. If that's only the initialization-related requests, then that sounds fine to me. Thanks for explanation.",
+        "createdAt" : "2021-06-14T07:37:24Z",
+        "updatedAt" : "2021-06-14T07:37:25Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2ffca1a-549e-4405-84fb-76d9831a5b04",
+        "parentId" : "62627bf3-ba42-48aa-89da-dcc277ab6f7c",
+        "authorId" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "body" : "There is one slightly pathological case. In an HA cluster where 1 KAS (or more importantly an ANP Server) is down, the agents will periodically keep trying to connect to that server. There is a back-off to diminish the overall traffic level. It shouldn't be nearly as high as this limit but there be ongoing traffic in this case. ",
+        "createdAt" : "2021-06-14T16:55:07Z",
+        "updatedAt" : "2021-06-14T16:55:07Z",
+        "lastEditedBy" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f090eb6-8298-4ea2-8d21-78b5290d20ea",
+        "parentId" : "62627bf3-ba42-48aa-89da-dcc277ab6f7c",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "OK - but that thing should be exercised also by rolling upgrade of the control-plane in HA scenario (which we test at least internally and are planning to also test in OSS).\r\nThanks for explanation!",
+        "createdAt" : "2021-06-15T06:30:01Z",
+        "updatedAt" : "2021-06-15T06:30:01Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9d514b2de4255629f5167163b2ed58e25bcd6e4b",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +34,38 @@                  \"--proxy-server-host=__APISERVER_IP__\",\n                  \"--proxy-server-port=8132\",\n                  \"--sync-interval=5s\",\n                  \"--sync-interval-cap=30s\",\n                  \"--probe-interval=5s\","
+  }
+]

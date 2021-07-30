@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "5a3baed5-2899-49b4-a077-89ef54525fc2",
+    "prId" : 100537,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/100537#pullrequestreview-620240223",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7de706e7-cfd5-47d6-ba5b-cebcc87dbaec",
+        "parentId" : null,
+        "authorId" : "34f61776-88da-4b26-aa20-3c4f92530d05",
+        "body" : "Eventually do you plan to include inline volumes here too?",
+        "createdAt" : "2021-03-24T18:13:35Z",
+        "updatedAt" : "2021-03-24T21:33:32Z",
+        "lastEditedBy" : "34f61776-88da-4b26-aa20-3c4f92530d05",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a138aa31-2476-43a4-a9f1-e8d0c128ec22",
+        "parentId" : "7de706e7-cfd5-47d6-ba5b-cebcc87dbaec",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : ">     * The KEP mentions \"The existing raw block volume tests then can be used to ensure that pod scheduling works\".\r\n>       \r\n>       * Is this still true? So without this PR, we have _some_ test coverage but only for the case when Storage Capacity allows scheduling to proceed, i.e. no regression. We can't actually tell whether Storage Capacity changed scheduling decisions, nor whether it prevented a pod from scheduling altogether.\r\n\r\nCorrect. If we want to verify in an E2E test that scheduling really takes capacity into account, then we have to write a test that schedules pods and then somehow determines that the scheduler considered storage capacity while making its choices. This is hard in the positive case of a pod starting to run (there's little to no information recorded), but in the negative case of a pod failing to start we might be able to use the (unreliable!) events to learn about the reason.\r\n\r\nIt's much easier to write unit tests for the scheduler. That's how the functionality is already getting tested.\r\n\r\n>     * The KEP then says \"A new test can be written which checks for CSIStorageCapacity objects, asks for pod scheduling with a volume that is too large, and then checks for events that describe the problem.\"\r\n\r\nYes, that's the test I meant above. Adding such a test to this test suite seems doable and worthwhile. We just shouldn't run it against a real driver were we have to allocate hundreds of terabytes before it runs out of storage :sweat_smile: \r\n\r\n\r\n\r\n>       * This PR only checks for expected `CSIStorageCapacity` objects, which I think is a low-impact test we can get in now to give us some coverage. Is the plan to extend this test to provision a volume and schedule a pod as well in the next release? \r\n\r\nYes. I also want to add checking of maximum volume size.\r\n\r\n> My understanding is that ultimately we care about whether pod scheduling is rejected under capacity constraints, and a test verifying `CSIStorageCapacity` objects might not be strictly needed because it's testing an implementation detail, but is still good to have to ease debugging.\r\n\r\nThis particular test was motivated by https://github.com/kubernetes-csi/external-provisioner/pull/590 which fixes an issue where too many CSIStorageCapacity objects were created. The failure was apparently random and even though the fix hasn't been merged yet, this test here doesn't trigger it. But the failure showed that there is a need for E2E testing because unit testing would never have exercised that faulty code.\r\n\r\n> Regarding the different alternative test setups: with the setup in this PR, isn't it still possible to run this test using the hostPath CSI driver in k/k testing-manifests if we update its deployment spec and test capabilities (i.e. your first proposed alternative if I understand correctly)? \r\n\r\nYes, that would be possible. But as the test in its current form doesn't exercise any functionality in Kubernetes, it's not worthwhile now. That will change once we add tests that involve the scheduler.\r\n\r\n> Eventually do you plan to include inline volumes here too?\r\n\r\nThat will make sense once the test covers scheduling.",
+        "createdAt" : "2021-03-24T21:18:59Z",
+        "updatedAt" : "2021-03-24T21:33:32Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d7a086ddd82d7d1b287ac4da4c35c5c96b98da0d",
+    "line" : 73,
+    "diffHunk" : "@@ -1,1 +71,75 @@func (p *capacityTestSuite) SkipUnsupportedTests(driver storageframework.TestDriver, pattern storageframework.TestPattern) {\n\t// Check preconditions.\n\tif pattern.VolType != storageframework.DynamicPV {\n\t\te2eskipper.Skipf(\"Suite %q does not support %v\", p.tsInfo.Name, pattern.VolType)\n\t}"
+  },
+  {
+    "id" : "4401f44f-4b95-4e01-b7ce-ac1b772619e0",
+    "prId" : 100537,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/100537#pullrequestreview-620219595",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "698679c6-dd83-4126-9bcd-82b4ef360064",
+        "parentId" : null,
+        "authorId" : "34f61776-88da-4b26-aa20-3c4f92530d05",
+        "body" : "Thinking about ways to make capacities matchers more generic instead of special casing local storage: Instead of having `CapCSILocalStorage`, what if we pass `len(dInfo.TopologyKeys)` into `HaveCapacitiesForClassAndNodes()`, and inside that function set TopologyKey to that one entry if `len()` is 1, otherwise ignore?",
+        "createdAt" : "2021-03-24T20:37:41Z",
+        "updatedAt" : "2021-03-24T21:33:32Z",
+        "lastEditedBy" : "34f61776-88da-4b26-aa20-3c4f92530d05",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cce8a550-fb59-4b00-8fa5-79a85fef9484",
+        "parentId" : "698679c6-dd83-4126-9bcd-82b4ef360064",
+        "authorId" : "34f61776-88da-4b26-aa20-3c4f92530d05",
+        "body" : "Ah I realized this alone wouldn't work because the local storage matcher implementation assumes a single topology key implies distinct topology values for each node. Looking deeper.",
+        "createdAt" : "2021-03-24T20:52:33Z",
+        "updatedAt" : "2021-03-24T21:33:32Z",
+        "lastEditedBy" : "34f61776-88da-4b26-aa20-3c4f92530d05",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d7a086ddd82d7d1b287ac4da4c35c5c96b98da0d",
+    "line" : 139,
+    "diffHunk" : "@@ -1,1 +137,141 @@\t\t\t// possible, too, but is not currently\n\t\t\t// implemented.\n\t\t\tmatcher = HaveCapacitiesForClassAndNodes(f.ClientSet, sc.Provisioner, sc.Name, dInfo.TopologyKeys[0])\n\t\t}\n"
+  },
+  {
+    "id" : "c98422b8-0d48-4c76-857c-87b7477ff789",
+    "prId" : 100537,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/100537#pullrequestreview-620258476",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3107644b-c105-4883-9e4f-6edac4180c2b",
+        "parentId" : null,
+        "authorId" : "34f61776-88da-4b26-aa20-3c4f92530d05",
+        "body" : "This looks similar to the actual algorithm for computing `CSIStorageCapacity`. Are we running into the risk of reimplementing the logic we are testing here?\n\nIdeally we should compute the number of expected objects based on configured expectations but that might be hard (for example to configure the topology segment distribution over nodes) and the existing test framework may not give enough information today to do this computation.\n\nSo if it's indeed close enough to a reimplementation, which would be hard to maintain, does it make sense to require that all LocalStorage drivers are expected to be installed on every node, and just use the node count to compute the expected number of Storage Capacity objects? The tradeoff here is some types of drivers will be excluded, but maybe this is necessary if (1) we don't want to reimplement the logic we are testing and (2) we can't configure expectations more easily.",
+        "createdAt" : "2021-03-24T21:31:12Z",
+        "updatedAt" : "2021-03-24T21:33:32Z",
+        "lastEditedBy" : "34f61776-88da-4b26-aa20-3c4f92530d05",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6f83b641-eb68-40c5-9920-cd55906b0033",
+        "parentId" : "3107644b-c105-4883-9e4f-6edac4180c2b",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "> This looks similar to the actual algorithm for computing `CSIStorageCapacity`. Are we running into the risk of reimplementing the logic we are testing here?\r\n\r\nSaw that after writing my own comment in https://github.com/kubernetes/kubernetes/pull/100537#discussion_r600891985 - yes, that's exactly the risk. The \"let's do a special case for local storage\" approach came from the desire to keep the test code simple and easy to review. I also expect that most drivers which use that will be for local storage, so the test would already be useful with that limitation.\r\n\r\n> Ideally we should compute the number of expected objects based on configured expectations but that might be hard (for example to configure the topology segment distribution over nodes) and the existing test framework may not give enough information today to do this computation.\r\n\r\nCorrect. The driver deployment itself would have to compute and configure this, which would be complex.\r\n\r\n> So if it's indeed close enough to a reimplementation, which would be hard to maintain, does it make sense to require that all LocalStorage drivers are expected to be installed on every node, and just use the node count to compute the expected number of Storage Capacity objects?\r\n\r\nI find that too limiting. PMEM-CSI cannot necessarily run on all nodes. I also don't find checking of the CSINode objects that hard or complex.\r\n",
+        "createdAt" : "2021-03-24T21:46:28Z",
+        "updatedAt" : "2021-03-24T21:46:28Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d7a086ddd82d7d1b287ac4da4c35c5c96b98da0d",
+    "line" : 286,
+    "diffHunk" : "@@ -1,1 +284,288 @@\t}\n\n\t// Find all nodes on which the driver runs.\n\tcsiNodes, err := h.client.StorageV1().CSINodes().List(context.Background(), metav1.ListOptions{})\n\tif err != nil {"
+  }
+]

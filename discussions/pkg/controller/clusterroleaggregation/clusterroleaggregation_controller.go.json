@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "44456d3e-2097-40ac-aa0f-64d67e9abc57",
+    "prId" : 99462,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99462#pullrequestreview-606530719",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2925a4b5-eea3-4b8a-868c-3c3880d2bb6a",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "seems like we could generate this into the applyconfiguration package.",
+        "createdAt" : "2021-03-05T20:39:55Z",
+        "updatedAt" : "2021-03-09T15:15:28Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "782d301a-2074-48df-bef5-ee70ceb73ce9",
+        "parentId" : "2925a4b5-eea3-4b8a-868c-3c3880d2bb6a",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "We're only lucky here because all the fields are pointers. If they weren't, we wouldn't be able to know if the zero value needs to be copied over.",
+        "createdAt" : "2021-03-05T22:31:05Z",
+        "updatedAt" : "2021-03-09T15:15:28Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "edb0c451-4392-4255-8da1-653e3dfe4e6e",
+        "parentId" : "2925a4b5-eea3-4b8a-868c-3c3880d2bb6a",
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "Yeah, the problem example I've been using to try to explain why we need to be careful copying from go structs is:\r\n\r\n- Developer uses a go struct to create an HPA that changes the `MinReplicas` value, e.g.:\r\n\r\n```\r\nautoscalingv1.HorizontalPodAutoscaler{\r\n   // ...\r\n  Spec: autoscalingv1.HorizontalPodAutoscalerSpec{\r\n    MinReplicas: 0,\r\n  }\r\n}\r\n```\r\n\r\n- Developer converts from the go struct to an apply configuration (Doesn't really matter how. They could marshal to YAML or JSON, or they use some mechanism to copy the struct into a generated apply builder).\r\n- Developer applies to the server\r\n- `MaxReplicas` get's applied with the value `0` (not to be confused with `MinReplicas`, which also got set to `0` like requested)\r\n- Whatever the HPA controls is autoscaled down to 0, quite plausibly causing an outage\r\n\r\nThis is because `MaxReplicas` is a non-nil int32 that does not have the `omitempty` JSON tag:\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/9a9a9b014c4e47325e10de837a720633ab8a2030/pkg/apis/autoscaling/types.go#L88\r\n\r\nThere are a lot of fields like this.",
+        "createdAt" : "2021-03-07T23:59:24Z",
+        "updatedAt" : "2021-03-09T15:15:28Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0fc014a1-f352-45c5-9918-23103fe0b65c",
+        "parentId" : "2925a4b5-eea3-4b8a-868c-3c3880d2bb6a",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> We're only lucky here because all the fields are pointers. If they weren't, we wouldn't be able to know if the zero value needs to be copied over.\r\n\r\n\"make every field of this match\" seems fairly common, but it would also be additive.",
+        "createdAt" : "2021-03-08T17:26:57Z",
+        "updatedAt" : "2021-03-09T15:15:28Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "24f95667bf9e6d28cb79a4d68b6775611f84c5a7",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +168,172 @@}\n\nfunc toApplyPolicyRule(rule rbacv1.PolicyRule) *rbacv1ac.PolicyRuleApplyConfiguration {\n\tresult := rbacv1ac.PolicyRule()\n\tresult.Resources = rule.Resources"
+  },
+  {
+    "id" : "0f5fa0b5-4c09-4212-a92a-31f905f43a71",
+    "prId" : 54005,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/54005#pullrequestreview-75244639",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f641e7a0-6cf4-45a2-b695-14a7aaf66d63",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "is it an error to have non-nil aggregationRule and zero clusterRoleSelectors?",
+        "createdAt" : "2017-11-08T14:26:04Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "417a704b-7a39-4dfd-b3c2-f33f6a0cc69c",
+        "parentId" : "f641e7a0-6cf4-45a2-b695-14a7aaf66d63",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> is it an error to have non-nil aggregationRule and zero clusterRoleSelectors?\r\n\r\nThe controller won't do anything with it.  I don't think I straight out made it an error though.  I don't feel strongly.",
+        "createdAt" : "2017-11-08T14:53:49Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "371e6592-72b1-422d-b392-04acfd8dad17",
+        "parentId" : "f641e7a0-6cf4-45a2-b695-14a7aaf66d63",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> The controller won't do anything with it.\r\n\r\nI don't think that's true... looks like syncClusterRole would handle it, select zero roles, and empty out `rules`",
+        "createdAt" : "2017-11-08T16:07:11Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3f2aed8d-2f54-4e03-8f67-bceec5cf4074",
+        "parentId" : "f641e7a0-6cf4-45a2-b695-14a7aaf66d63",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> I don't think that's true... looks like syncClusterRole would handle it, select zero roles, and empty out rules\r\n\r\nOk.  That doesn't bother me either.  You have a preference against it or just observing?",
+        "createdAt" : "2017-11-08T16:12:14Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "900b5e4b-2e0a-492e-aea4-c16efe0cd40a",
+        "parentId" : "f641e7a0-6cf4-45a2-b695-14a7aaf66d63",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I think I'm ok with it as well, but reconciliation needs to be fixed if we stick with this",
+        "createdAt" : "2017-11-08T16:18:53Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c765c1ab-99f6-491a-a8d0-b998aad05a78",
+        "parentId" : "f641e7a0-6cf4-45a2-b695-14a7aaf66d63",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> is it an error to have non-nil aggregationRule and zero clusterRoleSelectors?\r\n\r\nTurned out to be less work to just tighten validation.  I started there.  We could loosen it later.",
+        "createdAt" : "2017-11-08T20:51:12Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f34fb9b0ab37daf71d2d246db7e13a88a41ff359",
+    "line" : 197,
+    "diffHunk" : "@@ -1,1 +195,199 @@\tfor _, clusterRole := range allClusterRoles {\n\t\t// only queue ones that we may need to aggregate\n\t\tif clusterRole.AggregationRule == nil {\n\t\t\tcontinue\n\t\t}"
+  },
+  {
+    "id" : "02ed8815-d73f-477b-9cbd-7e39b368bebb",
+    "prId" : 54005,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/54005#pullrequestreview-75131888",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0c08c8e7-7f81-4c23-a803-2a251a01f9f6",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "also track if we already aggregated this role by name and skip the rule-by-rule checking?",
+        "createdAt" : "2017-11-08T15:03:18Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "685d8da3-93ea-4c58-a4e7-26eb333875f2",
+        "parentId" : "0c08c8e7-7f81-4c23-a803-2a251a01f9f6",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> also track if we already aggregated this role by name and skip the rule-by-rule checking?\r\n\r\nI'd rather avoid the extra tracking in this loop.  The rules would already be reject below.  Remember, we have o(10-ish) aggregated roles and they're usually steady state.  It's not like its a high throughput spot.",
+        "createdAt" : "2017-11-08T15:15:56Z",
+        "updatedAt" : "2017-11-13T13:18:10Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f34fb9b0ab37daf71d2d246db7e13a88a41ff359",
+    "line" : 108,
+    "diffHunk" : "@@ -1,1 +106,110 @@\t\t\tif clusterRoles[i].Name == sharedClusterRole.Name {\n\t\t\t\tcontinue\n\t\t\t}\n\n\t\t\tfor j := range clusterRoles[i].Rules {"
+  }
+]

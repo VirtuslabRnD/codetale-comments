@@ -1,0 +1,288 @@
+[
+  {
+    "id" : "bb1f87f2-0324-4df5-99e2-d77830b294bb",
+    "prId" : 96134,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96134#pullrequestreview-528585973",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c388f9ce-85ed-4bb2-a15f-c1487a8072a0",
+        "parentId" : null,
+        "authorId" : "26cf3b74-5295-41c5-a59a-2fb29a0c6555",
+        "body" : "Is the `setcap`'d kube-apiserver able to successfully bind port 443 with this in place?\r\n\r\nThe documentation of no_new_privs explicitly calls out that one purpose is to prevent file capabilities from being effective. This matches the testing I just did in docker with --security-opt=no-new-privileges:true.",
+        "createdAt" : "2020-11-11T02:33:21Z",
+        "updatedAt" : "2021-02-23T04:48:29Z",
+        "lastEditedBy" : "26cf3b74-5295-41c5-a59a-2fb29a0c6555",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "270298b3-c259-418f-bd1b-632879c1acf0",
+        "parentId" : "c388f9ce-85ed-4bb2-a15f-c1487a8072a0",
+        "authorId" : "30343065-ff78-4ac2-8aa1-fe001a3627c6",
+        "body" : "Yup it seems to be working for me\r\nhere is the security context in the manifest\r\n```\r\n\"securityContext\": {\r\n    \"runAsUser\": 2020,\r\n    \"runAsGroup\": 2020,\r\n    \"capabilities\": { \"drop\": [\"all\"], \"add\": [\"NET_BIND_SERVICE\"]},\r\n    \"allowPrivilegeEscalation\": false,\r\n    \"supplementalGroups\": [ 2042,2046 ],\r\n    \"seccompProfile\": {\r\n        \"type\": \"RuntimeDefault\"\r\n    }\r\n},\r\n```\r\nport flag setting\r\n```\r\n\"--secure-port=443\",\r\n\"--insecure-port=0\",\r\n```\r\n\r\nSeems to be running\r\n```\r\nsudo crictl ps --name kube-apiserver\r\nCONTAINER           IMAGE               CREATED             STATE               NAME                ATTEMPT             POD ID\r\n0127d5bce806b       1e8af2c849269       8 minutes ago       Running             kube-apiserver      1                   1172ad27a5670\r\n```\r\n\r\nLooking at the process is self:\r\n```\r\n2020        4100 17.8 13.7 1303376 517856 ?      Sl   03:06   2:11 /usr/local/bin/kube-apiserver --allow-privileged=true --profiling=false --v=3 --cloud-co ...\r\n```\r\n\r\nLooking at Capabilities\r\n```\r\nsudo cat /proc/4100/status | grep Cap\r\nCapInh: 00000000a80425fb\r\nCapPrm: 0000000000000400\r\nCapEff: 0000000000000400\r\nCapBnd: 00000000a80425fb\r\nCapAmb: 0000000000000000\r\n```\r\n\r\nDecoding the capabilities\r\n```\r\ncapsh --decode=0000000000000400\r\n0x0000000000000400=cap_net_bind_service\r\n```",
+        "createdAt" : "2020-11-11T03:32:17Z",
+        "updatedAt" : "2021-02-23T04:48:29Z",
+        "lastEditedBy" : "30343065-ff78-4ac2-8aa1-fe001a3627c6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bb3cf77e-3e66-4615-a070-04e01f0e2cde",
+        "parentId" : "c388f9ce-85ed-4bb2-a15f-c1487a8072a0",
+        "authorId" : "26cf3b74-5295-41c5-a59a-2fb29a0c6555",
+        "body" : "That's... really interesting. I've reproduced your success. Thank you.",
+        "createdAt" : "2020-11-11T22:37:17Z",
+        "updatedAt" : "2021-02-23T04:48:29Z",
+        "lastEditedBy" : "26cf3b74-5295-41c5-a59a-2fb29a0c6555",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c63ff05e6da6f4c447ea5905d93361fc6cacddbb",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +15,19 @@    {{runAsGroup}}\n    {{capabilities}}\n    {{allowPrivilegeEscalation}}\n    {{supplementalGroups}}\n    \"seccompProfile\": {"
+  },
+  {
+    "id" : "9105823e-ecad-4aac-a03f-8dc4d52a04a3",
+    "prId" : 76792,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76792#pullrequestreview-228769470",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "953c84e6-f5fc-4aa8-b6e5-0baef4fe8aa8",
+        "parentId" : null,
+        "authorId" : "26bd3fa6-ac8d-4cb0-b746-a30dc1dc2931",
+        "body" : "Does this default to 443 now? Do we allow user to switch back to 8080 and insecure?",
+        "createdAt" : "2019-04-19T16:58:02Z",
+        "updatedAt" : "2019-04-19T17:40:42Z",
+        "lastEditedBy" : "26bd3fa6-ac8d-4cb0-b746-a30dc1dc2931",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0db759d-57e2-4ad7-950f-2b530fc73173",
+        "parentId" : "953c84e6-f5fc-4aa8-b6e5-0baef4fe8aa8",
+        "authorId" : "1f68015a-b968-47bc-b26f-0adff52fb6d8",
+        "body" : "It's 443 in our [startup configuration script](https://github.com/kubernetes/kubernetes/blob/ac1557a8861b2c8fe50a2749ea45169a94bd4756/cluster/gce/gci/configure-helper.sh#L1595), but I made it {{secure_port}} here to stay consistent with the other instances in the manifest.",
+        "createdAt" : "2019-04-19T17:19:18Z",
+        "updatedAt" : "2019-04-19T17:40:42Z",
+        "lastEditedBy" : "1f68015a-b968-47bc-b26f-0adff52fb6d8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0da1c04-05f5-400e-8014-2c44230af88f",
+        "parentId" : "953c84e6-f5fc-4aa8-b6e5-0baef4fe8aa8",
+        "authorId" : "1f68015a-b968-47bc-b26f-0adff52fb6d8",
+        "body" : "I'm not sure there's a point in using the insecure port for the liveness or readiness probes",
+        "createdAt" : "2019-04-19T17:20:06Z",
+        "updatedAt" : "2019-04-19T17:40:42Z",
+        "lastEditedBy" : "1f68015a-b968-47bc-b26f-0adff52fb6d8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "18bfe7c2-816d-4af9-a70c-c85bb306d19c",
+        "parentId" : "953c84e6-f5fc-4aa8-b6e5-0baef4fe8aa8",
+        "authorId" : "1f68015a-b968-47bc-b26f-0adff52fb6d8",
+        "body" : "I'm guessing that there was also intended to be an {{insecure_port}}, which never got hooked up: https://github.com/kubernetes/kubernetes/blob/ac1557a8861b2c8fe50a2749ea45169a94bd4756/cluster/gce/gci/configure-helper.sh#L1880-L1881",
+        "createdAt" : "2019-04-19T17:22:00Z",
+        "updatedAt" : "2019-04-19T17:40:42Z",
+        "lastEditedBy" : "1f68015a-b968-47bc-b26f-0adff52fb6d8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ce74c9b-57a5-4bdf-bd98-d921a1ef1369",
+        "parentId" : "953c84e6-f5fc-4aa8-b6e5-0baef4fe8aa8",
+        "authorId" : "26bd3fa6-ac8d-4cb0-b746-a30dc1dc2931",
+        "body" : "SG, thanks for digging that up, I was just not clear on the expected behavior.",
+        "createdAt" : "2019-04-19T17:29:32Z",
+        "updatedAt" : "2019-04-19T17:40:42Z",
+        "lastEditedBy" : "26bd3fa6-ac8d-4cb0-b746-a30dc1dc2931",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4abbd50-2657-4dad-a697-4ee5d0bea45b",
+        "parentId" : "953c84e6-f5fc-4aa8-b6e5-0baef4fe8aa8",
+        "authorId" : "26bd3fa6-ac8d-4cb0-b746-a30dc1dc2931",
+        "body" : "BTW should we remove `sed -i -e \"s@{{secure_port}}@8080@g\" \"${src_file}\"`? That was a bit confusing :)",
+        "createdAt" : "2019-04-19T17:30:28Z",
+        "updatedAt" : "2019-04-19T17:40:42Z",
+        "lastEditedBy" : "26bd3fa6-ac8d-4cb0-b746-a30dc1dc2931",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a4d4dd5-3918-4d11-ab4f-e504acb2f0ba",
+        "parentId" : "953c84e6-f5fc-4aa8-b6e5-0baef4fe8aa8",
+        "authorId" : "1f68015a-b968-47bc-b26f-0adff52fb6d8",
+        "body" : "yeah, it's a no-op at best. done.",
+        "createdAt" : "2019-04-19T17:41:31Z",
+        "updatedAt" : "2019-04-19T17:41:31Z",
+        "lastEditedBy" : "1f68015a-b968-47bc-b26f-0adff52fb6d8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42fcd5eb635dad664f5b136401c15718a7309ed7",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +35,39 @@        \"scheme\": \"HTTPS\",\n        \"host\": \"127.0.0.1\",\n        \"port\": {{secure_port}},\n        \"path\": \"/healthz?exclude=etcd\"\n      },"
+  },
+  {
+    "id" : "d74ad55b-e553-430e-b434-6ca219a0daa0",
+    "prId" : 75624,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/75624#pullrequestreview-221795945",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4ccd6169-d198-48b9-bcc3-d0c3e937fdd8",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Can we separate command & args? That will also simplify the test.",
+        "createdAt" : "2019-04-02T17:25:03Z",
+        "updatedAt" : "2019-04-04T18:16:36Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67a2e77c-a265-40d6-9251-61f88ab01deb",
+        "parentId" : "4ccd6169-d198-48b9-bcc3-d0c3e937fdd8",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "To clarify, I'm proposing:\r\n\r\n```\r\n\"command\": [\"/usr/local/bin/kube-apiserver\"],\r\n\"args\": [\r\n  \"--allow-privileged={{pillar['allow_privileged']}}\",\r\n  {{params}}\r\n],\r\n```",
+        "createdAt" : "2019-04-02T17:28:20Z",
+        "updatedAt" : "2019-04-04T18:16:36Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "af2659527f0bd2f7ad8500ffcd0e5640bfd53cc3",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +29,33 @@    ],\n    \"args\": [\n      \"--allow-privileged={{pillar['allow_privileged']}}\",\n      {{params}}\n    ],"
+  },
+  {
+    "id" : "0abdf302-4bfa-4700-8921-1b1b059bc666",
+    "prId" : 70676,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70676#pullrequestreview-174514104",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ac29b5aa-22a0-40c2-a11d-d2ef000b61bf",
+        "parentId" : null,
+        "authorId" : "8fc8f958-3c0e-47dd-a0fb-b8cc483b4efb",
+        "body" : "This is good - so we won't restart the pod just because etcd isn't up, but we won't mark it ready until it is genuinely ready.\r\n\r\nDo we want to exclude the RBAC rules also (because it depends on etcd being / having been up)?",
+        "createdAt" : "2018-11-13T07:11:53Z",
+        "updatedAt" : "2018-11-13T22:49:10Z",
+        "lastEditedBy" : "8fc8f958-3c0e-47dd-a0fb-b8cc483b4efb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd5939bb-c7b8-4fbc-adaa-26f671efd51b",
+        "parentId" : "ac29b5aa-22a0-40c2-a11d-d2ef000b61bf",
+        "authorId" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "body" : "Yeah, I was actually debating this one. I didn't want to jump the gun on that particular exclusion because I didn't have a good answer for what happens when RBAC bootstrapping fails for a reason unrelated to etcd. Regardless, getting started with an etcd exclusion should be sufficient to improve steady state recovery mechanisms (i.e. something happens with our persistent disk and etcd goes down temporarily, at least in this situation we do not automatically start crashlooping the api-server). ",
+        "createdAt" : "2018-11-13T18:14:45Z",
+        "updatedAt" : "2018-11-13T22:49:10Z",
+        "lastEditedBy" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34b08503-bbe0-46e4-bae7-f3006b6f0990",
+        "parentId" : "ac29b5aa-22a0-40c2-a11d-d2ef000b61bf",
+        "authorId" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "body" : "I'm open to your thoughts on the matter though, I don't know the ins and outs of the RBAC boot sequence, so it's possible I am overly cautious.",
+        "createdAt" : "2018-11-13T18:16:28Z",
+        "updatedAt" : "2018-11-13T22:49:10Z",
+        "lastEditedBy" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "895dd4187bac7567667844f651d27293f1489bfe",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +35,39 @@        \"host\": \"127.0.0.1\",\n        \"port\": 8080,\n        \"path\": \"/healthz?exclude=etcd\"\n      },\n      \"initialDelaySeconds\": {{liveness_probe_initial_delay}},"
+  },
+  {
+    "id" : "2751e3c5-35dc-4c44-b271-e1ac81d483b0",
+    "prId" : 70676,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70676#pullrequestreview-175180531",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "68e225fd-5348-4f07-b03a-36455ff98874",
+        "parentId" : null,
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "There are a couple issues with this:\r\n\r\n* The API server main blocks (after listening, but before serving) on the etcd client opening a connection to the etcd server. Not all, but some etcd failures will cause the kube-apiserver to never start serving /healthz.\r\n* The etcd healthcheck is not the only healthcheck that depends on etcd. Spot checking [poststarthook/bootstrap-controller, poststarthook/rbac/bootstrap-roles, poststarthook/scheduling/bootstrap-system-priority-classes, poststarthook/ca-registration, autoregister-completion], all depend on etcd being up before they return an initial healthy status.\r\n\r\nIs this change intended to help reduce restarts on apiserver startup or only in steady state?",
+        "createdAt" : "2018-11-15T03:17:50Z",
+        "updatedAt" : "2018-11-15T03:18:32Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d03c5ec8-0df4-4626-a8f8-c2252258cef4",
+        "parentId" : "68e225fd-5348-4f07-b03a-36455ff98874",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> Is this change intended to help reduce restarts on apiserver startup or only in steady state?\r\n\r\nThe etcd check use case was to avoid useless restarts in steady state",
+        "createdAt" : "2018-11-15T03:23:00Z",
+        "updatedAt" : "2018-11-15T03:23:11Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe738500-d99b-4ed1-a0b8-ff0948e8d4ed",
+        "parentId" : "68e225fd-5348-4f07-b03a-36455ff98874",
+        "authorId" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "body" : "Yes, it was intended for steady state. Also, the observation that boot sequences are more problematic was a contributing factor for my thought process in #71054.",
+        "createdAt" : "2018-11-15T03:41:58Z",
+        "updatedAt" : "2018-11-15T03:41:58Z",
+        "lastEditedBy" : "09e31512-b413-47a1-bc83-20b5a77064ee",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "895dd4187bac7567667844f651d27293f1489bfe",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +35,39 @@        \"host\": \"127.0.0.1\",\n        \"port\": 8080,\n        \"path\": \"/healthz?exclude=etcd\"\n      },\n      \"initialDelaySeconds\": {{liveness_probe_initial_delay}},"
+  },
+  {
+    "id" : "2a338e8a-eb29-4ef7-ac9e-77cea0ca14fb",
+    "prId" : 59106,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59106#pullrequestreview-92924898",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3b6ea6cf-ff03-43e7-b465-154ba11d4a8a",
+        "parentId" : null,
+        "authorId" : "9cd12d42-ba38-4d33-b922-51e6f29f48e7",
+        "body" : "I'd use the `_sec` suffix, since you're appending \"s\" to the value.",
+        "createdAt" : "2018-01-31T13:11:45Z",
+        "updatedAt" : "2018-01-31T13:44:10Z",
+        "lastEditedBy" : "9cd12d42-ba38-4d33-b922-51e6f29f48e7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41a1416b-8384-4edd-86ec-cf4ff2975222",
+        "parentId" : "3b6ea6cf-ff03-43e7-b465-154ba11d4a8a",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Changed partially (to make it compatible with there is for kube_apiserver_request_timeout_sec).\r\nBTW - it seems that we no longer have proper support for those pillars, so we should probably get rid of them completely...",
+        "createdAt" : "2018-01-31T13:43:51Z",
+        "updatedAt" : "2018-01-31T13:44:10Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "617321e420104ae4a9e066d7fb80b8e57b9ec8e1",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +168,172 @@{% endif -%}\n\n{% set etcd_compaction_interval = \"\" %}\n{% if pillar['etcd_compaction_interval_sec'] is defined -%}\n  {% set etcd_compaction_interval = \"--etcd-compaction-interval=\" + pillar['etcd_compaction_interval_sec'] + \"s\" -%}"
+  }
+]

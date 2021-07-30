@@ -1,0 +1,222 @@
+[
+  {
+    "id" : "6e6409dc-41c3-4bea-9bb9-207c5e788f39",
+    "prId" : 36673,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36673#pullrequestreview-9139883",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0348939d-931c-4ac2-affc-72ec9178f980",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I don't think this is correct.  It should stay internal version.\n",
+        "createdAt" : "2016-11-15T21:42:33Z",
+        "updatedAt" : "2016-11-23T23:56:50Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ee37306-c779-414e-8e26-80aebf66dee7",
+        "parentId" : "0348939d-931c-4ac2-affc-72ec9178f980",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "If it stays internal version, then we'll need to convert the ListOptions to v1 before passing it to the client's List/Watch methods. Is using v1 wrong?\n",
+        "createdAt" : "2016-11-15T22:12:04Z",
+        "updatedAt" : "2016-11-23T23:56:50Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3d825329-2d53-4096-84b3-3224e31ae701",
+        "parentId" : "0348939d-931c-4ac2-affc-72ec9178f980",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Basically all of the discussions boil down to:\n\n> Our internal code mode only works if the same object can be represented in all versions with no loss of data.  By definition, we try to avoid losing data.  When we do have that potential, we create new objects (ReplicaSet vs ReplicationController) and don't use object versioning.\n\nSo v1 is no _worse_ than the internal version, except that right now we're introducing a change from internal to versioned that ripples out into other code before we're ready for it.\n\nI'd rather preserve the internal api.ListOptions for now until we solve the label selector / field selector string representation in v1 (which causes other code changes) and do the conversion inside the list watcher impl.  The `v1` here shouldn't be core API v1 - it should be `meta.k8s.io/v1` and we don't have that yet.\n\nWe can always come back to this particular change.\n",
+        "createdAt" : "2016-11-16T21:08:57Z",
+        "updatedAt" : "2016-11-23T23:56:50Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a8575dc-8d27-4b58-b85a-d4697f90e47c",
+        "parentId" : "0348939d-931c-4ac2-affc-72ec9178f980",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "> except that right now we're introducing a change from internal to versioned that ripples out into other code\n\nIIUC, \"ripples\" refers to all the calls to `selector.String()`? Keeping ListWatcher interface taking api.ListOptions will only reduce very limited amount of the ripples, because most ripples are not caused by it, but rather because the versioned clientset's [List/Watch methods](https://github.com/kubernetes/kubernetes/blob/master/pkg/client/clientset_generated/release_1_5/typed/core/v1/pod.go#L40-L41) take v1.ListOptions. Only a few ListFunc/WatchFunc definitions refer to the selectors, like this [one](https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/client_builder.go#L114).\n\nSo if we really want to reduce the ripples, we need to revert https://github.com/kubernetes/kubernetes/pull/31994. Otherwise there's not point keeping this interface using api.ListOptions, it will just introduce calls to conversion functions in all ListFunc/WatchFunc definitions.\n",
+        "createdAt" : "2016-11-17T23:11:42Z",
+        "updatedAt" : "2016-11-23T23:56:50Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "80ca2985774befd33fcbaaa0e29335769f063eeb",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +33,37 @@\t// List should return a list type object; the Items field will be extracted, and the\n\t// ResourceVersion field will be used to start the watch in the right place.\n\tList(options v1.ListOptions) (runtime.Object, error)\n\t// Watch should begin a watch at the specified version.\n\tWatch(options v1.ListOptions) (watch.Interface, error)"
+  },
+  {
+    "id" : "7198d33b-3cb4-4cfc-8355-523e840449e5",
+    "prId" : 17823,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d449ad1b-76ce-4eee-add6-80cbd3f32eb0",
+        "parentId" : null,
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "IIUC, this call will end up calling the conversion functions added in pkg/api/conversion.go (https://github.com/kubernetes/kubernetes/pull/17823/files#diff-380d3fffd8583e3e031622a90dcaec36R138), which does not involve a \"version\", all the conversion function does is a nil check and checking if the option is legit by round-tripping it.\n\nIf the above is true, then I think:\n1. The function name \"VersionedParams\" seems misleading as we are using the same unversioned.ListOptions type in all groups.\n2. Can we call the conversion function directly instead of going through several indirections in the convertor? because after all, we are converting unversioned.ListOptions to unversioned.ListOptions.\n\nI won't block this PR, just want to discuss if the above suggestions make sense.\n",
+        "createdAt" : "2015-11-30T21:07:33Z",
+        "updatedAt" : "2015-12-01T09:19:12Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aee8a96c-6cab-472d-b3f2-f1f3cf7bf87f",
+        "parentId" : "d449ad1b-76ce-4eee-add6-80cbd3f32eb0",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Ah, I think I know why we named it VersionedParams, because we really have \"versioned\" options like PodLogOptions. I forgot the context of this PR after the holidays. Sorry for the noise, please ignore my previous comment.\n",
+        "createdAt" : "2015-11-30T21:37:44Z",
+        "updatedAt" : "2015-12-01T09:19:12Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cdded4f0113217e09ae650bdeaf92af809b7064c",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +62,66 @@\t\t\tNamespace(namespace).\n\t\t\tResource(resource).\n\t\t\tVersionedParams(&options, api.Scheme).\n\t\t\tFieldsSelectorParam(fieldSelector).\n\t\t\tWatch()"
+  },
+  {
+    "id" : "07a8d2fb-4016-44dd-b47a-3da8c166495d",
+    "prId" : 4453,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d1df411-dea9-4681-a461-4baf93ee40b5",
+        "parentId" : null,
+        "authorId" : "f04ec747-f3ff-4334-a66e-6daaf4497091",
+        "body" : "Formatting?\n",
+        "createdAt" : "2015-02-16T15:00:17Z",
+        "updatedAt" : "2015-02-16T15:00:17Z",
+        "lastEditedBy" : "f04ec747-f3ff-4334-a66e-6daaf4497091",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35acf479-f635-4d6d-b037-ee2ce3cbe456",
+        "parentId" : "7d1df411-dea9-4681-a461-4baf93ee40b5",
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "Format looks good to me. It just has the two member fields and they are aligned. \n",
+        "createdAt" : "2015-02-16T18:33:16Z",
+        "updatedAt" : "2015-02-16T18:33:16Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c0ce15c588f1fad7567f7fe8d56571f4dca09c43",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +35,39 @@type ListWatch struct {\n\tListFunc  ListFunc\n\tWatchFunc WatchFunc\n}\n"
+  },
+  {
+    "id" : "981984a8-f377-446f-aadc-84d2996dd7de",
+    "prId" : 3285,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b4cd557d-e510-427a-ab7a-b9c7fc4b2ecc",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "// TODO: Add label selector?\n",
+        "createdAt" : "2015-01-07T21:55:41Z",
+        "updatedAt" : "2015-01-07T21:55:41Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7d5ac856c506896ca95527d41cb80df3fdcba02c",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +28,32 @@type ListWatch struct {\n\tClient        *client.Client\n\tFieldSelector labels.Selector\n\tResource      string\n}"
+  },
+  {
+    "id" : "24fa3927-fb2c-4dfb-8d0b-e4df0efdbf13",
+    "prId" : 3285,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a8ec3b56-a64a-4c13-8975-8384ac12a297",
+        "parentId" : null,
+        "authorId" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "body" : "Hi @erictune \n\nI'm trying to run a kubelet from head in standalone mode (containervm with a `--manifest_url` flag) and it's crashing on this line, I assume `lw.Client` is undefined in that specific case... Can you please have a look?\n\n@dchen1107 who is probably also interested in containervm.\n\nCheers,\nFilipe\n",
+        "createdAt" : "2015-01-16T18:02:23Z",
+        "updatedAt" : "2015-01-16T18:02:23Z",
+        "lastEditedBy" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be6ca3d3-b39f-46e0-8cc4-9bd2ecd5fa00",
+        "parentId" : "a8ec3b56-a64a-4c13-8975-8384ac12a297",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "taking a look now\n",
+        "createdAt" : "2015-01-16T21:02:01Z",
+        "updatedAt" : "2015-01-16T21:02:01Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b450efa-5c52-4e34-9432-17a9158da397",
+        "parentId" : "a8ec3b56-a64a-4c13-8975-8384ac12a297",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "can you post the complete list of flags (okay to obscure values if needed) you used?\n",
+        "createdAt" : "2015-01-16T21:03:00Z",
+        "updatedAt" : "2015-01-16T21:03:00Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48c5a71d-4655-4d3b-a84f-452a2a8dcc98",
+        "parentId" : "a8ec3b56-a64a-4c13-8975-8384ac12a297",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "nevermind I see the problem.\n",
+        "createdAt" : "2015-01-16T21:09:36Z",
+        "updatedAt" : "2015-01-16T21:09:36Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53ef11d9-bea4-4791-ba3f-64fa89cc7e42",
+        "parentId" : "a8ec3b56-a64a-4c13-8975-8384ac12a297",
+        "authorId" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "body" : "Sure.\n\n``` shell\nkubelet --manifest_url=http://metadata.google.internal/computeMetadata/v1beta1/instance/attributes/google-container-manifest --config=/etc/kubernetes/manifests\n```\n\nYou can reproduce this easily by starting a new containervm instance:\n\n``` shell\ngcloud compute instances create --image container-vm ... --metadata-from-file google-container-manifest=<yamlfile>.yaml\n```\n\nThis is roughly the YAML snippet I'm using, I'm fairly certain you'll reproduce it with this:\nhttps://cloud.google.com/compute/docs/containers/container_vms#create_the_manifest\n\nThen SSH to your image, replace the kubelet binary with the one from head, edit /etc/default/kubelet to replace the flags with a single dash with two dashes (required since the switch to pflag which uses POSIX-like flags) and reboot it, you'll see this error.\n\nBut then, you might be able to reproduce it outside of GCE as well...\n\nThanks for taking a look at this! Ping me if you have questions for me.\n\nCheers,\nFilipe\n",
+        "createdAt" : "2015-01-16T21:10:33Z",
+        "updatedAt" : "2015-01-16T21:10:33Z",
+        "lastEditedBy" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "188230e2-55c7-412e-8f18-7e214fdf0207",
+        "parentId" : "a8ec3b56-a64a-4c13-8975-8384ac12a297",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "#3577\n",
+        "createdAt" : "2015-01-16T21:41:03Z",
+        "updatedAt" : "2015-01-16T21:41:03Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7d5ac856c506896ca95527d41cb80df3fdcba02c",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +35,39 @@func (lw *ListWatch) List() (runtime.Object, error) {\n\treturn lw.Client.\n\t\tGet().\n\t\tResource(lw.Resource).\n\t\tSelectorParam(\"fields\", lw.FieldSelector)."
+  }
+]

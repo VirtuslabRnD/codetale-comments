@@ -1,0 +1,332 @@
+[
+  {
+    "id" : "1dec68e1-735c-48fe-91ca-875f4f9313b7",
+    "prId" : 69902,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69902#pullrequestreview-186792031",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c8351a49-75e9-4066-9289-344e614e841c",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "performing these immediately after registering the sink races with the dynamic backend observing the sink and registering the handler, right? need to do one of the following:\r\n* wait for positive confirmation the sink is active (which we can't do because we don't expose that in the API)\r\n* wait long enough after registering the sink that we would consider not observing it in that period a failure (5 seconds? 10 seconds?)\r\n* retry the \"configMapOperations && checkForEvents\" operation in a loop until it passes or we exceed the time we consider acceptable for the sink to have become active\r\n\r\nsame comment applies other places a sink is added/removed/updated",
+        "createdAt" : "2018-11-15T18:57:45Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "05f823af-0405-490f-a7d2-6329409870e7",
+        "parentId" : "c8351a49-75e9-4066-9289-344e614e841c",
+        "authorId" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "body" : "This is similar to my comment about a potential flake risk. I think we could start by waiting for 5 seconds after the sink has been added/updated/deleted before performing operations. I talked with @pbarker about the possibility of doing this in a loop, but he wasn't sure if we could get to a clean state after running the loop multiple times. We can continue to discuss if needed.\r\n\r\nWould you be ok with a sleep for starters?",
+        "createdAt" : "2018-11-15T19:03:42Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b1e3845f-c8e4-42cb-916c-517f6e59b069",
+        "parentId" : "c8351a49-75e9-4066-9289-344e614e841c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> Would you be ok with a sleep for starters?\r\n\r\nI could live with a 5 second timeout as long as you watch to make sure we're not hitting flakes, and look into a follow up that makes it more deterministic.\r\n\r\nThat said, I just looked at how long this new test is taking. These are the five run times for the test/integration/master package before this PR:\r\n```\r\n335.342s\r\n323.410s\r\n335.549s\r\n336.179s\r\n359.685s\r\n```\r\n\r\nand with this PR:\r\n```\r\n464.194s\r\n449.109s\r\n450.238s\r\n467.853s\r\n468.212s\r\n```\r\n\r\nThis new test seems to be adding ~2 minutes to the test/integration/master package run time. That seems excessive (and long run times can make tests flake on timeouts as well). Is that runtime expected? Can we get it closer to ~20 seconds? The other 25 tests in the package complete much more quickly",
+        "createdAt" : "2018-11-15T20:21:20Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "99ed59ab-062f-42fd-b98f-7405d1b2d543",
+        "parentId" : "c8351a49-75e9-4066-9289-344e614e841c",
+        "authorId" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "body" : "Yes, let's definitely fix that. @pbarker can you add some logging/timing info to the test to see what's taking so long?",
+        "createdAt" : "2018-11-15T20:23:48Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce5b7379-8481-4b35-b819-34da90c45eb5",
+        "parentId" : "c8351a49-75e9-4066-9289-344e614e841c",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "ok this is updated, this was caused by waiting on the buffers to flush because we hadn't hit the max batch or wait time. Implemented @liggitt's req and moved the example test server into the framework, and modified the audit options so that the batch config could be hacked. Test takes about 13s now 🙂",
+        "createdAt" : "2018-11-16T00:50:02Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e7eb720-a731-407f-8b60-bed2e55ef179",
+        "parentId" : "c8351a49-75e9-4066-9289-344e614e841c",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "In the CI environment tasks can be unscheduled for longer than 10 seconds, so anything less than 30 seconds is going to be prone to flakes.\r\n",
+        "createdAt" : "2018-12-19T23:29:31Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "34d57f295f314ed92d7b9e07dbfa2e469b4dafa3",
+    "line" : 81,
+    "diffHunk" : "@@ -1,1 +79,83 @@\n\t\t// perform configmap ops\n\t\tconfigMapOperations(t, kubeclient)\n\n\t\t// check for corresponding events"
+  },
+  {
+    "id" : "a87c3995-259b-47e9-a957-9da84e0eeaa4",
+    "prId" : 69902,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69902#pullrequestreview-175834143",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "799e9c2c-fcfe-47a8-aba9-2efd12a3402a",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I'm not used to seeing t.Run used serially like this... the tests seem fairly interdependent. if one fails won't the following ones fail too?",
+        "createdAt" : "2018-11-16T03:48:34Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35b21f67-987e-445c-b524-b87449c0668f",
+        "parentId" : "799e9c2c-fcfe-47a8-aba9-2efd12a3402a",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "yeah they would, its more just a way to segment the individual pieces, we could remove it if it feels like its complicating things",
+        "createdAt" : "2018-11-16T03:55:24Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c6f9126-67e5-4ba9-9616-4dc53bc4816e",
+        "parentId" : "799e9c2c-fcfe-47a8-aba9-2efd12a3402a",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "I think I'll write a wrapper here that checks if the test passed and if not fail the parent",
+        "createdAt" : "2018-11-16T14:52:45Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "34d57f295f314ed92d7b9e07dbfa2e469b4dafa3",
+    "line" : 145,
+    "diffHunk" : "@@ -1,1 +143,147 @@\t// Whilst that generation is occurring, the sink is updated to point to a different server.\n\t// The test checks that no events are lost or duplicated during the update.\n\tt.Run(\"update sink\", func(t *testing.T) {\n\t\t// fetch sink1 config\n\t\tsink1, err := kubeclient.AuditregistrationV1alpha1().AuditSinks().Get(sinkConfig1.Name, metav1.GetOptions{})"
+  },
+  {
+    "id" : "1b280006-8cb3-426a-885d-b526df0aa553",
+    "prId" : 69902,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69902#pullrequestreview-190562260",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b1eaf7fb-2f1b-49b4-b404-1398d86b4911",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Can you add a comment to each test giving a more detailed description of what the test is doing, in prose?",
+        "createdAt" : "2018-12-20T00:06:30Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7743134e-6837-4bf3-ae64-181130803728",
+        "parentId" : "b1eaf7fb-2f1b-49b4-b404-1398d86b4911",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Thanks, this is a good explanation. Can you add a similar comment to the other cases too (everywhere you call `t.Run`)",
+        "createdAt" : "2019-01-09T03:37:02Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "34d57f295f314ed92d7b9e07dbfa2e469b4dafa3",
+    "line" : 145,
+    "diffHunk" : "@@ -1,1 +143,147 @@\t// Whilst that generation is occurring, the sink is updated to point to a different server.\n\t// The test checks that no events are lost or duplicated during the update.\n\tt.Run(\"update sink\", func(t *testing.T) {\n\t\t// fetch sink1 config\n\t\tsink1, err := kubeclient.AuditregistrationV1alpha1().AuditSinks().Get(sinkConfig1.Name, metav1.GetOptions{})"
+  },
+  {
+    "id" : "1a6315e0-d087-4e4a-85e9-801ee8dd0168",
+    "prId" : 69902,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69902#pullrequestreview-190562260",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a1d878cb-8f10-4f94-8321-264b852bfd2a",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "nit: this test only uses 1 sink, so just call it `sink`",
+        "createdAt" : "2018-12-20T00:08:39Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "621729db-6e14-4f87-8515-f24e9c6deea9",
+        "parentId" : "a1d878cb-8f10-4f94-8321-264b852bfd2a",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "this is just to keep with semantics, before the subtests run we create server1 and server2, with respective sink1 and sink2. Its somewhat indicative of whats occurring in the test",
+        "createdAt" : "2019-01-07T19:09:27Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "28d20a82-147c-492a-b5d2-e8f8dbfed783",
+        "parentId" : "a1d878cb-8f10-4f94-8321-264b852bfd2a",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Ack.",
+        "createdAt" : "2019-01-09T03:37:20Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "34d57f295f314ed92d7b9e07dbfa2e469b4dafa3",
+    "line" : 147,
+    "diffHunk" : "@@ -1,1 +145,149 @@\tt.Run(\"update sink\", func(t *testing.T) {\n\t\t// fetch sink1 config\n\t\tsink1, err := kubeclient.AuditregistrationV1alpha1().AuditSinks().Get(sinkConfig1.Name, metav1.GetOptions{})\n\t\trequire.NoError(t, err)\n"
+  },
+  {
+    "id" : "b60b8143-081a-4b64-8e01-29862afd0035",
+    "prId" : 69902,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69902#pullrequestreview-189942012",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dec2666a-eb5b-417f-beef-d0f9cd99c5d6",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Are you sure the update is an atomic operation? There's no way for events to be lost in the transition?",
+        "createdAt" : "2018-12-20T00:10:05Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bc6ea862-7507-486b-a6a9-c821c8c7f5c4",
+        "parentId" : "dec2666a-eb5b-417f-beef-d0f9cd99c5d6",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "should be atomic https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/plugin/pkg/audit/dynamic/dynamic.go#L231",
+        "createdAt" : "2019-01-07T20:09:01Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "34d57f295f314ed92d7b9e07dbfa2e469b4dafa3",
+    "line" : 198,
+    "diffHunk" : "@@ -1,1 +196,200 @@\t\trequire.NoError(t, err, \"duplicate events found: %#v\", dups)\n\n\t\t// check that no events are missing\n\t\tmissing, err = utils.CheckAuditList(combinedList, expected)\n\t\trequire.NoError(t, err, \"failed to match all expected events: %#v not found\", missing)"
+  },
+  {
+    "id" : "7572d3d6-e856-49fd-959f-41652c57418c",
+    "prId" : 69902,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69902#pullrequestreview-191468498",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7ad4c0cf-3c21-4544-bae6-93cff67c8f17",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "This would be racy, except that there is only one thread that accesses the eventlist at a time. I'd prefer to just use a slice directly in that case.",
+        "createdAt" : "2019-01-09T04:02:19Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b59d42ce-4adc-4e47-bcef-96ee5bdfcd6b",
+        "parentId" : "7ad4c0cf-3c21-4544-bae6-93cff67c8f17",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "I think we may need atomic here, the slice needs to be read by the main routine as this operation takes place.",
+        "createdAt" : "2019-01-10T00:13:57Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2224dd69-afbf-4cc0-97bc-50ee34a866e6",
+        "parentId" : "7ad4c0cf-3c21-4544-bae6-93cff67c8f17",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Got it. I guess it's fine as long as it's single-writer.",
+        "createdAt" : "2019-01-10T23:51:03Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "34d57f295f314ed92d7b9e07dbfa2e469b4dafa3",
+    "line" : 279,
+    "diffHunk" : "@@ -1,1 +277,281 @@\t\t\tevList := []utils.AuditEvent{}\n\t\t\tevList = append(e, exp...)\n\t\t\texpected.Store(evList)\n\t\t}\n\t}"
+  },
+  {
+    "id" : "23aba4f0-63b5-469b-ad35-471e014ff840",
+    "prId" : 69902,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69902#pullrequestreview-191475765",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "57c77bf4-d438-40a8-9f3b-80df78371b96",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Picking back up the hotlooping thread - if there is an error in simpleOp for some reason, this will hotloop forever. I'm fine with a very short sleep - e.g. 1 millisecond.  Better yet - use a [rate limiter](https://godoc.org/github.com/kubernetes/kubernetes/staging/src/k8s.io/client-go/util/flowcontrol#NewTokenBucketRateLimiter) with sufficient burst to be effectively unthrottled in the happy path, but throttled in the worst case.",
+        "createdAt" : "2019-01-09T04:06:55Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ad07f69f-b0ab-4243-b9e1-da9fd79b4d8a",
+        "parentId" : "57c77bf4-d438-40a8-9f3b-80df78371b96",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "This client is currently set to `QPS:50 Burst:100`, do we think thats sufficient? ",
+        "createdAt" : "2019-01-10T01:34:45Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a536ff40-88ef-4525-ac32-f2e6c710f5cb",
+        "parentId" : "57c77bf4-d438-40a8-9f3b-80df78371b96",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Ah, that should be fine. Out of curiosity, where did you find those values?",
+        "createdAt" : "2019-01-10T23:55:05Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "46aa4b09-fb12-4c3d-8508-c5b7f44e2e53",
+        "parentId" : "57c77bf4-d438-40a8-9f3b-80df78371b96",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "https://github.com/kubernetes/kubernetes/blob/cc5c35e10ec35b48c6236f0b23db99958fd6b3b2/test/integration/framework/master_utils.go#L159 and checked we were hitting that path",
+        "createdAt" : "2019-01-11T00:25:14Z",
+        "updatedAt" : "2019-01-17T00:29:37Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "34d57f295f314ed92d7b9e07dbfa2e469b4dafa3",
+    "line" : 264,
+    "diffHunk" : "@@ -1,1 +262,266 @@\texpected *atomic.Value,\n) {\n\tfor i := 0; ; i++ {\n\t\tselect {\n\t\tcase <-stopChan:"
+  }
+]

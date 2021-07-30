@@ -1,0 +1,211 @@
+[
+  {
+    "id" : "be5187dc-9cd4-49dd-a36f-d9b6cde6042e",
+    "prId" : 46517,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46517#pullrequestreview-163028501",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "silently failing on some of the inputs is not what I would expect. I'm unsure whether we want to support the user specifying multiple addresses to bind to... would we expect the command to exit if *any* were unsuccessful, or if *all* were unsuccessful? I could see both ways, which makes me think it might be better to limit a single invocation to a single address (the previous loopback tcp4 or tcp6 is probably a special case)",
+        "createdAt" : "2018-04-04T14:41:07Z",
+        "updatedAt" : "2018-10-07T20:23:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "44c1a624-f3ef-4376-810c-8cbfb7ef73af",
+        "parentId" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "authorId" : "1a9701a6-c04d-4bc1-9347-cee15147907c",
+        "body" : "at it's current implementation, it binds to two addresses (127.0.0.1, ::1) by default so that behavior should be kept, it is in my opinion perfectly logical to want to listen on particular set of IP addresses and not the others (ie. IP from one external interface and the loopback ones). The command in kubectl explicitly lists ports it successfully bound to.\r\n\r\nsidenote: it will return an error (aggregating previous errors) in line 260 if all of the bind attempts failed",
+        "createdAt" : "2018-04-04T14:58:06Z",
+        "updatedAt" : "2018-10-07T20:23:52Z",
+        "lastEditedBy" : "1a9701a6-c04d-4bc1-9347-cee15147907c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1739b341-0553-4fdc-b9a9-c40344357a8a",
+        "parentId" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> at it's current implementation, it binds to two addresses (127.0.0.1, ::1) by default so that behavior should be kept\r\n\r\nsure, if the user doesn't have an address they want to forward on, it should continue binding to \"local\" addresses.\r\n\r\n> it is in my opinion perfectly logical to want to listen on particular set of IP addresses and not the others (ie. IP from one external interface and the loopback ones)\r\n\r\nI agree, but if I explicitly want to listen on a set of interfaces, I would not expect the command to report success (or just keep running) if it couldn't accomplish what I requested. Limiting the user-specified bind address to a single address makes it super clear when their intent was not satisfied, and plays well with something using this to script port-forward setups (e.g. loops that restart port-forward on a particular address when it times out or dies)",
+        "createdAt" : "2018-04-04T15:05:52Z",
+        "updatedAt" : "2018-10-07T20:23:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f2c5b756-ba9a-42b3-86ec-c14f307e3f39",
+        "parentId" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "authorId" : "1a9701a6-c04d-4bc1-9347-cee15147907c",
+        "body" : "The argument for scripting \"compatibility\" makes a lot of sense. I would lean to the idea that it could be implemented with failing if any bind failed... if it did not mean we'd have an issue on systems not supporting IPv6, where ::1 bind always fails. \r\n\r\nWould it make sense to fail if any bind failed with added logic to the `NewOnAddress` like `localhostFailMode` with `FailedBoth` when either no --address flag selected at all or --address included `localhost` and `FailedAny` when there was no localhost, meaning that `::1` and/or `127.0.0.1`, if it made it's way on bind list at all, would have to be provided explicitly on --address flag.\r\n\r\nMeaning that on non IPv6 enabled host `--address x.x.x.x,localhost` would work fine unless x.x.x.x or 127.0.0.1 failed, but `--address x.x.x.x,127.0.0.1,::1` would fail due to explicitly requested IPv6 loopback address.",
+        "createdAt" : "2018-04-04T16:01:39Z",
+        "updatedAt" : "2018-10-07T20:23:52Z",
+        "lastEditedBy" : "1a9701a6-c04d-4bc1-9347-cee15147907c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ad612af-7429-4fed-8c43-09048157b268",
+        "parentId" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> The argument for scripting \"compatibility\" makes a lot of sense. I would lean to the idea that it could be implemented with failing if any bind failed\r\n\r\nThere's the initial bind failure to consider, but also what happens when one of the connections closes, right? I'd expect the following:\r\n* On start, all explicitly requested bind addresses must succeed\r\n* On close of any explicitly requested bind addresses, the entire command should exit\r\n\r\nI would stick with the user specifying addresses explicitly (not doing localhost->[127.0.0.1, ::1] expansion for explicit addresses). You can move the defaulting into the command if it makes it easier to distinguish between unspecified addresses (which should preserve best-effort binding to 127.0.0.1 and ::1) and explicitly specified addresses of `127.0.0.1,::1` (which should both succeed or it would be considered failure)",
+        "createdAt" : "2018-04-04T21:09:11Z",
+        "updatedAt" : "2018-10-07T20:23:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a47f683e-e8f5-4173-aa2e-df25f909eded",
+        "parentId" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "authorId" : "1a9701a6-c04d-4bc1-9347-cee15147907c",
+        "body" : "I was looking into it a bit more, and it seems in fact that port-forward is not really built to behave like this at the moment. Look at following vanilla kubectl port-forward : \r\n\r\n    $ kubectl port-forward mysql-server-0 3306:3306 80:3306  \r\n    Forwarding from 127.0.0.1:3306 -> 3306\r\n    Unable to listen on port 80: All listeners failed to create with the following errors: Unable to create listener: Error listen tcp4 127.0.0.1:80: bind: permission denied, Unable to create listener: Error listen tcp6: address [[::1]]:80: missing port in address\r\n\r\nSo... as long as one of the ports binds correctly, the port-forward stays up and running. \r\n\r\nI'm not saying that is the ultimate argument for not failing if only some of the addresses fail to bind, but to stay consistent, it would stand to reason that we change to fail if any port failed as well, which would be a change from current behavior.",
+        "createdAt" : "2018-04-06T19:29:28Z",
+        "updatedAt" : "2018-10-07T20:23:52Z",
+        "lastEditedBy" : "1a9701a6-c04d-4bc1-9347-cee15147907c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b8232c34-dcea-44ab-b1d5-4b68c303cbfc",
+        "parentId" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "What do you think about changing it to just offer a single address? Users can always run multiple instances of kubectl, and that way if one fails the user can restart it.",
+        "createdAt" : "2018-10-09T17:15:56Z",
+        "updatedAt" : "2018-10-09T17:16:15Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1dfd111d-f793-40a7-aa63-45c28b9dca74",
+        "parentId" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "I see there's a good case for running on all loopback addresses, at least.\r\n\r\nIn that case, I think it's super important that if it can't bind every address requested, it fail-- if something malicious is occupying one of the ports, it'd be a security vuln.",
+        "createdAt" : "2018-10-09T17:22:35Z",
+        "updatedAt" : "2018-10-09T17:22:35Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07952192-0743-4d87-851b-85f03fd7c359",
+        "parentId" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "authorId" : "1a9701a6-c04d-4bc1-9347-cee15147907c",
+        "body" : "as mentioned before, one of the cases where we will fail on one, but not all, is when we make a `localhost` bind on a system that does not support IPv6",
+        "createdAt" : "2018-10-09T18:00:22Z",
+        "updatedAt" : "2018-10-09T18:00:22Z",
+        "lastEditedBy" : "1a9701a6-c04d-4bc1-9347-cee15147907c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70b3468a-aef2-46b4-a3ad-17e4076af0ee",
+        "parentId" : "8502bc53-8eff-4021-988a-dcd58bb4d98b",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Since this PR isn't making things worse, maybe we should merge this and file an issue for followup.",
+        "createdAt" : "2018-10-09T18:16:33Z",
+        "updatedAt" : "2018-10-09T18:16:33Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4643c6e95e0a0cf6561554fb3b9a1bc59bcead0c",
+    "line" : 102,
+    "diffHunk" : "@@ -1,1 +234,238 @@\tfailCounters := make(map[string]int, 2)\n\tsuccessCounters := make(map[string]int, 2)\n\tfor _, addr := range pf.addresses {\n\t\terr := pf.listenOnPortAndAddress(port, addr.protocol, addr.address)\n\t\tif err != nil {"
+  },
+  {
+    "id" : "c31792af-1648-48e8-9269-629bcee38a29",
+    "prId" : 46517,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46517#pullrequestreview-163004013",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b5ad623e-e724-4a49-95a5-c1471e6af507",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "This looks wrong. I think you need to resolve the name rather than hard coding this stuff.",
+        "createdAt" : "2018-10-09T17:18:53Z",
+        "updatedAt" : "2018-10-09T17:18:53Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a49e4de1-40ca-41f0-98eb-439d7b15a776",
+        "parentId" : "b5ad623e-e724-4a49-95a5-c1471e6af507",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Likely you should attempt resolving any name that isn't an IP address.",
+        "createdAt" : "2018-10-09T17:19:42Z",
+        "updatedAt" : "2018-10-09T17:19:42Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4643c6e95e0a0cf6561554fb3b9a1bc59bcead0c",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +122,126 @@\tparsed := make(map[string]listenAddress)\n\tfor _, address := range addressesToParse {\n\t\tif address == \"localhost\" {\n\t\t\tip := listenAddress{address: \"127.0.0.1\", protocol: \"tcp4\", failureMode: \"all\"}\n\t\t\tparsed[ip.address] = ip"
+  },
+  {
+    "id" : "f43209be-bd71-4e0e-b5ce-2cb355e2f90c",
+    "prId" : 46517,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46517#pullrequestreview-163030480",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce9707a8-8671-4f45-836d-c606546416e3",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Perhaps explicitly say 127.0.0.1 & ::1 here, then you can remove the special case in the parse function?",
+        "createdAt" : "2018-10-09T18:12:30Z",
+        "updatedAt" : "2018-10-09T18:12:31Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "75c0b530-dea5-4f87-b51d-e5530d53e58f",
+        "parentId" : "ce9707a8-8671-4f45-836d-c606546416e3",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "In a followup, I think we should do this after confirm that the address exists, if possible.",
+        "createdAt" : "2018-10-09T18:21:22Z",
+        "updatedAt" : "2018-10-09T18:21:22Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4643c6e95e0a0cf6561554fb3b9a1bc59bcead0c",
+    "line" : 51,
+    "diffHunk" : "@@ -1,1 +146,150 @@// New creates a new PortForwarder with localhost listen addresses.\nfunc New(dialer httpstream.Dialer, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, out, errOut io.Writer) (*PortForwarder, error) {\n\treturn NewOnAddresses(dialer, []string{\"localhost\"}, ports, stopChan, readyChan, out, errOut)\n}\n"
+  },
+  {
+    "id" : "8fdd36fc-4816-47ec-873e-0d3859e96cad",
+    "prId" : 46517,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46517#pullrequestreview-163027101",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d28bd309-9de0-46cb-be74-18c84166a020",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Document that addresses must all be valid IPv4 or IPv6 addresses, no hostnames?",
+        "createdAt" : "2018-10-09T18:13:15Z",
+        "updatedAt" : "2018-10-09T18:13:15Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4643c6e95e0a0cf6561554fb3b9a1bc59bcead0c",
+    "line" : 54,
+    "diffHunk" : "@@ -1,1 +149,153 @@}\n\n// NewOnAddresses creates a new PortForwarder with custom listen addresses.\nfunc NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, out, errOut io.Writer) (*PortForwarder, error) {\n\tif len(addresses) == 0 {"
+  }
+]

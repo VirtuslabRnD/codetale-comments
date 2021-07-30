@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "42e77bee-f013-428f-9914-e413c9c1bc76",
+    "prId" : 54660,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/54660#pullrequestreview-73443640",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8ad6e363-ce25-4d2d-80a6-5333f8d3f479",
+        "parentId" : null,
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "so we had a namespace argument already? What does this PR add then (other than the posibility to tweak the ListOptions) ?",
+        "createdAt" : "2017-11-01T11:07:51Z",
+        "updatedAt" : "2017-11-09T15:12:31Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1c69294d-fe84-4395-89ba-c1b4afec02fc",
+        "parentId" : "8ad6e363-ce25-4d2d-80a6-5333f8d3f479",
+        "authorId" : "c5a78ad1-2727-48a6-8217-285a102b94de",
+        "body" : "Yep we've always had a `namespace` argument on the `NewFooInformer` (or 'leaf' constructors as I like to think of them).\r\n\r\nThe issue is a few lines below - the `Informer` function (which forms part of the SharedInformerFactory) hardcodes `NamespaceAll`: https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/sample-controller/pkg/client/informers/externalversions/samplecontroller/v1alpha1/foo.go#L64\r\n\r\nThis means that in order to construct namespaced informers, you cannot use the SharedInformerFactory, which is what the original issue was about 😄 . In order to get around this in the past, I've created a SharedInformerFactory implementation that is non-type aware, and instead just returns SharedIndexInformer instances (I then use a GVK structure as a 'key' for the 'informer caching'. This gets super ugly, and really difficult to keep track of/inconsistent)",
+        "createdAt" : "2017-11-01T11:12:14Z",
+        "updatedAt" : "2017-11-09T15:12:31Z",
+        "lastEditedBy" : "c5a78ad1-2727-48a6-8217-285a102b94de",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9b1a1231dae9c720b3c0837e42e3c8f680868df1",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +47,51 @@// Always prefer using an informer factory to get a shared informer instead of getting an independent\n// one. This reduces memory footprint and number of connections to the server.\nfunc NewFooInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {\n\treturn NewFilteredFooInformer(client, namespace, resyncPeriod, indexers, nil)\n}"
+  },
+  {
+    "id" : "176b6dcb-3708-40a5-9a2e-215477f89718",
+    "prId" : 54660,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/54660#pullrequestreview-73457102",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3e075883-8fbd-4d40-bfba-17edfcdc0a84",
+        "parentId" : null,
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "What if we change `NewInformerFunc` with an additional namespace arg? That would be the canonical change without the need to tweak the list watcher last minute with a filter, wouldn't it?",
+        "createdAt" : "2017-11-01T11:25:43Z",
+        "updatedAt" : "2017-11-09T15:12:31Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9afd42e4-86b4-4364-baf4-19541d1c603e",
+        "parentId" : "3e075883-8fbd-4d40-bfba-17edfcdc0a84",
+        "authorId" : "c5a78ad1-2727-48a6-8217-285a102b94de",
+        "body" : "I'm not sure I understand - you mean change the `defaultInformer` (or `defaultFooInformer` previously) to have a `namespace` argument?\r\n\r\nThe issue there, is that `InformerFor` in the `SharedInformerFactory` then needs to somehow be aware whether the Informer that it's constructing is for a namespaced type or not. We *could* just include `namespace` on *all* of them, and silently drop the namespace arg on non-namespaced resources.\r\n\r\nThis sort of goes against what you mentioned previously - that we could use a filter instead of just a plain string. I'd *hope* I'm not alone in wanting to be able to modify `ListOptions` of the informers I create, but perhaps I am!",
+        "createdAt" : "2017-11-01T11:30:44Z",
+        "updatedAt" : "2017-11-09T15:12:31Z",
+        "lastEditedBy" : "c5a78ad1-2727-48a6-8217-285a102b94de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b39994e-90ec-47e1-8659-6832c0889689",
+        "parentId" : "3e075883-8fbd-4d40-bfba-17edfcdc0a84",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "> We could just include namespace on all of them, and silently drop the namespace arg on non-namespaced resources.\r\n\r\nThat's what I had in mind. But you have a point. What is really ugly is the filter func doing two things. You could separate the namespace and the filter by:\r\n- keep the namespace string separated in `NewFilteredFooInformer`, store it in `group` as well and pass it to `NewFilteredFooInformer` from `defaultInformer`\r\n- rename filter to tweakListOptions.\r\n\r\nIt's not really elegant either, but less magic.",
+        "createdAt" : "2017-11-01T12:11:38Z",
+        "updatedAt" : "2017-11-09T15:12:31Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4160bb52-595a-4bba-9e70-733224213086",
+        "parentId" : "3e075883-8fbd-4d40-bfba-17edfcdc0a84",
+        "authorId" : "c5a78ad1-2727-48a6-8217-285a102b94de",
+        "body" : "Yeah that might be a better idea - I imagine a lot of people will want to set a namespace, but be okay with the default ListOptions. Do you think that `tweakListOptions` function should accept a pointer, or a copy of the type to then return? My only concern then was that a user should really perform a DeepCopy before modifying the copy passed into the filter, as ListOptions could at some point include some nested/pointer types. Perhaps this isn't a concern though. By passing a pointer, it's clear straight away that this type *will* be mutated.\r\n\r\nI guess the 3rd option is to create some kind of 'Filter builder', where we can pass in a list of arbitrary functions that manipulate some kind of 'Filter' structure, that is understood by the `New*Informer` functions. This will probably be a fair amount more work, and may not be *clearer* to the user, but it'd probably be more elegant.",
+        "createdAt" : "2017-11-01T12:16:56Z",
+        "updatedAt" : "2017-11-09T15:12:31Z",
+        "lastEditedBy" : "c5a78ad1-2727-48a6-8217-285a102b94de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3903ce91-89f9-48a4-b107-0efbc962cc91",
+        "parentId" : "3e075883-8fbd-4d40-bfba-17edfcdc0a84",
+        "authorId" : "c5a78ad1-2727-48a6-8217-285a102b94de",
+        "body" : "(the 3rd option there obviously does not help fix the Lister inconsistency. I think we really are stuck on that one without a big change)",
+        "createdAt" : "2017-11-01T12:17:42Z",
+        "updatedAt" : "2017-11-09T15:12:31Z",
+        "lastEditedBy" : "c5a78ad1-2727-48a6-8217-285a102b94de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2bb4e89c-2855-47c7-8175-9f4ab0f11b97",
+        "parentId" : "3e075883-8fbd-4d40-bfba-17edfcdc0a84",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "> Do you think that tweakListOptions function should accept a pointer\r\n\r\n`tweakListOptions` is explicit enough to expect side effects. So a pointer is fine.",
+        "createdAt" : "2017-11-01T12:20:51Z",
+        "updatedAt" : "2017-11-09T15:12:31Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9b1a1231dae9c720b3c0837e42e3c8f680868df1",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +76,80 @@}\n\nfunc (f *fooInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {\n\treturn NewFilteredFooInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)\n}"
+  }
+]

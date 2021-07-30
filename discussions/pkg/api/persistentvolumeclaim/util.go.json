@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "49187cf4-a7c3-442d-acd9-25d25a3e0c11",
+    "prId" : 103276,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103276#pullrequestreview-699343318",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b0664195-b90b-4f5c-90ea-115effffeb65",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "This isn't clearly what the KEP calls for.  It may actually WORK but a reader of this will not comprehend it.\r\n\r\nWhere is the code that clears DataSource when it's not a PVC or Snapshot?  Should that be here?  Otherwise what happens if I send `{ DataSource = Invalid, DataSourceRef = nil }`?  Invalid will get copied to DSRef, then (somewhere) DS will be cleared, then DS and DSRef are not the same.  This converts case 5 (in KEP) into case 6.\r\n\r\nBasically, the compat logic is so precise and subtle that I think you should centralize it and comment the heck out of it.  Take pity on the next poor sucker who deals with this.",
+        "createdAt" : "2021-07-02T20:52:58Z",
+        "updatedAt" : "2021-07-02T20:55:11Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "12ee3118-60d4-4842-8c47-384b0591f0e5",
+        "parentId" : "b0664195-b90b-4f5c-90ea-115effffeb65",
+        "authorId" : "61f426fc-ef91-47d4-9d27-f5a1dd2b265b",
+        "body" : "So the case you mention is covered by the fact that DropDisabledFields() is called before NormalizeDataSources() in PrepareForCreate() in stragtegy.go. I agree it's not easy to follow, but there are substantial tests already for the existing code, so there's a strong reason not to make a ton of changes to the existing code, and to make these new changes in a mostly additive way. I can try to address the problem with lots and lots of comments.\r\n",
+        "createdAt" : "2021-07-04T21:29:54Z",
+        "updatedAt" : "2021-07-04T21:29:54Z",
+        "lastEditedBy" : "61f426fc-ef91-47d4-9d27-f5a1dd2b265b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7dbad5df-7d56-4ac9-8170-31b2e973124c",
+        "parentId" : "b0664195-b90b-4f5c-90ea-115effffeb65",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "By convention, the DropDisabledFields pattern holds feature-gated logic.  No feature-gates == no logic.  I'd STRONGLY encourage you to gather all of the \"permanent\" logic together.  Having to jump between functions to convince myself this works is unpleasant at best (and the tests are all split) and very brittle.  I can EASILY see logic around here getting \"fixed\" wrongly because it's not at all clear how it is supposed to work or why.",
+        "createdAt" : "2021-07-05T17:20:13Z",
+        "updatedAt" : "2021-07-05T17:21:33Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "00dba76918e8ce5b5cff6719bbd64c2cd38ad4e2",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +111,115 @@\t\treturn\n\t}\n\tif pvcSpec.DataSource != nil && pvcSpec.DataSourceRef == nil {\n\t\t// Using the old way of setting a data source\n\t\tpvcSpec.DataSourceRef = pvcSpec.DataSource.DeepCopy()"
+  },
+  {
+    "id" : "05770201-2fad-4b47-8d62-144402248928",
+    "prId" : 76913,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76913#pullrequestreview-244064147",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "25dc79a4-661e-4cd0-839d-815295338db8",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Do we really need this level of checking?  I mean, is it possible that external controllers could consume this with other types that we don't know about here?",
+        "createdAt" : "2019-05-30T22:28:46Z",
+        "updatedAt" : "2019-05-31T12:08:48Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "81da820b-79ef-4eba-a3b8-89bb70ce76ea",
+        "parentId" : "25dc79a4-661e-4cd0-839d-815295338db8",
+        "authorId" : "464046a5-36cb-4f77-ae2a-07c568c4c1b6",
+        "body" : "IMO no, in fact I thought it seemed redundant and had initially just removed the restrictions on the datasource field with a new feature gate and called it done.  Yes, my thought was this was designed for external controllers and I'd love to be able to use it as such.  During conversations I was asked to add the checks back in.\r\n\r\nI'm probably not helping myself out here.",
+        "createdAt" : "2019-05-30T22:40:03Z",
+        "updatedAt" : "2019-05-31T12:08:48Z",
+        "lastEditedBy" : "464046a5-36cb-4f77-ae2a-07c568c4c1b6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "62a4861c9bfa0aa7b422eb29ba21c09cbb20f87e",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +60,64 @@\nfunc dataSourceIsEnabled(pvcSpec *core.PersistentVolumeClaimSpec) bool {\n\tif pvcSpec.DataSource != nil {\n\t\tif pvcSpec.DataSource.Kind == pvc &&\n\t\t\t*pvcSpec.DataSource.APIGroup == \"\" &&"
+  }
+]

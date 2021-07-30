@@ -1,0 +1,387 @@
+[
+  {
+    "id" : "3ebf80c9-ad99-4e1a-94e4-4cf88972f9ca",
+    "prId" : 97013,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97013#pullrequestreview-543136460",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "00fe9c7a-0afe-41cf-a1cc-a49fd6553213",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "just want to confirm whether in certain cases, it should continue instead of return error (e.g., the error means device no longer exist?)",
+        "createdAt" : "2020-12-02T17:14:33Z",
+        "updatedAt" : "2020-12-03T08:54:50Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "99944ae0-e36f-4dc6-8e62-58fddfcdd63f",
+        "parentId" : "00fe9c7a-0afe-41cf-a1cc-a49fd6553213",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "Good catch! That's why iscsi volume plugin ignores the error code...",
+        "createdAt" : "2020-12-02T18:07:03Z",
+        "updatedAt" : "2020-12-03T08:54:50Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "40363641-f141-4b89-bbfd-a7e0724a832a",
+        "parentId" : "00fe9c7a-0afe-41cf-a1cc-a49fd6553213",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "If the device is missing:\r\n\r\n* Filesystem volumes: operation_generator.go will stop with \"The path isn't device path or doesn't exist. Skip checking device path: /dev/dm-0\" and it won't call volume plugin at all. Therefore, if the multipath device is removed, but the individual paths are still there, nothing will remove them.\r\n\r\n* Block volumes: if the device is missing, the next `DetachBlockFCDisk` will stop in `checkPathExists`, if not earlier in `operation_generator.go` (did not test it).\r\nhttps://github.com/kubernetes/kubernetes/blob/6f8bdb7cc1e28585edb5d47212ffb4d0ab3bf546/pkg/volume/fc/fc_util.go#L301\r\n\r\niscsi volume plugin actually ignores the error code from \"multipath -f\", continuing deleting the device paths. Which may result in volume corruption, if the multipath device still exists.. Now is the question what is actually correct - try to remove the individual paths to fully detach the devices and risk corruption OR do not remove the paths at all? The paths should just sit in /dev, not used by anything.\r\n\r\nMy gut feeling is to copy iscsi approach and ignore the exit code.",
+        "createdAt" : "2020-12-02T18:29:17Z",
+        "updatedAt" : "2020-12-03T08:54:50Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3750755-a7b3-4249-a085-165caece0048",
+        "parentId" : "00fe9c7a-0afe-41cf-a1cc-a49fd6553213",
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "according to manpage\r\n`-f     Flush (remove) a multipath device map specified as parameter, if unused.`\r\n\r\nSo if `multipath -f` fails, there is a good chance the device is still being used and removing it could cause data corruption. In this sense, the implementation in iscsi is indeed risky.",
+        "createdAt" : "2020-12-02T18:46:20Z",
+        "updatedAt" : "2020-12-03T08:54:50Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8f186f9172fc2d3ec07ca0df097169b4c8b9d207",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +395,399 @@\tout, err := exec.Command(\"multipath\", \"-f\", dmDevice).CombinedOutput()\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to flush multipath device %s: %s\\n%s\", dmDevice, err, string(out))\n\t}\n\tklog.V(4).Infof(\"Flushed multipath device: %s\", dmDevice)"
+  },
+  {
+    "id" : "c5c4dac3-0769-4e91-a30b-4d889ac6700e",
+    "prId" : 97013,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97013#pullrequestreview-543174388",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5979602e-59cf-4c3d-8859-6430458c9a0a",
+        "parentId" : null,
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "nit: \r\n```go\r\nreturn fmt.Errorf(\"failed to flush multipath device %s: %v\\n%s\", dmDevice, err, string(out))\r\n```",
+        "createdAt" : "2020-12-02T18:49:22Z",
+        "updatedAt" : "2020-12-03T08:54:50Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c49cd094-57d5-47a7-957a-71736b3703d7",
+        "parentId" : "5979602e-59cf-4c3d-8859-6430458c9a0a",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "No, `%s` is fine for `errror` type.",
+        "createdAt" : "2020-12-02T19:36:52Z",
+        "updatedAt" : "2020-12-03T08:54:50Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8f186f9172fc2d3ec07ca0df097169b4c8b9d207",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +395,399 @@\tout, err := exec.Command(\"multipath\", \"-f\", dmDevice).CombinedOutput()\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to flush multipath device %s: %s\\n%s\", dmDevice, err, string(out))\n\t}\n\tklog.V(4).Infof(\"Flushed multipath device: %s\", dmDevice)"
+  },
+  {
+    "id" : "472715cb-d5d6-4054-8cad-89b295c3c054",
+    "prId" : 97013,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97013#pullrequestreview-544140579",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "883fe851-db21-4d39-a0f5-a822d7dc0230",
+        "parentId" : null,
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "Same link - https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/storage_administration_guide/removing_devices#:~:text=Run%20multipath%20%2Dl%20command%20to,to%20remove%20the%20multipath%20device. recommends that for raw block devices we should call ` blockdev --flushbufs device`  before removing the device. Should we do that as well?",
+        "createdAt" : "2020-12-02T20:07:57Z",
+        "updatedAt" : "2020-12-03T08:54:50Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c7a065d9-1223-4e77-95c2-eb70d66ccf5c",
+        "parentId" : "883fe851-db21-4d39-a0f5-a822d7dc0230",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "Added as a separate commit.\r\nBTW, we should refactor FC and iSCSI to use the same flush / device deletion. But that's for a separate PR.",
+        "createdAt" : "2020-12-03T08:55:48Z",
+        "updatedAt" : "2020-12-03T08:55:48Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c81366c2-35d4-4a27-b4dd-66e0b6142223",
+        "parentId" : "883fe851-db21-4d39-a0f5-a822d7dc0230",
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "yeah lets file that as a separate issue I think.",
+        "createdAt" : "2020-12-03T16:26:10Z",
+        "updatedAt" : "2020-12-03T16:26:10Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8f186f9172fc2d3ec07ca0df097169b4c8b9d207",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +367,371 @@\n\t// Detach volume from kubelet node\n\tif len(dm) != 0 {\n\t\t// Find all devices which are managed by multipath\n\t\tdevices = c.deviceUtil.FindSlaveDevicesOnMultipath(dm)"
+  },
+  {
+    "id" : "d67d20d7-062a-4c17-bdce-bdf495ca981e",
+    "prId" : 89172,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/89172#pullrequestreview-381245547",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "00cdc73a-1d6d-47ec-b7db-9a575091f918",
+        "parentId" : null,
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "For completeness `fc_test.go` still performs mounting in `AttachDisk` function.",
+        "createdAt" : "2020-03-24T20:47:10Z",
+        "updatedAt" : "2020-03-26T17:02:04Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fd0aad27-395a-40eb-94db-e872663e90b4",
+        "parentId" : "00cdc73a-1d6d-47ec-b7db-9a575091f918",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "Fixed",
+        "createdAt" : "2020-03-25T15:11:54Z",
+        "updatedAt" : "2020-03-26T17:02:04Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "58129fd12cbe1ac4a975c41ed3bc272a73918fce",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +243,247 @@\n\treturn devicePath, nil\n}\n\n// DetachDisk removes scsi device file such as /dev/sdX from the node."
+  },
+  {
+    "id" : "d21bcd3e-8f19-4778-9323-c8928cf5e800",
+    "prId" : 74023,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/74023#pullrequestreview-203646504",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a8bb7f3f-98a5-4caa-b1b9-36fc629a3199",
+        "parentId" : null,
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "How will this work for existing FC mounts? I assume this only fixes new mounts right? Existing mounts that did not store all information will still be broken?",
+        "createdAt" : "2019-02-13T16:42:30Z",
+        "updatedAt" : "2019-02-13T16:42:47Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4da6961d-ddeb-4cb0-a4bb-ebe784f6c436",
+        "parentId" : "a8bb7f3f-98a5-4caa-b1b9-36fc629a3199",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "Yes, only the first WWN / WWID will be restored from mounts created by old kubelet. That's equal to behaviour before this PR, i.e. it won't re-introduce any regression (tested on my FC machine).",
+        "createdAt" : "2019-02-14T09:41:46Z",
+        "updatedAt" : "2019-02-14T09:41:46Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "662b683de4c516b1e62cbe101522f27ae942bda9",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +134,138 @@\n// make a directory like /var/lib/kubelet/plugins/kubernetes.io/fc/target1-target2-lun-0\nfunc makePDNameInternal(host volume.VolumeHost, wwns []string, lun string, wwids []string) string {\n\tif len(wwns) != 0 {\n\t\tw := strings.Join(wwns, \"-\")"
+  },
+  {
+    "id" : "06a7a7b5-3404-4ec8-a30e-9577e9a2e454",
+    "prId" : 57155,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/57155#pullrequestreview-83357020",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fcd5b384-1488-4db8-838c-014d57735187",
+        "parentId" : null,
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "this doesn't work for multipath. need to detach other paths as well.",
+        "createdAt" : "2017-12-13T17:36:39Z",
+        "updatedAt" : "2017-12-15T16:57:03Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08942ad7-be11-43e4-a535-c3f32e09456c",
+        "parentId" : "fcd5b384-1488-4db8-838c-014d57735187",
+        "authorId" : "967a712d-9784-41d4-920d-42eaba99fb24",
+        "body" : "See following steps which find all devices from multipath device then remove all devices from the kubelet node.",
+        "createdAt" : "2017-12-13T23:36:07Z",
+        "updatedAt" : "2017-12-15T16:57:03Z",
+        "lastEditedBy" : "967a712d-9784-41d4-920d-42eaba99fb24",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c8fffea765bede01edd219a9d6795b32ac8f80c9",
+    "line" : 203,
+    "diffHunk" : "@@ -1,1 +339,343 @@\t\t}\n\t}\n\tif len(devicePath) == 0 {\n\t\treturn fmt.Errorf(\"fc: failed to find corresponding device from searchPath: %v\", searchPath)\n\t}"
+  },
+  {
+    "id" : "41e97df7-351d-4c34-83e6-a0a5eb58d326",
+    "prId" : 52675,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/52675#pullrequestreview-63687157",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fb42e340-932b-4b99-873e-ee57cd8256a8",
+        "parentId" : null,
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "I still prefer checking dir before mkdir. WatiForAttach calls AttachDisk many times, upfront mkdir in every call is not desirable",
+        "createdAt" : "2017-09-19T12:25:53Z",
+        "updatedAt" : "2017-09-19T12:25:53Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c1ac53a5-faa9-4634-8d25-da6460e38bc8",
+        "parentId" : "fb42e340-932b-4b99-873e-ee57cd8256a8",
+        "authorId" : "967a712d-9784-41d4-920d-42eaba99fb24",
+        "body" : "@rootfs @jingxu97 \r\n\r\nI checked the MkdirAll() source code and found an interesting thing.\r\nMkdirAll() checks whether the directory exists at first and return nil if it exist immediately. I suppose the method is light weight.\r\n\r\nBut iscsi plugin already has same check on same method, I'm ok to check directory existence before create.\r\n\r\n```\r\nif err != nil && !os.IsNotExist(err) {\r\n```",
+        "createdAt" : "2017-09-19T13:01:55Z",
+        "updatedAt" : "2017-09-19T13:01:55Z",
+        "lastEditedBy" : "967a712d-9784-41d4-920d-42eaba99fb24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bfa9ee07-d30e-4017-97cb-3ff49f89b80b",
+        "parentId" : "fb42e340-932b-4b99-873e-ee57cd8256a8",
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "ok, let keep it this way.",
+        "createdAt" : "2017-09-19T14:48:21Z",
+        "updatedAt" : "2017-09-19T14:48:21Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e83cc78e65f7fc63c00ceff5d9230663c0f31af",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +220,224 @@\t// mount it\n\tglobalPDPath := util.MakeGlobalPDName(*b.fcDisk)\n\tif err := os.MkdirAll(globalPDPath, 0750); err != nil {\n\t\treturn devicePath, fmt.Errorf(\"fc: failed to mkdir %s, error\", globalPDPath)\n\t}"
+  },
+  {
+    "id" : "f0f7b7a3-0d36-49dc-b206-ef2eccb3d2e7",
+    "prId" : 49416,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/49416#pullrequestreview-53525087",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a0c2c079-ee62-4193-ab77-e0564b86f824",
+        "parentId" : null,
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "It doesn't appear to me that `DetachDisk` function signature should change. You can keep mntPath, unmount the path, and get device from mntPath to detach.",
+        "createdAt" : "2017-08-01T13:43:10Z",
+        "updatedAt" : "2017-08-01T13:43:10Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e372efc-4efe-46a1-b22f-affdbf29ceae",
+        "parentId" : "a0c2c079-ee62-4193-ab77-e0564b86f824",
+        "authorId" : "967a712d-9784-41d4-920d-42eaba99fb24",
+        "body" : "@rootfs \r\nThe parameter of DetachDisk is not actually mntPath now. The value is physical device name like /dev/sdX.\r\nSince you are using devicePath in your RBD implementation, I'm OK to use devicePath instead of devName.\r\n\r\n```\r\nerr = detacher.manager.DetachDisk(detacher.plugin, devicePath)\r\n```",
+        "createdAt" : "2017-08-01T13:50:30Z",
+        "updatedAt" : "2017-08-01T13:50:30Z",
+        "lastEditedBy" : "967a712d-9784-41d4-920d-42eaba99fb24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d7c6412-1f1f-4fd8-9c88-3312b1f3f95b",
+        "parentId" : "a0c2c079-ee62-4193-ab77-e0564b86f824",
+        "authorId" : "967a712d-9784-41d4-920d-42eaba99fb24",
+        "body" : "@rootfs \r\nI don't have strong opinion to change the parameter name. Just changed it to avoid confusion.\r\nIs it better to keep parameter name as is?",
+        "createdAt" : "2017-08-01T13:55:59Z",
+        "updatedAt" : "2017-08-01T13:55:59Z",
+        "lastEditedBy" : "967a712d-9784-41d4-920d-42eaba99fb24",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7546550f-c025-498e-93e2-5efad0cc35c7",
+        "parentId" : "a0c2c079-ee62-4193-ab77-e0564b86f824",
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "sgtm",
+        "createdAt" : "2017-08-01T14:47:32Z",
+        "updatedAt" : "2017-08-01T14:47:32Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ed46466b9595c033bee1423b7d547074e3c15cca",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +186,190 @@}\n\nfunc (util *FCUtil) DetachDisk(c fcDiskUnmounter, devName string) error {\n\t// Remove scsi device from the node.\n\tif !strings.HasPrefix(devName, \"/dev/\") {"
+  },
+  {
+    "id" : "f401a156-79ec-4083-b14a-696d6546cb57",
+    "prId" : 12599,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3a7738aa-d930-45dc-944b-8c5aea23435a",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Please add unit tests for this file\n",
+        "createdAt" : "2015-09-11T21:53:24Z",
+        "updatedAt" : "2015-09-18T23:15:49Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a540af5-3819-4f4b-a90c-f20ebd358a77",
+        "parentId" : "3a7738aa-d930-45dc-944b-8c5aea23435a",
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "like aws/gce_pd, all unit tests are in [fc_test.go](https://github.com/kubernetes/kubernetes/pull/12599/files#diff-91994080fa9be3f504e09dd42564950b)\n",
+        "createdAt" : "2015-09-14T17:38:39Z",
+        "updatedAt" : "2015-09-18T23:15:49Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "233df58c-40ab-46d9-8b81-0383c64c45eb",
+        "parentId" : "3a7738aa-d930-45dc-944b-8c5aea23435a",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Sorry, I might be missing something, but I don't see which tests in fc_test.go add coverage for this code, since those tests use a `fakeMounter`.\n\nThe only reason I'd like to see more coverage here is because this code is doing a lot of things each of which could potentially fail.\n",
+        "createdAt" : "2015-09-14T18:40:47Z",
+        "updatedAt" : "2015-09-18T23:15:49Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "44382930-fd0d-47b7-8776-56a894ef8848",
+        "parentId" : "3a7738aa-d930-45dc-944b-8c5aea23435a",
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "I see, you want to coverage on the helper functions? I'll cook up something.\n",
+        "createdAt" : "2015-09-14T19:05:17Z",
+        "updatedAt" : "2015-09-18T23:15:49Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ed9a1bbd3a9b689f4953deb6308d631314edf3f4",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +51,55 @@}\n\n// given a disk path like /dev/sdx, find the devicemapper parent\nfunc findMultipathDeviceMapper(disk string, io ioHandler) string {\n\tsys_path := \"/sys/block/\""
+  }
+]

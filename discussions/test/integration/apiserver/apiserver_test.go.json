@@ -1,0 +1,211 @@
+[
+  {
+    "id" : "347b513e-e8fa-431f-ac6c-203121562606",
+    "prId" : 96185,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96185#pullrequestreview-534812941",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "21ebfcbd-550c-4052-870e-4185ee6b8225",
+        "parentId" : null,
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "Two behaviors regarding managedFields that surprised me, but may be expected. FYI @apelisse \r\n1. once an object has empty managedFields, the field manager won't write managedFields for future requests made by this client, even if those requests don't contain duplicate owner refs. \r\n2. without this PR, the field manager still succeeded to write `managedFields` for custom resources, even when duplicate owner ref existed in the request. Note that `\"f:ownerReferences\"` in the custom resource doesn't contain UIDs. \r\n\r\nwith this PR, for built-in resource:\r\n```\r\n# 1. create with dup owner refs\r\nmanagedFields: [{apiserver.test Update v1 2020-11-18 19:44:36 -0800 PST FieldsV1 {\"f:metadata\":{\"f:ownerReferences\":{\".\":{},\"k:{\\\"uid\\\":\\\"03d3ba47-a815-46aa-84c7-70ee450b7761\\\"}\":{\".\":{},\"f:apiVersion\":{},\"f:kind\":{},\"f:name\":{},\"f:uid\":{}}}}}}]\r\n# 2. update with dup owner refs\r\nmanagedFields: [{apiserver.test Update v1 2020-11-18 19:44:36 -0800 PST FieldsV1 {\"f:metadata\":{\"f:ownerReferences\":{\".\":{},\"k:{\\\"uid\\\":\\\"03d3ba47-a815-46aa-84c7-70ee450b7761\\\"}\":{\".\":{},\"f:apiVersion\":{},\"f:kind\":{},\"f:name\":{},\"f:uid\":{}}}}}}]\r\n# 3. patch, append a dup owner ref\r\nfieldmanager.go:186] [SHOULD NOT HAPPEN] failed to update managedFields for /, Kind=: failed to convert new object (/v1, Kind=ConfigMap) to smd typed: .metadata.ownerReferences: duplicate entries for key [uid=\"03d3ba47-a815-46aa-84c7-70ee450b7761\"]\r\nmanagedFields: []\r\n# 4. update, append a different owner ref\r\nmanagedFields: []\r\n# 5. patch, append a different owner ref\r\nmanagedFields: []\r\n```\r\nfor custom resource (note the UID isn't written in the managed fields): \r\n```\r\n# 1-5. repeat all the steps above, the managed fields always read like:\r\nmanagedFields: [{apiserver.test Update cr.bar.com/v1 2020-11-18 19:44:36 -0800 PST FieldsV1 {\"f:metadata\":{\"f:ownerReferences\":{}}}}]\r\n```\r\nwithout this PR, the behavior of built-in resources will be:\r\n```\r\n# 1. create with dup owner refs\r\nfieldmanager.go:186] [SHOULD NOT HAPPEN] failed to update managedFields for /, Kind=: failed to convert new object (/v1, Kind=ConfigMap) to smd typed: .metadata.ownerReferences: duplicate entries for key [uid=\"29b54e45-e089-4b12-bfd6-6ab63f20204a\"]\r\nmanagedFields: []\r\n# 2-5. repeat all the remaining steps:\r\nmanagedFields: []\r\n```\r\nand the behavior of custom resources won't change.",
+        "createdAt" : "2020-11-19T04:19:54Z",
+        "updatedAt" : "2020-11-19T04:32:31Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac1dd16c-0bb0-452b-adf5-7435e476ed62",
+        "parentId" : "21ebfcbd-550c-4052-870e-4185ee6b8225",
+        "authorId" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "body" : "I didn't expect the managedFields to stay empty. Does this also happen on apply?\r\n",
+        "createdAt" : "2020-11-19T17:06:22Z",
+        "updatedAt" : "2020-11-19T17:06:22Z",
+        "lastEditedBy" : "500960f8-0ed2-4739-b582-fd7135d2ce87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "146ee6a6-c26d-4d93-a68a-722f977c485f",
+        "parentId" : "21ebfcbd-550c-4052-870e-4185ee6b8225",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "> 1. once an object has empty managedFields, the field manager won't write managedFields for future requests made by this client, even if those requests don't contain duplicate owner refs. \r\n\r\nThat's because we don't track fields for objects that don't have managed fields, until they are server-side applied. That's to prevent existing objects from suddenly becoming bigger (because of the managed-fields) on existing clusters.\r\nWhen we wipe, we could decide that we need to keep tracking (by setting an empty list rather than a nil value), but I'd say this is WAI.\r\n\r\n> 2. without this PR, the field manager still succeeded to write `managedFields` for custom resources, even when duplicate owner ref existed in the request. Note that `\"f:ownerReferences\"` in the custom resource doesn't contain UIDs. \r\n\r\nit looks like ownerReferences is considered atomic for custom-resources. Can you look at the CRD and say if the ownerReference list is associative?",
+        "createdAt" : "2020-11-19T17:24:42Z",
+        "updatedAt" : "2020-11-19T17:25:07Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "738b2230-5ec5-493b-bc73-f051a78337d3",
+        "parentId" : "21ebfcbd-550c-4052-870e-4185ee6b8225",
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "> but I'd say this is WAI.\r\n\r\nThanks for the explanation! That makes sense. \r\n\r\n> it looks like ownerReferences is considered atomic for custom-resources\r\n\r\nIIUC the field manager uses the CRD schema to determine that. The [CRD used](https://github.com/kubernetes/kubernetes/blob/18099e1ef7283d9ab09c45c5a4a90e26fdce1161/test/integration/etcd/data.go#L593-L606) doesn't have schema. I also verified that API server doesn't insert the in-tree object meta schema into CRD. I think this is expected.",
+        "createdAt" : "2020-11-19T18:38:16Z",
+        "updatedAt" : "2020-11-19T18:38:16Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff7135bd-480a-480c-b05d-a70d0a935dec",
+        "parentId" : "21ebfcbd-550c-4052-870e-4185ee6b8225",
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "> The CRD used doesn't have schema.\r\n\r\nWe treat all lists as atomic for schema-less CRDs, all good! 👍 ",
+        "createdAt" : "2020-11-19T20:13:38Z",
+        "updatedAt" : "2020-11-19T20:13:39Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a6afe798913ae31ab546e697e158e81a8dfb13a",
+    "line" : 122,
+    "diffHunk" : "@@ -1,1 +2236,2240 @@\t\t\t// not custom resources. In future we should either dedup before writing manage\n\t\t\t// fields, or stop deduping and reject the request.\n\t\t\t// assertManagedFields(t, dependent)\n\t\t\texpectedPatchWarning := fmt.Sprintf(handlers.DuplicateOwnerReferencesAfterMutatingAdmissionWarningFormat, fakeRefA.UID)\n\t\t\tassertOwnerReferences(t, dependent, []metav1.OwnerReference{fakeRefA})"
+  },
+  {
+    "id" : "209409c5-221b-4e8a-a3aa-eba010181184",
+    "prId" : 96185,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96185#pullrequestreview-534683979",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a4d7e6ba-143e-47fc-9125-610568de4e9f",
+        "parentId" : null,
+        "authorId" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "body" : "I think that comment is correct and makes sense! 👍 ",
+        "createdAt" : "2020-11-19T17:28:49Z",
+        "updatedAt" : "2020-11-19T17:28:49Z",
+        "lastEditedBy" : "a139439a-9f9e-4518-b4f3-9c602d956c57",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a6afe798913ae31ab546e697e158e81a8dfb13a",
+    "line" : 118,
+    "diffHunk" : "@@ -1,1 +2232,2236 @@\t\t\tklog.Infof(\"patching dependent with duplicate owner reference\")\n\t\t\tdependent = c.patchDependentWithOwner(dependent, fakeRefA)\n\t\t\t// TODO: currently a patch request that duplicates owner references can still\n\t\t\t// wipe out managed fields. Note that this happens to built-in resources but\n\t\t\t// not custom resources. In future we should either dedup before writing manage"
+  },
+  {
+    "id" : "53d77ba1-6f5f-49c2-a1c3-72fb954c8697",
+    "prId" : 91505,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91505#pullrequestreview-437993606",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e17e67f4-aff7-4e01-8262-1cb809039285",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "removing the rate limit on the clientset returned from setupWithOptions shortens this test from ~1 minute to ~10 seconds\r\n\r\n```diff\r\n--- a/test/integration/apiserver/apiserver_test.go\r\n+++ b/test/integration/apiserver/apiserver_test.go\r\n@@ -89,7 +89,7 @@ func setupWithResourcesWithOptions(t *testing.T, opts *framework.MasterConfigOpt\r\n        masterConfig.GenericConfig.OpenAPIConfig = framework.DefaultOpenAPIConfig()\r\n        _, s, closeFn := framework.RunAMaster(masterConfig)\r\n \r\n-       clientSet, err := clientset.NewForConfig(&restclient.Config{Host: s.URL})\r\n+       clientSet, err := clientset.NewForConfig(&restclient.Config{Host: s.URL, QPS: -1})\r\n        if err != nil {\r\n                t.Fatalf(\"Error in create clientset: %v\", err)\r\n        }\r\n```",
+        "createdAt" : "2020-06-26T02:56:13Z",
+        "updatedAt" : "2020-06-26T03:55:07Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "58ed403f-cc6e-40a9-a5be-659df05af163",
+        "parentId" : "e17e67f4-aff7-4e01-8262-1cb809039285",
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "yay!",
+        "createdAt" : "2020-06-26T03:38:57Z",
+        "updatedAt" : "2020-06-26T03:55:07Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "04676ff58cf0df69a9e098d0f2585073de81cef7",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +328,332 @@\t\t\tetcdOptions.EnableWatchCache = watchCacheEnabled\n\t\t\ts, clientSet, closeFn := setupWithOptions(t, &framework.MasterConfigOptions{EtcdOptions: etcdOptions})\n\t\t\tdefer closeFn()\n\n\t\t\tns := framework.CreateTestingNamespace(\"list-options\", s, t)"
+  },
+  {
+    "id" : "46ce7f70-a3bf-4ce5-ab2b-e20c9e9fb63a",
+    "prId" : 77819,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/77819#pullrequestreview-253183948",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "936d9c09-3449-49b6-b3ec-9f71085be55f",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "It would make me feel a lot better if only the creation step differed and the rest of the test was the same.",
+        "createdAt" : "2019-05-29T18:29:04Z",
+        "updatedAt" : "2019-07-02T20:43:19Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "519eddbb-a8e9-4d96-bd0a-e5b4b54c2ae6",
+        "parentId" : "936d9c09-3449-49b6-b3ec-9f71085be55f",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I tightened it up a bit more, but the original intent was to allow us to add more testing here.  I didn't want to over DRY what should also be a usable example of the test client in action (i.e. ergonomics)",
+        "createdAt" : "2019-06-24T03:09:39Z",
+        "updatedAt" : "2019-07-02T20:43:19Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "21f5e643d9dbe6b65d21713dc16ab8888de5423e",
+    "line" : 165,
+    "diffHunk" : "@@ -1,1 +547,551 @@\t\t\t\t\t\t},\n\t\t\t\t\t},\n\t\t\t\t}, metav1.CreateOptions{})\n\t\t\t\tif err != nil {\n\t\t\t\t\tt.Fatalf(\"unable to create cr: %v\", err)"
+  },
+  {
+    "id" : "b074bf90-22f0-44b3-b72b-f99509de5adc",
+    "prId" : 77819,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/77819#pullrequestreview-243383961",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2d68731f-9c97-4d9f-9514-2a97b582a8fb",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Here too I think it would be best if the evaluation half of the test was shared code :/",
+        "createdAt" : "2019-05-29T18:31:47Z",
+        "updatedAt" : "2019-07-02T20:43:19Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "21f5e643d9dbe6b65d21713dc16ab8888de5423e",
+    "line" : 293,
+    "diffHunk" : "@@ -1,1 +675,679 @@\t\t\t\t\t\t},\n\t\t\t\t\t},\n\t\t\t\t}, metav1.CreateOptions{})\n\t\t\t\tif err != nil {\n\t\t\t\t\tt.Fatalf(\"unable to create cr: %v\", err)"
+  },
+  {
+    "id" : "be5ac8fc-a2dd-419b-acb2-29c036793d57",
+    "prId" : 45219,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/45219#pullrequestreview-35931303",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a6b485f6-83bb-4b55-b913-02f61992f8a9",
+        "parentId" : null,
+        "authorId" : "185604f6-2915-4313-8d6b-1d55757d0d22",
+        "body" : "Would you prefer this?\r\n```\r\ncascDel := `foo`\r\n```",
+        "createdAt" : "2017-05-02T20:15:28Z",
+        "updatedAt" : "2017-05-02T20:15:45Z",
+        "lastEditedBy" : "185604f6-2915-4313-8d6b-1d55757d0d22",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8cd9ed5a-6f22-4674-9acb-51741868c9e9",
+        "parentId" : "a6b485f6-83bb-4b55-b913-02f61992f8a9",
+        "authorId" : "b41ac763-2378-4c8a-a9bf-7a3dd4082826",
+        "body" : "I tried this way, but I found that golang doesn't support it.\r\nShort variable declarations may appear only inside functions.\r\nReference:\r\nhttps://golang.org/ref/spec#Short_variable_declarations\r\nThanks",
+        "createdAt" : "2017-05-03T02:21:42Z",
+        "updatedAt" : "2017-05-03T02:21:42Z",
+        "lastEditedBy" : "b41ac763-2378-4c8a-a9bf-7a3dd4082826",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3b20875863dc803d12bb5f32c055a8560dc48bc8",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +100,104 @@}\n\nvar cascDel = `\n{\n  \"kind\": \"DeleteOptions\","
+  }
+]

@@ -1,0 +1,288 @@
+[
+  {
+    "id" : "4c4a8d47-0747-4fc5-8889-621f52378d70",
+    "prId" : 96122,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96122#pullrequestreview-522653689",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a903aba6-bd92-4a09-97bc-b6061ed2e51d",
+        "parentId" : null,
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "I think that it will be \"more solid\" if we create the node info independentyl \r\nhttps://github.com/kubernetes/kubernetes/blob/ee297b6f4d78daaf2f71c78a05203698581ca40a/test/e2e/framework/node/resource.go#L252\r\n\r\n```\r\n                ips := e2enode.GetAddresses(nodes.Items[0], v1.NodeInternalIP)\r\n\t\tclientNodeInfo = nodeInfo{\r\n\t\t\tname:   nodes.Items[0].Name,\r\n\t\t\tnodeIP: ips[0],\r\n\t\t}\r\n\r\n                ips = e2enode.GetAddresses(nodes.Items[1], v1.NodeInternalIP)\r\n                \r\n\t\tserverNodeInfo = nodeInfo{\r\n\t\t\tname:   nodes.Items[1].Name,\r\n\t\t\tnodeIP: ips[0],\r\n\t\t}\r\n```",
+        "createdAt" : "2020-11-02T22:14:02Z",
+        "updatedAt" : "2020-11-10T20:02:42Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9569ed36-a8c8-4ce9-b7fd-86fcf751a7ad",
+        "parentId" : "a903aba6-bd92-4a09-97bc-b6061ed2e51d",
+        "authorId" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "body" : "This is much simpler, I will change to this",
+        "createdAt" : "2020-11-03T16:10:26Z",
+        "updatedAt" : "2020-11-10T20:02:42Z",
+        "lastEditedBy" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa7a802d55339296e389b8b55c8198f77fbdb845",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +105,109 @@\n\t\tvar family v1.IPFamily\n\t\tif framework.TestContext.ClusterIsIPv6() {\n\t\t\tfamily = v1.IPv6Protocol\n\t\t} else {"
+  },
+  {
+    "id" : "c6518f3f-8284-4d79-965e-84b3d113a5ac",
+    "prId" : 96122,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96122#pullrequestreview-522766794",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3e272556-e7b9-4d1d-86f3-bd91ee08467e",
+        "parentId" : null,
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "we still need to be sure that the IP we choose correspond to the main IP family the cluster is using, maybe something like \r\n```\r\n\t\tfor _, ip := range e2enode.GetAddresses(&nodes.Items[1], v1.NodeInternalIP) {\r\n\t\t\tif netutil.IsIPv6String(ip) == framework.TestContext.ClusterIsIPv6() {\r\n\t\t\t\tserverNodeInfo.nodeIP = ip\r\n                                break\r\n\t\t\t}\r\n\t\t}\r\n```",
+        "createdAt" : "2020-11-03T16:34:56Z",
+        "updatedAt" : "2020-11-10T20:02:42Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db8c6de1-4e84-40c8-a9b3-12ba8a1bc7f5",
+        "parentId" : "3e272556-e7b9-4d1d-86f3-bd91ee08467e",
+        "authorId" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "body" : "Is that necessary since we are doing a separate hardcoded check of GetAddresses? It works locally on a dualstack cluster.",
+        "createdAt" : "2020-11-03T17:57:25Z",
+        "updatedAt" : "2020-11-10T20:02:42Z",
+        "lastEditedBy" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b581b67a-151d-4b4f-ae53-56173d4f7222",
+        "parentId" : "3e272556-e7b9-4d1d-86f3-bd91ee08467e",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "you don't control the order of the internalIP returned, and if the main family is IPv4 and the ip returned is IPv6 it will fail , actually is the reason why the tests fail today, it connects to an IPv4 service (by default services are SingleStack on the main family) but uses the IPv6 node address to connect to it ...\r\n\r\n```\r\n\r\nï¿½[1mSTEPï¿½[0m: waiting up to 3m0s for service svc-udp in namespace conntrack-2577 to expose endpoints map[pod-server-1:[80]]\r\nNov  3 15:13:54.111: INFO: successfully validated that service svc-udp in namespace conntrack-2577 exposes endpoints map[pod-server-1:[80]]\r\nï¿½[1mSTEPï¿½[0m: checking client pod connected to the backend 1 on Node IP fc00:f853:ccd:e793::4\r\nNov  3 15:14:54.143: INFO: Pod client logs: Tue Nov  3 15:13:49 UTC 2020\r\nTue Nov  3 15:13:49 UTC 2020 Try: 1\r\n```\r\n",
+        "createdAt" : "2020-11-03T18:04:57Z",
+        "updatedAt" : "2020-11-10T20:02:42Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f656e1db-ad6d-448c-9b4d-56f2fe567f95",
+        "parentId" : "3e272556-e7b9-4d1d-86f3-bd91ee08467e",
+        "authorId" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "body" : "Ah ok, I thought it was just failing bc we also picked the 2nd entry which consistently ended up being the IPv6 address, but that makes sense now.",
+        "createdAt" : "2020-11-03T18:23:08Z",
+        "updatedAt" : "2020-11-10T20:02:42Z",
+        "lastEditedBy" : "87ab1d19-ad39-40d0-a045-817039414280",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa7a802d55339296e389b8b55c8198f77fbdb845",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +122,126 @@\t\tserverNodeInfo = nodeInfo{\n\t\t\tname:   nodes.Items[1].Name,\n\t\t\tnodeIP: ips[0],\n\t\t}\n\t})"
+  },
+  {
+    "id" : "897dea13-a0be-467a-ac6e-d141ac4911ef",
+    "prId" : 95351,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95351#pullrequestreview-514904856",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3d7d0d7-f0a4-4cea-a5ee-2e4a2f7d17e1",
+        "parentId" : null,
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "the test fails if ERROR string is in the logs, that means that we've received a RST",
+        "createdAt" : "2020-10-07T16:47:41Z",
+        "updatedAt" : "2021-01-13T10:03:16Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9921820d-6742-4c7b-bf73-ac458caf15c5",
+        "parentId" : "b3d7d0d7-f0a4-4cea-a5ee-2e4a2f7d17e1",
+        "authorId" : "fa37bbb4-59dd-42f0-8202-52d5717aff5e",
+        "body" : "why checking log, the pod doesn't terminate anymore?",
+        "createdAt" : "2020-10-14T23:04:37Z",
+        "updatedAt" : "2021-01-13T10:03:16Z",
+        "lastEditedBy" : "fa37bbb4-59dd-42f0-8202-52d5717aff5e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35948eeb-0d30-4066-9dfd-bf213b4fc8e5",
+        "parentId" : "b3d7d0d7-f0a4-4cea-a5ee-2e4a2f7d17e1",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "the pod can terminate by different reasons, is not usual, but it happens in the CI. \r\nThis verifies exactly the behaviour that we want to test, that no RST is received",
+        "createdAt" : "2020-10-15T06:48:27Z",
+        "updatedAt" : "2021-01-13T10:03:16Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66acdc64-f48f-4ea4-84dc-5f3b7f1dbc45",
+        "parentId" : "b3d7d0d7-f0a4-4cea-a5ee-2e4a2f7d17e1",
+        "authorId" : "fa37bbb4-59dd-42f0-8202-52d5717aff5e",
+        "body" : "+1",
+        "createdAt" : "2020-10-22T16:20:43Z",
+        "updatedAt" : "2021-01-13T10:03:16Z",
+        "lastEditedBy" : "fa37bbb4-59dd-42f0-8202-52d5717aff5e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "67e2c37440a198f3de59933706e2e7cfcbc23702",
+    "line" : 175,
+    "diffHunk" : "@@ -1,1 +388,392 @@\t\t// the server will log ERROR if that happens\n\t\tginkgo.By(\"checking client pod does not RST the TCP connection because it receives and INVALID packet\")\n\t\tif err := wait.PollImmediate(5*time.Second, time.Minute, logContainsFn(\"ERROR\", \"boom-server\")); err == nil {\n\t\t\tlogs, err := e2epod.GetPodLogs(cs, ns, \"boom-server\", \"boom-server\")\n\t\t\tframework.ExpectNoError(err)"
+  },
+  {
+    "id" : "9b2a0965-0e7b-4681-9d38-56b8b089ba88",
+    "prId" : 95351,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95351#pullrequestreview-508829241",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e181c263-4224-441a-803a-deab394e5d73",
+        "parentId" : null,
+        "authorId" : "fa37bbb4-59dd-42f0-8202-52d5717aff5e",
+        "body" : "I know why the other change needs 2 envs 👍 ",
+        "createdAt" : "2020-10-14T23:01:34Z",
+        "updatedAt" : "2021-01-13T10:03:16Z",
+        "lastEditedBy" : "fa37bbb4-59dd-42f0-8202-52d5717aff5e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "67e2c37440a198f3de59933706e2e7cfcbc23702",
+    "line" : 97,
+    "diffHunk" : "@@ -1,1 +310,314 @@\t\t\t\t\t\tEnv: []v1.EnvVar{\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\tName: \"POD_IP\",\n\t\t\t\t\t\t\t\tValueFrom: &v1.EnvVarSource{\n\t\t\t\t\t\t\t\t\tFieldRef: &v1.ObjectFieldSelector{"
+  },
+  {
+    "id" : "9f175bad-ee99-4b24-a248-a1d1e60cefee",
+    "prId" : 95351,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95351#pullrequestreview-569357111",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "813e2c07-fc47-4275-a478-5d4a069cb67e",
+        "parentId" : null,
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "why did you drop the client-vs-server antiaffinity?",
+        "createdAt" : "2021-01-15T15:01:56Z",
+        "updatedAt" : "2021-01-15T15:01:56Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "938a97f0-5903-44c3-b133-e72e8626fc0b",
+        "parentId" : "813e2c07-fc47-4275-a478-5d4a069cb67e",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "BeforeEach selects 2 nodes\r\n```\r\n\t\tnodes, err := e2enode.GetBoundedReadySchedulableNodes(cs, 2)\r\n\t\tframework.ExpectNoError(err)\r\n\t\tif len(nodes.Items) < 2 {\r\n\t\t\te2eskipper.Skipf(\r\n\t\t\t\t\"Test requires >= 2 Ready nodes, but there are only %v nodes\",\r\n\t\t\t\tlen(nodes.Items))\r\n\t\t}\r\n```\r\n\r\nand the test schedules the pod in a different node using the `NodeName` field\r\n\r\n I find it simpler to debug ",
+        "createdAt" : "2021-01-15T15:25:56Z",
+        "updatedAt" : "2021-01-15T15:26:15Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "67e2c37440a198f3de59933706e2e7cfcbc23702",
+    "line" : 79,
+    "diffHunk" : "@@ -1,1 +292,296 @@\t\t}\n\n\t\tserverPod := &v1.Pod{\n\t\t\tObjectMeta: metav1.ObjectMeta{\n\t\t\t\tName:   \"boom-server\","
+  },
+  {
+    "id" : "b0552318-4645-4d18-b623-e0453520d4c4",
+    "prId" : 92304,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92304#pullrequestreview-434093187",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "df1c465b-4856-4b14-b6fe-050d728d949f",
+        "parentId" : null,
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "unrelated to your PR but when I added this command I was thinking that each iteration was 5 seconds (`nc -w` says it waits), however, the logs show multiple executions in the same second\r\n```Fri Jun 19 11:18:54 UTC 2020 Try: 5\r\n\r\nFri Jun 19 11:18:54 UTC 2020 Try: 6\r\n\r\nFri Jun 19 11:18:54 UTC 2020 Try: 7\r\n```\r\nthis is much better for sure\r\n",
+        "createdAt" : "2020-06-19T13:50:43Z",
+        "updatedAt" : "2020-06-19T14:49:42Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f32648d81013ac56ad529eb262a5cf1c18ff2273",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +133,137 @@\t\tclientPod := newAgnhostPod(podClient, \"\")\n\t\tclientPod.Spec.NodeName = clientNodeInfo.name\n\t\tcmd := fmt.Sprintf(`date; for i in $(seq 1 3000); do echo \"$(date) Try: ${i}\"; echo hostname | nc -u -w 5 -p %d %s %d; echo; done`, srcPort, serverNodeInfo.nodeIP, udpService.Spec.Ports[0].NodePort)\n\t\tclientPod.Spec.Containers[0].Command = []string{\"/bin/sh\", \"-c\", cmd}\n\t\tclientPod.Spec.Containers[0].Name = podClient"
+  },
+  {
+    "id" : "23668731-814a-448f-9d42-72541e046e7c",
+    "prId" : 92304,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92304#pullrequestreview-434207857",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a35339b0-32ae-4549-a78d-289b1df2cb11",
+        "parentId" : null,
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "maybe we can relax the interval, I mean, if the client connects to the backend it will show up in the logs.\r\nAnyway, you know better than me and anybody about this, just trying to reduce load in the e2e tests.\r\n",
+        "createdAt" : "2020-06-19T14:01:20Z",
+        "updatedAt" : "2020-06-19T14:49:42Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c738af26-d740-4317-8373-45625d04786d",
+        "parentId" : "a35339b0-32ae-4549-a78d-289b1df2cb11",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "IIUIC polling just improve the speed of the test only, it should be enough changing the sleep to 1 minute",
+        "createdAt" : "2020-06-19T14:08:24Z",
+        "updatedAt" : "2020-06-19T14:49:42Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff83b3ac-e763-4a78-b40f-2cfb76f21f67",
+        "parentId" : "a35339b0-32ae-4549-a78d-289b1df2cb11",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Yes - we can change to sleep 1m, but if polling logs every 5s can overload us, we have bigger problems...",
+        "createdAt" : "2020-06-19T14:31:42Z",
+        "updatedAt" : "2020-06-19T14:49:42Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cfb99230-79ca-4cf0-a909-eac9546a3713",
+        "parentId" : "a35339b0-32ae-4549-a78d-289b1df2cb11",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "well, the kube-cli tests take more than 20 secs to attach to  stdin sometimes, ",
+        "createdAt" : "2020-06-19T16:17:42Z",
+        "updatedAt" : "2020-06-19T16:17:42Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "baee7288-5375-47f5-b124-82004a884ba8",
+        "parentId" : "a35339b0-32ae-4549-a78d-289b1df2cb11",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I don't think we attach to get logs",
+        "createdAt" : "2020-06-19T16:33:06Z",
+        "updatedAt" : "2020-06-19T16:33:07Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f32648d81013ac56ad529eb262a5cf1c18ff2273",
+    "line" : 56,
+    "diffHunk" : "@@ -1,1 +160,164 @@\t\t// Based on the above check if the pod receives the traffic.\n\t\tginkgo.By(\"checking client pod connected to the backend 1 on Node IP \" + serverNodeInfo.nodeIP)\n\t\tif err := wait.PollImmediate(5*time.Second, time.Minute, logContainsFn(podBackend1)); err != nil {\n\t\t\tlogs, err = e2epod.GetPodLogs(cs, ns, podClient, podClient)\n\t\t\tframework.ExpectNoError(err)"
+  }
+]

@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "222e1070-0de3-4d42-bde0-7ec7100b138a",
+    "prId" : 97930,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97930#pullrequestreview-568403285",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dd0db192-c107-4a71-afb2-711f0abca45e",
+        "parentId" : null,
+        "authorId" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "body" : "Do you know why the func name \"FsInfo\" is not allowed by golint?",
+        "createdAt" : "2021-01-14T15:42:40Z",
+        "updatedAt" : "2021-01-14T15:42:40Z",
+        "lastEditedBy" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a337b1c3-d3ad-4d38-a7da-04e08610715c",
+        "parentId" : "dd0db192-c107-4a71-afb2-711f0abca45e",
+        "authorId" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "body" : "Got it.\r\n```\r\npkg/volume/util/fs/fs.go:35:6: func name will be used as fs.FsInfo by other packages, and that stutters; consider calling this Info\r\n```",
+        "createdAt" : "2021-01-14T16:25:51Z",
+        "updatedAt" : "2021-01-14T16:25:51Z",
+        "lastEditedBy" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f1829a7744a1c4d2211188e67a1d2d4231edd103",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +33,37 @@// Info linux returns (available bytes, byte capacity, byte usage, total inodes, inodes free, inode usage, error)\n// for the filesystem that path resides upon.\nfunc Info(path string) (int64, int64, int64, int64, int64, int64, error) {\n\tstatfs := &unix.Statfs_t{}\n\terr := unix.Statfs(path, statfs)"
+  },
+  {
+    "id" : "9a15f9ad-3d25-452b-a3ac-049bed8319ae",
+    "prId" : 96115,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96115#pullrequestreview-613541609",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b29854b1-b856-4732-ac92-2d79d8bbe72b",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "should it be if consumption != nil?",
+        "createdAt" : "2021-03-12T04:41:36Z",
+        "updatedAt" : "2021-04-06T12:20:09Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b95d5799-800c-46e2-a5cf-33c8b3064e3b",
+        "parentId" : "b29854b1-b856-4732-ac92-2d79d8bbe72b",
+        "authorId" : "acd131d4-e558-4498-9865-43a42af670ce",
+        "body" : "That is a good question.\r\n\r\nPreviously the code looked like this:\r\n```go\r\n\t// First check whether the quota system knows about this directory\r\n\t// A nil quantity with no error means that the path does not support quotas\r\n\t// and we should use other mechanisms.\r\n\tdata, err := fsquota.GetConsumption(path)\r\n\tif data != nil {\r\n\t\treturn data, nil\r\n\t} else if err != nil {\r\n\t\treturn nil, fmt.Errorf(\"unable to retrieve disk consumption via quota for %s: %v\", path, err)\r\n\t}\r\n```\r\nBut what happens if `fsquota.GetConsuption(path)` returns a data value that is non-nil _and_ an error? With the above code, it would gladly return the `data` even if there was an error returned. \r\n\r\nNormally in Go code, if there is an error returned, the other value(s) returned are invalid and must be discarded, but I'm not sure that is the case with `fsquota.GetConsumption` and `fsquota.GetInodes`? are there any valid case where those return a value _and_ an error, where we should ignore the error?\r\n\r\nMy change looks like this (which is difficult to see by just looking at the git diff):\r\n```go\r\n    // First check whether the quota system knows about this directory\r\n    // A nil quantity with no error means that the path does not support quotas\r\n    // and we should use other mechanisms.\r\n    consumption, err := fsquota.GetConsumption(path)\r\n    if err != nil {\r\n        return usage, fmt.Errorf(\"unable to retrieve disk consumption via quota for %s: %v\", path, err)\r\n    }\r\n    inodes, err := fsquota.GetInodes(path)\r\n    if err != nil {\r\n        return usage, fmt.Errorf(\"unable to retrieve inode consumption via quota for %s: %v\", path, err)\r\n    }\r\n\r\n    if inodes != nil {\r\n        usage.Bytes = consumption.Value()\r\n    }\r\n\r\n    if consumption != nil {\r\n        usage.Inodes = inodes.Value()\r\n    }\r\n\r\n    if inodes != nil && consumption != nil {\r\n        return usage, nil\r\n    }\r\n```\r\n\r\nSo, if either of `fsquota.GetConsumption` or `fsquota.GetInodes` returns error, we abort everything with that error, assuming that the return value can not be used.\r\n\r\nOnce we have tested that the return values are valid (eg no errors returned) we check if they are nil or not, and if both are non-nil we can return without walking the path.\r\n\r\nHowever, if we are supposed to ignore any errors from either `fsquota.GetConsumption` or `fsquota.GetInodes` as long as the return value is non-nil, then my code is wrong and needs change.\r\n",
+        "createdAt" : "2021-03-12T17:50:11Z",
+        "updatedAt" : "2021-04-06T12:20:09Z",
+        "lastEditedBy" : "acd131d4-e558-4498-9865-43a42af670ce",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3442b04b-8514-4dcb-9d74-eb213f71ff38",
+        "parentId" : "b29854b1-b856-4732-ac92-2d79d8bbe72b",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : ">So, if either of fsquota.GetConsumption or fsquota.GetInodes returns error, we abort everything with that error, assuming that the return value can not be used.\r\n\r\nIn this case, my thought is we should use the filepath.walk approach to get the size instead of returning error directly. I checked quota function, and I don't think there will be case that data!=nil && err!=nil\r\n\r\n```go\r\n    // First check whether the quota system knows about this directory\r\n    // A nil quantity with no error means that the path does not support quotas\r\n    // and we should use other mechanisms.\r\n    consumption, err1 := fsquota.GetConsumption(path)\r\n    inodes, err2 := fsquota.GetInodes(path)\r\n\r\n    if consumption != nil && inode !=nil {\r\n             usage.Bytes = consumption.Value()\r\n             usaga.Inodes = inode.Value()\r\n            return usage, nil\r\n    }\r\n\r\n     ...\r\n\r\n    // the following use filepath.Walk to get usage\r\n\r\n   ```\r\n",
+        "createdAt" : "2021-03-13T01:36:00Z",
+        "updatedAt" : "2021-04-06T12:20:09Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bf6d2d9c-1a6b-44f5-a22c-d86358c929a6",
+        "parentId" : "b29854b1-b856-4732-ac92-2d79d8bbe72b",
+        "authorId" : "acd131d4-e558-4498-9865-43a42af670ce",
+        "body" : "I think you are right, looks like `fsquota.GetConsumption` returns error in case `xfs_quota` fails to execute, and we dont want return error in that case. I think we simply want fallback to `filepath.walk` on any error. Will fix this.",
+        "createdAt" : "2021-03-16T17:36:28Z",
+        "updatedAt" : "2021-04-06T12:20:09Z",
+        "lastEditedBy" : "acd131d4-e558-4498-9865-43a42af670ce",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "79126376f02997be3b125555e1fdccda0f63a5f4",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +73,77 @@\tconsumption, _ := fsquota.GetConsumption(path)\n\tif consumption != nil {\n\t\tusage.Bytes = consumption.Value()\n\t}\n"
+  },
+  {
+    "id" : "ea2d320f-efd8-4812-bc3c-148b287b4bd1",
+    "prId" : 96115,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96115#pullrequestreview-611038063",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4b28c71d-5cb7-440b-8b29-b1d12bdb4d90",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "want to double check this works for both Linux and darwin, I see this will be different in plan9 https://stackoverflow.com/questions/65165823/undefined-syscall-stat-t-for-plan9",
+        "createdAt" : "2021-03-12T04:51:39Z",
+        "updatedAt" : "2021-04-06T12:20:09Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85f6abb2-6a0b-4ed6-8b74-1204823962d4",
+        "parentId" : "4b28c71d-5cb7-440b-8b29-b1d12bdb4d90",
+        "authorId" : "acd131d4-e558-4498-9865-43a42af670ce",
+        "body" : "I was in doubt if this is ok myself, but I searched the code and found it to be used various other places. looks like those are linux specific though.\r\n\r\nBut both [darwin arm64](https://github.com/golang/go/blob/master/src/syscall/ztypes_darwin_arm64.go#L66) and [darwin amd64](https://github.com/golang/go/blob/master/src/syscall/ztypes_darwin_amd64.go#L66) has both `Dev` and `NLink` fields so darwin should be fine.\r\n\r\nLooks plan9 would need speical handling indeed. Also does not look like there are any `NLink`s for plan9? Do we need to worry about that now?",
+        "createdAt" : "2021-03-12T18:09:22Z",
+        "updatedAt" : "2021-04-06T12:20:09Z",
+        "lastEditedBy" : "acd131d4-e558-4498-9865-43a42af670ce",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "79126376f02997be3b125555e1fdccda0f63a5f4",
+    "line" : 128,
+    "diffHunk" : "@@ -1,1 +108,112 @@\t\t}\n\n\t\ts, ok := info.Sys().(*syscall.Stat_t)\n\t\tif !ok {\n\t\t\treturn fmt.Errorf(\"unsupported fileinfo; could not convert to stat_t\")"
+  }
+]

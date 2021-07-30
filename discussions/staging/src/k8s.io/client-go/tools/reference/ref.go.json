@@ -1,0 +1,200 @@
+[
+  {
+    "id" : "9005ba47-ee26-4b63-a2dd-171e8b60d759",
+    "prId" : 80978,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80978#pullrequestreview-272016565",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cf70505d-33db-4e2f-bb61-ef2610017434",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This PR doesn't really make this worse - I don't think we will ever have a situation that kind was set, but version wasn't. Which means we were falling back for kind to scheme anyway.",
+        "createdAt" : "2019-08-05T11:26:43Z",
+        "updatedAt" : "2019-08-07T14:51:12Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0baa2c0a-3177-4138-975f-fe971ec0176a",
+        "parentId" : "cf70505d-33db-4e2f-bb61-ef2610017434",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "that means anything calling GetReference no longer works for custom object references, right? the event recorder looks to call this method with arbitrary objects",
+        "createdAt" : "2019-08-06T15:22:48Z",
+        "updatedAt" : "2019-08-07T14:51:12Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "03ebe1f7-ac68-41bd-bbf1-3597b992819a",
+        "parentId" : "cf70505d-33db-4e2f-bb61-ef2610017434",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I actually claim that this didn't change - I wasn't able to find any case where kind was set and group/version wasn't (in the object we were trying to reference).\r\nAnd if the kind was also missing, the to get it, we were already falling back to scheme, which was failing (because CRDs aren't registered there). This is what I have on my mind:\r\nhttps://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/client-go/tools/reference/ref.go#L57\r\n[and the comment line above \"this is wrong\" I guess is exactly about that case, or am I missing something?]",
+        "createdAt" : "2019-08-06T16:43:24Z",
+        "updatedAt" : "2019-08-07T14:51:12Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57cfa297-ca10-4b16-8cf0-cb1bc5b67e3c",
+        "parentId" : "cf70505d-33db-4e2f-bb61-ef2610017434",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I guess scheme can actually pull a gvk from a custom resource, but only if gvk is already set in the object... see https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apimachinery/pkg/runtime/scheme.go#L236-L248",
+        "createdAt" : "2019-08-07T13:49:34Z",
+        "updatedAt" : "2019-08-07T14:51:12Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8b3e91c9-0bbf-4a64-afe2-58fb3972eebb",
+        "parentId" : "cf70505d-33db-4e2f-bb61-ef2610017434",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Interesting (doesn't seem like something extremely useful though).",
+        "createdAt" : "2019-08-07T14:46:40Z",
+        "updatedAt" : "2019-08-07T14:51:19Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f0a8aecc46f5192c917d069ff57b104071862729",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +62,66 @@\t// we are falling back to scheme.\n\t//\n\t// TODO: This doesn't work for CRDs, which are not registered in scheme.\n\tif gvk.Empty() {\n\t\tgvks, _, err := scheme.ObjectKinds(obj)"
+  },
+  {
+    "id" : "58668475-0112-422e-8c4d-447afabbd23a",
+    "prId" : 80978,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80978#pullrequestreview-271978375",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c855a314-c260-4066-bed7-3495a11efb5e",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I think we should get kind/version from obj.GetObjectKind() or from the scheme, not get them from different sources. e.g.:\r\n\r\n```go\r\ngvk := obj.GetObjectKind().GroupVersionKind()\r\n\r\nif gvk.Empty() {\r\n  gvks, _, err := scheme.ObjectKinds(obj)\r\n  if err != nil {\r\n    return nil, err\r\n  }\r\n  if len(gvks) == 0 || gvks[0].Empty() {\r\n    return nil, fmt.Errorf(\"...\")\r\n  }\r\n  gvk = gvks[0]\r\n}\r\n\r\nkind := gvk.Kind\r\nversion := gvk.GroupVersion().String()\r\n```",
+        "createdAt" : "2019-08-07T13:47:44Z",
+        "updatedAt" : "2019-08-07T14:51:12Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0f592e52-5041-4dc5-93e8-24aeb7f5566d",
+        "parentId" : "c855a314-c260-4066-bed7-3495a11efb5e",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "good point - done",
+        "createdAt" : "2019-08-07T14:00:15Z",
+        "updatedAt" : "2019-08-07T14:51:12Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f0a8aecc46f5192c917d069ff57b104071862729",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +57,61 @@\t}\n\n\tgvk := obj.GetObjectKind().GroupVersionKind()\n\n\t// If object meta doesn't contain data about kind and/or version,"
+  },
+  {
+    "id" : "d686c225-de40-49e0-a7f0-0d35fb80f412",
+    "prId" : 49116,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/49116#pullrequestreview-51357248",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e99a9325-0fe6-4298-a61b-f80f0350e191",
+        "parentId" : null,
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "@sttts could you move it to client-go/util instead? In my mind, tools/ are for larger features like informers ect. And when k8s.io/pkg is ready, util/ should be moved there.",
+        "createdAt" : "2017-07-18T17:00:30Z",
+        "updatedAt" : "2017-07-18T20:46:55Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "11602ecc-5ee7-4a95-8d77-2e9479e97736",
+        "parentId" : "e99a9325-0fe6-4298-a61b-f80f0350e191",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "util is meant to be independent of kube types, isn't it?",
+        "createdAt" : "2017-07-18T20:44:18Z",
+        "updatedAt" : "2017-07-18T20:46:55Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "742ecc3d-c582-4861-838e-e5b3786f3e37",
+        "parentId" : "e99a9325-0fe6-4298-a61b-f80f0350e191",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Yes. My understanding is that there will be k8s.io/util for non-kube things, and k8s.io/pkg for utils that import kube types. So how about this reference package to k8s.io/client-go/pkg for now, and move it to k8s.io/pkg in the future?\r\n\r\n",
+        "createdAt" : "2017-07-18T21:31:30Z",
+        "updatedAt" : "2017-07-18T21:31:53Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "30a1edcc-d451-4b7c-bfad-a1d4e84b7a61",
+        "parentId" : "e99a9325-0fe6-4298-a61b-f80f0350e191",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "I would like to get rid of the pkg dir. Not much sense to have a single helper package there. Why not tools?",
+        "createdAt" : "2017-07-19T07:55:53Z",
+        "updatedAt" : "2017-07-19T07:55:53Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2876a72b-a0bf-4b88-bc34-4f410baee3f8",
+        "parentId" : "e99a9325-0fe6-4298-a61b-f80f0350e191",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "In my mind tools will be for features that deserve a README and an example in /examples. It seems the reality is moving further away from this picture.",
+        "createdAt" : "2017-07-19T22:29:05Z",
+        "updatedAt" : "2017-07-19T22:29:28Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7621043f-01ad-40ac-894f-49f5b4e1e5fa",
+        "parentId" : "e99a9325-0fe6-4298-a61b-f80f0350e191",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "To keep us on the same page: we still copy the clientset/listers/informers from kubernetes to client-go. I'm working on PRs to remove the copies in kubernetes.",
+        "createdAt" : "2017-07-19T22:30:48Z",
+        "updatedAt" : "2017-07-19T22:30:48Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "452c6179-4e67-4b0e-8f0d-f2f5a55c1952",
+        "parentId" : "e99a9325-0fe6-4298-a61b-f80f0350e191",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "Do you have anything in the works already? Wanted to tackle this as well very soon.",
+        "createdAt" : "2017-07-20T10:35:08Z",
+        "updatedAt" : "2017-07-20T10:35:08Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a26f8299-03a6-47f8-b285-480d4bad1c9f",
+        "parentId" : "e99a9325-0fe6-4298-a61b-f80f0350e191",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Yes, will send a PR today.",
+        "createdAt" : "2017-07-20T23:39:41Z",
+        "updatedAt" : "2017-07-20T23:39:41Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5925a0a1df1cb8cfbf9d1b4c9aa62d772090ad75",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +15,19 @@*/\n\npackage reference\n\nimport ("
+  }
+]

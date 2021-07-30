@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "e44cecf8-b77a-40f8-a2c6-24a61c5d1d5c",
+    "prId" : 36017,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36017#pullrequestreview-7000575",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "32108028-da15-4522-85ab-90ace3bfe107",
+        "parentId" : null,
+        "authorId" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "body" : "It won't work. You need to do normal get-update retry loop here, as you're iterating over Pod you got some time ago, so you're pretty much guaranteed to get some collision.\n\nAlso doing it (delete and setting reason) in different transactions may leave system in some weird state when update failed and delete succeeded (I'm not sure if Delete can fail because of collision - @deads2k @lavalamp). We don't have transaction yet, so I'm not sure if it can be solved properly (and thus if we care).\n\nRemoving LGTM to have time to discuss this.\n",
+        "createdAt" : "2016-11-03T08:59:24Z",
+        "updatedAt" : "2016-11-03T20:47:18Z",
+        "lastEditedBy" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e4be7fd-c2ed-41d2-8ec5-0d9f1aabffe2",
+        "parentId" : "32108028-da15-4522-85ab-90ace3bfe107",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "Delete can only fail on a collision if you opt-in to a conditional delete.\n\nIs it actually likely that the termination reason for an already terminated pod is likely to change?  Seems like a retryonconflict that makes sure the status reason and message haven't changed ought to do, right?\n\nI could also see an argument for making this error non-fatal and just `utilruntime.HandleError` and move on.  Seems like that might be better than stopping this entirely.\n",
+        "createdAt" : "2016-11-03T12:13:11Z",
+        "updatedAt" : "2016-11-03T20:47:18Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c68644ba-ad0e-4c8b-a319-074ae13989f7",
+        "parentId" : "32108028-da15-4522-85ab-90ace3bfe107",
+        "authorId" : "e535b047-00fc-4269-992a-b8d65bd7c57b",
+        "body" : "@gmarek \nThe deletion is happening on the pod name itself without any precondition, so it cannot fail unless the pod is gone already. \n\n@deads2k, If any of the updates return an error, we keep track of that and reschedule the entire deletePods operation immediately after the execution and retry just setting status till we succeed. We don't stop the deletions because of it but we do retry. \n",
+        "createdAt" : "2016-11-03T13:08:35Z",
+        "updatedAt" : "2016-11-03T20:47:18Z",
+        "lastEditedBy" : "e535b047-00fc-4269-992a-b8d65bd7c57b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd4fa365-b201-40e2-beef-6e62d2e31264",
+        "parentId" : "32108028-da15-4522-85ab-90ace3bfe107",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "> I could also see an argument for making this error non-fatal and just utilruntime.HandleError and move on. Seems like that might be better than stopping this entirely.\n\nOr aggregate all errors in one and try all deletions.\n",
+        "createdAt" : "2016-11-03T13:11:10Z",
+        "updatedAt" : "2016-11-03T20:47:18Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6d7213dd39d416ca567143c6d636f293a4f8a3e2",
+    "line" : 65,
+    "diffHunk" : "@@ -1,1 +111,115 @@\tvar updatedPod *api.Pod\n\tvar err error\n\tif updatedPod, err = kubeClient.Core().Pods(pod.Namespace).UpdateStatus(pod); err != nil {\n\t\treturn nil, err\n\t}"
+  },
+  {
+    "id" : "f07e52c9-dbd3-435c-b926-22d2238849bd",
+    "prId" : 29437,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "34b07cd6-49f3-4d0f-b0e6-9f030d915b35",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "We should add a test that ensures that these events are being correctly formed.\n",
+        "createdAt" : "2016-07-22T14:31:12Z",
+        "updatedAt" : "2016-08-15T07:02:58Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e99a6645-6b99-4584-aa7b-47bfa17f6fc8",
+        "parentId" : "34b07cd6-49f3-4d0f-b0e6-9f030d915b35",
+        "authorId" : "9eb1241d-3dca-4a34-a85d-a880ba615f8c",
+        "body" : "@smarterclayton I just noticed that we have already add such test cases [here](https://github.com/kubernetes/kubernetes/blob/master/pkg/client/record/event_test.go#L104). So do we still need to add test case in node controller? If so I will do that.\n",
+        "createdAt" : "2016-07-24T10:55:56Z",
+        "updatedAt" : "2016-08-15T07:02:58Z",
+        "lastEditedBy" : "9eb1241d-3dca-4a34-a85d-a880ba615f8c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "465407e0-9e7c-48ce-9364-fe9c78d7f8ab",
+        "parentId" : "34b07cd6-49f3-4d0f-b0e6-9f030d915b35",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "This would be a test to verify the correct node UID was set, as long as\nit's not unreasonably difficult to properly abstract.  If it's too complex\nI'm fine with not including it.\n\nOn Sun, Jul 24, 2016 at 6:56 AM, TonyAdo notifications@github.com wrote:\n\n> In pkg/controller/node/controller_utils.go\n> https://github.com/kubernetes/kubernetes/pull/29437#discussion_r71986570\n> :\n> \n> > @@ -304,7 +304,7 @@ func terminatePods(kubeClient clientset.Interface, recorder record.EventRecorder\n> >         if remaining < 0 {\n> >             remaining = 0\n> >             glog.V(2).Infof(\"Removing pod %v after %s grace period\", pod.Name, grace)\n> > -           recordNodeEvent(recorder, nodeName, api.EventTypeNormal, \"TerminatingEvictedPod\", fmt.Sprintf(\"Pod %s has exceeded the grace period for deletion after being evicted from Node %q and is being force killed\", pod.Name, nodeName))\n> > -           recordNodeEvent(recorder, nodeName, nodeUID, api.EventTypeNormal, \"TerminatingEvictedPod\", fmt.Sprintf(\"Pod %s has exceeded the grace period for deletion after being evicted from Node %q and is being force killed\", pod.Name, nodeName))\n> \n> @smarterclayton https://github.com/smarterclayton I just noticed that\n> we have already add such test cases here\n> https://github.com/kubernetes/kubernetes/blob/master/pkg/client/record/event_test.go#L104.\n> So do we still need to add test case in node controller? If so I will do\n> that.\n> \n> —\n> You are receiving this because you were mentioned.\n> Reply to this email directly, view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/29437/files/6977eaf67e62bcbaeb4a8b44b5116d5b2c73679b#r71986570,\n> or mute the thread\n> https://github.com/notifications/unsubscribe-auth/ABG_p1E3w9EVZPfjHAG8S06jUPOW2fPlks5qY0TJgaJpZM4JShB4\n> .\n",
+        "createdAt" : "2016-07-25T13:58:11Z",
+        "updatedAt" : "2016-08-15T07:02:58Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b2ab4c6d9b1eee04b4d4ca380d648f33949292ba",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +321,325 @@\t\t\tremaining = 0\n\t\t\tglog.V(2).Infof(\"Removing pod %v after %s grace period\", pod.Name, grace)\n\t\t\trecordNodeEvent(recorder, nodeName, nodeUID, api.EventTypeNormal, \"TerminatingEvictedPod\", fmt.Sprintf(\"Pod %s has exceeded the grace period for deletion after being evicted from Node %q and is being force killed\", pod.Name, nodeName))\n\t\t\tif err := kubeClient.Core().Pods(pod.Namespace).Delete(pod.Name, api.NewDeleteOptions(0)); err != nil {\n\t\t\t\tglog.Errorf(\"Error completing deletion of pod %s: %v\", pod.Name, err)"
+  },
+  {
+    "id" : "beda24a4-abf4-4e77-9af1-f275a189fedc",
+    "prId" : 29437,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "758f53da-225b-48b8-a611-e133c77e24ea",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "We have the potential for delete-create-delete race in the node controller because we don't check uid.  Can you open an issue against the node controller that we need to precondition pod deletion against Pod uid?  There may be one open, but if not it's something that may be causing real problems today.\n",
+        "createdAt" : "2016-07-22T14:33:06Z",
+        "updatedAt" : "2016-08-15T07:02:58Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3011818-4ebe-4055-9333-05e919da2a15",
+        "parentId" : "758f53da-225b-48b8-a611-e133c77e24ea",
+        "authorId" : "9eb1241d-3dca-4a34-a85d-a880ba615f8c",
+        "body" : "Sure, I will do that.\n",
+        "createdAt" : "2016-07-23T06:00:37Z",
+        "updatedAt" : "2016-08-15T07:02:58Z",
+        "lastEditedBy" : "9eb1241d-3dca-4a34-a85d-a880ba615f8c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b2ab4c6d9b1eee04b4d4ca380d648f33949292ba",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +84,88 @@// deletePods will delete all pods from master running on given node, and return true\n// if any pods were deleted.\nfunc deletePods(kubeClient clientset.Interface, recorder record.EventRecorder, nodeName, nodeUID string, daemonStore cache.StoreToDaemonSetLister) (bool, error) {\n\tremaining := false\n\tselector := fields.OneTermEqualSelector(api.PodHostField, nodeName)"
+  },
+  {
+    "id" : "88ba548d-708c-46e7-bbe6-34aa9bcdec59",
+    "prId" : 28897,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "44d3278d-5665-4f2c-b751-889c0286337d",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Please add a function comment that describes the algorithm that we are using to compute it, so that not everyone needs to understand the code.\n",
+        "createdAt" : "2016-07-15T06:43:46Z",
+        "updatedAt" : "2016-08-02T12:22:10Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b8ec9af5-411f-4d7e-a430-fe7c6f78b323",
+        "parentId" : "44d3278d-5665-4f2c-b751-889c0286337d",
+        "authorId" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "body" : "Done.\n",
+        "createdAt" : "2016-07-15T08:46:10Z",
+        "updatedAt" : "2016-08-02T12:22:10Z",
+        "lastEditedBy" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "66224ce0bd9310deda7aa8a696310a89cc927747",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +60,64 @@\t\treturn stateFullDisruption\n\tcase notReadyNodes > 2 && 2*notReadyNodes > readyNodes:\n\t\treturn statePartialDisruption\n\tdefault:\n\t\treturn stateNormal"
+  }
+]

@@ -1,0 +1,354 @@
+[
+  {
+    "id" : "8864adef-d3ef-4733-bfe9-bcc1d7f7b90c",
+    "prId" : 88854,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88854#pullrequestreview-381151281",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9d00be58-d8dd-46e2-b97a-c13a67eeb403",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "I would suggest a slightly different approach in here. Instead of having a couple of `if` statements here, we can divide the `UpgradePlane` like so:\r\n```\r\ntype UpgradePlan struct {\r\n\tmetav1.TypeMeta\r\n\r\n\tBefore []ComponentUpgradePlan\r\n\tMain   []ComponentUpgradePlan\r\n\tAfter   []ComponentUpgradePlan\r\n}\r\n```\r\n\r\nThen we'll simply print 3 tables (if they are not empty that is).",
+        "createdAt" : "2020-03-23T11:12:21Z",
+        "updatedAt" : "2020-03-24T10:45:56Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26e47db1-2b8f-4ff2-a2d7-0c861a897eed",
+        "parentId" : "9d00be58-d8dd-46e2-b97a-c13a67eeb403",
+        "authorId" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "body" : "@rosti thank you for the review!\r\n\r\nThis would make the structure less flexible in my opinion. I like it more when it's less nested, i.e. when it's just a list of components.  This division to 3 groups looks a bit artificial to me and only make sense for the text output.\r\n\r\nAlso \"Before\" and \"After\" names  can be confusing as they may sound like \"Before the upgrade\" and \"After the upgrade\".\r\n\r\n@neolit123, @fabriziopandini wdyt?",
+        "createdAt" : "2020-03-24T10:28:04Z",
+        "updatedAt" : "2020-03-24T10:45:56Z",
+        "lastEditedBy" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7dc43711-d83b-4137-add4-07ca70e4bac7",
+        "parentId" : "9d00be58-d8dd-46e2-b97a-c13a67eeb403",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "why is the separate Before, Main, After better?\r\n\r\ni think it makes sense to define a Component as external via a `IsExternal bool` field.\r\n\r\nwe can then:\r\n- count the external components\r\n- if > 0 print the external header\r\n  - print each external component\r\n- print the local components header\r\n- iterate over the local components\r\n- print the local component\r\n\r\nwould that work?\r\n\r\nPS: i think we should stop reporting the version of external etcd!\r\n",
+        "createdAt" : "2020-03-24T15:35:24Z",
+        "updatedAt" : "2020-03-24T15:35:25Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8afaa0dd-75c4-43e7-88f4-cd2d17b17b57",
+        "parentId" : "9d00be58-d8dd-46e2-b97a-c13a67eeb403",
+        "authorId" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "body" : "It would work, but it's not enough to cover current output layout. There are 3 tables in the current output: manual upgrade components(kubelet), main components and external components.\r\n\r\nMy opinion is that we shouldn't be creating extra levels of complexity here. Text output is already quite complex, but it doesn't mean we should keep it and even do the same for structured output. I'd just go with the plain list of upgradable components in both modes (text and structured) and add notes for users at the end of the text output. would it work for you?",
+        "createdAt" : "2020-03-25T10:35:54Z",
+        "updatedAt" : "2020-03-25T10:35:54Z",
+        "lastEditedBy" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e83a70c-0e85-4a7d-ab5b-8475ee5eec0d",
+        "parentId" : "9d00be58-d8dd-46e2-b97a-c13a67eeb403",
+        "authorId" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "body" : "if you want to keep current output that's ok too. This PR does exactly that. Feel free to merge it as it is in this case :)",
+        "createdAt" : "2020-03-25T10:38:15Z",
+        "updatedAt" : "2020-03-25T10:38:16Z",
+        "lastEditedBy" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f9c1c5fc-60ec-4617-bd09-b221a9adbe78",
+        "parentId" : "9d00be58-d8dd-46e2-b97a-c13a67eeb403",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "I am somewhat fine with not saying anything for etcd if it's external (probably just print it's external though). It's the responsibility of the user to handle it. It is certainly handy, though, to prompt users to upgrade their external etcd whenever the current version is being dropped by the API server (for example, when etcd 4.0 is released someday).\r\n\r\nI do think, that it's beneficial for the output API to be able to tell components that are going to be upgraded by kubeadm and ones that need manual upgrades after that (kubelet). It's entirely possible, that some automation tool is going to use the information to, say `apt-get` the correct package after `apply`.",
+        "createdAt" : "2020-03-25T13:35:41Z",
+        "updatedAt" : "2020-03-25T13:43:44Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0eac66d647f3e0559305cb9dfb4d246192c8012d",
+    "line" : 216,
+    "diffHunk" : "@@ -1,1 +204,208 @@\tprintManualUpgradeHeader := true\n\tfor _, component := range plan.Components {\n\t\tif isExternalEtcd && component.Name == constants.Etcd {\n\t\t\tfmt.Fprintln(w, \"External components that should be upgraded manually before you upgrade the control plane with 'kubeadm upgrade apply':\")\n\t\t\tfmt.Fprintln(tabw, \"COMPONENT\\tCURRENT\\tAVAILABLE\")"
+  },
+  {
+    "id" : "5ef7d727-b2af-41d3-8109-655aec6dd1f8",
+    "prId" : 88854,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88854#pullrequestreview-382756420",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f1c698d7-4127-4fd5-8605-2449dbe3d512",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "It's best to keep the user friendly component names if we can. For that matter, we can perform a quick translation here by using a static `map[string]string` in a helper func. Something like so:\r\n```golang\r\nvar userFriendlyComponentNamesMap = map[string]string {\r\n\tconstants.KubeAPIServer: \"API Server\",\r\n\t// ...\r\n}\r\n\r\nfunc getUserFriendlyComponentName(component string) string {\r\n\tif name, ok := userFriendlyComponentNamesMap[component]; ok {\r\n\t\treturn name\r\n\t}\r\n\treturn component\r\n}\r\n\r\n// ...\r\nfmt.Fprintf(tabw, \"%s\\t%s\\t%s\\n\", getUserFriendlyComponentName(component.Name), component.CurrentVersion, component.NewVersion)\r\n// ...\r\n```",
+        "createdAt" : "2020-03-23T11:29:16Z",
+        "updatedAt" : "2020-03-24T10:45:56Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "28011d04-dc8a-445a-9573-678fad73e7fb",
+        "parentId" : "f1c698d7-4127-4fd5-8605-2449dbe3d512",
+        "authorId" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "body" : "AFAIR this was discussed in one of the previous PRs of this kind and we decided to go with the names from constants.go. @neolit123 was ok with this.",
+        "createdAt" : "2020-03-24T10:20:35Z",
+        "updatedAt" : "2020-03-24T10:45:56Z",
+        "lastEditedBy" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1dcd9402-a3b9-4d34-8eee-e2b7b80277bc",
+        "parentId" : "f1c698d7-4127-4fd5-8605-2449dbe3d512",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "i don't recall, my personal preference is to have everything coming from constants - e.g. `kube-apiserver, kubelet...`. our `upgrade apply` output is doing that.",
+        "createdAt" : "2020-03-24T15:27:50Z",
+        "updatedAt" : "2020-03-24T15:27:50Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70879e0d-1080-4540-885e-0c3e0b182f80",
+        "parentId" : "f1c698d7-4127-4fd5-8605-2449dbe3d512",
+        "authorId" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "body" : "ok, thanks. Let's agree not to have different names for the same component then. @rosti would it be ok for you?",
+        "createdAt" : "2020-03-25T10:29:26Z",
+        "updatedAt" : "2020-03-25T10:29:26Z",
+        "lastEditedBy" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3c1180f9-6eca-43d3-983f-b6b540ded61a",
+        "parentId" : "f1c698d7-4127-4fd5-8605-2449dbe3d512",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "It's possible that some existing tools actually parse those tables at the moment. Hence, changing `API Server` to `kube-apiserver` might prove problematic for some users. That's my only concern right now. Otherwise, I am fine with using the consts in the user readable output.\r\n\r\n@detiber by any chance, is Cluster API doing any parsing of this table (`kubeadm upgrade plan` that is)?",
+        "createdAt" : "2020-03-25T13:43:21Z",
+        "updatedAt" : "2020-03-25T13:43:44Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e3d1bf72-befa-4778-afb7-a4079265f0da",
+        "parentId" : "f1c698d7-4127-4fd5-8605-2449dbe3d512",
+        "authorId" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "body" : "We are not currently doing any parsing of this output as we currently use a loose coupling with `kubeadm`.",
+        "createdAt" : "2020-03-25T14:14:24Z",
+        "updatedAt" : "2020-03-25T14:14:24Z",
+        "lastEditedBy" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "331c2bff-a917-4c89-a45e-96d3610d5209",
+        "parentId" : "f1c698d7-4127-4fd5-8605-2449dbe3d512",
+        "authorId" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "body" : "@rosti re map or not to map names, I'm ok with either approach. Just let me know what you decided.",
+        "createdAt" : "2020-03-26T13:38:31Z",
+        "updatedAt" : "2020-03-26T13:38:31Z",
+        "lastEditedBy" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d90aa352-386b-4615-b56e-e172f49272f2",
+        "parentId" : "f1c698d7-4127-4fd5-8605-2449dbe3d512",
+        "authorId" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "body" : "@rosti @neolit123 as for introducing groups of components to the UpgradePlan structure. I'm proposing either not to do it at all (see my reasons explained above) or at least name it differently.",
+        "createdAt" : "2020-03-26T13:40:51Z",
+        "updatedAt" : "2020-03-26T13:40:51Z",
+        "lastEditedBy" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0965edd9-ab2e-46ed-a5c0-9975fc245fc2",
+        "parentId" : "f1c698d7-4127-4fd5-8605-2449dbe3d512",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "@bart0sh I am fine with not remapping.\r\nAlso, due to kubernetes/kubeadm#2058 external etcd will likely not be reported anymore by `kubeadm upgrade plan`. That leaves only the kubelet as of today as a component that needs manual upgrading.\r\nHence, let's merge it as is. If we need to add differentiation we can do that in alpha2 of the output API.\r\n\r\n/approve\r\n/lgtm",
+        "createdAt" : "2020-03-27T10:55:43Z",
+        "updatedAt" : "2020-03-27T10:55:43Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0eac66d647f3e0559305cb9dfb4d246192c8012d",
+    "line" : 219,
+    "diffHunk" : "@@ -1,1 +207,211 @@\t\t\tfmt.Fprintln(w, \"External components that should be upgraded manually before you upgrade the control plane with 'kubeadm upgrade apply':\")\n\t\t\tfmt.Fprintln(tabw, \"COMPONENT\\tCURRENT\\tAVAILABLE\")\n\t\t\tfmt.Fprintf(tabw, \"%s\\t%s\\t%s\\n\", component.Name, component.CurrentVersion, component.NewVersion)\n\t\t\t// end of external components table\n\t\t\tendOfTable()"
+  },
+  {
+    "id" : "7be23956-f7b4-4de5-9f01-054bdfbafbdb",
+    "prId" : 63509,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/63509#pullrequestreview-119908272",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "given the `DNSType` extension i would refactor the above to be a `switch / case` instead of handling it with `if / then`. it would then need less line changes once more DNS types are introduced.\r\n",
+        "createdAt" : "2018-05-09T11:25:25Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dfbb3ef2-f086-487e-95cd-d03881fd390a",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "body" : "Latest updates the conditionals that set printKubeDNS/printCoreDNS and the before/after versions, but since we need to potentially print multiples I think it still made sense to leave the if statements in place for the actual printing of the output.",
+        "createdAt" : "2018-05-09T15:57:42Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "148a18b2-3c80-4eb0-8468-3d0d6249b3f7",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "a map can be used too, but it kind of depends if it's OK to print names in the tabs `\\t`:\r\nthis also solves the case where the before and after types differ (?). to my understanding this was possible.\r\n\r\n```php\r\n// define names for known DNS types here\r\nvar dnsNames = make(map[string]string)\r\ndnsNames[constants.CoreDNS] = \"CoreDNS\"\r\ndnsNames[constants.KubeDNS] = \"KubeDNS\"\r\n\r\ndnsBefore, isKnownDNSBefore := dnsNames[upgrade.Before.DNSType]\r\ndnsAfter, isKnownDNSAfter := dnsNames[upgrade.After.DNSType]\r\n\r\nif isKnownDNSBefore && isKnownDNSAfter {\r\n\tfmt.Printf(\"DNS upgrade\\t%s %s\\t%s %s\\n\", dnsBefore, upgrade.Before.DNSVersion, dnsAfter, upgrade.After.DNSVersion)\r\n} else {\r\n\t// do we need to print an error?\r\n\tfmt.Printf(\"DNS upgrade encountered unknown type. Before: %s, After: %s\\n\", upgrade.Before.DNSType, upgrade.After.DNSType)  \r\n}\r\n```\r\n\r\n",
+        "createdAt" : "2018-05-09T18:10:46Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "afb1e01c-1d08-4b62-a9b4-1dec7726e648",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "body" : "~~Oooh, I like that!~~\r\n\r\nPlaying around with this a bit, and I think it might make the output a bit confusing compared to the surrounding context. That said, I think the output from the current state of this PR is a bit confusing as well.\r\n\r\nI think it would be worth putting some thought into how to properly handle this from a UX perspective, since there are a few different cases that we need to take into account:\r\n- component changes, such as Kube DNS to CoreDNS\r\n- new components added (possibly new default addons that weren't available for the previous version)\r\n- components removed (if we potentially would ever want to deprecate an addon, or if multiple addons are merged into a single addon)\r\n\r\nIdeally, in the case that we are replacing a component we should break it out from the component upgrade output and draw attention to it in a way that makes it clear to the user what is happening.\r\n\r\n@neolit123 do you have any objections with continuing that discussion on a separate issue that can be addressed as a followup?",
+        "createdAt" : "2018-05-10T15:09:47Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67005883-d189-45cb-8ac0-f23afebb2a86",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "@detiber I'm not sure I got the full problem here, but I think that we should consider also to use mutators to \"fix\" older configuration in order to adapt to the latest change in code.\r\nIn this case, when upgrading, if the fetureflag CoreDNS is not set, we should add fetureflag coreDNS=false in order to avoid an unexpected switch to CoreDNS.\r\nWDYT?",
+        "createdAt" : "2018-05-10T18:31:58Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fd9f3a16-270b-441d-b342-29215314b156",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "body" : "@fabriziopandini There is another PR pending that helps improve the migration between dns addons here: https://github.com/kubernetes/kubernetes/pull/63400\r\n\r\nI do think that we *should* upgrade to CoreDNS by default and that we need to document this not only in the release notes, but also the other kubeadm documentation so that users that wish to stay on Kube DNS will know that they need to provide the proper command line arguments (or config) to do so.",
+        "createdAt" : "2018-05-10T21:28:23Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a71088f-3d63-43a3-bc55-ac6d1eb504c0",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "body" : "@fabriziopandini If this was just a case of changing a default for a choice of options that were going to be supported long term, then I would agree with trying to use some type of a mutator to persist the existing config.  However, since Kube DNS is being phased out, I think a user should be required to opt-in in order to keep using it.",
+        "createdAt" : "2018-05-10T21:31:36Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dddbfc5c-bc3b-46fd-abb8-d16e80240c4c",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "> Ideally, in the case that we are replacing a component we should break it out from the component upgrade output and draw attention to it in a way that makes it clear to the user what is happening.\r\n\r\n> @neolit123 do you have any objections with continuing that discussion on a separate issue that can be addressed as a followup?\r\n\r\n@detiber sounds good, that would probably be the correct course. :+1: ",
+        "createdAt" : "2018-05-10T23:03:45Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f15274d6-8324-4036-b9cb-426ae44a6f2b",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "body" : "https://github.com/kubernetes/kubeadm/issues/810",
+        "createdAt" : "2018-05-14T15:04:38Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1cd1cdce-85c1-4ad1-9b3d-497ab2608b4f",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Put a // TODO: comment with the notes above this and link to a separate issue please. ",
+        "createdAt" : "2018-05-14T15:34:50Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ee0bec25-cf6a-47de-8974-272bf28b1f6f",
+        "parentId" : "c3ad6b6d-60df-4527-b251-f4934d073927",
+        "authorId" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "body" : "@timothysc done",
+        "createdAt" : "2018-05-14T16:19:28Z",
+        "updatedAt" : "2018-05-15T18:00:51Z",
+        "lastEditedBy" : "6746e0cc-0c52-4344-889b-945a672c83e3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "08ba47b237dcb94f30a3e329cd440956b10a3fe7",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +212,216 @@\t\t\tfmt.Fprintf(tabw, \"Kube DNS\\t%s\\t%s\\n\", kubeDNSBeforeVersion, kubeDNSAfterVersion)\n\t\t}\n\n\t\tif !isExternalEtcd {\n\t\t\tfmt.Fprintf(tabw, \"Etcd\\t%s\\t%s\\n\", upgrade.Before.EtcdVersion, upgrade.After.EtcdVersion)"
+  },
+  {
+    "id" : "82c5f485-a411-4911-83bf-4e1754cbab4a",
+    "prId" : 50872,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50872#pullrequestreview-58224783",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eea18fb1-d8a6-406b-89cc-c72cec3a03b9",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Might want to consider https://github.com/ryanuber/columnize here, or do similar wrapping. ",
+        "createdAt" : "2017-08-23T21:12:02Z",
+        "updatedAt" : "2017-08-25T14:23:44Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba034364-d1c1-4969-99a5-51de72103ffd",
+        "parentId" : "eea18fb1-d8a6-406b-89cc-c72cec3a03b9",
+        "authorId" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "body" : "not for these PRs, but maybe in the future. This works pretty well and is stdlib. Not wanna vendor sth now.",
+        "createdAt" : "2017-08-23T21:42:45Z",
+        "updatedAt" : "2017-08-25T14:23:44Z",
+        "lastEditedBy" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "396a33dd8fe112454652cdbf8618c8671c18c42f",
+    "line" : 110,
+    "diffHunk" : "@@ -1,1 +108,112 @@\t\tfmt.Fprintln(w, \"\")\n\t\tfmt.Fprintln(tabw, \"COMPONENT\\tCURRENT\\tAVAILABLE\")\n\t\tfmt.Fprintf(tabw, \"API Server\\t%s\\t%s\\n\", upgrade.Before.KubeVersion, upgrade.After.KubeVersion)\n\t\tfmt.Fprintf(tabw, \"Controller Manager\\t%s\\t%s\\n\", upgrade.Before.KubeVersion, upgrade.After.KubeVersion)\n\t\tfmt.Fprintf(tabw, \"Scheduler\\t%s\\t%s\\n\", upgrade.Before.KubeVersion, upgrade.After.KubeVersion)"
+  }
+]

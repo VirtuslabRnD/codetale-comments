@@ -1,0 +1,343 @@
+[
+  {
+    "id" : "230f540a-0180-4b4d-9107-9d97eb73c7c5",
+    "prId" : 98774,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98774#pullrequestreview-585330077",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "846a7990-be9f-43b6-9dcf-6667264b1d59",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Not strictly related to do this PR - but we have to periodically sync if nodes don't change?",
+        "createdAt" : "2021-02-04T19:44:38Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0c02ad9-61ae-4450-9049-a0f2d9f193e9",
+        "parentId" : "846a7990-be9f-43b6-9dcf-6667264b1d59",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "Yes. But the sync only retries on the services that did not update the nodes successfully, otherwise, it is a no-op",
+        "createdAt" : "2021-02-05T18:44:54Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "86f7e472-68ca-472a-a0cf-fd54b1e00fac",
+        "parentId" : "846a7990-be9f-43b6-9dcf-6667264b1d59",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "OK - I see that now - it's basically a \"retry on error\" stuff.\r\n\r\nI'm not a fan of this pattern, but let's not touch it in this PR.",
+        "createdAt" : "2021-02-08T10:00:20Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4af1f4b30bbe024e64cf69998e96cf24f659f0f4",
+    "line" : 76,
+    "diffHunk" : "@@ -1,1 +240,244 @@\n\tgo s.nodeSyncLoop(workers)\n\tgo wait.Until(s.triggerNodeSync, nodeSyncPeriod, stopCh)\n\n\t<-stopCh"
+  },
+  {
+    "id" : "ffc890de-b9fb-4e40-b8dc-75af9573c5d8",
+    "prId" : 98774,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98774#pullrequestreview-599115551",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This check doesn't work anymore.\r\n\r\nGiven that you list nodes again in `nodeSyncService` it may happen that:\r\n\r\n- you have nodes A and B at this point\r\n- in the meantime node C is added\r\n- you call nodeSyncService with nodes A, B and C (so you're programmed for all 3 nodes)\r\n- in the meantime node C is deleted\r\n-  when you call it here the next time, you will not reprogram all services, because we will think that nothing changed",
+        "createdAt" : "2021-02-12T07:14:24Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e2198a6b-1804-4f28-890e-bf0c7669ce9f",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "I think the current logic would handle your case. Here is how: \r\n\r\n1. node A and B at one point. \r\n2. node C got added. Triggers `nodeSyncInternal`\r\n3. nodeSyncInternal would record `knownHosts= node A B C` at one point\r\n4. node C got deleted, Triggers nodeSyncLoop but got cached in the size 1 buffered channel\r\n5. Meanwhile as step 4. happens, nodeSyncService updates LB with node A, B, C\r\n6. in the next nodeSyncInternal triggered on step 4. knownHosts (node A, B, C) is not equal to newHosts (node A, B). Hence, LB will get a full resync on backend nodes.\r\n\r\n",
+        "createdAt" : "2021-02-16T19:18:19Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b8fbe081-2d96-4f2e-b528-5e15cf3adafb",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "I find this logic pretty vulnerable as well. I have not find a good way to modify it so I just keep it as is. \r\n\r\nThere is problematic scenario similar to what you pointed out:\r\nNode A, B, C at one point. Node C got preempted and come back up very quickly. During preemption, IIUC, cloud LB control plane underneath will deprogram C without service controller calling the API explicitly. But when nodeSync runs, all node A B C are present and nothing changed, hence node sync got skipped. If this happens enough times, all node A, B, C will be eventually moved out of the LB backends and cause outages. \r\n\r\n",
+        "createdAt" : "2021-02-16T19:20:55Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9eafad21-8513-4bb9-8914-97d18826bae7",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "The current logic is optimized for avoiding the LB API calls as much as possible. ",
+        "createdAt" : "2021-02-16T19:21:53Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8ffa208-7fbd-48da-aef8-f48815110c53",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "c1166017-761f-41df-8ad7-07e3dd792799",
+        "body" : "ideally we want only one logic - to update all LBs each time there is a nodes change and get rid of periodic sync, correct?\r\n The problem here is that we cannot set s.knownHosts to an accurate value since each LB update used a different list most likely.\r\n\r\nShould we change this function to perform node updates for all services all the time and increase the interval between periodic updates?",
+        "createdAt" : "2021-02-19T19:34:08Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "c1166017-761f-41df-8ad7-07e3dd792799",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a649bfa0-59fc-4227-bcd5-367bb30265bb",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Ok - so the reasoning is that it's eventually consistent, because we always program LBs with the state that is at least as fresh as `knowHosts`. That's a good argument, but maybe please document it explicitly.",
+        "createdAt" : "2021-02-22T08:40:04Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22fae64f-7af3-4294-8638-4f3d7d5842f5",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "Done. Added detail comment on the end to end implications of recording the known states above.",
+        "createdAt" : "2021-02-22T22:06:53Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e664159d-d858-4175-beac-75ef7b9038a9",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Actually no - I was right that it doesn't work now.\r\nLet me give a more precise example (now that I recall what I had on my mind):\r\n\r\nt0: node A is added, item inserted to nodeSyncCh\r\nt1: nodeSyncInternal calls, newHosts={A}\r\nt2. updateLoadBalancerHost is called\r\nt3: node B is added, item inserted to nodeSyncCh\r\nt4; nodes listed from cache - got {A,B}\r\nt5: programming LB with {A, B}\r\nt6: node B is deleted, trying to put to nodeSyncCh, already full\r\nt7: programming end\r\nt8: nodeSyncInternal called again\r\nt9: Hosts ={A} [ which is the same as knownHosts => skip\r\n\r\nBut LB is programmed for {A,B}. And we won't recover until future change in node set.",
+        "createdAt" : "2021-02-24T13:23:23Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3077c30d-f86e-4dbe-8b52-f335f50abac0",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "Good catch. let us discuss how to address this. I have 2 potential approaches. \r\n\r\n1. Beef up `triggerNodeSync` and let it compare the knownHosts vs. newHosts. Hence `triggerNodeSync` basically decides if `nodeSyncInternal` runs a full sync across all services or just do retry. \r\n2. Use a queue to contain services that needs nodeSync. When ever there is `triggerNodeSync` happens and node changes, enqueue all services into the queue. Plus the queue would need to handle retries and etc..\r\n\r\nthe 1st one is a simpler change, but we need to sort out if it contains any other corner cases.\r\n\r\nthe 2nd one is a bigger change to the nodesync logic today. Pro: it will be more consistent with the current controller pattern. Cons: 1. Hard to collect latency metrics for a full sync on all services 2. since the change is bigger, it contains higher risk. ",
+        "createdAt" : "2021-02-25T18:28:04Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48f2d62f-87ee-4973-b966-624dd436dbd3",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "As discussed offline - (2) is much larger and much more risky change (maybe even deserving a KEP), so I'm fine with proceeding with (1).",
+        "createdAt" : "2021-02-25T19:27:16Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4059ae3c-0782-474b-90ab-f9583f3ee3a6",
+        "parentId" : "514ed8a7-d36c-475f-b682-4e9beca65a33",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "Done with (1). \r\n\r\nReady for another round",
+        "createdAt" : "2021-02-25T23:01:08Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4af1f4b30bbe024e64cf69998e96cf24f659f0f4",
+    "line" : 160,
+    "diffHunk" : "@@ -1,1 +725,729 @@\t\t// The set of nodes in the cluster hasn't changed, but we can retry\n\t\t// updating any services that we failed to update last time around.\n\t\ts.servicesToUpdate = s.updateLoadBalancerHosts(s.servicesToUpdate, workers)\n\t\treturn\n\t}"
+  },
+  {
+    "id" : "4957d2be-ea3e-45fd-89a5-121a1cc64b84",
+    "prId" : 98774,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98774#pullrequestreview-601010860",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ed028cd9-701f-4987-bcb7-ff8e3f6ab829",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "The logic of removing LBs etc. is triggered by the changes of service objects, right?",
+        "createdAt" : "2021-03-01T07:43:21Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4cb104f-bebc-42da-b071-e82b71b39955",
+        "parentId" : "ed028cd9-701f-4987-bcb7-ff8e3f6ab829",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "Yes. NodeSync is only updating LB hosts. ",
+        "createdAt" : "2021-03-01T17:54:39Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4af1f4b30bbe024e64cf69998e96cf24f659f0f4",
+    "line" : 180,
+    "diffHunk" : "@@ -1,1 +741,745 @@// nodeSyncService syncs the nodes for one load balancer type service\nfunc (s *Controller) nodeSyncService(svc *v1.Service) bool {\n\tif svc == nil || !wantsLoadBalancer(svc) {\n\t\treturn false\n\t}"
+  },
+  {
+    "id" : "6b87927f-7e14-4e81-afb8-437c798b5b6e",
+    "prId" : 98774,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98774#pullrequestreview-601579972",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6d4338c3-d525-4071-8bd4-6e61530f0f6b",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This should only happen on corrupted data in the cache. So yeah - we can do whatever here.",
+        "createdAt" : "2021-03-02T09:04:17Z",
+        "updatedAt" : "2021-03-04T18:02:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4af1f4b30bbe024e64cf69998e96cf24f659f0f4",
+    "line" : 89,
+    "diffHunk" : "@@ -1,1 +253,257 @@\t\truntime.HandleError(fmt.Errorf(\"Failed to retrieve current set of nodes from node lister: %v\", err))\n\t\t// if node list cannot be retrieve, trigger full node sync to be safe.\n\t\ts.needFullSync = true\n\t} else if !nodeSlicesEqualForLB(newHosts, s.knownHosts) {\n\t\t// Here the last known state is recorded as knownHosts. For each"
+  },
+  {
+    "id" : "70ceb71d-1672-489e-8497-4828f4f69b6d",
+    "prId" : 98277,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98277#pullrequestreview-604429806",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "66da885a-bd35-4ebd-bd45-9970ee08ef31",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "comment here, like \"if LoadBalancerClass is set, the user does not want the default cloud-provider LB\"",
+        "createdAt" : "2021-03-04T19:43:22Z",
+        "updatedAt" : "2021-03-05T01:12:13Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "72da0b1bb06607f3f3e067f1bb5ce329ec861e1b",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +822,826 @@func wantsLoadBalancer(service *v1.Service) bool {\n\t// if LoadBalancerClass is set, the user does not want the default cloud-provider Load Balancer\n\treturn service.Spec.Type == v1.ServiceTypeLoadBalancer && service.Spec.LoadBalancerClass == nil\n}\n"
+  },
+  {
+    "id" : "6682a8d6-71a5-4bf9-bbc7-4bcaa9214ad3",
+    "prId" : 97543,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97543#pullrequestreview-561995736",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce2d20fd-7487-4f04-be36-0e76efc80932",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "followup nit - we should rename this to \"labelNodeExcludeBalancers\" or something  -  \"role\" has no place any more :)",
+        "createdAt" : "2021-01-05T17:26:15Z",
+        "updatedAt" : "2021-01-05T17:26:15Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cfb7c6bc-b8f1-4970-8aee-09e9c5c80b6a",
+        "parentId" : "ce2d20fd-7487-4f04-be36-0e76efc80932",
+        "authorId" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "body" : "want me to open a new issue and mark as a good first issue? I'm on it :D",
+        "createdAt" : "2021-01-05T17:38:18Z",
+        "updatedAt" : "2021-01-05T17:38:19Z",
+        "lastEditedBy" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b2ea5401-d0e7-411d-8c9b-2a43628ac705",
+        "parentId" : "ce2d20fd-7487-4f04-be36-0e76efc80932",
+        "authorId" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "body" : "https://github.com/kubernetes/kubernetes/issues/97734 :)",
+        "createdAt" : "2021-01-05T17:40:48Z",
+        "updatedAt" : "2021-01-05T17:40:48Z",
+        "lastEditedBy" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "441985afb6c9702d83ad3c73dd880151f4eb3826",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +62,66 @@\t// any backends on excluded nodes are not reachable by those external load-balancers.\n\t// Implementations of this exclusion may vary based on provider.\n\tlabelNodeRoleExcludeBalancer = \"node.kubernetes.io/exclude-from-external-load-balancers\"\n)\n"
+  },
+  {
+    "id" : "442573cc-5a10-43c1-a2e9-9f536d61fdcc",
+    "prId" : 97543,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97543#pullrequestreview-563753701",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "83852789-42b8-43ba-bae6-4f7b21074def",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "I imagine this change is going to break some users since control plane nodes will now be added to load balancers automatically when previously they were not. Can we add an `ACTION REQUIRED` to the release notes and call out that users need to add the `labelNodeExcludeBalancer` label to control plane nodes if they want to preserve this behaviour?",
+        "createdAt" : "2021-01-06T15:49:14Z",
+        "updatedAt" : "2021-01-06T15:49:22Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "60c2468a-fb64-410a-9fdb-61727de11caa",
+        "parentId" : "83852789-42b8-43ba-bae6-4f7b21074def",
+        "authorId" : "5e225159-999d-430a-8b58-d5220dc1429d",
+        "body" : "Need I edit the release note like this. @neolit123  @andrewsykim \r\n```\r\n`ServiceNodeExclusion`, `NodeDisruptionExclusion` and `LegacyNodeRoleBehavior`(locked to false) features have been promoted to GA. \r\nTo prevent control plane nodes being added to load balancers automatically, upgrade users need to add \"node.kubernetes.io/exclude-from-external-load-balancers\"  label to control plane nodes.\r\n```\r\n",
+        "createdAt" : "2021-01-07T02:31:13Z",
+        "updatedAt" : "2021-01-07T02:31:59Z",
+        "lastEditedBy" : "5e225159-999d-430a-8b58-d5220dc1429d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e175c146-bf1e-47d9-b2de-662c1b42145a",
+        "parentId" : "83852789-42b8-43ba-bae6-4f7b21074def",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Yes, that would be better than the current release notes ",
+        "createdAt" : "2021-01-07T19:15:47Z",
+        "updatedAt" : "2021-01-07T19:15:47Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "441985afb6c9702d83ad3c73dd880151f4eb3826",
+    "line" : 84,
+    "diffHunk" : "@@ -1,1 +615,619 @@func (s *Controller) getNodeConditionPredicate() NodeConditionPredicate {\n\treturn func(node *v1.Node) bool {\n\t\tif _, hasExcludeBalancerLabel := node.Labels[labelNodeRoleExcludeBalancer]; hasExcludeBalancerLabel {\n\t\t\treturn false\n\t\t}"
+  }
+]

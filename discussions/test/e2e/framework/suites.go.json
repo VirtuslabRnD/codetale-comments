@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "4745c71c-0c75-4553-9a73-96ee1ea2f363",
+    "prId" : 81750,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81750#pullrequestreview-280292075",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "aa195773-5cf6-4a2d-ad94-1e3d7277baa9",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Sorry if I'm missing context. \r\n\r\n`IPFamily` shouldn't change across parallel ginkgo nodes so curious why we moved the default IP family check into `SetupSuiteAllNodes`. ",
+        "createdAt" : "2019-08-26T18:43:16Z",
+        "updatedAt" : "2019-08-27T10:59:57Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f46fe1d5-7e03-4ef6-803d-7168dd6719ab",
+        "parentId" : "aa195773-5cf6-4a2d-ad94-1e3d7277baa9",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "it took me a while to discover this, it turns out that this is [how ginkgo run specs in parallel ](https://onsi.github.io/ginkgo/#parallel-specs)\r\n\r\n> With SynchronizedBeforeSuite Ginkgo gives you a way to run some preliminary setup code on just one parallel node (Node 1) and other setup code on all nodes. Ginkgo synchronizes these functions and guarantees that node 1 will complete its preliminary setup before the other nodes run their setup code. Moreover, Ginkgo makes it possible for the preliminary setup code on the first node to pass information on to the setup code on the other nodes.\r\n\r\nPreviously ,TestContext.IPFamily was set on `framework.SetupSuite()`, but it turns out that part of the code only runs on just one parallel node in the first function of `SynchronizedBeforeSuite()`, thus the variable wasn't available for the rest of the nodes.\r\n\r\n> SynchronizedBeforeSuite must be passed two functions. The first must return []byte and the second must accept []byte. When running with multiple nodes the first function is only run on node 1. When this function completes, all nodes (including node 1) proceed to run the second function and will receive the data returned by the first function. In this example, we use this data-passing mechanism to forward the database’s address (set up on node 1) to all nodes\r\n\r\nI've decided to run the code to the get the variable on the second function from SynchronizedBeforeSuite() because maybe can be useful to other tests in the future, instead of passing the result using the []byte output\r\n\r\n```\r\nvar _ = ginkgo.SynchronizedBeforeSuite(func() []byte {\r\n\t// Reference common test to make the import valid.\t\t// Reference common test to make the import valid.\r\n\tcommontest.CurrentSuite = commontest.E2E\t\tcommontest.CurrentSuite = commontest.E2E\r\n\tframework.SetupSuite()\t\tframework.SetupSuite()\r\n\treturn nil\t\treturn nil\r\n}, func(data []byte) {\t}, func(data []byte) {\r\n\t// Run on all Ginkgo nodes\t\t// Run on all Ginkgo nodes\r\n\tframework.SetupSuiteAllNodes()\r\n})\t})\r\n```",
+        "createdAt" : "2019-08-26T19:06:29Z",
+        "updatedAt" : "2019-08-27T10:59:57Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4af76ed0-33e1-4116-8e52-7688aa00bcc1",
+        "parentId" : "aa195773-5cf6-4a2d-ad94-1e3d7277baa9",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "> Previously ,TestContext.IPFamily was set on framework.SetupSuite(), but it turns out that part of the code only runs on just one parallel node in the first function of SynchronizedBeforeSuite(), thus the variable wasn't available for the rest of the nodes.\r\n\r\nSo `TestContext.IPFamily` is set _by_ the first parallel node, but does that mean it's not readable from other parallel nodes after the fact? `TestContext` a global var so I assumed it is. ",
+        "createdAt" : "2019-08-26T19:44:08Z",
+        "updatedAt" : "2019-08-27T10:59:57Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09292674-528b-46b3-98d9-9faef52c990c",
+        "parentId" : "aa195773-5cf6-4a2d-ad94-1e3d7277baa9",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "\r\n> So `TestContext.IPFamily` is set _by_ the first parallel node, but does that mean it's not readable from other parallel nodes after the fact? `TestContext` a global var so I assumed it is.\r\n\r\nright, actually I was thinking the same when I've implemented it but seems that `TestContext` is global per node executor, not global for all the nodes.",
+        "createdAt" : "2019-08-26T20:40:20Z",
+        "updatedAt" : "2019-08-27T10:59:57Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e54a6e7b-24e4-4c31-806a-463be35d04aa",
+        "parentId" : "aa195773-5cf6-4a2d-ad94-1e3d7277baa9",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "So is it that `TestContext` is not updated for all other node executors or that because they run in Parallel there are race conditions where we check for IPFamily before it's set by the first node? \r\n\r\nWondering if we should move this to `AfterReadingAllFlags` in `test_context.go`, no need to this run per node if it doesn't change across suites. ",
+        "createdAt" : "2019-08-27T15:29:23Z",
+        "updatedAt" : "2019-08-27T15:29:24Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "00099204-6954-4c07-bae1-260946e5a354",
+        "parentId" : "aa195773-5cf6-4a2d-ad94-1e3d7277baa9",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "The first node cannot modify `TestContext` in other nodes because each node runs in a separate process.\r\n\r\n`AfterReadingAllFlags` is called by all processes, processing the same input, and thus the result is the same on all nodes. The `getDefaultClusterIPFamily(c)` call could work there, but I think it's better to call it where it is called now because of the need to connect to the API server. Doing that in `AfterReadingAllFlags` \"feels\" a bit too early.\r\n",
+        "createdAt" : "2019-08-27T15:42:12Z",
+        "updatedAt" : "2019-08-27T15:42:12Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "930a1321dac4a8178184e8c64c1ab56057ef1862",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +139,143 @@\t\tklog.Fatal(\"Error loading client: \", err)\n\t}\n\tTestContext.IPFamily = getDefaultClusterIPFamily(c)\n\te2elog.Logf(\"Cluster IP family: %s\", TestContext.IPFamily)\n}"
+  }
+]

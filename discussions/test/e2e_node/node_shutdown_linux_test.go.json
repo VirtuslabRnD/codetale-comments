@@ -1,0 +1,486 @@
+[
+  {
+    "id" : "a4d7f932-dbd9-4876-b74f-bb5c9022cc2c",
+    "prId" : 99805,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99805#pullrequestreview-604616205",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "557dc473-b51f-4540-a0a7-a1c16d7738db",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "this is strange. `CreateBatch` is already checking for readiness, is it?",
+        "createdAt" : "2021-03-04T20:43:20Z",
+        "updatedAt" : "2021-03-04T20:43:20Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a97983fa-1e1e-418e-9a8c-e4079a218e73",
+        "parentId" : "557dc473-b51f-4540-a0a7-a1c16d7738db",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "It was a bit tricky, here's what I found and what I think the problem is:\r\n\r\n* [`CreateBatch`](https://github.com/kubernetes/kubernetes/blob/04b1062cbc5eac1a8b70a1094f767f3214fd9ab8/test/e2e/framework/pods.go#L111) calls [`CreateSync`](https://github.com/kubernetes/kubernetes/blob/04b1062cbc5eac1a8b70a1094f767f3214fd9ab8/test/e2e/framework/pods.go#L119) for each pod\r\n* CreateSync polls if the pod is ready and checks that error is nil from [`e2epod.WaitTimeoutForPodReadyInNamespace`](https://github.com/kubernetes/kubernetes/blob/04b1062cbc5eac1a8b70a1094f767f3214fd9ab8/test/e2e/framework/pods.go#L103)\r\n* `WaitTimeoutForPodReadyInNamespace` polls `podRunningAndReady`\r\n* [`podRunningAndReady`](https://github.com/kubernetes/kubernetes/blob/04b1062cbc5eac1a8b70a1094f767f3214fd9ab8/test/e2e/framework/pod/resource.go#L191-L193) checks if the pod status phase is running AND that the pod is ready\r\n\r\nIn our case, the pods were in crash loop backoff and failing to start due to the sleep infinity issue.\r\n\r\nThe problem is that pod is not ready `podRunningAndReady` returns (false, nil) (where nil is the error). Higher up the stack `WaitTimeoutForPodReadyInNamespace` will poll until the timeout, but only fail the test if the error is not nil. \r\n \r\nIn the current case, the pods were in crash loop backoff and were not ready. So, basically `podRunningAndReady` kept checking that the pods got into ready state (which they were not) so eventually the `WaitTimeoutForPodReadyInNamespace` hit the timeout, and ended up continuing (since the error was nil). \r\n\r\nWith the added check here, we'll ensure that if the pods fail getting into ready=true condition, the test will fail early rather the continuing (and thus failing due to a different issue)",
+        "createdAt" : "2021-03-04T22:21:34Z",
+        "updatedAt" : "2021-03-04T22:36:42Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd2e557b25b8718ae2580b048be4a4b2fa5899f0",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +90,94 @@\n\t\t\tginkgo.By(\"Verifying batch pods are running\")\n\t\t\tfor _, pod := range list.Items {\n\t\t\t\tif podReady, err := testutils.PodRunningReady(&pod); err != nil || !podReady {\n\t\t\t\t\tframework.Failf(\"Failed to start batch pod: %v\", pod.Name)"
+  },
+  {
+    "id" : "a7ea0dac-2a4f-4cf9-8a01-f2cd5d2478c6",
+    "prId" : 99805,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99805#pullrequestreview-604617491",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d5fe514-7a8d-450f-9597-f276fafb3d2d",
+        "parentId" : null,
+        "authorId" : "5328b1c0-0dbd-4fd8-869d-e914880959c2",
+        "body" : "Another option would be to set it to sufficiently high value.",
+        "createdAt" : "2021-03-04T21:36:50Z",
+        "updatedAt" : "2021-03-04T21:36:50Z",
+        "lastEditedBy" : "5328b1c0-0dbd-4fd8-869d-e914880959c2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f62acfad-2b4a-47a5-bd93-9c21ae54267f",
+        "parentId" : "3d5fe514-7a8d-450f-9597-f276fafb3d2d",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "ack, that should work as well. I went with `while true; sleep` loop since it more closely matches \"infinity\" sleep  and seems to be the common pattern in other tests (e.g. https://github.com/kubernetes/kubernetes/blob/bd2e557/test/e2e_node/eviction_test.go#L832).\r\n\r\nLet me know if high value is better, I think both work, no strong opinion there. ",
+        "createdAt" : "2021-03-04T22:23:33Z",
+        "updatedAt" : "2021-03-04T22:24:18Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd2e557b25b8718ae2580b048be4a4b2fa5899f0",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +195,199 @@_term() {\n\techo \"Caught SIGTERM signal!\"\n\twhile true; do sleep 5; done\n}\ntrap _term SIGTERM"
+  },
+  {
+    "id" : "21df448c-3da2-4435-8c69-8604355a2f4f",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-580735499",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7f26c188-2f9c-47a0-9351-76698a7d37fe",
+        "parentId" : null,
+        "authorId" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "body" : "nit: `framework.ExpectEqual(pod.Status.Phase, v1.PodRunning, \"pod is not ready\")`",
+        "createdAt" : "2021-02-01T20:26:16Z",
+        "updatedAt" : "2021-02-18T06:47:09Z",
+        "lastEditedBy" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 94,
+    "diffHunk" : "@@ -1,1 +92,96 @@\t\t\t\t\tv1.PodRunning,\n\t\t\t\t\t\"pod is not ready\",\n\t\t\t\t)\n\t\t\t}\n"
+  },
+  {
+    "id" : "b6055466-9f3f-4ebb-95fb-ce80a3561782",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-581936409",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f2eaa65d-7981-4f41-9775-83e094015f94",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "let's add some verbose logging of the various main steps the test does to make debugging failure easier in future. The pattern seems to be to use `ginkgo.By`, e.g. https://github.com/kubernetes/kubernetes/blob/master/test/e2e_node/docker_test.go#L60\r\n\r\nI added some suggestions of places to log some of the important steps in the test.",
+        "createdAt" : "2021-02-03T01:52:49Z",
+        "updatedAt" : "2021-02-18T06:47:09Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 79,
+    "diffHunk" : "@@ -1,1 +77,81 @@\t\t\t\tgetGracePeriodOverrideTestPod(\"period-critical-5\", nodeName, 5, true),\n\t\t\t}\n\n\t\t\tginkgo.By(\"Creating batch pods\")\n\t\t\tf.PodClient().CreateBatch(pods)"
+  },
+  {
+    "id" : "0f06cf07-e860-44e5-be52-ebe1cf1a9cbb",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-581936409",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eb75b079-6c4d-481a-9333-01a3aae785c2",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "add above:\r\n\r\n```\r\nginkgo.By(\"Emitting Shutdown signal\")\r\n```",
+        "createdAt" : "2021-02-03T02:00:51Z",
+        "updatedAt" : "2021-02-18T06:47:09Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 149,
+    "diffHunk" : "@@ -1,1 +147,151 @@\t\tginkgo.It(\"should be able to handle a cancelled shutdown\", func() {\n\t\t\tginkgo.By(\"Emitting Shutdown signal\")\n\t\t\terr := emitSignalPrepareForShutdown(true)\n\t\t\tframework.ExpectNoError(err)\n\t\t\tgomega.Eventually(func() error {"
+  },
+  {
+    "id" : "82bf5014-fc13-49cd-819e-49267e59d11d",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-581936409",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5ba42816-b796-41a4-a943-f0e08934e264",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "`ginkgo.By(\"Emitting Shutdown false signal; cancelling the shutdown\")`\r\n",
+        "createdAt" : "2021-02-03T02:02:39Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 158,
+    "diffHunk" : "@@ -1,1 +156,160 @@\t\t\t\treturn nil\n\t\t\t}, nodeStatusUpdateTimeout, pollInterval).Should(gomega.BeNil())\n\n\t\t\tginkgo.By(\"Emitting Shutdown false signal; cancelling the shutdown\")\n\t\t\terr = emitSignalPrepareForShutdown(false)"
+  },
+  {
+    "id" : "a7441c64-e26e-4399-8349-97ee10ec042a",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-581972623",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4f006972-96e3-4bf4-8060-374b4d62f327",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "curious what this is / why is it needed?",
+        "createdAt" : "2021-02-03T02:05:20Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8d68e76-ce70-451e-befd-82ea1495c3b4",
+        "parentId" : "4f006972-96e3-4bf4-8060-374b4d62f327",
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "https://github.com/kubernetes/kubernetes/blob/7655badeced62802e0776184ef4bac852eecb0ad/test/e2e_node/critical_pod_test.go#L152-L162\r\n\r\n`kubelettypes.IsCriticalPod` judged based on this key to determine whether this pod is critical",
+        "createdAt" : "2021-02-03T03:19:24Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 204,
+    "diffHunk" : "@@ -1,1 +202,206 @@\tif critical {\n\t\tpod.ObjectMeta.Annotations = map[string]string{\n\t\t\tkubelettypes.ConfigSourceAnnotationKey: kubelettypes.FileSource,\n\t\t}\n\t\tpod.Spec.PriorityClassName = scheduling.SystemNodeCritical"
+  },
+  {
+    "id" : "1cebcbb8-7ed8-45e6-954a-94708c970bd3",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-581975710",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1ed059c2-d7c6-4ad1-bb17-88e24eababad",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "you should be able to use getNode which already does this:\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/master/test/e2e_node/e2e_node_suite_test.go#L314\r\n\r\nI think all you need is something like this:\r\nhttps://github.com/kubernetes/kubernetes/blob/master/test/e2e_node/e2e_node_suite_test.go#L273-L280\r\n\r\n(or maybe above when you check the node status you can use `waitForNodeReady` directly and remove this function?",
+        "createdAt" : "2021-02-03T02:11:06Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5a59bf5-9c74-4953-baa2-c6acfc26fc36",
+        "parentId" : "1ed059c2-d7c6-4ad1-bb17-88e24eababad",
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "`getNode` may not be used because it is not compatible with `framework.Framework`\r\n\r\n`waitForNodeReady` is also not needed. this case not only requires waiting for node ready but also waiting for node not ready. ",
+        "createdAt" : "2021-02-03T03:29:11Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 222,
+    "diffHunk" : "@@ -1,1 +220,224 @@}\n\nfunc getNodeReadyStatus(f *framework.Framework) bool {\n\tnodeList, err := f.ClientSet.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})\n\tframework.ExpectNoError(err)"
+  },
+  {
+    "id" : "b477dd3d-2d66-464b-ab97-b4c2e1ab158b",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-581936409",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d36a1876-a91f-4a15-872d-2d193564fe87",
+        "parentId" : null,
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "let's leave a comment describing what this does:\r\n\r\n```\r\n// Emits a fake PrepareForShutdown dbus message on system dbus. Will cause kubelet to react to an active shutdown event.\r\n```",
+        "createdAt" : "2021-02-03T02:12:14Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 217,
+    "diffHunk" : "@@ -1,1 +215,219 @@// Emits a fake PrepareForShutdown dbus message on system dbus. Will cause kubelet to react to an active shutdown event.\nfunc emitSignalPrepareForShutdown(b bool) error {\n\tcmd := \"gdbus emit --system --object-path /org/freedesktop/login1 --signal org.freedesktop.login1.Manager.PrepareForShutdown \" + strconv.FormatBool(b)\n\t_, err := runCommand(\"sh\", \"-c\", cmd)\n\treturn err"
+  },
+  {
+    "id" : "303debfe-65a0-4af4-b77e-08a9230a919c",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-584058710",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bb187f08-9bd0-46f3-825d-1b20bade9755",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "check that the list contain 4 elements",
+        "createdAt" : "2021-02-05T06:41:22Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 89,
+    "diffHunk" : "@@ -1,1 +87,91 @@\t\t\tframework.ExpectEqual(len(list.Items), len(pods), \"the number of pods is not as expected\")\n\n\t\t\tfor _, pod := range list.Items {\n\t\t\t\tframework.ExpectEqual(\n\t\t\t\t\tpod.Status.Phase,"
+  },
+  {
+    "id" : "edb16013-7620-42f0-a990-62e08624d51b",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-594714800",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d9128a68-2501-41c8-95f6-bc8473112362",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "does `CreateBatch` guarantees pods readiness? I do not see any waits. If it has that guarantee, why to check readiness here again?",
+        "createdAt" : "2021-02-05T06:41:53Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b519f0de-2e2c-48db-8dec-467e99b51acd",
+        "parentId" : "d9128a68-2501-41c8-95f6-bc8473112362",
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "hm, I still see that check here. `CreateBatch` will guarantee they are ready",
+        "createdAt" : "2021-02-20T05:46:00Z",
+        "updatedAt" : "2021-02-20T05:46:00Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 93,
+    "diffHunk" : "@@ -1,1 +91,95 @@\t\t\t\t\tpod.Status.Phase,\n\t\t\t\t\tv1.PodRunning,\n\t\t\t\t\t\"pod is not ready\",\n\t\t\t\t)\n\t\t\t}"
+  },
+  {
+    "id" : "029d4f0c-7e86-49c3-a7b9-9e77b6f3b624",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-585131911",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "345209a1-025f-4aa0-b1dd-b743e8c93c3c",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "is it guaranteed by `[Serial]` that there will be no other pods on the node? Should it query by test namespace instead?",
+        "createdAt" : "2021-02-05T06:44:26Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "de0bb190-2f58-4957-93fa-05158bed4051",
+        "parentId" : "345209a1-025f-4aa0-b1dd-b743e8c93c3c",
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "This should be guaranteed by the e2e framework. we don't have to reinvent the wheel.",
+        "createdAt" : "2021-02-08T02:59:09Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +67,71 @@\t\t\tnodeName := getNodeName(f)\n\t\t\tnodeSelector := fields.Set{\n\t\t\t\t\"spec.nodeName\": nodeName,\n\t\t\t}.AsSelector().String()\n"
+  },
+  {
+    "id" : "e8801091-3bec-412e-a4fd-32a442431319",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-584058710",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e0b40c33-ae2c-4da0-9f01-7540c67f9a5b",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "should it validate that pods were given enough time for graceful termination?",
+        "createdAt" : "2021-02-05T06:51:13Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 123,
+    "diffHunk" : "@@ -1,1 +121,125 @@\t\t\t\t}\n\t\t\t\treturn nil\n\t\t\t}, podStatusUpdateTimeout, pollInterval).Should(gomega.BeNil())\n\n\t\t\t// All pod should be shutdown"
+  },
+  {
+    "id" : "73c2cfc7-836d-4559-8939-9e4fbf12f7ba",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-594715111",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e3581aca-ccc9-45e9-8e3e-1d00109ef338",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "there is a risk this will start flaking. test machines sometimes are super slow and it may take a while for this loop to execute so the critical pods termination will already be started. I don't know what would be the best way to address it. Either pods can signal back using some logs so test can validate how long pods were alive. Or this loop to run more often than once a second",
+        "createdAt" : "2021-02-05T06:57:30Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bcbee78c-4abc-45cd-aff0-cd5fdfc000b8",
+        "parentId" : "e3581aca-ccc9-45e9-8e3e-1d00109ef338",
+        "authorId" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "body" : "good point. Maybe one simple solution to start with is just to increase the `nodeShutdownGracePeriod` from `20s` and `nodeShutdownGracePeriodCriticalPods` from `10s` to something much higher, say `nodeShutdownGracePeriod`: `5min` and  `nodeShutdownGracePeriodCriticalPods`: `2min`\r\n\r\nHaving pods signal back would be ideal but I think it makes the test more complicated, maybe makes sense as a followup... I also brought this up in https://github.com/kubernetes/kubernetes/pull/98658#issuecomment-772172702",
+        "createdAt" : "2021-02-06T00:06:01Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "db4d847e-0006-4342-9243-2f3f71f190b9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1da5bdb9-7231-49fe-938f-cd161a5ec8ba",
+        "parentId" : "e3581aca-ccc9-45e9-8e3e-1d00109ef338",
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "I think the time to add is not very good. This will add a few minutes of checking time for each PR. \r\nPods can use some logs to send out signals. I think it’s a good idea.",
+        "createdAt" : "2021-02-08T02:56:34Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "902ee4a5-080b-4286-97cc-8e6964ee9f62",
+        "parentId" : "e3581aca-ccc9-45e9-8e3e-1d00109ef338",
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "if we want to proceed with this, can you add a comment suggesting that this may become flaky so it will be easier to investigate.",
+        "createdAt" : "2021-02-20T05:49:58Z",
+        "updatedAt" : "2021-02-20T05:49:59Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c0b1cc0-534d-4334-8cf9-eb0d8c87b508",
+        "parentId" : "e3581aca-ccc9-45e9-8e3e-1d00109ef338",
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "I'm fine going as is and see if it will actually become a problem on e2e environment ",
+        "createdAt" : "2021-02-20T05:50:26Z",
+        "updatedAt" : "2021-02-20T05:50:26Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 123,
+    "diffHunk" : "@@ -1,1 +121,125 @@\t\t\t\t}\n\t\t\t\treturn nil\n\t\t\t}, podStatusUpdateTimeout, pollInterval).Should(gomega.BeNil())\n\n\t\t\t// All pod should be shutdown"
+  },
+  {
+    "id" : "26d0b404-bbd1-4b79-8efb-18869280b6a2",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-584058710",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "252a71c9-9e5c-4da0-965d-58a8c2dddf38",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "should this signal be emited in test cleanup so we guarantee that the state of kubelet after these tests is that signal is cancelled even if test has failed?",
+        "createdAt" : "2021-02-05T07:00:52Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 160,
+    "diffHunk" : "@@ -1,1 +158,162 @@\n\t\t\tginkgo.By(\"Emitting Shutdown false signal; cancelling the shutdown\")\n\t\t\terr = emitSignalPrepareForShutdown(false)\n\t\t\tframework.ExpectNoError(err)\n\t\t\tgomega.Eventually(func() error {"
+  },
+  {
+    "id" : "1d4cca0f-d916-4c0d-a01c-6a973cdee762",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-584058710",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5558fd2c-082d-4d72-8344-68aaf08cba78",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "I think it is a best practice to namespace pods created for this test with the test namespace",
+        "createdAt" : "2021-02-05T07:02:53Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 180,
+    "diffHunk" : "@@ -1,1 +178,182 @@\t\t},\n\t\tObjectMeta: metav1.ObjectMeta{\n\t\t\tName: name,\n\t\t},\n\t\tSpec: v1.PodSpec{"
+  },
+  {
+    "id" : "f5dcdd33-c4f1-4c3e-b75d-fc4f3c5b50b8",
+    "prId" : 98658,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98658#pullrequestreview-584058710",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0a6ab5ce-51ce-4c19-9d1d-1f3286fd73ea",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "it will be great to explain the side effects of this test on other tests",
+        "createdAt" : "2021-02-05T07:04:44Z",
+        "updatedAt" : "2021-02-18T06:47:10Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e367d2fe0c4960fb44003d7b99c38fa42af9efdc",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +38,42 @@)\n\nvar _ = framework.KubeDescribe(\"GracefulNodeShutdown [Serial] [NodeAlphaFeature:GracefulNodeShutdown]\", func() {\n\tf := framework.NewDefaultFramework(\"graceful-node-shutdown\")\n\tginkgo.Context(\"when gracefully shutting down\", func() {"
+  }
+]

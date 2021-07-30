@@ -1,0 +1,189 @@
+[
+  {
+    "id" : "3a6e1c41-d3a7-4594-8107-49640f8450a4",
+    "prId" : 88794,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88794#pullrequestreview-370043257",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d2847ad1-2869-4e26-a67d-5e7d8f541347",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "We need a validation change too, no? Otherwise \"/foo/bar*\" will be acted upon as if it were \"/foo/bar/*\".\r\n\r\nSide note: string manipulation like this produces a lot of garbage, when we start caring about performance more we'll want to pre-compute this.",
+        "createdAt" : "2020-03-05T18:22:47Z",
+        "updatedAt" : "2020-03-05T18:22:48Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3684554e-cf73-49c9-af16-5afca28a46c6",
+        "parentId" : "d2847ad1-2869-4e26-a67d-5e7d8f541347",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "The validation is already there.\r\nI agree, there are performance improvements to be made in several ways.  We will have to get to them in later releases.",
+        "createdAt" : "2020-03-05T18:53:10Z",
+        "updatedAt" : "2020-03-05T19:05:07Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b1809c78-171c-4cac-8fbe-94616ddae4ac",
+        "parentId" : "d2847ad1-2869-4e26-a67d-5e7d8f541347",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "the url validation: https://github.com/kubernetes/kubernetes/blob/edf460bc0f50822e3cb123457445aa63ae87cf10/pkg/apis/flowcontrol/validation/validation.go#L470-L497\r\n\r\nin terms of string garbages, we can simplify the matching logic given that the validation ensures that wildcard can only present in the end.\r\n\r\n```\r\nfunc nonResourceURLRuleWildCardMatch(rule, target string) bool {\r\n\tfor i := 0; i < len(rule); i++ {\r\n\t\tif rule[i] == '*' { // wildcard (in the end) matches everything\r\n\t\t\treturn true\r\n\t\t}\r\n\t\tif i >= len(target) { // the rule is longer than the target\r\n\t\t\treturn false\r\n\t\t}\r\n\t\tif rule[i] != target[i] {\r\n\t\t\treturn false\r\n\t\t}\r\n\t}\r\n\treturn true\r\n}\r\n```\r\n",
+        "createdAt" : "2020-03-06T02:14:08Z",
+        "updatedAt" : "2020-03-06T02:15:58Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2e97d3c8732147c3ba2f11d668f50b44e6374348",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +158,162 @@\t\t\treturn true\n\t\t}\n\t\trulePrefix := strings.TrimSuffix(rulePath, \"*\")\n\t\tif !strings.HasSuffix(rulePrefix, \"/\") {\n\t\t\trulePrefix = rulePrefix + \"/\""
+  },
+  {
+    "id" : "e1638177-64cf-4761-b145-4f783991e7bf",
+    "prId" : 81224,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81224#pullrequestreview-274563709",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "06d2f41a-323a-4453-a3e7-958988dd3a31",
+        "parentId" : null,
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "I see essentially the same function defined multiple times, differing only in how the wildcard value is referenced.  How about one common function that takes the wildcard as a parameter?",
+        "createdAt" : "2019-08-10T03:32:44Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e57255fe-d459-445a-b9b7-29f10c02c765",
+        "parentId" : "06d2f41a-323a-4453-a3e7-958988dd3a31",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "refactored. please take another look",
+        "createdAt" : "2019-08-12T06:10:33Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0b6d405-6c8b-44db-98f6-9f393aa8991b",
+        "parentId" : "06d2f41a-323a-4453-a3e7-958988dd3a31",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "I was thinking something more along the lines of\r\n```\r\nfunc stringInList(x string, list []string, wildcard string) bool {\r\n    if len(list) == 1 && list[0] == wildcard {\r\n        return true\r\n    }\r\n    for _, y := range list {\r\n        if x == y {\r\n            return true\r\n        }\r\n    }\r\n    return false\r\n}\r\n```\r\n\r\nWith that in place, instead of writing `matchPolicyRuleResource(policyRule.Resources, digest.RequestInfo.Resource)` we can write `stringInList(digest.RequestInfo.Resource, policyRule.Resources, ResourceAll)`; and instead of `matchPolicyRuleAPIGroup(policyRule.APIGroups, digest.RequestInfo.APIGroup)` we can write `stringInList(digest.RequestInfo.APIGroup, policyRule.APIGroups, APIGroupAll)`; and so on.",
+        "createdAt" : "2019-08-13T04:43:54Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f51dec72-499e-487e-b98b-e917dd08cc00",
+        "parentId" : "06d2f41a-323a-4453-a3e7-958988dd3a31",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "If we want to goove on abstractions note that there are a lot more interesting things going on here than just iteration.  I see key-less map/reduce: each element of a list of strings is mapped to a boolean, and the list of booleans is reduced with \"OR\" (which has an early-out).",
+        "createdAt" : "2019-08-13T04:47:48Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd6395c4-0601-4495-92e2-0b96c9edff42",
+        "parentId" : "06d2f41a-323a-4453-a3e7-958988dd3a31",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "refactored w/ your code snippet",
+        "createdAt" : "2019-08-13T15:16:27Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a53dbe73-a2b5-44f8-bfc8-12d1f3489dc4",
+        "parentId" : "06d2f41a-323a-4453-a3e7-958988dd3a31",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "I also suggest that we do not need four functions that just call `containsString`; we can replace calls on them with calls on `containsString`.",
+        "createdAt" : "2019-08-13T21:41:07Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a531c6ac594fac1835a231a83b4ec0b552bd2d6",
+    "line" : 86,
+    "diffHunk" : "@@ -1,1 +84,88 @@}\n\nfunc matchPolicyRuleResource(policyRuleRequestResources []string, requestResource string) bool {\n\treturn containsString(requestResource, policyRuleRequestResources, rmtypesv1alpha1.ResourceAll)\n}"
+  },
+  {
+    "id" : "9519f9ef-6300-456f-8d76-65f1fed37000",
+    "prId" : 81224,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81224#pullrequestreview-274368130",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d69faeea-297f-4eab-a5a5-d597925d8c44",
+        "parentId" : null,
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "we could add `break` here.",
+        "createdAt" : "2019-08-13T04:33:43Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c217036f-e8e4-4361-83af-d6e65551677f",
+        "parentId" : "d69faeea-297f-4eab-a5a5-d597925d8c44",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "yes",
+        "createdAt" : "2019-08-13T15:28:06Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a531c6ac594fac1835a231a83b4ec0b552bd2d6",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +27,31 @@\t\tfor _, subject := range policyRule.Subjects {\n\t\t\tif matchesSubject(digest, subject) {\n\t\t\t\tsubjectMatches = true\n\t\t\t\tbreak\n\t\t\t}"
+  },
+  {
+    "id" : "2138fa49-4383-411d-955f-ba22a5f9b39d",
+    "prId" : 81224,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81224#pullrequestreview-275469099",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f8436ae5-b75b-440f-ae4f-9514afbc96da",
+        "parentId" : null,
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "Why not make this line\r\n```\r\n    if !containsString(digest.RequestInfo.Verb, policyRule.Verbs, rmtypesv1alpha1.VerbAll) {\r\n```\r\n?\r\n\r\nNote that `policyRule.Verbs` is declared to have type `[]string`, so going directly to a function of `[]string` does not break any abstraction that exists in the API.",
+        "createdAt" : "2019-08-14T21:30:09Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cebd5ee4-eeb2-4daa-8a2f-0e0fd59c4519",
+        "parentId" : "f8436ae5-b75b-440f-ae4f-9514afbc96da",
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "am in favor of a named function for readability",
+        "createdAt" : "2019-08-15T14:41:29Z",
+        "updatedAt" : "2019-08-16T04:36:31Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a531c6ac594fac1835a231a83b4ec0b552bd2d6",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +57,61 @@\nfunc matchesPolicyRule(digest RequestDigest, policyRule rmtypesv1alpha1.PolicyRule) bool {\n\tif !matchPolicyRuleVerb(policyRule.Verbs, digest.RequestInfo.Verb) {\n\t\treturn false\n\t}"
+  }
+]

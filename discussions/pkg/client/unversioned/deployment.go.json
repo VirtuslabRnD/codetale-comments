@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "30c320c7-c0f1-444c-ad7a-81f7701f964a",
+    "prId" : 15705,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "55d9fd39-1115-45d8-9124-a55263a903a6",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "This would be better as `VersionedParams(opts).` - was there a reason you didn't use it (perhaps because of another discussion that I forgot)?\n",
+        "createdAt" : "2015-10-20T14:18:13Z",
+        "updatedAt" : "2015-10-24T11:29:46Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "94f1c9ee-6a6b-47a5-8af5-221b654d5ccd",
+        "parentId" : "55d9fd39-1115-45d8-9124-a55263a903a6",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I'm not sure I understand - you still want to pass api.ListOptions to Watch method, and convert it into VersionedParams here? What is the goal of it?\nI though that client here is by design unversioned and we use by design only unversioned objects here.\n\n[No there wasn't any discussion about it].\n",
+        "createdAt" : "2015-10-20T14:29:10Z",
+        "updatedAt" : "2015-10-24T11:29:46Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80d19bfa-0052-4b59-aca3-6034a020ba01",
+        "parentId" : "55d9fd39-1115-45d8-9124-a55263a903a6",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "What you have:\n\n```\n    return c.client.Get().\n        Prefix(\"watch\").\n        Namespace(c.ns).\n        Resource(\"deployments\").\n        Param(\"resourceVersion\", opts.ResourceVersion).\n        TimeoutSeconds(TimeoutFromListOptions(opts)).\n        LabelsSelectorParam(label).\n        FieldsSelectorParam(field).\n```\n\ncan be represented as:\n\n```\n    return c.client.Get().\n        Prefix(\"watch\").\n        Namespace(c.ns).\n        Resource(\"deployments\").\n        VersionedParams(opts, api.Scheme).\n        LabelsSelectorParam(label).\n        FieldsSelectorParam(field).\n```\n\nor can be represented as:\n\n```\n    opts.FieldSelector = field\n    opts.LabelSelector = label\n    return c.client.Get().\n        Prefix(\"watch\").\n        Namespace(c.ns).\n        Resource(\"deployments\").\n        VersionedParams(opts, api.Scheme)\n```\n\nor even:\n\n```\n    opts.FieldSelector = field\n    opts.LabelSelector = label\n    opts.Watch = true\n    return c.client.Get().\n        Namespace(c.ns).\n        Resource(\"deployments\").\n        VersionedParams(opts, api.Scheme)\n```\n\nVersionedParams converts an unversioned ListOptions object into versioned query params.\n",
+        "createdAt" : "2015-10-20T14:34:46Z",
+        "updatedAt" : "2015-10-24T11:29:46Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b5b77ec-9bc9-40c1-aec5-d03c34f01524",
+        "parentId" : "55d9fd39-1115-45d8-9124-a55263a903a6",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Got it - thanks.\nOne more question. I've added \"timeoutSeconds\" to special params here:\nhttps://github.com/kubernetes/kubernetes/pull/15705/files#diff-fa79e9ef069aba6022a27bd97ab2c0beR48\nwhich means that VersionedParams will not set it according to the current code:\nhttps://github.com/kubernetes/kubernetes/blob/master/pkg/client/unversioned/request.go#L424\n\nIf we want to use it I need to remove \"timeoutSeconds\" from special params - is that what we want? (\"timeout\" is the special param).\n",
+        "createdAt" : "2015-10-20T14:42:31Z",
+        "updatedAt" : "2015-10-24T11:29:46Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2877dc34-490d-4f56-ade8-748ebcb17e02",
+        "parentId" : "55d9fd39-1115-45d8-9124-a55263a903a6",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I think removing it from special params is what we want.\n\nOn Tue, Oct 20, 2015 at 10:42 AM, Wojciech Tyczynski <\nnotifications@github.com> wrote:\n\n> In pkg/client/unversioned/deployment.go\n> https://github.com/kubernetes/kubernetes/pull/15705#discussion_r42504303\n> :\n> \n> > ```\n> > return c.client.Get().\n> >     Prefix(\"watch\").\n> >     Namespace(c.ns).\n> >     Resource(\"deployments\").\n> > ```\n> > -       Param(\"resourceVersion\", resourceVersion).\n> > -       Param(\"resourceVersion\", opts.ResourceVersion).\n> \n> Got it - thanks.\n> One more question. I've added \"timeoutSeconds\" to special params here:\n> \n> https://github.com/kubernetes/kubernetes/pull/15705/files#diff-fa79e9ef069aba6022a27bd97ab2c0beR48\n> which means that VersionedParams will not set it according to the current\n> code:\n> \n> https://github.com/kubernetes/kubernetes/blob/master/pkg/client/unversioned/request.go#L424\n> \n> If we want to use it I need to remove \"timeoutSeconds\" from special params\n> - is that what we want? (\"timeout\" is the special param).\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/15705/files#r42504303.\n",
+        "createdAt" : "2015-10-20T16:20:25Z",
+        "updatedAt" : "2015-10-24T11:29:46Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e99ec44c-14a8-418f-957e-3305b6ce65c5",
+        "parentId" : "55d9fd39-1115-45d8-9124-a55263a903a6",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "SGTM - will fix that tomorrow.\n",
+        "createdAt" : "2015-10-20T17:30:52Z",
+        "updatedAt" : "2015-10-24T11:29:46Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e64724f-b59c-4a80-9933-da003f5394ee",
+        "parentId" : "55d9fd39-1115-45d8-9124-a55263a903a6",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "See my comment below:\nhttps://github.com/kubernetes/kubernetes/pull/15705#issuecomment-149838167\n",
+        "createdAt" : "2015-10-21T09:40:12Z",
+        "updatedAt" : "2015-10-24T11:29:46Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "abc15f10-18cb-4e9e-a221-d880e052fa79",
+        "parentId" : "55d9fd39-1115-45d8-9124-a55263a903a6",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I fixed it by changing back to TimeoutSeconds() in \"extensions\" resources - this works, but we should fix that properly, although I'm not sure what's the best way to do it.\n",
+        "createdAt" : "2015-10-21T14:27:10Z",
+        "updatedAt" : "2015-10-24T11:29:46Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aa57f607f67ff1cfab1ddba04b8bfc9f0bb37897",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +100,104 @@\t\tNamespace(c.ns).\n\t\tResource(\"deployments\").\n\t\tParam(\"resourceVersion\", opts.ResourceVersion).\n\t\tTimeoutSeconds(TimeoutFromListOptions(opts)).\n\t\tLabelsSelectorParam(label)."
+  }
+]

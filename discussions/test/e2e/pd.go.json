@@ -1,0 +1,420 @@
+[
+  {
+    "id" : "a8cc5bc0-b57f-43f6-af48-6b242115a576",
+    "prId" : 36972,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36972#pullrequestreview-13670430",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fb10d478-9e72-4458-8799-f91bee4b3291",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "What deletes the pod? The node controller? Regardless, let's make sure to explicitly delete the pod so that we are not dependent on the behavior of another component.",
+        "createdAt" : "2016-12-19T23:28:16Z",
+        "updatedAt" : "2016-12-20T20:24:09Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ec05b909-742e-48bf-a740-b4ccd58bd1ca",
+        "parentId" : "fb10d478-9e72-4458-8799-f91bee4b3291",
+        "authorId" : "3493bb4b-b4bb-4e5d-b6dc-7c87de7da51b",
+        "body" : "It's being deleted by the gc_controller when it finds an orphaned pod.\r\n\r\nhttps://gist.github.com/anonymous/810849a6f1f7b2608796a2d44b7fa27b\r\n\r\nI'll make the pod deletion explicit.",
+        "createdAt" : "2016-12-20T00:14:59Z",
+        "updatedAt" : "2016-12-20T20:24:09Z",
+        "lastEditedBy" : "3493bb4b-b4bb-4e5d-b6dc-7c87de7da51b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d405d041e3d8766b8b6813e8a974ccb647ad4557",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +526,530 @@\t\tBy(\"deleting host0pod\")\n\t\tframework.ExpectNoError(podClient.Delete(host0Pod.Name, v1.NewDeleteOptions(0)), \"Unable to delete host0Pod\")\n\t\t// The disk should be detached from host0 on its deletion\n\t\tBy(\"Waiting for pd to detach from host0\")\n\t\tframework.ExpectNoError(waitForPDDetach(diskName, host0Name), \"Timed out waiting for detach pd\")"
+  },
+  {
+    "id" : "02ffe122-ca89-4069-9f4b-3cbbf13c00cf",
+    "prId" : 36972,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36972#pullrequestreview-13834974",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d11d10b-b59a-4d4f-b69f-a58957342c06",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "If there is an error in cleanup, don't exit immediately, log the error, execute the remainder of the cleanup steps, and fail the tests at the end if err happened (that way we make sure to clean up as much as possible and not leave the cluster in a bad state if one cleanup step failed).",
+        "createdAt" : "2016-12-19T23:34:03Z",
+        "updatedAt" : "2016-12-20T20:24:09Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aba81a07-15dd-4e01-bd96-dfa28e00b8d0",
+        "parentId" : "3d11d10b-b59a-4d4f-b69f-a58957342c06",
+        "authorId" : "3493bb4b-b4bb-4e5d-b6dc-7c87de7da51b",
+        "body" : "Ack. In this particular case except for one line ( detachAndDelete() ) the remainder cleanup steps depend on whether the node api object is being created here or not. I'll change the order for that line.",
+        "createdAt" : "2016-12-20T19:41:22Z",
+        "updatedAt" : "2016-12-20T20:24:09Z",
+        "lastEditedBy" : "3493bb4b-b4bb-4e5d-b6dc-7c87de7da51b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d405d041e3d8766b8b6813e8a974ccb647ad4557",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +497,501 @@\t\t\t// need to set the resource version or else the Create() fails\n\t\t\t_, err := nodeClient.Create(nodeToDelete)\n\t\t\tframework.ExpectNoError(err, \"Unable to re-create the deleted node\")\n\t\t\tframework.ExpectNoError(WaitForGroupSize(framework.TestContext.CloudConfig.NodeInstanceGroup, int32(initialGroupSize)), \"Unable to get the node group back to the original size\")\n\t\t\tframework.WaitForNodeToBeReady(f.ClientSet, nodeToDelete.Name, nodeStatusTimeout)"
+  },
+  {
+    "id" : "e9961663-0b63-4aa6-ac8e-a8e2d88c47bb",
+    "prId" : 36009,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36009#pullrequestreview-8329526",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "418ad9b5-5f40-4ea4-9104-173ce898e66c",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Instead of writing your own cluster resizing routine, reuse the existing code in `e2e/resize_nodes.go`:\n\n``` GO\nBy(fmt.Sprintf(\"decreasing cluster size to %d\", initialGroupSize-1))\nerr = ResizeGroup(group, initialGroupSize-1)\nExpect(err).NotTo(HaveOccurred())\nerr = WaitForGroupSize(group, initialGroupSize-1)\nExpect(err).NotTo(HaveOccurred())\nerr = framework.WaitForClusterSize(c, int(initialGroupSize-1), 10*time.Minute)\nExpect(err).NotTo(HaveOccurred())\n```\n\nMaybe stick it in a common method `ResizeCluster(newSize int)`.\n\nAlso immediately prior to resizing make sure to call `defer...` that reverts the cluster to the original size (even if there is a failure). Again you can probably reuse the code from `AfterEach` in `ResizeCluster(newSize int)`\n",
+        "createdAt" : "2016-11-10T23:58:03Z",
+        "updatedAt" : "2016-12-19T22:58:23Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1df70f98-2092-4700-8cc2-cfc9a93a69e2",
+        "parentId" : "418ad9b5-5f40-4ea4-9104-173ce898e66c",
+        "authorId" : "3493bb4b-b4bb-4e5d-b6dc-7c87de7da51b",
+        "body" : "The ResizeCluster(newsize int) picks a random node to shut down which may or may not help me with my test.\nWhat I wanted to do was to shut down a specific node on which the volume was mounted on.\n",
+        "createdAt" : "2016-11-11T02:58:15Z",
+        "updatedAt" : "2016-12-19T22:58:23Z",
+        "lastEditedBy" : "3493bb4b-b4bb-4e5d-b6dc-7c87de7da51b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "236eb083-bc26-460e-bdc8-c896c5cce0b4",
+        "parentId" : "418ad9b5-5f40-4ea4-9104-173ce898e66c",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Ack. There is the potential for things not going quite as planned here since the managed-instance-group recreates the missing node. But I don't see a good way to have the MIG kill only the node that we want instead of a random one.\n",
+        "createdAt" : "2016-11-14T01:53:21Z",
+        "updatedAt" : "2016-12-19T22:58:23Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f67b4950c0551de4bf9fbeb6e20b981578dac5b4",
+    "line" : 54,
+    "diffHunk" : "@@ -1,1 +464,468 @@\t\tBy(\"deleting host0\")\n\n\t\toutput, err = exec.Command(\"gcloud\", \"compute\", \"instances\", \"delete\", string(host0Name), \"--project=\"+framework.TestContext.CloudConfig.ProjectID, \"--zone=\"+framework.TestContext.CloudConfig.Zone).CombinedOutput()\n\t\tframework.ExpectNoError(err, fmt.Sprintf(\"Failed to delete host0pod: %v\", err))\n"
+  },
+  {
+    "id" : "013be5dc-c2ce-4f80-b07f-17fdea200722",
+    "prId" : 34570,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/34570#pullrequestreview-4761325",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f74d55ae-604c-49ac-9307-3601aee1833c",
+        "parentId" : null,
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "need this after if err != nil ?\n",
+        "createdAt" : "2016-10-17T18:02:34Z",
+        "updatedAt" : "2016-10-24T20:38:44Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56e060e9-aa06-4340-ad1a-d834e8cbb2c2",
+        "parentId" : "f74d55ae-604c-49ac-9307-3601aee1833c",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "this error means it fails to read the file which will results in test failure. Our current issue is that sometimes read returns empty string (read still succeeds) because of docker exec issue. This fix is to add retry to read it again.\n",
+        "createdAt" : "2016-10-18T21:09:53Z",
+        "updatedAt" : "2016-10-24T20:38:44Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16a495158715b0ddb09a0102f12f730f76a92e8b",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +459,463 @@\t\t\t\tframework.Logf(\"Error reading file: %v\", err)\n\t\t\t}\n\t\t\tframework.ExpectNoError(err)\n\t\t\tframework.Logf(\"Read file %q with content: %v\", filePath, v)\n\t\t\tif strings.TrimSpace(v) != strings.TrimSpace(expectedContents) {"
+  },
+  {
+    "id" : "855ff4fc-7945-4499-959e-ff3f9888b424",
+    "prId" : 34570,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/34570#pullrequestreview-4760607",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "db3eb1de-f9d3-4b7b-9e2f-f941145c3e2e",
+        "parentId" : null,
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "can we trust `size` here?\n",
+        "createdAt" : "2016-10-17T18:04:44Z",
+        "updatedAt" : "2016-10-24T20:38:44Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8635195-e257-4b33-94ee-e6392164cf6b",
+        "parentId" : "db3eb1de-f9d3-4b7b-9e2f-f941145c3e2e",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "This check is just for double checking the file if read returns empty string. It mainly for debugging purpose. From my experiences, the size always return the correct valule.\n",
+        "createdAt" : "2016-10-18T21:06:04Z",
+        "updatedAt" : "2016-10-24T20:38:44Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16a495158715b0ddb09a0102f12f730f76a92e8b",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +467,471 @@\t\t\t\t\tframework.Logf(\"Error checking file size: %v\", err)\n\t\t\t\t}\n\t\t\t\tframework.Logf(\"Check file %q size: %q\", filePath, size)\n\t\t\t} else {\n\t\t\t\tbreak"
+  },
+  {
+    "id" : "6a8c8ef1-16e3-43dc-8d31-4dec90c99d67",
+    "prId" : 34570,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/34570#pullrequestreview-4526167",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ee85560c-b968-40ec-b708-a0a0fabc3cef",
+        "parentId" : null,
+        "authorId" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "body" : "for simplicity of error handling, why not `continue` from here?\n",
+        "createdAt" : "2016-10-17T18:05:32Z",
+        "updatedAt" : "2016-10-24T20:38:44Z",
+        "lastEditedBy" : "a7f673a6-4b23-4df6-aa10-f123fa9dcd5f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16a495158715b0ddb09a0102f12f730f76a92e8b",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +457,461 @@\t\t\tv, err := f.ReadFileViaContainer(podName, containerName, filePath)\n\t\t\tif err != nil {\n\t\t\t\tframework.Logf(\"Error reading file: %v\", err)\n\t\t\t}\n\t\t\tframework.ExpectNoError(err)"
+  },
+  {
+    "id" : "6bd8919a-5361-45a2-8fca-e583d8152f08",
+    "prId" : 34570,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/34570#pullrequestreview-5534365",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d6b045bb-683c-4046-b0bb-3809057836d3",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Should log a warning before retry\n",
+        "createdAt" : "2016-10-19T03:21:22Z",
+        "updatedAt" : "2016-10-24T20:38:44Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e3460c3c-ef85-4808-9816-ed907b0f94c1",
+        "parentId" : "d6b045bb-683c-4046-b0bb-3809057836d3",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "done\n",
+        "createdAt" : "2016-10-24T20:39:05Z",
+        "updatedAt" : "2016-10-24T20:39:05Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16a495158715b0ddb09a0102f12f730f76a92e8b",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +468,472 @@\t\t\t\t}\n\t\t\t\tframework.Logf(\"Check file %q size: %q\", filePath, size)\n\t\t\t} else {\n\t\t\t\tbreak\n\t\t\t}"
+  },
+  {
+    "id" : "4cb361b0-e06a-41a7-bc5d-b753cf18b75b",
+    "prId" : 28181,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/28181#pullrequestreview-4991667",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "73921c13-ca2c-4db5-8ce5-e12f69feadbb",
+        "parentId" : null,
+        "authorId" : "65c676d6-aec8-4761-943f-80e1f66d400b",
+        "body" : "I guess it's too late to comment on this pr, but I'm curious to know what you think. It seems that the defer below should be moved to after the call to podClient.Create(). If the Create() fails then the not-yet-created pod will be try to be deleted, and the not-yet-attached  disks will try to be detached. This is probably very minor, or perhaps I'm missing something?\n",
+        "createdAt" : "2016-10-20T01:32:02Z",
+        "updatedAt" : "2016-10-20T01:32:02Z",
+        "lastEditedBy" : "65c676d6-aec8-4761-943f-80e1f66d400b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e94242ed19f39596e908a155d1549912627235ab",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +76,80 @@\n\t// Flaky-- Issue #27691\n\tIt(\"[Flaky] should schedule a pod w/ a RW PD, ungracefully remove it, then schedule it on another host [Slow]\", func() {\n\t\tframework.SkipUnlessProviderIs(\"gce\", \"gke\", \"aws\")\n"
+  },
+  {
+    "id" : "f9aacf98-f513-41a2-ab29-29fe3a99d7e7",
+    "prId" : 10001,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "433722e6-6b5b-4506-9376-9b183e50ccb2",
+        "parentId" : null,
+        "authorId" : "e7e1d709-e9c3-47a5-91f2-ed86958679e2",
+        "body" : "Any interest in stdout vs stderr?\n\nIf this is flaky, doing some parsing and retrying on transient errors might be a good thing.\n",
+        "createdAt" : "2015-06-18T06:07:14Z",
+        "updatedAt" : "2015-06-18T06:07:14Z",
+        "lastEditedBy" : "e7e1d709-e9c3-47a5-91f2-ed86958679e2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b6055e61-c013-4316-a75d-ae7782669f5a",
+        "parentId" : "433722e6-6b5b-4506-9376-9b183e50ccb2",
+        "authorId" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "body" : "combined output gets both.  I want the data first, then we can see what to do with it.\n",
+        "createdAt" : "2015-06-18T20:18:34Z",
+        "updatedAt" : "2015-06-18T20:18:34Z",
+        "lastEditedBy" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd5ff0c9-3099-4707-8162-ae83feefab81",
+        "parentId" : "433722e6-6b5b-4506-9376-9b183e50ccb2",
+        "authorId" : null,
+        "body" : "I'm pretty sure that the error is that the PD is still in use (i.e. attached). In that case, retrying the deletion probably won't help (although retrying the detachment probably will).  As per @brendandburns, let's see what data this this unearths before deciding.  I'm fairly certain that what we'll want here in the end will be explicit confirmation that the detachment has completed (not just that the detach API call has succeeded), and also retries on the PD deletion.\nAs an aside, I'm not 100% convinced that this test should actually be made to fail if only the PD deletion fails.  That seems like a GCE rather than a K8S issue.  But I could be convinced either way.\n",
+        "createdAt" : "2015-06-18T20:41:52Z",
+        "updatedAt" : "2015-06-18T20:41:52Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9961263a-0041-41d2-85ab-a4c25bab4a3c",
+        "parentId" : "433722e6-6b5b-4506-9376-9b183e50ccb2",
+        "authorId" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "body" : "yeah, +1, I think this test should probably not fail if GCE delete via gcloud fails, esp. if the disk is no longer attached.\n",
+        "createdAt" : "2015-06-18T20:49:07Z",
+        "updatedAt" : "2015-06-18T20:49:07Z",
+        "lastEditedBy" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0bf936d23a5e2899692fcd11d4f1f1012062e587",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +215,219 @@\n\t\t// TODO: make this hit the compute API directly.\n\t\tcmd := exec.Command(\"gcloud\", \"compute\", \"--project=\"+testContext.CloudConfig.ProjectID, \"disks\", \"delete\", \"--zone=\"+zone, pdName)\n\t\tdata, err := cmd.CombinedOutput()\n\t\tif err != nil {"
+  },
+  {
+    "id" : "74d7a966-1237-4336-8e84-7ce57b6abdd1",
+    "prId" : 7191,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "504256ec-c16c-477b-a72b-82fe06353290",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "nit: Since the code below always assumes >= 2 hosts, I'm not sure why we'd do a separate if check here for an e2e cluster with only 1 host. This could just be done inside the prior if block. \n",
+        "createdAt" : "2015-04-23T17:53:05Z",
+        "updatedAt" : "2015-04-23T17:53:05Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3662399e807bd740aa05262f8a76924985435693",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +58,62 @@\t\t\thost1Name = nodes.Items[1].ObjectMeta.Name\n\t\t}\n\t\tif len(nodes.Items) >= 1 {\n\t\t\thost0Name = nodes.Items[0].ObjectMeta.Name\n\t\t}"
+  },
+  {
+    "id" : "7804cf18-32cc-46c5-b60c-b412317c4d07",
+    "prId" : 7191,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "abe8d0eb-1f44-4c2f-9eaa-25bf95e5ba43",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "FYI @quinton-hoole @ixdy - here's on e2e test that assumes a cluster has at least two nodes, and then explicitly uses the first two nodes in the cluster for the test. If we want e2es to run on larger clusters (or in parallel), we need to fix this. \n",
+        "createdAt" : "2015-04-23T17:54:05Z",
+        "updatedAt" : "2015-04-23T17:54:05Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a33d4429-e383-41ad-b8e4-fe4675bdb4b4",
+        "parentId" : "abe8d0eb-1f44-4c2f-9eaa-25bf95e5ba43",
+        "authorId" : null,
+        "body" : "Ack.  Created #7239.\n",
+        "createdAt" : "2015-04-23T19:13:13Z",
+        "updatedAt" : "2015-04-23T19:13:13Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3662399e807bd740aa05262f8a76924985435693",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +53,57 @@\t\texpectNoError(err, \"Failed to list nodes for e2e cluster.\")\n\n\t\tnumHosts = len(nodes.Items)\n\n\t\tif len(nodes.Items) >= 2 {"
+  },
+  {
+    "id" : "80361a9c-7d44-4836-beb2-e2023c503e68",
+    "prId" : 4965,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e869c63f-8ee6-4ad1-9865-b401c35fad42",
+        "parentId" : null,
+        "authorId" : "a92f8f9e-31fd-4510-b4d9-3553f7025485",
+        "body" : "If this becomes a common pattern, we could probably write a generic retry-on-error that just took a func. You're not mutating anything here, you're just pounding it. And I see why (stupid GCE case where we don't care, but really don't want to leak the resource).\n",
+        "createdAt" : "2015-03-03T14:31:53Z",
+        "updatedAt" : "2015-03-03T19:11:00Z",
+        "lastEditedBy" : "a92f8f9e-31fd-4510-b4d9-3553f7025485",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "427e0c71-8cc9-4214-8fb6-ac515dfce2e8",
+        "parentId" : "e869c63f-8ee6-4ad1-9865-b401c35fad42",
+        "authorId" : "3cd3a661-80f4-45b3-bae0-5a78fbaedc59",
+        "body" : "I have a callWithTimeout in the other PR I'm working on. I'll put it in a util package and switch these calls over to it when (if) that PR gets in.\n",
+        "createdAt" : "2015-03-03T19:15:22Z",
+        "updatedAt" : "2015-03-03T19:15:22Z",
+        "lastEditedBy" : "3cd3a661-80f4-45b3-bae0-5a78fbaedc59",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "51f1a244e7ee1b63421fd17e165928ac4f87773b",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +160,164 @@\t\t\tbreak\n\t\t}\n\t\texpectNoError(err, \"Error deleting PD\")\n\t})\n})"
+  },
+  {
+    "id" : "66726dbe-067d-4d91-8f4c-74cc0a794949",
+    "prId" : 4718,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "39d7454a-e506-46f6-a8d9-3c6747a2b74d",
+        "parentId" : null,
+        "authorId" : "a92f8f9e-31fd-4510-b4d9-3553f7025485",
+        "body" : "Can you factor these two tests together? Seems likely.\n",
+        "createdAt" : "2015-02-23T17:28:47Z",
+        "updatedAt" : "2015-02-23T20:19:31Z",
+        "lastEditedBy" : "a92f8f9e-31fd-4510-b4d9-3553f7025485",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54e8240916a5b3c98c554a5fc9622d8ef854e973",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +96,100 @@\t})\n\n\tIt(\"should schedule a pod w/ a readonly PD on two hosts, then remove both.\", func() {\n\t\trwPod := testPDPod(diskName, host0Name, false)\n\t\thost0ROPod := testPDPod(diskName, host0Name, true)"
+  }
+]

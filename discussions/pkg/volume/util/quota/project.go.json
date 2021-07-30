@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "ba5d2765-fd7e-4723-99bb-a0a6cb599022",
+    "prId" : 66928,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/66928#pullrequestreview-180500842",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b1f2091e-d3a4-4047-b120-d2a0702c520f",
+        "parentId" : null,
+        "authorId" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "body" : "nit: generally, we want to handle each error individually to add information to it, rather than just return it at the end.  This would also reduce the amount of nesting here, and make code more readable.",
+        "createdAt" : "2018-11-21T23:05:08Z",
+        "updatedAt" : "2019-05-29T19:23:14Z",
+        "lastEditedBy" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16beea05-6ab1-41b1-b5c2-430c519e06fc",
+        "parentId" : "b1f2091e-d3a4-4047-b120-d2a0702c520f",
+        "authorId" : "4aab55a0-5299-4d58-b630-6d54a352dba8",
+        "body" : "The reason I did it this way is that there are a number of things that have to be unwound along the way.  I suppose I could have something like\r\n\r\n        func withLockedProjectFiles(operation(*os.File, *os.File, string, common.QuotaId) (common.QuotaID, error)) (common.QuotaID, error)\r\n\r\nbut that calling sequence looks ugly enough itself, especially since not everything that uses it returns a quota ID.",
+        "createdAt" : "2018-11-26T16:25:07Z",
+        "updatedAt" : "2019-05-29T19:23:14Z",
+        "lastEditedBy" : "4aab55a0-5299-4d58-b630-6d54a352dba8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57af5fb8-4e43-4ba4-b0db-1b087bee3ebb",
+        "parentId" : "b1f2091e-d3a4-4047-b120-d2a0702c520f",
+        "authorId" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "body" : "I don't think you need to do that.  It isn't the most elegant thing, but you can change:\r\n```\r\nfunc openAndLockProjectFiles() (*os.File, *os.File, error) {\r\n    ...\r\n    fProjid, err := os.OpenFile(projidFile, os.O_RDONLY|os.O_CREATE, 0644)\r\n    if err == nil {\r\n        ... do things...\r\n    } else {\r\n        err = fmt.Errorf(\"unable to open %s: %v\", projidFile, err)\r\n    }\r\n    fProjects.Close()\r\n    return nil, nil, err\r\n}\r\n```\r\n```\r\nfunc openAndLockProjectFiles() (fProjects *os.File, fProjid *os.File, err error) {\r\n    ...\r\n    fProjid, err = os.OpenFile(projidFile, os.O_RDONLY|os.O_CREATE, 0644)\r\n    if err != nil {\r\n        return nil, nil, fmt.Errorf(\"unable to open %s: %v\", projidFile, err)\r\n    }\r\n    defer func() {\r\n        if err != nil {\r\n            fProjects.Close()\r\n        }\r\n    }\r\n    ... do things ...\r\n    return\r\n}\r\n```\r\n\r\nThat handles errors returned later in the function (because they are assigned to the `err` variable declared in the function definition).  You keep the error handling and `Close()` call immediately after the `OpenFile(...)` call, and don't get extra nesting.",
+        "createdAt" : "2018-12-01T01:41:29Z",
+        "updatedAt" : "2019-05-29T19:23:15Z",
+        "lastEditedBy" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "38753efcc758e16cb501906b9a1aabb7308a0246",
+    "line" : 90,
+    "diffHunk" : "@@ -1,1 +88,92 @@\t}\n\tfProjid, err := os.OpenFile(projidFile, os.O_RDONLY|os.O_CREATE, 0644)\n\tif err == nil {\n\t\t// Check once more, to ensure nothing got changed out from under us\n\t\tif err := projFilesAreOK(); err == nil {"
+  },
+  {
+    "id" : "7a035806-a39f-4501-90b9-ed86d8f1dfaf",
+    "prId" : 66928,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/66928#pullrequestreview-180500842",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a0be40e5-f45e-4183-a7ff-b17a11a0fd84",
+        "parentId" : null,
+        "authorId" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "body" : "do we ever unlock this?  I generally prefer making locked functions separate, so we can `lockFile()`, and `defer unlockFile()` at the start.",
+        "createdAt" : "2018-11-21T23:08:39Z",
+        "updatedAt" : "2019-05-29T19:23:14Z",
+        "lastEditedBy" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "685d3f4e-ea30-4eca-b1e0-d3b404ab2948",
+        "parentId" : "a0be40e5-f45e-4183-a7ff-b17a11a0fd84",
+        "authorId" : "4aab55a0-5299-4d58-b630-6d54a352dba8",
+        "body" : "It's used in `createProjectID()` and `removeProjectID()` (and, in the version using `xfs_quota(8)`, `getProjectIDForDirectory()`).  Those all have a calling sequence of\r\n\r\n\tfProjects, fProjid, err := openAndLockProjectFiles()\r\n\tif err == nil {\r\n\t\tdefer closeProjectFiles(fProjects, fProjid)\r\n                ...do something...\r\n\t}\r\n\r\nSo that actually is separating the locking function from everything else.",
+        "createdAt" : "2018-11-26T16:19:36Z",
+        "updatedAt" : "2019-05-29T19:23:14Z",
+        "lastEditedBy" : "4aab55a0-5299-4d58-b630-6d54a352dba8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04e9f7c8-6fc8-4498-ad12-60bb2e90b5ad",
+        "parentId" : "a0be40e5-f45e-4183-a7ff-b17a11a0fd84",
+        "authorId" : "4aab55a0-5299-4d58-b630-6d54a352dba8",
+        "body" : "N.B. this and the above comment are really different aspects of the same issue.",
+        "createdAt" : "2018-11-26T16:37:41Z",
+        "updatedAt" : "2019-05-29T19:23:15Z",
+        "lastEditedBy" : "4aab55a0-5299-4d58-b630-6d54a352dba8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "edc2a1db-eb1e-4d44-a304-b531a08e9c1b",
+        "parentId" : "a0be40e5-f45e-4183-a7ff-b17a11a0fd84",
+        "authorId" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "body" : "Ack, that makes sense.",
+        "createdAt" : "2018-12-01T01:29:00Z",
+        "updatedAt" : "2019-05-29T19:23:15Z",
+        "lastEditedBy" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "38753efcc758e16cb501906b9a1aabb7308a0246",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +93,97 @@\t\t\terr = lockFile(fProjects)\n\t\t\tif err == nil {\n\t\t\t\terr = lockFile(fProjid)\n\t\t\t\tif err == nil {\n\t\t\t\t\treturn fProjects, fProjid, nil"
+  },
+  {
+    "id" : "af2283a8-ba59-412f-ba68-2819eac68afc",
+    "prId" : 66928,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/66928#pullrequestreview-180826924",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bf320127-f8b5-48fe-9e19-9cce300b4a19",
+        "parentId" : null,
+        "authorId" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "body" : "Is common.FirstQuota an important number, or just random?\r\n\r\nIs there a reason why we search linearly from that point, rather than generating random int32s?",
+        "createdAt" : "2018-12-01T01:20:08Z",
+        "updatedAt" : "2019-05-29T19:23:15Z",
+        "lastEditedBy" : "d2b16581-e7e9-48b8-9f76-6f6bcb9ec300",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3af80083-9031-4c49-a579-ea978e6aacb6",
+        "parentId" : "bf320127-f8b5-48fe-9e19-9cce300b4a19",
+        "authorId" : "4aab55a0-5299-4d58-b630-6d54a352dba8",
+        "body" : "It's not important per se.  I did this initially because I had in mind the possibility of reserving a range/ranges of quota IDs that could be configured (the system administrator might want to reserve other ranges).  Doing a linear search keeps the range of quota IDs compact.",
+        "createdAt" : "2018-12-03T15:35:08Z",
+        "updatedAt" : "2019-05-29T19:23:15Z",
+        "lastEditedBy" : "4aab55a0-5299-4d58-b630-6d54a352dba8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "38753efcc758e16cb501906b9a1aabb7308a0246",
+    "line" : 168,
+    "diffHunk" : "@@ -1,1 +166,170 @@func findAvailableQuota(path string, idMap map[common.QuotaID]bool) (common.QuotaID, error) {\n\tunusedQuotasSearched := 0\n\tfor id := common.FirstQuota; id == id; id++ {\n\t\tif _, ok := idMap[id]; !ok {\n\t\t\tisInUse, err := getApplier(path).QuotaIDIsInUse(id)"
+  }
+]

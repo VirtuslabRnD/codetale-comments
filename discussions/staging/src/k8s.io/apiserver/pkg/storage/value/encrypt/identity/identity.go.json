@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "08180146-281d-4580-9b5d-255d03eafa77",
+    "prId" : 46460,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46460#pullrequestreview-41628687",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "841b2f4a-e053-4197-b574-d578dc8e53b7",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "How will someone configure the encryption config to stop encrypting?  If identity transformer is first, won't this error out?  Did you add a fallback decoder to the prefix transformer codepath?",
+        "createdAt" : "2017-05-31T21:56:39Z",
+        "updatedAt" : "2017-06-02T03:36:16Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d7c9a6d-72c4-4eb9-afa2-9f6dc728eb3a",
+        "parentId" : "841b2f4a-e053-4197-b574-d578dc8e53b7",
+        "authorId" : "992c4ffe-40aa-4314-8c54-4b38052f13fd",
+        "body" : "Oh right. I had it handled in the location transformer, but it is not there at the moment.\r\n\r\nCurrent prefix transformer code:\r\n```\r\n\tfor i, transformer := range t.transformers {\r\n\t\tif bytes.HasPrefix(data, transformer.Prefix) {\r\n\t\t\tresult, stale, err := transformer.Transformer.TransformFromStorage(data[len(transformer.Prefix):], context)\r\n\t\t\treturn result, stale || i != 0, err\r\n\t\t}\r\n\t}\r\n\treturn nil, false, t.err\r\n```\r\n\r\nProposed:\r\n```\r\nresult, stale, err := transformer.Transformer.TransformFromStorage(data[len(transformer.Prefix):], context)\r\nif len(transformer.Prefix) != 0 || err == nil {\r\n\treturn result, stale || i != 0, err\r\n}\r\n```\r\n\r\nAny transformer which has no prefix shall match all data. Thus, we need to ensure that such a transformer does not prevent other transformers from decrypting the data. If that transformer can decrypt without an error, it should be fine.",
+        "createdAt" : "2017-05-31T22:08:56Z",
+        "updatedAt" : "2017-06-02T03:36:16Z",
+        "lastEditedBy" : "992c4ffe-40aa-4314-8c54-4b38052f13fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4f612bce-011d-4b0e-aadd-19a92281ec3f",
+        "parentId" : "841b2f4a-e053-4197-b574-d578dc8e53b7",
+        "authorId" : "992c4ffe-40aa-4314-8c54-4b38052f13fd",
+        "body" : "Resolved.",
+        "createdAt" : "2017-06-01T20:33:31Z",
+        "updatedAt" : "2017-06-02T03:36:16Z",
+        "lastEditedBy" : "992c4ffe-40aa-4314-8c54-4b38052f13fd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9760d00d08ef0619e30a7b1b90fd290cab960069",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +39,43 @@\t// JSON data starts with '{'. Protobuf data has a prefix 'k8s[\\x00-\\xFF]'.\n\t// Prefix 'k8s:enc:' is reserved for encrypted data on disk.\n\tif bytes.HasPrefix(b, []byte(\"k8s:enc:\")) {\n\t\treturn []byte{}, false, fmt.Errorf(\"identity transformer tried to read encrypted data\")\n\t}"
+  },
+  {
+    "id" : "3c83610d-2e8b-4548-8630-f29c5a6847d8",
+    "prId" : 46460,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46460#pullrequestreview-45232364",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "36a403b1-a7f6-4fa1-87c2-31decdbc0378",
+        "parentId" : null,
+        "authorId" : "21b457d2-6f88-4a9f-8d5a-debafbcb6cfe",
+        "body" : "@sakshamsharma @smarterclayton This is the 3rd `identityTransformer` in our codebase ([first]( https://github.com/kubernetes/kubernetes/blob/5e8f44f1954f04742bdcf7058c69c9fa5358ae16/staging/src/k8s.io/apiserver/pkg/storage/etcd/etcd_helper.go#L53), [second](https://github.com/kubernetes/kubernetes/blob/5e8f44f1954f04742bdcf7058c69c9fa5358ae16/staging/src/k8s.io/apiserver/pkg/storage/value/transformer.go#L46)).\r\n\r\n1) Do we really need to have 3 of them? What is the reason?\r\n\r\n 2) I see that this implementation has check for `k8s:enc:` prefix. Why 2 others don't have such check? Should we copy it to them?",
+        "createdAt" : "2017-06-20T14:40:14Z",
+        "updatedAt" : "2017-06-20T14:41:27Z",
+        "lastEditedBy" : "21b457d2-6f88-4a9f-8d5a-debafbcb6cfe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "693d155b-0820-4901-854c-ecbdac5d4621",
+        "parentId" : "36a403b1-a7f6-4fa1-87c2-31decdbc0378",
+        "authorId" : "992c4ffe-40aa-4314-8c54-4b38052f13fd",
+        "body" : "This new identity transformer needs to return an error if it finds something that is encrypted. Without that check, the PrefixTransformer cannot try to use other transformers, because it will never see this one failing.\r\n\r\nI had originally just modified the one in transformer.go to do this, but @smarterclayton reasoned that the identity transformer (which is used for all the cases where there is no encryption) should only be returning the data. Which is why, we now have a separate one for cases where we want to add more logic.",
+        "createdAt" : "2017-06-20T18:48:52Z",
+        "updatedAt" : "2017-06-20T18:48:52Z",
+        "lastEditedBy" : "992c4ffe-40aa-4314-8c54-4b38052f13fd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9760d00d08ef0619e30a7b1b90fd290cab960069",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +26,30 @@// encryptIdentityTransformer performs no transformation on provided data, but validates\n// that the data is not encrypted data during TransformFromStorage\ntype identityTransformer struct{}\n\n// NewEncryptCheckTransformer returns an identityTransformer which returns an error"
+  }
+]

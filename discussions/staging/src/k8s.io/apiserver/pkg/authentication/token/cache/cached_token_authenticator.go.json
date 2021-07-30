@@ -1,0 +1,420 @@
+[
+  {
+    "id" : "18f7cc0b-3829-4751-9d92-ce8ebcef4f9c",
+    "prId" : 85242,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85242#pullrequestreview-317112076",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b05fbbd4-fd92-449e-8825-9aeedb6039f6",
+        "parentId" : null,
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "If a particular key \"hangs\" indefinitely somehow, all future uses of that key will timeout right?  We pass in the context to `a.authenticator.AuthenticateToken` and I suppose that should just timeout so this should not be an issue.\r\n\r\nI think we need some use of `group.Forget(key)`",
+        "createdAt" : "2019-11-14T04:02:11Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c33b84b0-2df9-4772-bcd7-5379984dcf80",
+        "parentId" : "b05fbbd4-fd92-449e-8825-9aeedb6039f6",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "@liggitt fixed the obvious instance of this in https://github.com/kubernetes/kubernetes/pull/83064\r\n\r\nForgetting means that we leak potentially unbound numbers of goroutines, so it's a tradeoff.",
+        "createdAt" : "2019-11-14T16:20:31Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e0a84de-ea20-4a91-a9c6-c39c146219d6",
+        "parentId" : "b05fbbd4-fd92-449e-8825-9aeedb6039f6",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "yeah, I'd depend on the context timeout being effective",
+        "createdAt" : "2019-11-14T16:58:19Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8647e75cec684fce64280b6079ef174643548c53",
+    "line" : 60,
+    "diffHunk" : "@@ -1,1 +122,126 @@\t}\n\n\tc := a.group.DoChan(key, func() (val interface{}, err error) {\n\t\t// We're leaving the request handling stack so we need to handle crashes\n\t\t// ourselves. Log a stack trace and return a 500 if something panics."
+  },
+  {
+    "id" : "3b48ec0f-8571-4314-8efc-e498ade38bac",
+    "prId" : 85242,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85242#pullrequestreview-330137901",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ea3e3dd0-b71d-47e6-84e7-d926ebebac28",
+        "parentId" : null,
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "Does this actually work?  If request A starts at time 0 and times out at time 30, would a request B for the same key at time 25 also time out at time 30 (i.e. it times out too soon)?  Do we need to only aggregate the same key over a small period of time?",
+        "createdAt" : "2019-11-14T04:07:21Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "36826424-7901-46c1-9445-fb547f6a698d",
+        "parentId" : "ea3e3dd0-b71d-47e6-84e7-d926ebebac28",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "That sounds like it would be working as intended. Isn't this what we want?",
+        "createdAt" : "2019-11-14T16:21:55Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "efe00d5c-5671-4544-8f14-8619ab5871a1",
+        "parentId" : "ea3e3dd0-b71d-47e6-84e7-d926ebebac28",
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "I guess?  Seems a bit weird from the second caller's perspective to get timed out too soon.  Maybe in practice it does not matter?",
+        "createdAt" : "2019-11-14T17:05:40Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7da3c6f9-29ed-410e-83f3-60d4f947f1f3",
+        "parentId" : "ea3e3dd0-b71d-47e6-84e7-d926ebebac28",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "I like to think of it like this: we are giving this lookup 30 seconds. If you ask for it and we started it 25 seconds ago, this will timeout in 5 seconds, and you'll get 25 seconds back. Everyone's happy. ",
+        "createdAt" : "2019-11-14T17:35:01Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9e4eab0-9e5c-40db-a340-bb10196c1a99",
+        "parentId" : "ea3e3dd0-b71d-47e6-84e7-d926ebebac28",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "30s seems excessive to me?",
+        "createdAt" : "2019-12-04T21:15:56Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df376c80-a586-41ca-8fcf-614b56577429",
+        "parentId" : "ea3e3dd0-b71d-47e6-84e7-d926ebebac28",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "That's our current webhook default, and half of our default RequestTimeout configured for kube-apiserver. This matches those relatively well. If we want to shorten this, it should be done independent of this PR.",
+        "createdAt" : "2019-12-10T20:54:48Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8647e75cec684fce64280b6079ef174643548c53",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +142,146 @@\t\t}\n\n\t\t// Detach the context because the lookup may be shared by multiple callers,\n\t\t// however propagate the audience.\n\t\tctx, cancel := context.WithTimeout(context.Background(), sharedLookupTimeout)"
+  },
+  {
+    "id" : "c375fa99-e721-4fbb-a4f1-6c0e141f9c17",
+    "prId" : 85242,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85242#pullrequestreview-327266692",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2a955f45-7282-47c4-98c6-8850e441319a",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Why custom defer instead of runtime.HandleCrash (IIRC the right name)?",
+        "createdAt" : "2019-12-04T21:14:38Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7502598-34ba-4127-b014-424e0e412e57",
+        "parentId" : "2a955f45-7282-47c4-98c6-8850e441319a",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "Handle crash still crashes (although it logs). We have to catch ourselves if we leave the request goroutine. On the request goroutine, the stdlib catches the panic. Discussed above: https://github.com/kubernetes/kubernetes/pull/85242#discussion_r346116120",
+        "createdAt" : "2019-12-05T01:51:00Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8647e75cec684fce64280b6079ef174643548c53",
+    "line" : 63,
+    "diffHunk" : "@@ -1,1 +125,129 @@\t\t// We're leaving the request handling stack so we need to handle crashes\n\t\t// ourselves. Log a stack trace and return a 500 if something panics.\n\t\tdefer func() {\n\t\t\tif r := recover(); r != nil {\n\t\t\t\terr = errAuthnCrash"
+  },
+  {
+    "id" : "d0724057-bb2f-46ef-a6ca-39f0c662ec6a",
+    "prId" : 85242,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85242#pullrequestreview-327266367",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9768b8c7-6790-4ca7-a81e-532f9e1b7e76",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "This can still race with folks checking the cache first, it's still possible to start a check for a thing that's just been added to the cache. I guess it's harder to trigger, though.",
+        "createdAt" : "2019-12-04T21:21:07Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0123ba51-61f1-4a28-bc73-73466a14f6a4",
+        "parentId" : "9768b8c7-6790-4ca7-a81e-532f9e1b7e76",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "Good catch. I'll double check the cache once I'm in the singleflight.",
+        "createdAt" : "2019-12-05T01:49:39Z",
+        "updatedAt" : "2019-12-10T21:12:27Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8647e75cec684fce64280b6079ef174643548c53",
+    "line" : 96,
+    "diffHunk" : "@@ -1,1 +158,162 @@\t\tswitch {\n\t\tcase ok && a.successTTL > 0:\n\t\t\ta.cache.set(key, &cacheRecord{resp: resp, ok: ok, err: err}, a.successTTL)\n\t\tcase !ok && a.failureTTL > 0:\n\t\t\ta.cache.set(key, &cacheRecord{resp: resp, ok: ok, err: err}, a.failureTTL)"
+  },
+  {
+    "id" : "cfc4f413-91a0-478d-b81b-26e62b0055be",
+    "prId" : 83796,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83796#pullrequestreview-301430008",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "87e7b54a-d207-4edc-80b9-a2e825d361e5",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Are auds guaranteed to be in the same order every time?\r\n\r\nI think since auds is the last thing to go in to the hash, this code is OK. If something were to be appended, though, I think we'd also want to first write in the number of auds, otherwise it'd be possible to get a collision if the last aud could be the same as that other thing.",
+        "createdAt" : "2019-10-14T17:01:39Z",
+        "updatedAt" : "2019-10-14T22:34:52Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9a547bca8e6e15273bfafd3496aa6524fd7d35bd",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +135,139 @@\t// encode the length of audiences to avoid ambiguities\n\twriteLength(h, b, len(auds))\n\tfor _, aud := range auds {\n\t\twriteLengthPrefixedString(h, b, aud)\n\t}"
+  },
+  {
+    "id" : "7816c609-f98d-4549-bf55-1206ca6dcaaa",
+    "prId" : 83796,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83796#pullrequestreview-301537697",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "274a14e0-cf21-490f-a2e9-3325826395ad",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "nit: since this doesn't allocate, it's fine to just do it within the function, making it take fewer parameters.",
+        "createdAt" : "2019-10-14T20:19:50Z",
+        "updatedAt" : "2019-10-14T22:34:52Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4b71eda0-dbcd-4719-9ce3-40c7d6c3823e",
+        "parentId" : "274a14e0-cf21-490f-a2e9-3325826395ad",
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "Apparently it causes allocations when called from a `for` loop:\r\n\r\n```\r\nBenchmarkKeyFunc/has_audiences-4         \t 2000000\t      4452 ns/op\t      48 B/op\t       5 allocs/op\r\nBenchmarkKeyFunc/nil_audiences-4         \t 2000000\t      3842 ns/op\t      36 B/op\t       2 allocs/op\r\nPASS\r\n```",
+        "createdAt" : "2019-10-14T20:52:02Z",
+        "updatedAt" : "2019-10-14T22:34:52Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38ba4e73-2560-4dea-8873-e457a612e55a",
+        "parentId" : "274a14e0-cf21-490f-a2e9-3325826395ad",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "hm, we must be defeating the escape analysis :(",
+        "createdAt" : "2019-10-14T21:00:16Z",
+        "updatedAt" : "2019-10-14T22:34:52Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9a547bca8e6e15273bfafd3496aa6524fd7d35bd",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +129,133 @@\n\t// try to force stack allocation\n\tvar a [4]byte\n\tb := a[:]\n"
+  },
+  {
+    "id" : "2065878a-947d-4e96-abf3-c5f48cd32ef0",
+    "prId" : 83796,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83796#pullrequestreview-301534802",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9c80d7e8-90cc-421e-b015-1d024c822573",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "perhaps better to reset before Put()ing to prevent reuse?",
+        "createdAt" : "2019-10-14T20:21:50Z",
+        "updatedAt" : "2019-10-14T22:34:52Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "92deb15e-8e72-4a98-a476-b3857cf332d7",
+        "parentId" : "9c80d7e8-90cc-421e-b015-1d024c822573",
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "Eh both way have issues if \"done incorrectly.\"",
+        "createdAt" : "2019-10-14T20:54:03Z",
+        "updatedAt" : "2019-10-14T22:34:52Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9a547bca8e6e15273bfafd3496aa6524fd7d35bd",
+    "line" : 74,
+    "diffHunk" : "@@ -1,1 +126,130 @@\th := hashPool.Get().(hash.Hash)\n\n\th.Reset()\n\n\t// try to force stack allocation"
+  },
+  {
+    "id" : "03852b56-c334-4ff1-938f-b31d9ed363ae",
+    "prId" : 83796,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83796#pullrequestreview-301548735",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ec211eae-bb3e-4ec7-ac20-0ec20b9b35d1",
+        "parentId" : null,
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "Maybe just defer this?",
+        "createdAt" : "2019-10-14T21:05:46Z",
+        "updatedAt" : "2019-10-14T22:34:52Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "81e8c449-d032-4189-bb6f-d5c5c426f213",
+        "parentId" : "ec211eae-bb3e-4ec7-ac20-0ec20b9b35d1",
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "I was under the mindset of \"I am doing terrible things to make this 'performant,' might as well go all the way.\"",
+        "createdAt" : "2019-10-14T21:07:47Z",
+        "updatedAt" : "2019-10-14T22:34:52Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0453dd39-9494-4e39-a1da-c8b8d511f59e",
+        "parentId" : "ec211eae-bb3e-4ec7-ac20-0ec20b9b35d1",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "defer won't speed up the return, if that was the goal? you'd have to `go` it for that--probably not worth it over all.",
+        "createdAt" : "2019-10-14T21:25:59Z",
+        "updatedAt" : "2019-10-14T22:34:52Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9a547bca8e6e15273bfafd3496aa6524fd7d35bd",
+    "line" : 89,
+    "diffHunk" : "@@ -1,1 +141,145 @@\tkey := toString(h.Sum(nil)) // skip base64 encoding to save an allocation\n\n\thashPool.Put(h)\n\n\treturn key"
+  },
+  {
+    "id" : "ccd93973-db0b-4f0e-978f-0eef4a1fba63",
+    "prId" : 83643,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83643#pullrequestreview-299141618",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "267cd410-d2af-45ec-96f3-70bdab261be0",
+        "parentId" : null,
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "If we consider the case of short lived SA tokens from the token request API, the cache will grow to the max size before dropping old tokens since there is no go routine or similar to purge the cache.  I do not think that is immediately apparent from this comment.\r\n\r\nThat being said, even at the worse case I do not think this is an issue.",
+        "createdAt" : "2019-10-08T23:06:46Z",
+        "updatedAt" : "2019-10-08T23:15:00Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fca1667f-9cfc-442c-ade8-15ccf7fc5efd",
+        "parentId" : "267cd410-d2af-45ec-96f3-70bdab261be0",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "How short-lived are such tokens? How many of them do we make?",
+        "createdAt" : "2019-10-08T23:12:53Z",
+        "updatedAt" : "2019-10-08T23:15:00Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2cb0f731-0678-4af2-a9d0-ac1002989e48",
+        "parentId" : "267cd410-d2af-45ec-96f3-70bdab261be0",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "And under what conditions do we make them?",
+        "createdAt" : "2019-10-08T23:16:22Z",
+        "updatedAt" : "2019-10-08T23:16:22Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc54d647-c204-42d9-b306-e652bf9a7bb8",
+        "parentId" : "267cd410-d2af-45ec-96f3-70bdab261be0",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "They live 10 minutes by default, and are provisioned per-pod.",
+        "createdAt" : "2019-10-09T02:28:26Z",
+        "updatedAt" : "2019-10-09T02:28:26Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "236112c6af9b22b02e35914fe8fbbdbfe856f975",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +66,70 @@\t\t// tokens in operation exceeds the size of the cache. It is\n\t\t// cheap to make the cache big in the second dimension below,\n\t\t// the memory is only consumed when that many tokens are being\n\t\t// used. Currently we advertise support 5k nodes and 10k\n\t\t// namespaces; a 32k entry cache is therefore a 2x safety"
+  },
+  {
+    "id" : "b2b3b6da-4f5e-4656-8b07-776836248843",
+    "prId" : 50258,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50258#pullrequestreview-55430914",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c1abbdcf-0739-4e27-86e2-46cdc0ad9c83",
+        "parentId" : null,
+        "authorId" : "0af48e59-4be9-46ce-9275-aa218813b6fd",
+        "body" : "I'd expect this to check the err and fail fast before evaluating ok. It seems odd that we'd cache errors. Maybe that's just a bad distinction between `ok == false` and `err != nil`",
+        "createdAt" : "2017-08-08T22:54:01Z",
+        "updatedAt" : "2017-08-10T03:51:59Z",
+        "lastEditedBy" : "0af48e59-4be9-46ce-9275-aa218813b6fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f6341bf8-6050-4144-80b5-67ff17c745b6",
+        "parentId" : "c1abbdcf-0739-4e27-86e2-46cdc0ad9c83",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "we cache the complete results. failure cases are only cached if the failure ttl is set (which this PR does not do... it only caches success). If we wanted to in the future, we could set different ttls on error and non-error cases.",
+        "createdAt" : "2017-08-10T04:10:55Z",
+        "updatedAt" : "2017-08-10T04:10:55Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0458fac8c0788de022acf9308721413257392bf9",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +70,74 @@\t}\n\n\tuser, ok, err := a.authenticator.AuthenticateToken(token)\n\n\tswitch {"
+  }
+]

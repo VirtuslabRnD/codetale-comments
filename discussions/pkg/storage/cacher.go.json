@@ -1,0 +1,1069 @@
+[
+  {
+    "id" : "9e1e445a-4a7e-46ac-a9c1-e5fe765000e7",
+    "prId" : 39078,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/39078#pullrequestreview-14202314",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "parentId" : null,
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "I do not quite understand this. If the sending buffer is full, c.done will be triggered.",
+        "createdAt" : "2016-12-21T18:03:35Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22bfb6af-9597-4b18-88a8-b9d402235768",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "> We don't want to block on c.result if c.done is already closed.\r\n\r\nWe wont be blocked on c.done. but if c.result is not full, we might try to send over it.\r\n\r\nthis pr changes the priority to always evaluate c.done first no matter what. is that what you want? can you explain why and fix the comment? or i am missing something?",
+        "createdAt" : "2016-12-21T18:05:24Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e6a0be9-d726-4445-9aba-e10c0b94f574",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "@wojtek-t \r\n\r\nSo I read https://github.com/kubernetes/kubernetes/issues/39072. Now I understand the problem. The comment is very misleading. We need to fix it.\r\n\r\nAlso how about\r\n\r\n``` go\r\nc.Lock\r\nstopped := c.stopped\r\nc.Unlock\r\nif stopped {\r\n    return\r\n}\r\n\r\n// keep previous logic\r\n```\r\n\r\nnot sure if the lock adds up latency. but it would help the race between close(done) and the default case here. or we might end up with leaking routine again.\r\n\r\n",
+        "createdAt" : "2016-12-21T21:24:06Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3e90ab3-26c0-47a2-b640-2519a24cc60a",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I'm happy to change the comment, but in my opinion it's not misleading. So if you can suggest something else, I'm happy to change that.\r\n\r\nRegarding your proposal about changing to use lock - I don't see how this is fixing the problem. The watcher can still be stopped right after you are calling c.Unlock, which will again decrease the probability but will not fix the problem completely. And you are adding Lock for every (watch event , watcher) pair.",
+        "createdAt" : "2016-12-22T07:32:39Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1311b32-e892-4256-91f6-9f764cfafd97",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "> // We don't want to block on c.result if c.done is already closed.\r\n\r\nThis is true previously. Now the code is\r\n\r\n```go\r\nc.result <- watchEvent\r\n```\r\n\r\nc.done has nothing to do with whether c.result blocks or not. Even if c.result does not block, we wont reach there. If we reach there and c.result blocks, c.done cannot help.",
+        "createdAt" : "2016-12-22T07:52:36Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2caea141-0430-4d3c-9de8-6eee44160674",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : ">  The watcher can still be stopped right after you are calling c.Unlock\r\n\r\nThis is fine. All we need to ensure is that 1, (missing 2), 3, 4 wont happen. Adding the stop check will completely solve it since it makes all checking deterministic and serializable.\r\n\r\nWe do not want to ensure we deliver everything sent before done is called.\r\n ",
+        "createdAt" : "2016-12-22T08:02:55Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b15d109-b3c5-4a9d-b077-4015ef4f7400",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Sorry I wasn't clear enough. I agree this solves the problem that my PR is solving. However, this potentially also doesn't solve the problem that was supposed to be solved by the original PR which is leaking go-routines. By that I mean that if noone is draining the ResultChan, then we can still block on the ``` c.result <- watchEvent ``` forever in that case.\r\n\r\nThat said, I think that what you are suggesting is equally good as my PR and adds additional locking. Or am I missing something and what you suggested is somehow better?",
+        "createdAt" : "2016-12-22T11:17:04Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "afcdbbeb-e9fe-4f81-89bd-e8eac7cc23bd",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "> Or am I missing something and what you suggested is somehow better?\r\n\r\n```go\r\nc.Lock\r\nstopped := c.stopped\r\nc.Unlock\r\nif stopped {\r\n    return\r\n}\r\n\r\n// keep previous logic\r\n```\r\n\r\nThis is what I suggested. The previous logic already handles the problem you mentioned, which is\r\n\r\n```go\r\nselect {\r\n    case c.result <- watchEvent:\r\n    // don't block on c.result if c.done is closed\r\n    case <-c.done:\r\n}\r\n```\r\n\r\nthe stop thing is a safe guard we can add upon the previous logic.",
+        "createdAt" : "2016-12-22T15:37:17Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ec49c9b6-3737-4336-8e02-f4fff7d8f3d7",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "instead of locking and checking `stopped`, why not just attempt to select from done before using the existing logic?\r\n\r\n```go\r\n// short-circuit if done is already closed\r\nselect {\r\n  case <-c.done:\r\n    return\r\n  default:\r\n}\r\n\r\n// existing logic (unblocks when done is closed to free up goroutine)\r\nselect {\r\n    case c.result <- watchEvent:\r\n    case <-c.done:\r\n}\r\n```\r\n",
+        "createdAt" : "2016-12-22T15:50:53Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e9541702-40e7-4597-8030-045bba8fb7e5",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "> why not just attempt to select from done before using the existing logic?\r\n\r\n@wojtek-t wont like something more expensive. :P Based on previous experiments, select evaluation is more expensive than un-contention lock checking. But, sure, we can do a quick benchmark for this. I do not really know since go changed a few things around this.",
+        "createdAt" : "2016-12-22T16:27:54Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c6090210-514c-4847-928d-4cacd918e64a",
+        "parentId" : "ddb5f59c-a2cc-42bc-90c7-546034b495bf",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "OK - thank you for comments. I changed the code (and the comments) to the one that @liggitt suggested as this is the most consistent one. We can evaluate performance of both suggestions after Christmas, but I think we should merge this ASAP.",
+        "createdAt" : "2016-12-22T17:59:52Z",
+        "updatedAt" : "2016-12-22T19:04:20Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d31ff83fdc770e9a0ce42cab8f049722ac765720",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +876,880 @@\tcase <-c.done:\n\t\treturn\n\tdefault:\n\t}\n"
+  },
+  {
+    "id" : "ed2fa237-db2d-4047-80b3-e69a967cd70e",
+    "prId" : 39078,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/39078#pullrequestreview-16761260",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "73bd5c83-050c-4771-b20c-82349f4014b0",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Doesn't this just make problem rarer? What if c.done gets set after the above select and before the below select?",
+        "createdAt" : "2017-01-06T22:26:16Z",
+        "updatedAt" : "2017-01-06T22:26:16Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ae650cb3-b5f3-4093-a5de-e304c06b384b",
+        "parentId" : "73bd5c83-050c-4771-b20c-82349f4014b0",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "Yes. The first (racing with close(c.done)) one might still be non-deterministic. But it is OK. We only want to ensure if we ever drop a event due to the close of c.done, we drop all following events. \r\n\r\nIn this case, if one event goes through default all events after it will goes through default for sure.",
+        "createdAt" : "2017-01-06T23:52:29Z",
+        "updatedAt" : "2017-01-06T23:52:29Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9cfa4056-026a-4355-b098-710db58cb46c",
+        "parentId" : "73bd5c83-050c-4771-b20c-82349f4014b0",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "As @xiang90 wrote, what you wrote can happen, but this is ok for us.\r\nBasically, we only need to avoid situation when we from 2 consecutive events A, B, we don't deliver A, but then deliver B. (Either delivering both or neither of them is fine). \r\nIf c.done will be satisfied after the above select, but before the one below, we don't know what will happen with A, but in the next round, we are sure that B won't be delivered. So we will be in the situation that we are fine with.",
+        "createdAt" : "2017-01-16T09:07:31Z",
+        "updatedAt" : "2017-01-16T09:07:31Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d31ff83fdc770e9a0ce42cab8f049722ac765720",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +877,881 @@\t\treturn\n\tdefault:\n\t}\n\n\tselect {"
+  },
+  {
+    "id" : "f9bcdc4e-8879-45e5-942f-3caa8722bc1e",
+    "prId" : 37195,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/37195#pullrequestreview-9847842",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5d31ec7e-7e67-4efb-a837-cd2b3e254b39",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "does dispatchEvent get called more than 4 times per second?",
+        "createdAt" : "2016-11-21T18:01:08Z",
+        "updatedAt" : "2016-11-28T09:09:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "575bc96b-f79f-4dec-a70a-87264ed915d2",
+        "parentId" : "5d31ec7e-7e67-4efb-a837-cd2b3e254b39",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Yup - in large clusters it can be even hundreds (e.g. in 2k-node clusters, it can be 250 or so).\r\nBut as I wrote somewhere, it happens that some watcher sometimes block it for tens of milliseconds (e.g. 20 or 30) and system still works perfectly fine. Cancelling them would potentially cause relists, which might be even worse for the system.\r\nMaybe 250ms is too large, but I think we shouldn't get lower than 100ms (at least now).",
+        "createdAt" : "2016-11-21T18:09:58Z",
+        "updatedAt" : "2016-11-28T09:09:39Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c0b4e2ef-b328-4553-8e7b-0f3d3fedb0ca",
+        "parentId" : "5d31ec7e-7e67-4efb-a837-cd2b3e254b39",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "OK, I'm not convinced this would actually fix the problem that we observed? Can you add a test or something? But don't block on me.",
+        "createdAt" : "2016-11-22T18:44:03Z",
+        "updatedAt" : "2016-11-28T09:09:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a9c250ba-c069-4258-8ad1-bec7f2b4b738",
+        "parentId" : "5d31ec7e-7e67-4efb-a837-cd2b3e254b39",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "It's not a full fix, but it would solve the main underlying problem (there won't be hanging for few minutes List requests - because we will be releasing lock at least once every ~250ms). I verified that indeed that one is fixed and extended some test. It doesn't protect for really stale data in watch, but I think it's slightly too late for such fix now. I will try to do it next week.",
+        "createdAt" : "2016-11-23T12:01:19Z",
+        "updatedAt" : "2016-11-28T09:09:39Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ac7b1065e783062302bf4daee5f0c10fcfe6fb8c",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +537,541 @@\t// - budget has upper bound at <max_timeout>\n\t// - we add <portion> to current timeout every second\n\ttimeout := time.Duration(250) * time.Millisecond\n\n\tc.Lock()"
+  },
+  {
+    "id" : "f0c265dd-6f8e-4f65-bec1-85a9234e2b29",
+    "prId" : 37195,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/37195#pullrequestreview-9730962",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8b68e784-4faf-4392-8558-01160d7165ac",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "I would probably extract this and the timerPool bit to a separate function / object, just for clarity & to make testing easier. Up to you.",
+        "createdAt" : "2016-11-21T18:02:07Z",
+        "updatedAt" : "2016-11-28T09:09:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48a35946-f81c-4deb-aaac-3223eb6fec01",
+        "parentId" : "8b68e784-4faf-4392-8558-01160d7165ac",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Can we do it after 1.5 is out (while doing something more sophisticated)?",
+        "createdAt" : "2016-11-21T18:10:43Z",
+        "updatedAt" : "2016-11-28T09:09:39Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e26b9e6-c0e5-4150-8ac5-c6bf389ecf70",
+        "parentId" : "8b68e784-4faf-4392-8558-01160d7165ac",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "sure.",
+        "createdAt" : "2016-11-22T18:43:43Z",
+        "updatedAt" : "2016-11-28T09:09:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ac7b1065e783062302bf4daee5f0c10fcfe6fb8c",
+    "line" : 74,
+    "diffHunk" : "@@ -1,1 +773,777 @@\t}\n\n\tif *timeout = *timeout - time.Since(startTime); *timeout < 0 {\n\t\t*timeout = 0\n\t}"
+  },
+  {
+    "id" : "8913a895-43db-4c4a-9890-f039ee9c5beb",
+    "prId" : 35029,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/35029#pullrequestreview-4809447",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "135ebc7a-c9a4-47cc-a115-f4716e37f139",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "does this depend on all watchers treating the incoming event as immutable?\n",
+        "createdAt" : "2016-10-18T20:20:15Z",
+        "updatedAt" : "2016-10-19T06:38:26Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10555530-f896-40a4-90fe-5ef1a3230fde",
+        "parentId" : "135ebc7a-c9a4-47cc-a115-f4716e37f139",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Yes (and this is true assumption today). I added explicit comment for that method.\n",
+        "createdAt" : "2016-10-19T06:33:21Z",
+        "updatedAt" : "2016-10-19T06:38:30Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8040719d7fccd3a5143c19dc570fc09f0b61c037",
+    "line" : 124,
+    "diffHunk" : "@@ -1,1 +747,751 @@\tstartTime := time.Now()\n\tfor _, event := range initEvents {\n\t\tc.sendWatchCacheEvent(&event)\n\t}\n\tprocessingTime := time.Since(startTime)"
+  },
+  {
+    "id" : "faa02e8c-08a3-40b3-a881-11c958aeda88",
+    "prId" : 35029,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/35029#pullrequestreview-4882846",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2114484-0f1f-42d7-b338-9810563a3440",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "same question here, what happens if a watcher mutates an event (or object in an event)?\n",
+        "createdAt" : "2016-10-18T21:15:30Z",
+        "updatedAt" : "2016-10-19T06:38:26Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "058f65b4-e991-41af-9272-d99aa640cd0f",
+        "parentId" : "e2114484-0f1f-42d7-b338-9810563a3440",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "As above - added comment to \"sendWatchCacheEvent\" method.\n",
+        "createdAt" : "2016-10-19T06:33:42Z",
+        "updatedAt" : "2016-10-19T06:38:30Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e5edafb-2c21-423b-8820-900c8a1ee164",
+        "parentId" : "e2114484-0f1f-42d7-b338-9810563a3440",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "ok, just realized sendWatchCacheEvent copies the object and constructs a watch.Event per watcher, so that's fine\n",
+        "createdAt" : "2016-10-19T14:31:06Z",
+        "updatedAt" : "2016-10-19T14:31:06Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8040719d7fccd3a5143c19dc570fc09f0b61c037",
+    "line" : 133,
+    "diffHunk" : "@@ -1,1 +767,771 @@\t\t// only send events newer than resourceVersion\n\t\tif event.ResourceVersion > resourceVersion {\n\t\t\tc.sendWatchCacheEvent(&event)\n\t\t}\n\t}"
+  },
+  {
+    "id" : "37e6af7c-fcbe-46d0-ba1d-bed336fd6bf3",
+    "prId" : 29429,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "33899eb7-b8f4-4838-bc2b-5d5d917c1b2b",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "@xiang90 - I think that removing this one was actually a problem. But since we were blocked from a lot of time so far, and I didn't have time to really confirm it, I reverted this PR.\n",
+        "createdAt" : "2016-07-22T05:32:55Z",
+        "updatedAt" : "2016-07-22T05:32:55Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0cf8be5e-ee19-4de0-8ae1-bb1b42bef2eb",
+        "parentId" : "33899eb7-b8f4-4838-bc2b-5d5d917c1b2b",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "yes. see https://github.com/kubernetes/kubernetes/pull/26861#discussion_r71828780.\n",
+        "createdAt" : "2016-07-22T05:34:33Z",
+        "updatedAt" : "2016-07-22T05:34:33Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "33e612e101d66f50a05a1723950a622c129003bc",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +308,312 @@// Implements storage.Interface.\nfunc (c *Cacher) WatchList(ctx context.Context, key string, resourceVersion string, filter Filter) (watch.Interface, error) {\n\treturn c.Watch(ctx, key, resourceVersion, filter)\n}\n"
+  },
+  {
+    "id" : "5ea9b662-bf5a-420e-b954-08faf46da65d",
+    "prId" : 26860,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "02b06fe5-2294-4a33-85dc-4d33797048e6",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Can this lock be acquired if something else already `wait()`s?\n",
+        "createdAt" : "2016-06-05T15:25:56Z",
+        "updatedAt" : "2016-07-04T15:58:12Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e4c3d2b-c317-454d-874a-bb9ce4c564f4",
+        "parentId" : "02b06fe5-2294-4a33-85dc-4d33797048e6",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "I am not sure what do you mean. Do you mean that you worry about someone entries at line 622 without releasing the lock? This is how convar works. Convar will release lock in wait. See https://golang.org/pkg/sync/#Cond.Wait\n",
+        "createdAt" : "2016-06-05T15:31:01Z",
+        "updatedAt" : "2016-07-04T15:58:12Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7435019-9fd7-4caf-b64d-d1172cff7859",
+        "parentId" : "02b06fe5-2294-4a33-85dc-4d33797048e6",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Now I see, thanks\n",
+        "createdAt" : "2016-06-05T15:38:47Z",
+        "updatedAt" : "2016-07-04T15:58:12Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aa472ff734d9261ac96a85c35b8bcec5e956a3dd",
+    "line" : 126,
+    "diffHunk" : "@@ -1,1 +591,595 @@\nfunc (r *ready) set(ok bool) {\n\tr.c.L.Lock()\n\tdefer r.c.L.Unlock()\n\tr.ok = ok"
+  },
+  {
+    "id" : "f8cdb6c9-c373-41d3-a745-270855c0785f",
+    "prId" : 26860,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b87cb2c2-b9af-4795-b678-a240c2ac8bf8",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "this looks like a functionality change to me-- we've had bugs here before, this is pretty tricky to get right. I will let @wojtek-t do a careful review. Let's not make this change until after 1.3, at least.\n",
+        "createdAt" : "2016-06-06T23:27:49Z",
+        "updatedAt" : "2016-07-04T15:58:12Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a9f9a70-3691-47e9-9827-eeb4781b6657",
+        "parentId" : "b87cb2c2-b9af-4795-b678-a240c2ac8bf8",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "I am not sure why exactly we need to hold the c.Rlock. It would be great if @wojtek-t can help to review. Also if it is really tricky, I would love to write a test to ensure we make the tricky part right.\n",
+        "createdAt" : "2016-06-06T23:33:22Z",
+        "updatedAt" : "2016-07-04T15:58:12Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "708f5612-1944-4b50-a3b3-b6a6c8439ca1",
+        "parentId" : "b87cb2c2-b9af-4795-b678-a240c2ac8bf8",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "That's true, I think I added a test last time I fixed a bug here.\n\nOn Mon, Jun 6, 2016 at 4:33 PM, Xiang Li notifications@github.com wrote:\n\n> In pkg/storage/cacher.go\n> https://github.com/kubernetes/kubernetes/pull/26860#discussion_r65988030\n> :\n> \n> > @@ -417,18 +401,13 @@ func filterFunction(key string, keyFunc func(runtime.Object) (string, error), fi\n> > \n> >  // Returns resource version to which the underlying cache is synced.\n> >  func (c *Cacher) LastSyncResourceVersion() (uint64, error) {\n> > -   // To avoid situation when LastSyncResourceVersion is processed before the\n> > -   // underlying watchCache is propagated, we acquire 'usable' lock.\n> > -   c.usable.RLock()\n> > \n> > ## \\-   defer c.usable.RUnlock()\n> > -   c.RLock()\n> > -   defer c.RUnlock()\n> > -   c.ready.wait()\n> \n> I am not sure why exactly we need to hold the c.Rlock. It would be great\n> if @wojtek-t https://github.com/wojtek-t can help to review. Also if it\n> is really tricky, I would love to write a test to ensure we make the tricky\n> part right.\n> \n> —\n> You are receiving this because you were mentioned.\n> Reply to this email directly, view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/26860/files/5d6b423585362dd13620036bc44e1f3a1baec730#r65988030,\n> or mute the thread\n> https://github.com/notifications/unsubscribe/AAnglox9DOYIzeq-y37zBQ5SN5_V8xwsks5qJK5NgaJpZM4IuX_4\n> .\n",
+        "createdAt" : "2016-06-06T23:34:22Z",
+        "updatedAt" : "2016-07-04T15:58:12Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04cc78ac-7fff-44a9-8975-c247b5b3dc08",
+        "parentId" : "b87cb2c2-b9af-4795-b678-a240c2ac8bf8",
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "Yea. It seems all the tests are passed. Probably we can assume it works correctly? Anyway, I am happy to write more tests to handle concerns or potential regressions. Thank you!\n",
+        "createdAt" : "2016-06-06T23:36:08Z",
+        "updatedAt" : "2016-07-04T15:58:12Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aa472ff734d9261ac96a85c35b8bcec5e956a3dd",
+    "line" : 93,
+    "diffHunk" : "@@ -1,1 +367,371 @@// Returns resource version to which the underlying cache is synced.\nfunc (c *Cacher) LastSyncResourceVersion() (uint64, error) {\n\tc.ready.wait()\n\n\tresourceVersion := c.reflector.LastSyncResourceVersion()"
+  },
+  {
+    "id" : "3dd16bbb-36bf-4751-bd01-037e0d8bd511",
+    "prId" : 25369,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "539cceef-26f7-4ac1-b8d0-25709894b8f2",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I would probably be better if this could use apiserver.StatusForError.\n",
+        "createdAt" : "2016-05-09T21:05:21Z",
+        "updatedAt" : "2016-05-10T15:00:00Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "682a33c3-578c-43aa-bb0a-573958cf3b60",
+        "parentId" : "539cceef-26f7-4ac1-b8d0-25709894b8f2",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "But it's fine for here.\n",
+        "createdAt" : "2016-05-09T21:05:34Z",
+        "updatedAt" : "2016-05-10T15:00:00Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "92f1b428-807c-400c-9399-2b995215bcae",
+        "parentId" : "539cceef-26f7-4ac1-b8d0-25709894b8f2",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "ah, I didn't know about `errToAPIStatus`... I'd like to keep this targeted for picking, can rework to expose and use errToAPIStatus (maybe moved to the api/errors package?) as a follow up\n",
+        "createdAt" : "2016-05-09T21:11:36Z",
+        "updatedAt" : "2016-05-10T15:00:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f80b59ba8766c57fe8b9947a5316e2e6d1b8a1d4",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +469,473 @@func newErrWatcher(err error) *errWatcher {\n\t// Create an error event\n\terrEvent := watch.Event{Type: watch.Error}\n\tswitch err := err.(type) {\n\tcase runtime.Object:"
+  },
+  {
+    "id" : "155af36a-060d-4c88-b609-2b0ecee0a337",
+    "prId" : 24532,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3bb76923-ce4f-4f22-a4cc-a7b5350bfb0d",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Nice improvement - thanks!\n",
+        "createdAt" : "2016-04-21T07:26:39Z",
+        "updatedAt" : "2016-04-21T19:53:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "58629a28e49fbc77a5b0557e6b36a16302953333",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +530,534 @@\tcase <-t.C:\n\t\t// This means that we couldn't send event to that watcher.\n\t\t// Since we don't want to block on it infinitely,\n\t\t// we simply terminate it.\n\t\tc.forget(false)"
+  },
+  {
+    "id" : "a6d41f17-5c37-4151-8009-3ce5148c4161",
+    "prId" : 24532,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1ee2ffdd-1542-429d-ad5d-de70ac2bbd63",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "When retting a timer, don't we have to wait for the next event to drain?\n\nhttps://github.com/golang/go/issues/11513\n\nPretty sure this can cause spurious ticks.\n",
+        "createdAt" : "2016-04-21T18:53:31Z",
+        "updatedAt" : "2016-04-21T19:53:54Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb105bc3-2b85-46f8-9cb1-9e0b5b98e70f",
+        "parentId" : "1ee2ffdd-1542-429d-ad5d-de70ac2bbd63",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Oh wait, I saw it was rsc doing the change.  Disregard\n",
+        "createdAt" : "2016-04-21T18:53:48Z",
+        "updatedAt" : "2016-04-21T19:53:54Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d497cf0-d37b-4d51-a747-2328d0a371f3",
+        "parentId" : "1ee2ffdd-1542-429d-ad5d-de70ac2bbd63",
+        "authorId" : "ee7169ec-8470-416d-aa95-bbb723b803f5",
+        "body" : "Fixed. Now every timer in the pool is both stopped and known not to have a channel event waiting.\nIn my earlier version there was only a possible problem if the event send took nearly exactly 5 seconds, so that the select could pick the c.input <- event case but then have the timer go off before the immediately following t.Stop. In that case there would be a leftover timer event in t.C that would be found when the timer was reused. In practice this was very unlikely to happen, and it's very difficult to force in a test. In some future version of Go I hope we'll be able to put the old time.After code back and have it do all the right things as far as efficiency instead of us doing it. But this will help for now.\n",
+        "createdAt" : "2016-04-21T19:56:05Z",
+        "updatedAt" : "2016-04-21T19:56:05Z",
+        "lastEditedBy" : "ee7169ec-8470-416d-aa95-bbb723b803f5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "58629a28e49fbc77a5b0557e6b36a16302953333",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +514,518 @@\tt, ok := timerPool.Get().(*time.Timer)\n\tif ok {\n\t\tt.Reset(timeout)\n\t} else {\n\t\tt = time.NewTimer(timeout)"
+  },
+  {
+    "id" : "398717cd-cfdb-49fd-bc80-7ed695fe4884",
+    "prId" : 18207,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "69ed1691-5f43-4e01-a8bc-e5afda5f650f",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "why the switch to \"\" ? \n",
+        "createdAt" : "2015-12-07T22:08:30Z",
+        "updatedAt" : "2015-12-07T22:08:30Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "28cacfac-6981-4d35-a82c-33fb3093266e",
+        "parentId" : "69ed1691-5f43-4e01-a8bc-e5afda5f650f",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "@wojtek-t I think this should eventually come from the user's request, right?\n",
+        "createdAt" : "2015-12-08T00:17:49Z",
+        "updatedAt" : "2015-12-08T00:17:49Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fbfc9c72-ee11-4e81-b3f3-d6bb4f5239d4",
+        "parentId" : "69ed1691-5f43-4e01-a8bc-e5afda5f650f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Actually no.\nThe \"cacherListerWatcher\" is the class that is reponsible for updating the internal cacher based on etcd state. So what it is doing it has an open \"watch\" for all resources of a given type to etcd and all \"real watchers\" are just accessing cache.\n\nThe List() here is used to either initiate the first watch or to relist in case e.g. falling out of etcd window.\nThis means that there will never be a corresponding user request here.\n\nWhy do we change it to \"\"? It's because we would like to force the list from etcd - if you pass an empty string, this will cause exactly that.\nSo this is WAI.\n",
+        "createdAt" : "2015-12-08T07:32:29Z",
+        "updatedAt" : "2015-12-08T07:32:29Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1250a4b5-85ed-4411-9c09-6c046fb26e2e",
+        "parentId" : "69ed1691-5f43-4e01-a8bc-e5afda5f650f",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Oh, right. Of course. :)\n\nOn Mon, Dec 7, 2015 at 11:32 PM, Wojciech Tyczynski <\nnotifications@github.com> wrote:\n\n> In pkg/storage/cacher.go\n> https://github.com/kubernetes/kubernetes/pull/18207#discussion_r46922348\n> :\n> \n> > @@ -389,7 +399,7 @@ func newCacherListerWatcher(storage Interface, resourcePrefix string, newListFun\n> >  // Implements cache.ListerWatcher interface.\n> >  func (lw *cacherListerWatcher) List() (runtime.Object, error) {\n> >     list := lw.newListFunc()\n> > -   if err := lw.storage.List(context.TODO(), lw.resourcePrefix, 0, Everything, list); err != nil {\n> > -   if err := lw.storage.List(context.TODO(), lw.resourcePrefix, \"\", Everything, list); err != nil {\n> \n> Actually no.\n> The \"cacherListerWatcher\" is the class that is reponsible for updating the\n> internal cacher based on etcd state. So what it is doing it has an open\n> \"watch\" for all resources of a given type to etcd and all \"real watchers\"\n> are just accessing cache.\n> \n> The List() here is used to either initiate the first watch or to relist in\n> case e.g. falling out of etcd window.\n> This means that there will never be a corresponding user request here.\n> \n> Why do we change it to \"\"? It's because we would like to force the list\n> from etcd - if you pass an empty string, this will cause exactly that.\n> So this is WAI.\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/18207/files#r46922348.\n",
+        "createdAt" : "2015-12-08T18:14:12Z",
+        "updatedAt" : "2015-12-08T18:14:12Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "793da62c7f7abbf52e03b5823d4e5250baf5adff",
+    "line" : 82,
+    "diffHunk" : "@@ -1,1 +400,404 @@func (lw *cacherListerWatcher) List() (runtime.Object, error) {\n\tlist := lw.newListFunc()\n\tif err := lw.storage.List(context.TODO(), lw.resourcePrefix, \"\", Everything, list); err != nil {\n\t\treturn nil, err\n\t}"
+  },
+  {
+    "id" : "204bc106-2841-488c-a725-df480e31fb2e",
+    "prId" : 13135,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a9ee9196-8c8a-41a8-9423-d2fc5b92a939",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "I didn't understand--this mutex can't already be locked, since you lock it here.\n",
+        "createdAt" : "2015-08-26T05:57:51Z",
+        "updatedAt" : "2015-08-26T06:02:34Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b4dfc0bf-ec5a-456d-b585-3ea0ee01bc92",
+        "parentId" : "a9ee9196-8c8a-41a8-9423-d2fc5b92a939",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "No - it's already locked at line 120: \"cacher.usable.Lock()\".\nHere I'm defering lock to the end of this method, so that at the next enter to this method, it's already locked (this method is being called in a loop indefinitely).\n",
+        "createdAt" : "2015-08-26T06:02:09Z",
+        "updatedAt" : "2015-08-26T06:02:34Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8eaabfa8-ef42-4094-a8e1-642d01b97c2d",
+        "parentId" : "a9ee9196-8c8a-41a8-9423-d2fc5b92a939",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "If you already hold the mutex when you enter, and you do not unlock in this method, then why do you need to lock when you exit the method? Is the stuff in the comment about (\"Once the underlying cache is propagated...\") saying that the call to c.reflector.ListAndWatch() may unlock? If not, I'm confused.\n",
+        "createdAt" : "2015-08-26T06:30:14Z",
+        "updatedAt" : "2015-08-26T06:30:14Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08c333a1-eafe-43f1-b184-48006e26e531",
+        "parentId" : "a9ee9196-8c8a-41a8-9423-d2fc5b92a939",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "It will be unlocked. In the line 122 I'm setting the hook:\n\"watchCache.SetOnReplace(func() { cacher.usable.Unlock() })\"\n\nwhich means that as soon as the underlying cache is propagated, the mutex will be unlocked. It's guaranteed that at the end, the lock will not be held (so we can acquire it again).\n",
+        "createdAt" : "2015-08-26T06:33:18Z",
+        "updatedAt" : "2015-08-26T06:33:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a12b7edc42c5c06a2e7d9f381975658692951d5a",
+    "line" : 67,
+    "diffHunk" : "@@ -1,1 +129,133 @@\nfunc (c *Cacher) startCaching(stopChannel <-chan struct{}) {\n\t// Whenever we enter startCaching method, usable mutex is held.\n\t// We explicitly do NOT Unlock it in this method, because we do\n\t// not want to allow any Watch/List methods not explicitly redirected"
+  },
+  {
+    "id" : "c0590807-e04c-41a2-a756-1a847f28fd01",
+    "prId" : 12477,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a518370d-42da-41de-b4ad-c6713e08c0d6",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Does this feed through to a command line option?  If so, I seem to have missed it.\n",
+        "createdAt" : "2015-08-11T03:01:42Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c403622d-5e43-4981-b88a-bee1a8a845e3",
+        "parentId" : "a518370d-42da-41de-b4ad-c6713e08c0d6",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Not yet - I would like this to be in, before switching it on for any resource.\nSo as you can see, it's not yet integrated for any resource.\n",
+        "createdAt" : "2015-08-11T06:34:31Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e424da7d0d89e36f005bbb37ee8119ad187e49ca",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +36,40 @@type CacherConfig struct {\n\t// Maximum size of the history cached in memory.\n\tCacheCapacity int\n\n\t// An underlying storage.Interface."
+  },
+  {
+    "id" : "e326ecdf-6184-4f0a-84b5-26269d9dfe76",
+    "prId" : 12477,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "26ce93b8-078f-41d0-a159-8c3002990446",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Given that this Cache serves a specific use case as mentioned above, shouldn't we name appropriately?  \nCacher is responsible for serving WATCH and LIST requests for a given resource...\n\n\"Cacher\" is a pretty generic name. \n",
+        "createdAt" : "2015-08-11T03:11:31Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e24c8d9b-71a4-4142-9739-57be4752b0e2",
+        "parentId" : "26ce93b8-078f-41d0-a159-8c3002990446",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I'm fine with renaming it - any suggestions? (I was always bad in naming)\n",
+        "createdAt" : "2015-08-11T06:34:56Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "937be685-d9ad-485c-8ef8-d8bf85ea428d",
+        "parentId" : "26ce93b8-078f-41d0-a159-8c3002990446",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "I am equally as bad, but I recall @alex-mohr being pretty adept at naming. \n",
+        "createdAt" : "2015-08-11T15:28:14Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e424da7d0d89e36f005bbb37ee8119ad187e49ca",
+    "line" : 65,
+    "diffHunk" : "@@ -1,1 +63,67 @@// resource from its internal cache and updating its cache in the background\n// based on the underlying storage contents.\ntype Cacher struct {\n\tsync.RWMutex\n"
+  },
+  {
+    "id" : "811f4726-fafe-45eb-865d-156caee55637",
+    "prId" : 12477,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d34da4e9-e7a2-456b-af17-9978c15787c5",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Seems like Watch and Watchlist are nearly identical, could probably dedupe. \n",
+        "createdAt" : "2015-08-11T03:14:03Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88d6522f-310c-4b97-9e71-f6389584a3a8",
+        "parentId" : "d34da4e9-e7a2-456b-af17-9978c15787c5",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "They are, but I wanted to make the interface identical to \"storage.Interface\" (regarding List and Watch methods), to make them easy to replace. I agree we should get to it at some point, but it's not necessary for now.\n",
+        "createdAt" : "2015-08-11T06:36:32Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e5879d21-c4a6-4720-9c3c-94214f49e72c",
+        "parentId" : "d34da4e9-e7a2-456b-af17-9978c15787c5",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "What is the difference between Watch and WatchList?  if there is none, call one from the other.\n",
+        "createdAt" : "2015-08-12T18:00:28Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b7a65edb-b1b1-4840-b94b-fa7586343944",
+        "parentId" : "d34da4e9-e7a2-456b-af17-9978c15787c5",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Done.\n",
+        "createdAt" : "2015-08-13T07:05:33Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e424da7d0d89e36f005bbb37ee8119ad187e49ca",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +151,155 @@\n// Implements WatchList (signature from storage.Interface).\nfunc (c *Cacher) WatchList(key string, resourceVersion uint64, filter FilterFunc) (watch.Interface, error) {\n\treturn c.Watch(key, resourceVersion, filter)\n}"
+  },
+  {
+    "id" : "afd8b5df-7a67-48f6-8ae9-69db57e56236",
+    "prId" : 12477,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3e91af93-9846-469f-820f-718661d8175d",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Why not call this a \"CacheConfig\" and the other object a \"Cache\"?  We usually give struct types noun names and interfaces verb names.\n",
+        "createdAt" : "2015-08-12T17:55:18Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01530aff-ac50-4b3e-9588-c46fe22c45a6",
+        "parentId" : "3e91af93-9846-469f-820f-718661d8175d",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I'm fine with renaming it, but I'm not sure if \"Cache\" is the best name - it's not really a cache, it's a wrapper around the real cache to service List and Watch requests.\n",
+        "createdAt" : "2015-08-13T07:21:21Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e424da7d0d89e36f005bbb37ee8119ad187e49ca",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +34,38 @@\n// CacherConfig contains the configuration for a given Cache.\ntype CacherConfig struct {\n\t// Maximum size of the history cached in memory.\n\tCacheCapacity int"
+  },
+  {
+    "id" : "cd00bd61-3999-4f8d-990e-760b896f7623",
+    "prId" : 12477,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8f0ccfc6-7b81-4c6d-87be-5ac86e36f8f0",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "`until()` to be consistent with our other classes.  Also, I would go ahead and add the stop channel to the config or take it as an argument to New\n",
+        "createdAt" : "2015-08-12T17:56:55Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3beb71d7-f6cf-4bb5-b1e4-57c35d55a4d2",
+        "parentId" : "8f0ccfc6-7b81-4c6d-87be-5ac86e36f8f0",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I exposed StopChannel as part of config.\n\nHowever, I didn't understand your comment with \"until()\". Do you want me to rename the method or do something else?\n",
+        "createdAt" : "2015-08-13T07:18:21Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e424da7d0d89e36f005bbb37ee8119ad187e49ca",
+    "line" : 117,
+    "diffHunk" : "@@ -1,1 +115,119 @@}\n\nfunc (c *Cacher) startCaching(stopChannel <-chan struct{}) {\n\tc.Lock()\n\tc.terminateAllWatchers()"
+  },
+  {
+    "id" : "fdcc93da-0811-47c7-8859-dd43b6929ff7",
+    "prId" : 12477,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3df47530-a4c1-48f5-b290-938a8105c22e",
+        "parentId" : null,
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "If im a watcher and I get kicked off because of etcd watch window, and I come back to list from the cache before the reflector has done its real list+replace, will I waste a round trip?\n",
+        "createdAt" : "2015-08-13T02:16:02Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20d106e9-df32-4be0-af38-1c06d05c3c0c",
+        "parentId" : "3df47530-a4c1-48f5-b290-938a8105c22e",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I'm not sure if I get your point. So let me describe this situation:\n1. \"internal\" watch to etcd breaks because of \"out of windows\"\n2. the startCaching method is exiting and is called from the beginning\n3. this terminates all the open watchers\n4. however, lock is still hold, until the underlying cache will be propagated with list+replace data (i.e. we are not accepting watch rejoins then - they will be waiting for lock)\n5. once the contents are replaced, we start accepting watches\n\nSo IIUC you  question, the answer is that you do not waste anything.\n",
+        "createdAt" : "2015-08-13T07:27:11Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea837586-2ed8-4368-9d93-81e968b33d24",
+        "parentId" : "3df47530-a4c1-48f5-b290-938a8105c22e",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "Ah yes we only disconnect the clients on the next iteration. Got ratholed by the old way of handling this.\n\n> 2 the startCaching method is exiting and is called from the beginning. \n\nI can still have a new watch creeping in inbetween these 2 steps, though I suppose that window is small enough to ignore. \n",
+        "createdAt" : "2015-08-13T16:58:36Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73e1257d-971a-41b7-885e-a6dd594cf399",
+        "parentId" : "3df47530-a4c1-48f5-b290-938a8105c22e",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Not really - note that it's all under the same lock. So there are two cases:\n1. new watcher is accepted before - then it will be initialized with the old contents and terminated immediately after\n2. new watcher is accepted after - then it will just work.\n",
+        "createdAt" : "2015-08-13T17:40:10Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ddbb0f0b-015d-4e7f-9575-e7592e2c53c0",
+        "parentId" : "3df47530-a4c1-48f5-b290-938a8105c22e",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "Yeah that's the round trip i was asking about (your 1 case, basically i list the old contents, but the watch gets terminated immediately and I need to list and watch again). It's not a bad case, just that usually the expectation is that after I've listed I can watch for a while. \n\nAlso that can happen today as well, so this is more of an edge case discussion than a comment on the pr.\n",
+        "createdAt" : "2015-08-13T17:54:00Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d4bb4046-5bdf-4ce4-94f6-e98c99ef7d7b",
+        "parentId" : "3df47530-a4c1-48f5-b290-938a8105c22e",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "OK - I see your point.\nOn the other hand during my experiments with the new approach I didn't see any \"out of the window\" failure, so hopefully this would be very rare.\n",
+        "createdAt" : "2015-08-13T18:09:29Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e424da7d0d89e36f005bbb37ee8119ad187e49ca",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +136,140 @@\n// Implements Watch (signature from storage.Interface).\nfunc (c *Cacher) Watch(key string, resourceVersion uint64, filter FilterFunc) (watch.Interface, error) {\n\tc.Lock()\n\tdefer c.Unlock()"
+  },
+  {
+    "id" : "7fca62b3-3e1d-4e0c-a1c8-b9ef2690afcd",
+    "prId" : 12477,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c222f272-179e-4129-82c6-6b2a31f087d4",
+        "parentId" : null,
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "Can't you do a cond.Broadcast from the watchCache instead?  If not, can you rename the lock to stopAllWatchers or something to better reflect its stop-the-world nature? \n",
+        "createdAt" : "2015-08-13T02:16:02Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "396fc998-721a-4c18-b420-ae5fd4e3a4d8",
+        "parentId" : "c222f272-179e-4129-82c6-6b2a31f087d4",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I think that introducing cond can even complicate the code.\nThe lock is not actually \"stopAllWatchers\" - i'ts just \"stop accepting any new watchers\", which I think is expected from having a lock. So I'm not sure if I understood the second part of the comment. Can you please explain it?\n",
+        "createdAt" : "2015-08-13T07:44:09Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5ba1103f-c399-466e-9a87-ed84489b9cde",
+        "parentId" : "c222f272-179e-4129-82c6-6b2a31f087d4",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "I was thinking about the out of window case alone, that's really the only time when this lock is useful (other than bootstrap) and in that case it stops all watchers from making progress right? the comment you have is sufficient, just add that the logic is triggered every time we fall out of etcd's watch window. \n",
+        "createdAt" : "2015-08-13T16:58:34Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5aa5d5d1-5120-4fc7-9007-47e25cf448a1",
+        "parentId" : "c222f272-179e-4129-82c6-6b2a31f087d4",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Done (extended a comment).\n",
+        "createdAt" : "2015-08-14T07:42:52Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e424da7d0d89e36f005bbb37ee8119ad187e49ca",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +126,130 @@\t// backen storage (e.g. etcd's) watch event window.\n\t// Note that since onReplace may be not called due to errors, we explicitly\n\t// need to retry it on errors under lock.\n\tfor {\n\t\terr := c.reflector.ListAndWatch(stopChannel)"
+  },
+  {
+    "id" : "7017355c-c4ab-4798-a9ef-455801338f3c",
+    "prId" : 12477,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f9f37f05-0510-4dbd-b836-91436baf9616",
+        "parentId" : null,
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "please add godoc, for this and other public functions below\n",
+        "createdAt" : "2015-08-13T16:58:31Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3efb2642-6393-4761-9295-96759ecc894e",
+        "parentId" : "f9f37f05-0510-4dbd-b836-91436baf9616",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Done.\n",
+        "createdAt" : "2015-08-14T07:42:58Z",
+        "updatedAt" : "2015-08-14T07:44:53Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e424da7d0d89e36f005bbb37ee8119ad187e49ca",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +88,92 @@// internal cache and updating its cache in the background based on the given\n// configuration.\nfunc NewCacher(config CacherConfig) *Cacher {\n\twatchCache := cache.NewWatchCache(config.CacheCapacity)\n\tlisterWatcher := newCacherListerWatcher(config.Storage, config.ResourcePrefix, config.NewListFunc)"
+  }
+]

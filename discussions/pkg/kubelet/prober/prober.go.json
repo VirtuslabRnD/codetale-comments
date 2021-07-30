@@ -1,0 +1,354 @@
+[
+  {
+    "id" : "395a0128-d621-4756-a81d-e6fcceb4d458",
+    "prId" : 84792,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84792#pullrequestreview-316925327",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b2b6c685-a489-4c41-a625-0ade0f50cf74",
+        "parentId" : null,
+        "authorId" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "body" : "Did you model this after the approach used in `pkg/kubelet/kuberuntime/kuberuntime_container.go#recordContainerEvent`?",
+        "createdAt" : "2019-11-05T15:19:48Z",
+        "updatedAt" : "2020-02-21T12:33:12Z",
+        "lastEditedBy" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "319a537b-da97-442f-841a-a4e2ca90cb08",
+        "parentId" : "b2b6c685-a489-4c41-a625-0ade0f50cf74",
+        "authorId" : "88751690-bdd3-4c3a-8d7c-46c84f9de4d1",
+        "body" : "Precisely! I just trimmed it down slightly because there was no need for the container ID vs name substitution since we don't have it in the input to the function.\r\n\r\nIn fact, wrt to your earlier comment, it's when I discovered this function existed that I figured it seemed safe to remove RefManager. I did try to hunt down some of the history, however the earliest commit of container_reference_manager.go appears to be moving the code from elsewhere according to the log comment. I then didn't try to go down the rabbit hole and find where it came from nor when it was introduced.\r\n\r\nI was concerned that it might be some kind of optimisation, however seeing kuberuntime_container.go doesn't bother with it, I thought maybe prober.go could too.\r\n",
+        "createdAt" : "2019-11-05T17:13:49Z",
+        "updatedAt" : "2020-02-21T12:33:12Z",
+        "lastEditedBy" : "88751690-bdd3-4c3a-8d7c-46c84f9de4d1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b9ae8b3a-4298-4715-b73f-447202827ca6",
+        "parentId" : "b2b6c685-a489-4c41-a625-0ade0f50cf74",
+        "authorId" : "88751690-bdd3-4c3a-8d7c-46c84f9de4d1",
+        "body" : "Travelling back in time (newest to oldest commits):\r\n\r\nThis commit moved the RefManager to pkg/kubelet/container so it could be used by other packages (says the log):\r\nhttps://github.com/kubernetes/kubernetes/commit/9f62b929b885\r\n\r\nThis commit turned the previous ref manager map into the RefManager:\r\nhttps://github.com/kubernetes/kubernetes/commit/a06bc964143\r\n\"This enables pluggable container runtime to manage the container references.\"\r\n\r\nThis commit changes the dockerIDToRef map into generic containerIDToRef map:\r\nhttps://github.com/kubernetes/kubernetes/commit/027f6854d0f\r\n\r\nThis commit introduces the dockerIDToRef map:\r\nhttps://github.com/kubernetes/kubernetes/commit/dcc111bf13d\r\nComment is: \"Start putting event generation into kubelet (not enabled yet)\"\r\n\r\nThe reason for creating this reference manager appears to be \"Needed to report events for containers belonging to deleted/modified pods.\" (https://github.com/kubernetes/kubernetes/commit/dcc111bf13d#diff-bf28da68f62a8df6e99e447c4351122dR116) That comment has since disappeared in the 5 year interim.\r\n\r\nAlso, the refs are cleared from the map as soon as the containers are deleted, and nowhere other than in the prober was GetRef used other than for checking if the ref existed prior to deleting it.\r\n\r\nSo I'm not sure what the idea was precisely behind this map, however it wasn't introduced as an afterthought e.g. for performance reasons.\r\n\r\nRefManager looks unnecessary to me, though I do agree a smaller fix can be achieved by defaulting to using the RefManager and creating the ref if it isn't there.\r\n\r\nWhat do you prefer I do?",
+        "createdAt" : "2019-11-05T22:37:55Z",
+        "updatedAt" : "2020-02-21T12:33:12Z",
+        "lastEditedBy" : "88751690-bdd3-4c3a-8d7c-46c84f9de4d1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1aa471ce-6558-410a-b41d-bc3a9431536d",
+        "parentId" : "b2b6c685-a489-4c41-a625-0ade0f50cf74",
+        "authorId" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "body" : "Given that I don't have the context on why `RefManager` was first introduced, I think I'd prefer leaving `RefManager` as is, and just creating the ref if it isn't there.\r\n\r\nThat said I don't feel super strongly.\r\n\r\nCurious to hear from other community members and @vishh.",
+        "createdAt" : "2019-11-06T15:17:40Z",
+        "updatedAt" : "2020-02-21T12:33:12Z",
+        "lastEditedBy" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0acc848c-7e85-4f97-96c2-ceed8c7323c4",
+        "parentId" : "b2b6c685-a489-4c41-a625-0ade0f50cf74",
+        "authorId" : "88751690-bdd3-4c3a-8d7c-46c84f9de4d1",
+        "body" : "As we've not had any feedback, I'll split this into 2 PRs: one that just fixes the bug by using the ref if it is available (this PR), and another that proposes to remove RefManager.\r\n",
+        "createdAt" : "2019-11-13T16:08:46Z",
+        "updatedAt" : "2020-02-21T12:33:12Z",
+        "lastEditedBy" : "88751690-bdd3-4c3a-8d7c-46c84f9de4d1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b8ffa8f-d8fc-4673-bb81-65fb705a1212",
+        "parentId" : "b2b6c685-a489-4c41-a625-0ade0f50cf74",
+        "authorId" : "88751690-bdd3-4c3a-8d7c-46c84f9de4d1",
+        "body" : "Hi @mattjmcnaughton !\r\n\r\nI split the PR in 2 and this one now checks if the ref exists before falling back to regenerating it. What do you make of this version?",
+        "createdAt" : "2019-11-14T08:44:31Z",
+        "updatedAt" : "2020-02-21T12:33:12Z",
+        "lastEditedBy" : "88751690-bdd3-4c3a-8d7c-46c84f9de4d1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0947bd8-2e36-45bc-81c9-480031bebf83",
+        "parentId" : "b2b6c685-a489-4c41-a625-0ade0f50cf74",
+        "authorId" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "body" : "That sounds like a good plan!",
+        "createdAt" : "2019-11-14T12:46:14Z",
+        "updatedAt" : "2020-02-21T12:33:12Z",
+        "lastEditedBy" : "d7870cae-47b0-4c8e-8527-be8fc4be86de",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4cb28f64ea2e670e3dd65b6cadc116bdcda2d3ba",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +81,85 @@}\n\n// recordContainerEvent should be used by the prober for all container related events.\nfunc (pb *prober) recordContainerEvent(pod *v1.Pod, container *v1.Container, containerID kubecontainer.ContainerID, eventType, reason, message string, args ...interface{}) {\n\tvar err error"
+  },
+  {
+    "id" : "1b085fc0-c871-4bae-8d09-2f1c761a50a4",
+    "prId" : 30731,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "parentId" : null,
+        "authorId" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "body" : "Wrt. https://github.com/kubernetes/kubernetes/pull/24921 the same fix should be applied in `pkg/kubelet/kubelet.go:2887`. Or not? Worth opening an issue if positive.\n",
+        "createdAt" : "2016-08-17T10:23:32Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a741fe11-8df7-4627-90b1-fbe6b135f8ec",
+        "parentId" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "Will err be an ExitError in the case this PR wants to fix? It's unidiomatic to return actual values if `err != nil`. A more explicit interface, e.g. with an additional `rc int` would be better IMO.\n",
+        "createdAt" : "2016-08-17T10:26:09Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "500dae4d-ef8d-455f-bf09-ee748d8cb96a",
+        "parentId" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "In any case, this behavior must be documented in the godoc.\n",
+        "createdAt" : "2016-08-17T10:27:16Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "830b94ca-fbc8-4801-a6e6-c4a33149af56",
+        "parentId" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "authorId" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "body" : "@ingvagabund line 2887 probably needs to change as well. \n\n@sttts I agree that this isn't an ideal fix, but it does effectively restore the code to the same unidiomatic way it was before... I can work more on it this afternoon, or I can put in a TODO to fix this properly later.\n",
+        "createdAt" : "2016-08-17T10:49:47Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ecc2fc06-7d82-436d-a3e1-26675e687ba5",
+        "parentId" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "A godoc documenting the new behavior would be good already.\n",
+        "createdAt" : "2016-08-17T11:42:07Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0821f42c-013f-42b1-8755-8de5d24563b0",
+        "parentId" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "authorId" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "body" : "@sttts are you suggesting changing the signature of `ExecInContainer` or `run` or both?\n",
+        "createdAt" : "2016-08-17T13:41:25Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1e075f23-c633-48c3-ab39-e0ba452f5a8b",
+        "parentId" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "For a clean signature, I had in mind:\n\n```\ntype Cmd interface {\n  CombinedOutput() ([]byte, int, error)\n  Output() ([]byte, int, error)\n  ...\n}\n```\n\nI haven't checked other consequences of this.\n\nA short-term compromise would be to add godocs to the `Cmd` interface (maybe in the implementation as well) describing that the bytes array has contents in case of ExitErrors.\n",
+        "createdAt" : "2016-08-17T13:49:00Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1d5979bf-85e7-41ce-9cde-e95e2eb40b39",
+        "parentId" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "authorId" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "body" : "Actually, kube's `Cmd.CombinedOutput()` is 100% consistent with how go's `os/exec` package does it. You always get the stdout/stderr output in the `[]byte`, and err is either nil (no error) or set (something went wrong, including possibly a nonzero exit code).\n",
+        "createdAt" : "2016-08-17T13:57:03Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88fea99d-9fd1-4440-acf2-43d0ad1a0c64",
+        "parentId" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "True, and not even (explicitly) documented.\n",
+        "createdAt" : "2016-08-17T14:00:11Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "59df09cc-4c85-4d23-9b46-d9d26ae35afa",
+        "parentId" : "c39a289b-bd34-4eae-8cb4-111287495ac9",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : "In fact, it's kind of strange to consider an exit code != 0 as an error. The command was running. I don't consider that as an error for the `Cmd.Run`. But it's the API. Doesn't help to not like it ;)\n",
+        "createdAt" : "2016-08-17T14:02:44Z",
+        "updatedAt" : "2016-08-17T20:21:46Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c3fe759fec556273a30e059cb73f53ffa9e752a0",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +237,241 @@\t\t// the command returned a nonzero exit code). Therefore, always return the output along with the\n\t\t// error.\n\t\treturn buffer.Bytes(), err\n\t}}\n}"
+  },
+  {
+    "id" : "bc38acd0-9da5-4ab3-9bed-31bcf7f91980",
+    "prId" : 25064,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bc76b8d2-bdb1-40d2-9bd9-7787c1361081",
+        "parentId" : null,
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "I'm confused, isn't path here supposed to be not a full url but the path after scheme://host:port?\n",
+        "createdAt" : "2016-06-07T18:39:58Z",
+        "updatedAt" : "2016-06-07T18:41:45Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c6a2516-6e18-408e-974b-c42c29d864b1",
+        "parentId" : "bc76b8d2-bdb1-40d2-9bd9-7787c1361081",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "ok, I get it.\n",
+        "createdAt" : "2016-06-07T18:46:36Z",
+        "updatedAt" : "2016-06-07T18:46:36Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a201de4-a0ee-40a2-8ec1-2c1e22d34833",
+        "parentId" : "bc76b8d2-bdb1-40d2-9bd9-7787c1361081",
+        "authorId" : "11725e10-43c9-4a8c-96d0-5118a3e67a6a",
+        "body" : "Parse() also properly deals with the query string. `path` can/should be, in this case, a relative url without scheme or host (we override those anyway). I can add a comment explaining the reason for the Parse() call.\n",
+        "createdAt" : "2016-06-07T18:51:14Z",
+        "updatedAt" : "2016-06-07T18:51:14Z",
+        "lastEditedBy" : "11725e10-43c9-4a8c-96d0-5118a3e67a6a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a2051b2d477d798228bbc8ced6e1226f0a8e45ba",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +207,211 @@// formatURL formats a URL from args.  For testability.\nfunc formatURL(scheme string, host string, port int, path string) *url.URL {\n\tu, err := url.Parse(path)\n\t// Something is busted with the path, but it's too late to reject it. Pass it along as is.\n\tif err != nil {"
+  },
+  {
+    "id" : "d6ed2c63-3919-466b-9e65-8aac821e3289",
+    "prId" : 9965,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cecb2538-b5d6-4c8c-9412-daf9eccc8c3b",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I don't like having to transform values... we should require the API value to be an exact match and validate it before accepting it\n",
+        "createdAt" : "2015-06-25T13:25:34Z",
+        "updatedAt" : "2015-06-25T20:59:38Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "991ddeca-8139-4249-8aea-4697185f0dd4",
+        "parentId" : "cecb2538-b5d6-4c8c-9412-daf9eccc8c3b",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "This is antithetical to most of the API.  Is the value in the API a constant (in as much as JSON has them) or a literal?  We have lots of constant-ish values but no literal-ish values.  Constants in the API Start with capitals and follow Go style.\n\nFor analogy - the API says \"TCP\" and \"UDP\", even though docker wants \"tcp\" and \"udp\".\n\n@bgrant0607 is the final arbiter, but he's not at his desk right now, so I can't ask him.  So instead he gets an @ here.\n",
+        "createdAt" : "2015-06-25T16:16:38Z",
+        "updatedAt" : "2015-06-25T20:59:38Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48a5b2f8-25fd-4143-ac63-d9733bdbfa19",
+        "parentId" : "cecb2538-b5d6-4c8c-9412-daf9eccc8c3b",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I'd prefer something like this\n\n```\nvar scheme string\nswitch p.HTTPGet.Scheme {\n  case api.URISchemeHTTP:\n    scheme = \"http\"\n  case api.URISchemeHTTPS:\n    scheme = \"https\"\n  default:\n    return probe.Unknown, \"\", fmt.Errorf(\"Unknown scheme %v\", p.HTTPGet.Scheme)\n}\n```\n",
+        "createdAt" : "2015-06-25T16:23:18Z",
+        "updatedAt" : "2015-06-25T20:59:38Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bcc1a527-34ce-4be1-ae59-df55032c2867",
+        "parentId" : "cecb2538-b5d6-4c8c-9412-daf9eccc8c3b",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "It's a constant. HTTP and HTTPS -- caps, like TCP and UDP.\n",
+        "createdAt" : "2015-06-25T16:28:09Z",
+        "updatedAt" : "2015-06-25T20:59:38Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bc44c8b9-2172-49ca-b9b6-883ab3e1bb69",
+        "parentId" : "cecb2538-b5d6-4c8c-9412-daf9eccc8c3b",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I agree that calling ToLower is a bit weird, we should have a method or something, but we're not really mothod-y yet for API stuff.  OK for now.\n",
+        "createdAt" : "2015-06-25T17:17:28Z",
+        "updatedAt" : "2015-06-25T20:59:38Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3008ff6150c6b04c4e566786ff518caf60d7766c",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +204,208 @@\t}\n\tif p.HTTPGet != nil {\n\t\tscheme := strings.ToLower(string(p.HTTPGet.Scheme))\n\t\thost := p.HTTPGet.Host\n\t\tif host == \"\" {"
+  },
+  {
+    "id" : "652d8e43-b535-4d4b-886d-897c0487594d",
+    "prId" : 8238,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cba1a82a-5e17-4fb7-8916-8a6bbbeabed2",
+        "parentId" : null,
+        "authorId" : "b7abca6a-d6be-4008-a014-3b5ca0e90529",
+        "body" : "Same here about V(3)?\n",
+        "createdAt" : "2015-05-20T15:50:50Z",
+        "updatedAt" : "2015-05-20T15:57:04Z",
+        "lastEditedBy" : "b7abca6a-d6be-4008-a014-3b5ca0e90529",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "40c07fc1-5b71-442c-9b6e-d88fcaf405aa",
+        "parentId" : "cba1a82a-5e17-4fb7-8916-8a6bbbeabed2",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Sigh.  yes.\n\nOn Wed, May 20, 2015 at 8:51 AM, Victor Marmol notifications@github.com\nwrote:\n\n> In pkg/kubelet/prober/prober.go\n> https://github.com/GoogleCloudPlatform/kubernetes/pull/8238#discussion_r30717110\n> :\n> \n> > -           }\n> > -           if err != nil {\n> > -               glog.V(1).Infof(\"readiness probe for %q errored: %v\", ctrName, err)\n> > -               if ok {\n> > -                   pb.recorder.Eventf(ref, \"unhealthy\", \"Readiness probe errored: %v\", err)\n> > -               }\n> > -               return probe.Unknown, err\n> > -           } else { // ready != probe.Success\n> > -               glog.V(1).Infof(\"Readiness probe for %q failed (%v): %s\", ctrName, ready, output)\n> > -               if ok {\n> > -                   pb.recorder.Eventf(ref, \"unhealthy\", \"Readiness probe failed: %s\", output)\n> > -               }\n> > -               return ready, nil\n> > -           }\n> > -       }\n> > -       glog.V(1).Infof(\"Readiness probe for %q succeeded\", ctrName)\n> \n> Same here about V(3)?\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/GoogleCloudPlatform/kubernetes/pull/8238/files#r30717110\n> .\n",
+        "createdAt" : "2015-05-20T15:57:19Z",
+        "updatedAt" : "2015-05-20T15:57:19Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "75617e876031d0b5b1fb75f392bdba4e9e5ffa56",
+    "line" : 86,
+    "diffHunk" : "@@ -1,1 +147,151 @@\t\t\t}\n\t\t}\n\t\tglog.V(1).Infof(\"Readiness probe for %q succeeded\", ctrName)\n\t}\n"
+  }
+]

@@ -1,0 +1,332 @@
+[
+  {
+    "id" : "7c72d0c6-62f2-4860-9012-160bd5b6273e",
+    "prId" : 102168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102168#pullrequestreview-666688726",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3b713d55-1792-4336-b401-7dceacf2328c",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "getCachedCredentials does not look thread-safe (has unprotected reads and writes of `cache` and `lastCachePurge`) ... is there a test that calls `Provide` many times in parallel with matching and different `image` args to exercise race-safety here?",
+        "createdAt" : "2021-05-20T13:18:26Z",
+        "updatedAt" : "2021-05-20T13:27:55Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57406fdc-679e-4168-9fc2-d2452b7ddf45",
+        "parentId" : "3b713d55-1792-4336-b401-7dceacf2328c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "also, this function has later access to `p.cache` which is now unprotected... is `p.cache` threadsafe?",
+        "createdAt" : "2021-05-20T13:21:59Z",
+        "updatedAt" : "2021-05-20T13:21:59Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c1707b3-d99b-4ba4-aba7-63fcf205ca25",
+        "parentId" : "3b713d55-1792-4336-b401-7dceacf2328c",
+        "authorId" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "body" : "cache looks thread safe https://github.com/kubernetes/client-go/blob/master/tools/cache/expiration_cache.go#L38\r\n\r\nbut yes at least `purge` call is required to be protected.\r\nwould it be fine if i add the `purge` call and  `cache add` call under lock? Making write thread safe. OR  can make the whole cache operation protected?\r\n\r\nThere was a previous concern having whole `provide` function under lock could slow it down for parallel image pulls. But this was more a concern as `exec` was also protected\r\n\r\nThere is no test case, I have verified locally. I will add a unit test for race safety.",
+        "createdAt" : "2021-05-20T13:51:33Z",
+        "updatedAt" : "2021-05-20T16:13:09Z",
+        "lastEditedBy" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea72d5d5-4a76-44b9-8642-bfac0c8bc748",
+        "parentId" : "3b713d55-1792-4336-b401-7dceacf2328c",
+        "authorId" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "body" : "@liggitt Added test case for parallel call to provide and wrapped `lastCachePurge` in lock, rest cache rw operations are safe, have tested with `go test -race`",
+        "createdAt" : "2021-05-24T12:29:48Z",
+        "updatedAt" : "2021-05-24T12:29:49Z",
+        "lastEditedBy" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "def93317b489ee499ca91b9e2e8c157aca358c3e",
+    "line" : 87,
+    "diffHunk" : "@@ -1,1 +198,202 @@\t}\n\n\tcachedConfig, found, err := p.getCachedCredentials(image)\n\tif err != nil {\n\t\tklog.Errorf(\"Failed to get cached docker config: %v\", err)"
+  },
+  {
+    "id" : "df1b372e-134f-4431-b1ab-f7f2f73b0cba",
+    "prId" : 102168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102168#pullrequestreview-664422405",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "34867018-0d20-48db-9178-608d8af8614e",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "does ExecPlugin time out or can it hang forever?",
+        "createdAt" : "2021-05-20T13:20:42Z",
+        "updatedAt" : "2021-05-20T13:20:42Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1d71ee85-eb6b-47d8-9639-799b05a3209e",
+        "parentId" : "34867018-0d20-48db-9178-608d8af8614e",
+        "authorId" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "body" : "It has a timeout of 1 min\r\nhttps://github.com/kubernetes/kubernetes/blob/29e4fdab4d644af51c1fa2623bf0e78f3dd6383b/pkg/credentialprovider/plugin/plugin.go#L342",
+        "createdAt" : "2021-05-20T13:59:54Z",
+        "updatedAt" : "2021-05-20T13:59:54Z",
+        "lastEditedBy" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "def93317b489ee499ca91b9e2e8c157aca358c3e",
+    "line" : 102,
+    "diffHunk" : "@@ -1,1 +215,219 @@\t// foo.bar.registry/image2\n\tres, err, _ := p.group.Do(image, func() (interface{}, error) {\n\t\treturn p.plugin.ExecPlugin(context.Background(), image)\n\t})\n"
+  },
+  {
+    "id" : "72ca7cec-b594-42bd-a98b-a9752be8b684",
+    "prId" : 102168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102168#pullrequestreview-666807571",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ed775f7d-6634-4975-a52a-4f3eccced89f",
+        "parentId" : null,
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "```suggestion\r\n\t\"golang.org/x/sync/singleflight\"\r\n\r\n```",
+        "createdAt" : "2021-05-24T14:28:37Z",
+        "updatedAt" : "2021-05-24T20:42:51Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "def93317b489ee499ca91b9e2e8c157aca358c3e",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +29,33 @@\t\"time\"\n\n\t\"golang.org/x/sync/singleflight\"\n\n\t\"k8s.io/apimachinery/pkg/runtime\""
+  },
+  {
+    "id" : "8779a4fe-1244-4111-ae76-aa94e9435393",
+    "prId" : 102168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102168#pullrequestreview-690508225",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8c0c3598-79f1-4c90-ba37-a4fecbabd8d3",
+        "parentId" : null,
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "This does assume that a plugin can handle concurrent execution, i.e. it uses some file based locking to prevent itself from concurrently writing to a local cred file or similar.  Do the docs make that clear?",
+        "createdAt" : "2021-05-24T20:07:15Z",
+        "updatedAt" : "2021-05-24T20:42:51Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71232087-549c-46fd-96a6-03a67c30b6de",
+        "parentId" : "8c0c3598-79f1-4c90-ba37-a4fecbabd8d3",
+        "authorId" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "body" : "sorry I might not have understood here but Kubelet is managing the parallel execution here, creating new buffers for each request https://github.com/kubernetes/kubernetes/blob/b96c86f1b9d92880845724d2030da3e2adac89e5/pkg/credentialprovider/plugin/plugin.go#L334-L353",
+        "createdAt" : "2021-05-25T08:37:18Z",
+        "updatedAt" : "2021-05-25T08:37:18Z",
+        "lastEditedBy" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04a92e3d-67a9-4e3e-b862-2ed8e379b29a",
+        "parentId" : "8c0c3598-79f1-4c90-ba37-a4fecbabd8d3",
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "@adisky I am referring to parallel execution of the exec plugin itself, meaning that the binary may be run multiple times at the same time.  I think that is already the case even without this change.",
+        "createdAt" : "2021-06-22T19:41:54Z",
+        "updatedAt" : "2021-06-22T19:41:54Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8daee49d-16ec-40fd-94ee-95b5a148bd9b",
+        "parentId" : "8c0c3598-79f1-4c90-ba37-a4fecbabd8d3",
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "Actually I think the locking prevented parallel execution previously.  So I do think this behavior should be documented, if it is not already.",
+        "createdAt" : "2021-06-22T20:14:40Z",
+        "updatedAt" : "2021-06-22T20:14:40Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4d78230-bd13-4e9b-8e3d-945e192d9c01",
+        "parentId" : "8c0c3598-79f1-4c90-ba37-a4fecbabd8d3",
+        "authorId" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "body" : "Ack, will update the documentation.",
+        "createdAt" : "2021-06-23T11:04:28Z",
+        "updatedAt" : "2021-06-23T11:04:28Z",
+        "lastEditedBy" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "def93317b489ee499ca91b9e2e8c157aca358c3e",
+    "line" : 102,
+    "diffHunk" : "@@ -1,1 +215,219 @@\t// foo.bar.registry/image2\n\tres, err, _ := p.group.Do(image, func() (interface{}, error) {\n\t\treturn p.plugin.ExecPlugin(context.Background(), image)\n\t})\n"
+  },
+  {
+    "id" : "62d024ba-fce6-441a-b275-23ea18d70e5f",
+    "prId" : 102168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102168#pullrequestreview-690513327",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "db366d82-5fb1-4684-8bbf-641b091cd829",
+        "parentId" : null,
+        "authorId" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "body" : "I would expect `newPluginProvider` to take this as input and for tests to try to use `newPluginProvider` if possible instead of directly creating the `pluginProvider` struct.",
+        "createdAt" : "2021-06-07T15:06:45Z",
+        "updatedAt" : "2021-06-22T19:32:49Z",
+        "lastEditedBy" : "e58080d6-2177-419f-a546-b51075d7bcb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "99d29575-64bb-46f3-bf0e-893c84b549b6",
+        "parentId" : "db366d82-5fb1-4684-8bbf-641b091cd829",
+        "authorId" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "body" : "Thats a neat way to do, but now It'll be a lot of reshuffling in tests, it sets lots of parameters from `kubeletconfig.CredentialProvider` that we are directly passing in tests and have to take care of `execPlugin`as well.",
+        "createdAt" : "2021-06-23T11:10:34Z",
+        "updatedAt" : "2021-06-23T11:10:34Z",
+        "lastEditedBy" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "def93317b489ee499ca91b9e2e8c157aca358c3e",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +121,125 @@\t}\n\n\tclock := clock.RealClock{}\n\n\treturn &pluginProvider{"
+  },
+  {
+    "id" : "f7675fa3-bf76-4468-bf5c-eedecbd70172",
+    "prId" : 102168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102168#pullrequestreview-684884951",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fa8b06a5-0905-441b-bbf9-2535bf7094f6",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "So in the event that there are multiple concurrent calls, the last successful call is the one that is cached right?",
+        "createdAt" : "2021-06-11T18:11:54Z",
+        "updatedAt" : "2021-06-11T18:12:49Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af3d5410-af06-483d-90c4-5a6372dd2513",
+        "parentId" : "fa8b06a5-0905-441b-bbf9-2535bf7094f6",
+        "authorId" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "body" : "yes, the disadvantage is just that for same credentials it could request multiple times. \r\nWe could change the key for singleflight if `cacheKeyType` is known in advance or we were saving it in config file.\r\n",
+        "createdAt" : "2021-06-16T08:38:11Z",
+        "updatedAt" : "2021-06-16T08:38:11Z",
+        "lastEditedBy" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "def93317b489ee499ca91b9e2e8c157aca358c3e",
+    "line" : 96,
+    "diffHunk" : "@@ -1,1 +209,213 @@\n\t// ExecPlugin is wrapped in single flight to exec plugin once for concurrent same image request.\n\t// The caveat here is we don't know cacheKeyType yet, so if cacheKeyType is registry/global and credentials saved in cache\n\t// on per registry/global basis then exec will be called for all requests if requests are made concurrently.\n\t// foo.bar.registry"
+  },
+  {
+    "id" : "e9d8000a-7e0d-4aa5-a36a-a865c096dec1",
+    "prId" : 102168,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102168#pullrequestreview-694132968",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3cb15b24-33b8-40ba-9225-7a99a3945f77",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Going back to one of my older comments, relying on List() for cache purging seems a bit odd. I would at least add a comment here for why List() is called. \r\n\r\nAlternatively as a follow-up, it might make sense to just write a simple cache implementation internal to this package (or use a caching lib from another package) that handles this use-case a bit better. ",
+        "createdAt" : "2021-06-28T15:28:55Z",
+        "updatedAt" : "2021-06-28T15:28:57Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f758d309-a506-481b-921a-01544be6bb8d",
+        "parentId" : "3cb15b24-33b8-40ba-9225-7a99a3945f77",
+        "authorId" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "body" : "@andrewsykim I have already added a comment on Line no. 300.\r\n\r\nEdit : Updated it to be more explicit.\r\nWith this cache there is no other way we have, on the side not We were using the same cache with intree ones since long time without purging :)\r\n",
+        "createdAt" : "2021-06-28T15:46:41Z",
+        "updatedAt" : "2021-06-28T15:47:43Z",
+        "lastEditedBy" : "69f0771a-50bf-4976-bb8b-0e355d554b8b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "538cd80c-9ede-4086-ae5e-327d6369df70",
+        "parentId" : "3cb15b24-33b8-40ba-9225-7a99a3945f77",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Also a reminder that this PR is only scoped for external traffic, I think we had some discussions on whether we should handle internal but I didn't want to implement that on the first pass. ",
+        "createdAt" : "2021-06-28T16:01:34Z",
+        "updatedAt" : "2021-06-28T16:01:34Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "def93317b489ee499ca91b9e2e8c157aca358c3e",
+    "line" : 141,
+    "diffHunk" : "@@ -1,1 +303,307 @@\t\t// The expired entry in the cache is removed only when Get or List called on it.\n\t\t// List() is called on some interval to remove those expired entries on which Get is never called.\n\t\t_ = p.cache.List()\n\t\tp.lastCachePurge = p.clock.Now()\n\t}"
+  },
+  {
+    "id" : "5b3c06f3-f5de-46e8-909e-c18a39d3435a",
+    "prId" : 97167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97167#pullrequestreview-553910104",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a63b507b-4d3a-479c-85c3-3f379a8af8f0",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "FYI - if you don't use the arg at all, you can just leave out entirely :)",
+        "createdAt" : "2020-12-16T17:17:01Z",
+        "updatedAt" : "2020-12-16T17:17:01Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a0b5acf00f142fa39e09df38077c89656c352a4",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +253,257 @@\n// Enabled always returns true since registration of the plugin via kubelet implies it should be enabled.\nfunc (p *pluginProvider) Enabled() bool {\n\treturn true\n}"
+  },
+  {
+    "id" : "fa761e3f-0dfd-493f-a059-7c52960c5ceb",
+    "prId" : 94196,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94196#pullrequestreview-523928299",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "89dec558-5175-43a8-96e6-de4ca483713b",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "add a default case that returns an error",
+        "createdAt" : "2020-11-05T06:28:21Z",
+        "updatedAt" : "2020-11-10T18:44:36Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f3192c31491228926f3dd5c319fc70e9c42e6aa6",
+    "line" : 214,
+    "diffHunk" : "@@ -1,1 +212,216 @@\t\tklog.Errorf(\"credential provider plugin did not return a valid cacheKeyType: %q\", cacheKeyType)\n\t\treturn credentialprovider.DockerConfig{}\n\t}\n\n\tdockerConfig := make(credentialprovider.DockerConfig, len(response.Auth))"
+  }
+]

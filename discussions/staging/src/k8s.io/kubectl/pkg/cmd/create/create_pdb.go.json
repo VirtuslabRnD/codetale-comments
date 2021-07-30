@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "d937a934-479c-4d66-bcd1-7f19f003ed25",
+    "prId" : 97429,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97429#pullrequestreview-558210836",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a0687dc4-db53-4955-a6e6-82c2dd4738cc",
+        "parentId" : null,
+        "authorId" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "body" : "Here, doing some tests:\r\n\r\nWhen I create a PDB with invalid values, like \"--min-available=10gb\" and a client dryrun it generates the yaml, but with server dry-run not (because the API Server validates the input with the regex `[0-9]+%`\r\n\r\nI think, even if this is not the focus of this PR, that adding this validation inside the Validate() (and also unit tests for this) would add some more value to the create command, so much more as a recommendation then a request for change, what about adding this validation for --min-available and --max-available here in validate?\r\n\r\n",
+        "createdAt" : "2020-12-22T19:23:08Z",
+        "updatedAt" : "2020-12-29T15:50:39Z",
+        "lastEditedBy" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b7a98701-a7e0-4bc5-a38c-6f989336a83e",
+        "parentId" : "a0687dc4-db53-4955-a6e6-82c2dd4738cc",
+        "authorId" : "9cd30d8b-85c9-442a-8266-f48196ecb2c3",
+        "body" : "I've created a validation for the above at the end of `Validate()` which looks like this:\r\n```go\r\nre := regexp.MustCompile(`^[0-9]+%?$`)\r\n\r\nswitch {\r\ncase len(o.MinAvailable) > 0 && !re.MatchString(o.MinAvailable):\r\n    return fmt.Errorf(\"invalid format specified for min-avaiable\")\r\ncase len(o.MaxUnavailable) > 0 && !re.MatchString(o.MaxUnavailable):\r\n    return fmt.Errorf(\"invalid format specified for max-unavailable\")\r\n}\r\n```\r\nBut I'm having a little problem writing the unit test for the same. Should I rewrite them by leveraging a fake HTTP server as was done before for testings? Please suggest if the test can be written in this table-driven testing format.",
+        "createdAt" : "2020-12-23T15:17:47Z",
+        "updatedAt" : "2020-12-29T15:50:39Z",
+        "lastEditedBy" : "9cd30d8b-85c9-442a-8266-f48196ecb2c3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a1df20e-30fa-4771-9a63-3de5745ef7ad",
+        "parentId" : "a0687dc4-db53-4955-a6e6-82c2dd4738cc",
+        "authorId" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "body" : "No need to make fake HTTP.\r\n\r\nWhat you can do here is like https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/kubectl/pkg/cmd/create/create_ingress_test.go#L28\r\n\r\nCreate another set of tests, but only for the validation function, then create a set of scenarios with the correct and the incorrect values (like minAvailable > 0 but not matching the regex, then matching the regex, then both matching the regex which should raise an error because of the existing of both arguments)\r\n\r\n",
+        "createdAt" : "2020-12-23T19:00:34Z",
+        "updatedAt" : "2020-12-29T15:50:39Z",
+        "lastEditedBy" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c0cceabc-6464-41ac-8cef-9bd0fd38fc2e",
+        "parentId" : "a0687dc4-db53-4955-a6e6-82c2dd4738cc",
+        "authorId" : "9cd30d8b-85c9-442a-8266-f48196ecb2c3",
+        "body" : "Done!",
+        "createdAt" : "2020-12-23T20:18:40Z",
+        "updatedAt" : "2020-12-29T15:50:39Z",
+        "lastEditedBy" : "9cd30d8b-85c9-442a-8266-f48196ecb2c3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1e4cba79ef8972248ac360b4ac5b21b085f6a8dc",
+    "line" : 173,
+    "diffHunk" : "@@ -1,1 +169,173 @@\n// Validate checks to the PodDisruptionBudgetOpts to see if there is sufficient information run the command\nfunc (o *PodDisruptionBudgetOpts) Validate() error {\n\tif len(o.Name) == 0 {\n\t\treturn fmt.Errorf(\"name must be specified\")"
+  },
+  {
+    "id" : "5dce18d7-4371-4fb8-9360-b239f9d5f8c1",
+    "prId" : 97429,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97429#pullrequestreview-559591916",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5baa9ab6-f433-4376-83d6-68562e2eac28",
+        "parentId" : null,
+        "authorId" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "body" : "One thing @soltysh teached me is that it's always good to document our regex for the future us (and other reviewers).\r\n\r\nSo maybe something like:\r\n\r\n// The following regex matches the following values:\r\n// 10, 20, 30% \r\n// but not 10Gb, 20Mb\r\n\r\nI think this is a nit actually for this PR, but always good to document our regexes :D",
+        "createdAt" : "2020-12-29T12:03:57Z",
+        "updatedAt" : "2020-12-29T15:50:39Z",
+        "lastEditedBy" : "7cdf591c-5b87-4588-b48e-a40560f96eb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8729339c-29ff-4657-a5c5-aeb2182febc8",
+        "parentId" : "5baa9ab6-f433-4376-83d6-68562e2eac28",
+        "authorId" : "9cd30d8b-85c9-442a-8266-f48196ecb2c3",
+        "body" : "Done!",
+        "createdAt" : "2020-12-29T15:51:08Z",
+        "updatedAt" : "2020-12-29T15:51:09Z",
+        "lastEditedBy" : "9cd30d8b-85c9-442a-8266-f48196ecb2c3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1e4cba79ef8972248ac360b4ac5b21b085f6a8dc",
+    "line" : 193,
+    "diffHunk" : "@@ -1,1 +189,193 @@\t// 10, 20, 30%, 50% (number and percentage)\n\t// but not 10Gb, 20Mb\n\tre := regexp.MustCompile(`^[0-9]+%?$`)\n\n\tswitch {"
+  },
+  {
+    "id" : "1db17397-1e29-43ab-9170-956b9fab182d",
+    "prId" : 97429,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97429#pullrequestreview-572452100",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0f30452c-1df6-48ba-9977-af82f3facbd8",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "`resource` is good alias, please re-use aliases similar to other files, for consistency. ",
+        "createdAt" : "2021-01-20T17:17:27Z",
+        "updatedAt" : "2021-01-20T17:19:03Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1e4cba79ef8972248ac360b4ac5b21b085f6a8dc",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +29,33 @@\t\"k8s.io/apimachinery/pkg/util/intstr\"\n\t\"k8s.io/cli-runtime/pkg/genericclioptions\"\n\tresourcecli \"k8s.io/cli-runtime/pkg/resource\"\n\tpolicyclient \"k8s.io/client-go/kubernetes/typed/policy/v1beta1\"\n\tcmdutil \"k8s.io/kubectl/pkg/cmd/util\""
+  },
+  {
+    "id" : "a115298d-e412-40bf-8916-cfec9d2fa55e",
+    "prId" : 97429,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97429#pullrequestreview-572452100",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "58c90c09-36f6-4381-baef-8f2f9703b17b",
+        "parentId" : null,
+        "authorId" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "body" : "`policyv1beta1client` is preferred ",
+        "createdAt" : "2021-01-20T17:17:38Z",
+        "updatedAt" : "2021-01-20T17:19:03Z",
+        "lastEditedBy" : "b7d2a698-a6e1-4031-bb69-8b45505badb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1e4cba79ef8972248ac360b4ac5b21b085f6a8dc",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +30,34 @@\t\"k8s.io/cli-runtime/pkg/genericclioptions\"\n\tresourcecli \"k8s.io/cli-runtime/pkg/resource\"\n\tpolicyclient \"k8s.io/client-go/kubernetes/typed/policy/v1beta1\"\n\tcmdutil \"k8s.io/kubectl/pkg/cmd/util\"\n\t\"k8s.io/kubectl/pkg/scheme\""
+  }
+]

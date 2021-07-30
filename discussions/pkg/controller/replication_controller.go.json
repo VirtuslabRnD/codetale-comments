@@ -1,0 +1,783 @@
+[
+  {
+    "id" : "421d0568-5e59-4791-8fe8-41270f1553f1",
+    "prId" : 10147,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d1d09dae-1c0c-4a47-b6b3-55917be1fde6",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "If I had one last nit, it'd be that this might make a lot of messages on startup. V(4)? Probably not a big deal.\n",
+        "createdAt" : "2015-06-22T20:03:39Z",
+        "updatedAt" : "2015-06-22T20:03:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6c31826e-9cf9-4b35-b0a6-5c9b0caba6f5",
+        "parentId" : "d1d09dae-1c0c-4a47-b6b3-55917be1fde6",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "I figured we shouldn't see more than a few because of the time.Sleep. If I upload another pr it's going to go through another set of testing, which might need more waiting/button pushing before merge :\\\n",
+        "createdAt" : "2015-06-22T20:39:48Z",
+        "updatedAt" : "2015-06-22T20:39:48Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b9ee024a-0cdb-43a3-9114-4855444ebc3d",
+        "parentId" : "d1d09dae-1c0c-4a47-b6b3-55917be1fde6",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Yeah, you might be right, and either way it's not a big enough deal to be worth changing at the moment.\n",
+        "createdAt" : "2015-06-22T20:41:47Z",
+        "updatedAt" : "2015-06-22T20:41:47Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "35950c04ff84149d39f328cc89c3540060dc9c4e",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +380,384 @@\t\t// Sleep so we give the pod reflector goroutine a chance to run.\n\t\ttime.Sleep(PodStoreSyncedPollPeriod)\n\t\tglog.Infof(\"Waiting for pods controller to sync, requeuing rc %v\", controller.Name)\n\t\trm.enqueueController(&controller)\n\t\treturn nil"
+  },
+  {
+    "id" : "bcb0b9e2-9324-4820-9e6c-6018a096401f",
+    "prId" : 8641,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "@bprashanth I worry I don't understand the replication controller (as it is now) to debug what I've added.  A few questions:\n1. Are there known scenarios today where fast rescale triggers the RC loop to forget a pod?\n2. Do I even need these notifications, or would it be more accurate to simply let the controller handle it now that I have the check in filterActivePods?\n",
+        "createdAt" : "2015-05-22T18:53:47Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "05f874c8-fbec-47b9-8bd6-881200471e64",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "If you rescale it up to 50, the rc will create 50 replicas. If you rescale it down again soon after, the rc will ignore the downsize till the watch has notified it of the 50 replicas having been created, after which it will go about deleting all 50. The key here is the `Expectations` thingy. When the rc fires off creates/deletes it sets the number it expects to see via watch, and goes to sleep till the manager does in fact see these many. Watch latencies sometimes tend to be higher than I like on some cloud providers :(\n\nThe rc manager will never sync the same rc more than once simultaneously, the work queue enforces this, which is why the size up and immediate size down isn't racy. \n\nYou need to invoke deletePod because you need the `DeletionsObserved` call to wake up the rc, if you want it to create more replicas. Without this, you will wake up the rc, it will say 'hey i expect another delete so im going back to sleep' (but it will update status.Replica).\n",
+        "createdAt" : "2015-05-22T19:04:21Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ec4c9cb-1c5e-48c6-bafc-3d886b857bb6",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "> On May 22, 2015, at 3:04 PM, Prashanth B notifications@github.com wrote:\n> \n> In pkg/controller/replication_controller.go:\n> \n> > @@ -204,6 +204,10 @@ func (rm _ReplicationManager) getPodControllers(pod *api.Pod) *api.ReplicationCo\n> >  // When a pod is created, enqueue the controller that manages it and update it's expectations.\n> >  func (rm *ReplicationManager) addPod(obj interface{}) {\n> >     pod := obj.(_api.Pod)\n> > -   if pod.DeletionTimestamp != nil {\n> >   If you rescale it up to 50, the rc will create 50 replicas. If you rescale it down again soon after, the rc will ignore the downsize till the watch has notified it of the 50 replicas having been created, after which it will go about deleting all 50. The key here is the Expectations thingy. When the rc fires off creates/deletes it sets the number it expects to see via watch, and goes to sleep till the manager does in fact see these many. Watch latencies sometimes tend to be higher than I like on some cloud providers :(\n> \n> Ok, so we're touching base at 50 then?  I thought we made a statement a while back that touching base was bad?\n> The rc manager will never sync the same rc more than once simultaneously, the work queue enforces this, which is why the size up and immediate size down isn't racy.\n> \n> You need to push the login into deletePod because you need the DeletionsObserved call to wake up the rc, if you want it to create more replicas. Without this, you will wake up the rc, it will say 'hey i expect another delete so im going back to sleep' (but it will update status.Replica).\n> \n> —\n> Reply to this email directly or view it on GitHub.\n",
+        "createdAt" : "2015-05-22T19:23:12Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3463b202-9cf6-424c-bc0d-b553846e02b9",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "50 was a random example, sorry, can you elaborate? \nThe rc will only create BurstReplicas at a time (https://github.com/GoogleCloudPlatform/kubernetes/blob/master/pkg/controller/replication_controller.go#L69) but that's a rate limit. Our scalability tests periodically spin up rcs with 3000 replicas.\n",
+        "createdAt" : "2015-05-22T19:26:45Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "63bf9a91-bc62-4b51-a3d3-b0a4402861cc",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I mean, if I say 50, then 30, then 10, the manager has to touch base at 50 before going back down to 10?\n",
+        "createdAt" : "2015-05-22T19:28:35Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4aa9ce2-c142-42e6-959e-1e5bc95d529d",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "Ah, yes https://github.com/GoogleCloudPlatform/kubernetes/issues/7369\n",
+        "createdAt" : "2015-05-22T19:30:04Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2ef375d9-7026-4006-b887-0d4207f579bd",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "Why aren't we also filtering out terminated pods here? Could we factor out the test from filterActivePods and use that in both places?\n",
+        "createdAt" : "2015-06-01T20:06:03Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "053be1f6-b545-4093-9811-6efc50d9f978",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "You mean, before this method is called?  This is really just to wake the controller up with the right expectation, so it wakes the controller up and then runs filterActivePods.  Or maybe I misunderstand.\n",
+        "createdAt" : "2015-06-01T20:09:27Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29f1dbcd-9b6b-4e67-bb9e-6a6c0a2b0e4f",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "I'm asking why DeletionTimestamp != nil here is any different from Status.Phase == api.PodFailed.\n",
+        "createdAt" : "2015-06-01T20:57:09Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "292ae672-e3f6-45ba-a16f-b513919dc463",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I don't have an answer for that.\n",
+        "createdAt" : "2015-06-01T21:05:39Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "704ad688-b666-42b3-a37d-d63a64b9861a",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "@bprashanth \n",
+        "createdAt" : "2015-06-01T22:03:54Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eec646b3-6a06-4201-a4df-b65d0fd3bfdf",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "Discussed irl. The point of putting the rc to sleep till the watch has propogated adds/delets is so we get confirmation that the rpcs initiated by the rc has propogated throughout the system before we take further action (we're assuming all other watcers are equally fast here). \n\nPlease add a comment saying something like (probably rephrased): when a pod is deleted gracefully it's deletion timestamp is first modified to reflect a grace period, and after such time has passed, the kubelet actually deletes it from the store. We receive an update for modification of the deletion timestamp and expect an rc to create more replicas asap, not wait until the kubelet actually deletes the pod. This is different from the Phase of a pod changing, because an rc never initiates a phase change, and so is never asleep waiting for the same. \n\nThe phase of a pod changing while an rc is creating replicas is addressed in https://github.com/GoogleCloudPlatform/kubernetes/issues/7369.\n",
+        "createdAt" : "2015-06-01T22:30:00Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ec0e79b8-829e-42c4-837c-dac06de6f6ae",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "@bprashanth explained in person that the behavior is indeed different for actions initiated by the ReplicationManager, such as add and delete, vs. observing status changes, such as reports that pods have failed. So, I think we just need a comment explaining why this check is needed, at least for updatePod, so that the ReplicationManager doesn't just sleep until it has observed its own delete action.\n\nWhether this is needed in addPod is questionable, but I don't object so long as it doesn't cause problems.\n",
+        "createdAt" : "2015-06-01T22:33:17Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b139c95c-20f8-4892-a24e-3ffcab7116a7",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Added a comment.\n\n----- Original Message -----\n\n> > @@ -204,6 +204,10 @@ func (rm _ReplicationManager) getPodControllers(pod\n> > *api.Pod) *api.ReplicationCo\n> >  // When a pod is created, enqueue the controller that manages it and\n> >  update it's expectations.\n> >  func (rm *ReplicationManager) addPod(obj interface{}) {\n> >     pod := obj.(_api.Pod)\n> > -   if pod.DeletionTimestamp != nil {\n> \n> Discussed irl. The point of putting the rc to sleep till the watch has\n> propogated adds/delets is so we get confirmation that the rpcs initiated by\n> the rc has propogated throughout the system before we take further action\n> (we're assuming all other watcers are equally fast here).\n> \n> Please add a comment saying something like (probably rephrased): when a pod\n> is deleted gracefully it's deletion timestamp is first modified to reflect a\n> grace period, and after such time has passed, the kubelet actually deletes\n> it from the store. We receive an update for modification of the deletion\n> timestamp and expect an rc to create more replicas asap, not wait until the\n> kubelet actually deletes the pod. This is different from the Phase of a pod\n> changing, because an rc never initiates a phase change, and so is never\n> asleep waiting for the same.\n> \n> The phase of a pod changing while an rc is creating replicas is addressed in\n> https://github.com/GoogleCloudPlatform/kubernetes/issues/7369.\n> \n> ---\n> \n> Reply to this email directly or view it on GitHub:\n> https://github.com/GoogleCloudPlatform/kubernetes/pull/8641/files#r31477546\n",
+        "createdAt" : "2015-06-01T22:34:36Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "75719234-0097-42e9-b6c1-a5f5cc1e7fcf",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "The comment is better placed above the deletePod in updatePod, pologies for not mentioning this.\n\nIf one can create an rc with a pod template that has the deletion timestamp set, it will just keep creating pods. Are we disallowing this in validation or is it intended?\n",
+        "createdAt" : "2015-06-01T22:37:32Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b66319f-3ac5-4dec-989d-36e591baa0dc",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "It's cleared during creation - that said, I'm making an additional guard to prevent deletion grace period seconds from being reset and will move your comment.\n\n----- Original Message -----\n\n> > @@ -204,6 +204,10 @@ func (rm _ReplicationManager) getPodControllers(pod\n> > *api.Pod) *api.ReplicationCo\n> >  // When a pod is created, enqueue the controller that manages it and\n> >  update it's expectations.\n> >  func (rm *ReplicationManager) addPod(obj interface{}) {\n> >     pod := obj.(_api.Pod)\n> > -   if pod.DeletionTimestamp != nil {\n> \n> The comment is better placed above updatePod, pologies for not mentioning\n> this.\n> \n> If one can create an rc with a pod template that has the deletion timestamp\n> set, it will just keep creating pods. Are we disallowing this in validation\n> or is it intended?\n> \n> ---\n> \n> Reply to this email directly or view it on GitHub:\n> https://github.com/GoogleCloudPlatform/kubernetes/pull/8641/files#r31478081\n",
+        "createdAt" : "2015-06-01T22:58:22Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4582a4bb-20ae-4ec1-a40c-59a8a1fd8c2d",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "ah, then we'll never get add pods with the deletion timestamp set unless you restart the controller manager or something right? (we get add pod events when the pod isn't in the store but is present in whatever the apiserver sends us -- this could either be a watch event or the output of a relist --). Please add that as a comment here.\n",
+        "createdAt" : "2015-06-01T23:15:19Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0bf41fd7-7cdb-4e54-8c78-37e5fc1ee00c",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Comments updated.  I also added stronger checking and reset behavior to ValidateObjectMetaUpdate (deletionGracePeriodSeconds is immutable) and rest.BeforeCreate() to guard against objects being created with those values.\n\n----- Original Message -----\n\n> > @@ -204,6 +204,10 @@ func (rm _ReplicationManager) getPodControllers(pod\n> > *api.Pod) *api.ReplicationCo\n> >  // When a pod is created, enqueue the controller that manages it and\n> >  update it's expectations.\n> >  func (rm *ReplicationManager) addPod(obj interface{}) {\n> >     pod := obj.(_api.Pod)\n> > -   if pod.DeletionTimestamp != nil {\n> \n> ah, then we'll never get add pods with the deletion timestamp set unless you\n> restart the controller manager or something right? (we get add pod events\n> when the pod isn't in the store but is present in whatever the apiserver\n> sends us -- this could either be a watch event or the output of a relist\n> --). Please add that as a comment here.\n> \n> ---\n> \n> Reply to this email directly or view it on GitHub:\n> https://github.com/GoogleCloudPlatform/kubernetes/pull/8641/files#r31480606\n",
+        "createdAt" : "2015-06-01T23:24:57Z",
+        "updatedAt" : "2015-06-01T23:24:57Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f6da496-196e-43a6-bd7d-deb57f30b9f2",
+        "parentId" : "cba69d86-d6a9-41a0-b328-fd280271bfc6",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "LGTM thanks\n",
+        "createdAt" : "2015-06-01T23:33:37Z",
+        "updatedAt" : "2015-06-01T23:33:37Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f12a68cd60ccfe2f0926386df771805c0993d783",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +205,209 @@func (rm *ReplicationManager) addPod(obj interface{}) {\n\tpod := obj.(*api.Pod)\n\tif pod.DeletionTimestamp != nil {\n\t\t// on a restart of the controller manager, it's possible a new pod shows up in a state that\n\t\t// is already pending deletion. Prevent the pod from being a creation observation."
+  },
+  {
+    "id" : "46bba91c-858a-4633-a987-39b4bb2961a6",
+    "prId" : 8641,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9a3ce6bc-7f08-4993-a741-97ac4e353183",
+        "parentId" : null,
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "Same comment as above. Also, does this presume that the pod has already been \"counted\" by the ReplicationManager?\n",
+        "createdAt" : "2015-06-01T20:08:13Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca25ea20-4e31-4f93-a7ff-44a42a38a4ad",
+        "parentId" : "9a3ce6bc-7f08-4993-a741-97ac4e353183",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Should just serve as a signal to the RM that it may need to check this again (we observed a pod updated with a deletion timestamp) - I think we can only over check (wake up too early) but since each wake up also properly calls filterActivePods my understanding that post-deletion, we might wake up more times and do redundant checks.\n",
+        "createdAt" : "2015-06-01T20:10:47Z",
+        "updatedAt" : "2015-06-01T23:24:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f12a68cd60ccfe2f0926386df771805c0993d783",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +233,237 @@\t\t// until the kubelet actually deletes the pod. This is different from the Phase of a pod changing, because\n\t\t// an rc never initiates a phase change, and so is never asleep waiting for the same.\n\t\trm.deletePod(curPod)\n\t\treturn\n\t}"
+  },
+  {
+    "id" : "247cdd1b-b328-4dc3-898c-5d29aaae77b2",
+    "prId" : 8138,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4ecf9ee3-44d1-464a-8d55-1c6b7875e603",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "This can still happen, right? you've just made it rarer?\n",
+        "createdAt" : "2015-05-15T21:01:47Z",
+        "updatedAt" : "2015-05-15T21:01:47Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "491095d2-55be-478d-8e86-d29392d1e170",
+        "parentId" : "4ecf9ee3-44d1-464a-8d55-1c6b7875e603",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "We are defenseless against a pod sneaking in, it's only bad if it does so after we've counted the active pods but before we've checked the expectation. Previously there was a race:\n\n```\nexpectations = 1\nwe count active pods = 1\n-- 2nd pod arrives, sets expectations = 0 \nwe check that expectations are satisfied and pass 1 active pods to manageReplicas, which creates a third pod\n```\n\nNow, if the expectation was 1 when we checked it, even if the pod sneaked in we won't invoke manageReplicas. \n",
+        "createdAt" : "2015-05-15T21:11:46Z",
+        "updatedAt" : "2015-05-15T21:11:57Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "86ce5551-8e55-4eb2-a0ca-f7e1119841b5",
+        "parentId" : "4ecf9ee3-44d1-464a-8d55-1c6b7875e603",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "OK-- sorry for the delay reviewing, it took me some time to think through this. I think you're right.\n",
+        "createdAt" : "2015-05-18T22:35:57Z",
+        "updatedAt" : "2015-05-18T22:35:57Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54b65013493e9f1f8757925425ab4d13052b4fa5",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +354,358 @@\t// Check the expectations of the rc before counting active pods, otherwise a new pod can sneak in\n\t// and update the expectations after we've retrieved active pods from the store. If a new pod enters\n\t// the store after we've checked the expectation, the rc sync is just deferred till the next relist.\n\trcNeedsSync := rm.expectations.SatisfiedExpectations(&controller)\n\tpodList, err := rm.podStore.Pods(controller.Namespace).List(labels.Set(controller.Spec.Selector).AsSelector())"
+  },
+  {
+    "id" : "24a4cf30-3763-4c22-84af-cf3ee4223cb6",
+    "prId" : 8000,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "69107eb9-5f26-4d87-9608-4f782de99b7d",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Sorry for delay reviewing; when an rc gets deleted, the proper behavior is for it to sync to the last requested state (if known) before RC manager forgets about it.\n",
+        "createdAt" : "2015-05-12T04:49:23Z",
+        "updatedAt" : "2015-05-19T18:02:04Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb4845df-ef9f-4a70-8265-fcda7b57c359",
+        "parentId" : "69107eb9-5f26-4d87-9608-4f782de99b7d",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "hm. That gets complicated with expectations. Maybe this is better behavior. Ideally I'd like it to make one last attempt to sync; so if you set replicas=0 and then delete the rc, it would in fact delete all the replicas. But if you set replicas=5, delete the RC & add it again with a new name and replicas=17, RC Manager should not keep the old one around to fight with the new one...\n",
+        "createdAt" : "2015-05-12T04:52:35Z",
+        "updatedAt" : "2015-05-19T18:02:04Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6483a427-0267-4cc2-ac3c-4c05b5e603cf",
+        "parentId" : "69107eb9-5f26-4d87-9608-4f782de99b7d",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "Doing that last sync is a little hard, though I'm sure I can figure out a way if that's needed. It's hard because we insert the key of the rc into the work queue, and by the time we pull it out the other side, the rc has been deleted from the store. I'd have to sidestep the work queue alltogether for deletes.\n",
+        "createdAt" : "2015-05-12T04:59:43Z",
+        "updatedAt" : "2015-05-19T18:02:04Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "739694f3-449b-49cd-9892-46eab631fc58",
+        "parentId" : "69107eb9-5f26-4d87-9608-4f782de99b7d",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "OK I thought about it and I think that since we require the client to wait anyway, it's OK if RC manager doesn't do this for the moment.\n",
+        "createdAt" : "2015-05-18T22:39:26Z",
+        "updatedAt" : "2015-05-19T18:02:04Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c0a8981b74edeab110c7080b2897593a0ab00c9f",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +352,356 @@\tif !exists {\n\t\tglog.Infof(\"Replication Controller has been deleted %v\", key)\n\t\trm.expectations.DeleteExpectations(key)\n\t\treturn nil\n\t}"
+  },
+  {
+    "id" : "9ee9c75b-69df-494a-a7a2-93ed2d597995",
+    "prId" : 7869,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "429bd57c-b3dc-4195-9233-e9945f38d1e8",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Last comment: what do you think about making this a parameter to the NewReplicationManager function?\n",
+        "createdAt" : "2015-05-07T00:14:39Z",
+        "updatedAt" : "2015-05-08T21:24:53Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ec7aa4d6-bcdd-45ea-b0f2-be38d6b2587d",
+        "parentId" : "429bd57c-b3dc-4195-9233-e9945f38d1e8",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "done\n",
+        "createdAt" : "2015-05-08T18:44:02Z",
+        "updatedAt" : "2015-05-08T21:24:53Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4fdd5bc3f3c7d25458258829bb0cb86cf222921d",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +67,71 @@\t// Realistic value of the burstReplica field for the replication manager based off\n\t// performance requirements for kubernetes 1.0.\n\tBurstReplicas = 500\n)\n"
+  },
+  {
+    "id" : "fd65de13-790a-450b-9ea9-4e1a02d9f400",
+    "prId" : 7628,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b562db57-d6b3-4989-83d2-9dd9bfd36738",
+        "parentId" : null,
+        "authorId" : null,
+        "body" : "typo: s/the/that\n",
+        "createdAt" : "2015-05-01T18:26:29Z",
+        "updatedAt" : "2015-05-01T18:26:29Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a8fdf3d78b84679e646ef7aa1c9b51ff539a9a41",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +43,47 @@const (\n\t// We'll attempt to recompute the required replicas of all replication controllers\n\t// the have fulfilled their expectations at least this often. This recomputation\n\t// happens based on contents in local pod storage.\n\tFullControllerResyncPeriod = 30 * time.Second"
+  },
+  {
+    "id" : "29610221-3f35-4a3e-afd6-f37b6ccc0a44",
+    "prId" : 6992,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6d3ab6a0-309c-4705-9f59-806a5791bb46",
+        "parentId" : null,
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "This is great. You could also check readiness (not ready < ready). The endpoints controller check could be factored out into a function:\nhttps://github.com/GoogleCloudPlatform/kubernetes/blob/e1b76b922b3f7aec73715cc53cb6f8e9180e5c26/pkg/service/endpoints_controller.go#L99\n",
+        "createdAt" : "2015-04-17T19:42:14Z",
+        "updatedAt" : "2015-04-21T17:18:49Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e07faec-dc63-4b70-b170-6d0b607ffbea",
+        "parentId" : "6d3ab6a0-309c-4705-9f59-806a5791bb46",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "Factored out the pod ready logic to api.IsPodReady. Added this new condition to pod sorting.\n",
+        "createdAt" : "2015-04-20T17:15:19Z",
+        "updatedAt" : "2015-04-21T17:18:49Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "df2cbd48778908b069401f880e4a44f7464ec676",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +218,222 @@\tif !api.IsPodReady(s[i]) && api.IsPodReady(s[j]) {\n\t\treturn true\n\t}\n\treturn false\n}"
+  },
+  {
+    "id" : "b62f9d84-d575-4b58-989d-8bff61edb27f",
+    "prId" : 6866,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "833a6011-1f56-4639-b3d1-43ee740d4843",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "``` return```\n```\n",
+        "createdAt" : "2015-04-22T23:49:12Z",
+        "updatedAt" : "2015-04-28T20:45:49Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f9a97def-d202-43ae-afc0-75a9c2dc9c21",
+        "parentId" : "833a6011-1f56-4639-b3d1-43ee740d4843",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "done, fyi  `(comment)` is a blank line :)\n",
+        "createdAt" : "2015-04-24T00:14:14Z",
+        "updatedAt" : "2015-04-28T20:45:49Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7592dabeba854da7b3b4045dbb9b19e848f17271",
+    "line" : 360,
+    "diffHunk" : "@@ -1,1 +235,239 @@\tkey, err := rcKeyFunc(obj)\n\tif err != nil {\n\t\tglog.Errorf(\"Couldn't get key for object %+v: %v\", obj, err)\n\t\treturn\n\t}"
+  },
+  {
+    "id" : "7a44b7d3-c480-4e0d-9671-12081664cae7",
+    "prId" : 6694,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a8e6c51c-5d6c-4208-89b8-347b3c852cea",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "RunUntil\n",
+        "createdAt" : "2015-04-10T20:48:34Z",
+        "updatedAt" : "2015-05-16T00:30:30Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4200033c0afd05b03a03b9f3a5443441e756f130",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +178,182 @@}\n\n// Run begins watching and syncing.\nfunc (rm *ReplicationManager) Run(workers int, stopCh <-chan struct{}) {\n\tdefer util.HandleCrash()"
+  },
+  {
+    "id" : "76b51c3c-ec30-41b0-98b7-9fcef5967b02",
+    "prId" : 5842,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3559e481-8280-496f-9754-bfb5abe6f555",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "@simon3z @bgrant0607 This serializes our internal, unversioned object. These annotations will not be readable as soon as that changes!\n\nThis should use some codec's Encode function.\n",
+        "createdAt" : "2015-04-24T23:12:30Z",
+        "updatedAt" : "2015-04-24T23:12:30Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f07ca19-6a9e-4824-8a91-371a8b36e6ee",
+        "parentId" : "3559e481-8280-496f-9754-bfb5abe6f555",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "It's a bit awkward, because the field doesn't go through conversion, so the versioned rep isn't really appropriate, either. I do want to get rid of the json tags on the internal rep., however, which would also break this.\n",
+        "createdAt" : "2015-04-24T23:34:24Z",
+        "updatedAt" : "2015-04-24T23:34:24Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a26fac51-f895-4668-a534-26c63a8288d7",
+        "parentId" : "3559e481-8280-496f-9754-bfb5abe6f555",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "I suppose using the latest stable API version would be better. Really, the RC controller shouldn't be using the internal rep. at all.\n",
+        "createdAt" : "2015-04-24T23:54:58Z",
+        "updatedAt" : "2015-04-24T23:54:58Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2de46cf2-3432-4b74-bce1-49586382c2f6",
+        "parentId" : "3559e481-8280-496f-9754-bfb5abe6f555",
+        "authorId" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "body" : "@lavalamp Did you file an issue to fix this? How did you discover it?\n",
+        "createdAt" : "2015-04-24T23:55:19Z",
+        "updatedAt" : "2015-04-24T23:55:19Z",
+        "lastEditedBy" : "7be32503-562e-4caa-838d-bba025e626b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f5a5b172-a537-491a-b506-3ad86bd2b1d5",
+        "parentId" : "3559e481-8280-496f-9754-bfb5abe6f555",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Noticed while reviewing #6866. I asked for a TODO there, but I'll file an issue, too.\n",
+        "createdAt" : "2015-04-25T00:16:26Z",
+        "updatedAt" : "2015-04-25T00:16:26Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8cf62aa3-ccb3-4272-9569-49f3da7112de",
+        "parentId" : "3559e481-8280-496f-9754-bfb5abe6f555",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Also, now that you got me actually thinking about it, this is gonna be a nightmare for any sort of schema updating script-- it's going to have to understand the annotations to be correct.\n",
+        "createdAt" : "2015-04-25T00:17:40Z",
+        "updatedAt" : "2015-04-25T00:17:40Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "81d3f92c-41c6-42da-8625-a2699b03ae00",
+        "parentId" : "3559e481-8280-496f-9754-bfb5abe6f555",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Filed #7322.\n",
+        "createdAt" : "2015-04-25T00:22:41Z",
+        "updatedAt" : "2015-04-25T00:22:41Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "253ce4b6fedb8496bb7e59324ce37f649507581d",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +81,85 @@\t}\n\n\tcreatedByRefJson, err := json.Marshal(createdByRef)\n\tif err != nil {\n\t\tutil.HandleError(fmt.Errorf(\"unable to serialize controller reference: %v\", err))"
+  },
+  {
+    "id" : "283636a5-ffc3-4483-b858-727e3f312d38",
+    "prId" : 2097,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a2bfdfbe-550e-4300-bf2e-cf91cab14f90",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "This might confuse someone, but it's essentially creating a copy (which is good).  I can't think of a better way to phrase it, so it's fine to leave as is.\n",
+        "createdAt" : "2014-11-17T22:04:49Z",
+        "updatedAt" : "2014-11-18T14:25:56Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8af4ccb1110f2fa548df3098c87638e376a9b2ef",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +63,67 @@\t\t},\n\t}\n\tif err := api.Scheme.Convert(&controller.Spec.Template.Spec, &pod.Spec); err != nil {\n\t\tglog.Errorf(\"Unable to convert pod template: %v\", err)\n\t\treturn"
+  },
+  {
+    "id" : "e1688e58-b07a-4d24-a08d-520332f0870b",
+    "prId" : 619,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f3411345-7acd-47f6-93e9-e09c293c27fd",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "This code would be prettier if the conditional were in the loop somehow, maybe-- seems like there's an awful lot of repetition in the two sections of the if...\n",
+        "createdAt" : "2014-07-25T05:21:47Z",
+        "updatedAt" : "2014-07-28T22:05:49Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e3702d06-af83-4262-bc78-0b5890224b15",
+        "parentId" : "f3411345-7acd-47f6-93e9-e09c293c27fd",
+        "authorId" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "body" : "hrm, I don't think there is a clean way to do it, unless you abstract out the function that you're actually running.  which is _ok_, I guess, but leads to harder to understand code.  It would look something like:\n\n``` go\nvar action func(ix iteration)\nif diff < 0 {\n  action = func(ix iteration) {rm.deleteReplica(ix)}\n  diff = diff * -1\n} else if diff > 0 {\n  action = func(ix interation) {rm.createReplica()}\n}\n\nwg.Add(diff)\nfor i := 0; i < diff; i++ {\n  defer wg.Done()\n  go action(i)\n}\nwg.Wait()\n```\n\nI guess that's a little less repetitive, but I find it harder to read.  If you feel its better, I'm ok to switch.\n",
+        "createdAt" : "2014-07-25T05:53:03Z",
+        "updatedAt" : "2014-07-28T22:05:49Z",
+        "lastEditedBy" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "84f2d2ca-bb0b-458a-98f8-e4dcce3e6b68",
+        "parentId" : "f3411345-7acd-47f6-93e9-e09c293c27fd",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Let's not worry about it for now. I'll try to extract it to a general pattern later, maybe.\n",
+        "createdAt" : "2014-07-25T06:02:02Z",
+        "updatedAt" : "2014-07-28T22:05:49Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1a3e4f8bafc0449358b9e61026d127ae78c95c4c",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +182,186 @@\tfilteredList := rm.filterActivePods(podList.Items)\n\tdiff := len(filteredList) - controllerSpec.DesiredState.Replicas\n\tif diff < 0 {\n\t\tdiff *= -1\n\t\twait := sync.WaitGroup{}"
+  },
+  {
+    "id" : "ae7a3f15-2c5e-4d2b-87ef-dc65c1401fba",
+    "prId" : 549,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d3f28f9-929f-4fcb-80d2-632e1c84088b",
+        "parentId" : null,
+        "authorId" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "body" : "I don't see where this is used.\n",
+        "createdAt" : "2014-07-29T21:54:32Z",
+        "updatedAt" : "2014-07-31T21:57:39Z",
+        "lastEditedBy" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5094ea2a-23ba-4256-a7db-29941edcbf1f",
+        "parentId" : "3d3f28f9-929f-4fcb-80d2-632e1c84088b",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "It's not, but it was very useful for debugging. I was switching it in and out to make sure it behaved the same. A future PR will remove all etcd references from this file.\n",
+        "createdAt" : "2014-07-29T22:12:41Z",
+        "updatedAt" : "2014-07-31T21:57:39Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "928092e79eddfb396c09e056dbf6a0a7cc00a9d3",
+    "line" : 60,
+    "diffHunk" : "@@ -1,1 +101,105 @@}\n\n// makeEtcdWatch starts watching via etcd.\nfunc (rm *ReplicationManager) makeEtcdWatch() (watch.Interface, error) {\n\thelper := tools.EtcdHelper{rm.etcdClient}"
+  },
+  {
+    "id" : "ba8c7910-61d5-4a39-8b0c-2958cea9836b",
+    "prId" : 165,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cb96e856-9009-4b1e-ac96-d7e0c08886ca",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Suggested comment somewhere around here:\n// Ensure that the final state of a replication controller is applied before it is deleted. Otherwise, a replication controller could be modified and then deleted (for example, from 3 to 0 replicas), and it would be non-deterministic which of its pods continued to exist.\n",
+        "createdAt" : "2014-06-19T04:28:45Z",
+        "updatedAt" : "2014-06-19T04:33:09Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29c992c0-692d-4fec-99b4-e901a2219fe4",
+        "parentId" : "cb96e856-9009-4b1e-ac96-d7e0c08886ca",
+        "authorId" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "body" : "Done.\n",
+        "createdAt" : "2014-06-19T04:33:16Z",
+        "updatedAt" : "2014-06-19T04:33:16Z",
+        "lastEditedBy" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "84b2a9e9f37ddab5bc48c2401affd68d2d3faeb8",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +153,157 @@\t\t// Otherwise, a replication controller could be modified and then deleted (for example, from 3 to 0\n\t\t// replicas), and it would be non-deterministic which of its pods continued to exist.\n\t\tif response.PrevNode != nil {\n\t\t\tvar controllerSpec api.ReplicationController\n\t\t\tif err := json.Unmarshal([]byte(response.PrevNode.Value), &controllerSpec); err != nil {"
+  },
+  {
+    "id" : "26c75fb1-6487-4b12-afe6-2e8ef339b151",
+    "prId" : 144,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e90e23c0-8271-454b-b86c-457a3923fec1",
+        "parentId" : null,
+        "authorId" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "body" : "return here?\n",
+        "createdAt" : "2014-06-18T04:06:03Z",
+        "updatedAt" : "2014-06-18T20:10:55Z",
+        "lastEditedBy" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a253209a2cca1d4ce964bcde754f5a9c467f6adb",
+    "line" : 142,
+    "diffHunk" : "@@ -1,1 +191,195 @@\terr := helper.ExtractList(\"/registry/controllers\", &controllerSpecs)\n\tif err != nil {\n\t\tlog.Printf(\"Synchronization error: %v (%#v)\", err, err)\n\t\treturn\n\t}"
+  }
+]

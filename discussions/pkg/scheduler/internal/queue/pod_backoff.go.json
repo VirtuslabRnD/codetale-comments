@@ -1,0 +1,233 @@
+[
+  {
+    "id" : "e6be667f-c9ff-4c80-89da-d9a650e37b15",
+    "prId" : 87616,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/87616#pullrequestreview-350235507",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7273bd2d-44a5-486e-b586-f5dee36bee36",
+        "parentId" : null,
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "What is the assumption here? why multiplying by 2 addresses the problem? if the pod stayed in the active queue for maxDuration or longer after a backoff, wouldn't we still incorrectly cleanup the pod state?",
+        "createdAt" : "2020-01-28T23:20:14Z",
+        "updatedAt" : "2020-01-29T18:15:52Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce3eccce-aceb-4bad-890f-a447497ef611",
+        "parentId" : "7273bd2d-44a5-486e-b586-f5dee36bee36",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "We would. But then we are talking 10s in the active queue, which should be enough for most cases. This should be enough for processing about 1000 pods. But we can always tune this higher (to 10x, maybe?). The point is that just maxDuration is definitely wrong.\r\n\r\nThere can be better architectural solutions, but this fix should be easy to backport.",
+        "createdAt" : "2020-01-28T23:25:04Z",
+        "updatedAt" : "2020-01-29T18:15:52Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b020a2c5-d2e3-4df1-b339-382f4bdce45b",
+        "parentId" : "7273bd2d-44a5-486e-b586-f5dee36bee36",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "ok, can we document the assumption?\r\n\r\nPerhaps also create a follow up issue to calculate backoff using the number of attempts in PodInfo and remove both maps in this data structure after this gets patched to previous versions.",
+        "createdAt" : "2020-01-28T23:53:07Z",
+        "updatedAt" : "2020-01-29T18:15:52Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "884db69d-ae6e-40ec-8527-f6a8937b4b8f",
+        "parentId" : "7273bd2d-44a5-486e-b586-f5dee36bee36",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Sg, I'll add a comment.\r\n\r\nThere is already an open PR that goes in the direction that you suggest. And I also commented the same thing :) https://github.com/kubernetes/kubernetes/pull/78849#discussion_r371525344",
+        "createdAt" : "2020-01-29T00:25:52Z",
+        "updatedAt" : "2020-01-29T18:15:52Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62f6e44b-567e-4fb2-b07a-217dafd05008",
+        "parentId" : "7273bd2d-44a5-486e-b586-f5dee36bee36",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Done",
+        "createdAt" : "2020-01-29T16:16:02Z",
+        "updatedAt" : "2020-01-29T18:15:52Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9d2786c383df20acdeb48dfaf2abc1c050f7dc3e",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +104,108 @@\t\t// Here we assume that maxDuration should be enough for a pod to move up the\n\t\t// active queue and get an schedule attempt.\n\t\tif value.Add(2 * pbm.maxDuration).Before(pbm.clock.Now()) {\n\t\t\tpbm.clearPodBackoff(pod)\n\t\t}"
+  },
+  {
+    "id" : "f1d8e8c1-0fb9-4738-9e0d-d508ca4eea13",
+    "prId" : 87616,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/87616#pullrequestreview-350325084",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "beae3f77-15c5-408e-a546-4ca04d3fcf4a",
+        "parentId" : null,
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "In the before, our logic to clear the Pod backoff timer was \"check if the time it's previously attempted + 10s < current timestamp\", and now it's changed to \"check if the time it's previously attempted + 2*10s < current timestamp\".\r\nI'm not sure it can alleviate the problem a lot, because it's quite related to the time when it's previously attempted. If in a high-churned cluster, even if we set it to `2*maxDuration`, it's still possible that high-priority pods can expire the backoff timer.\r\n\r\nI'm still leaning towards finding a solution to offer the low-priority pods fair opportunities to be scheduled, no matter when the high-priority pod was retried, and how many their number is.\r\n\r\nSo basically the starvation is due to a limitation of our internal structure - maxHeap activeQ + {unschedulable map, backoffQ} doesn't fit for all cases.",
+        "createdAt" : "2020-01-29T00:56:14Z",
+        "updatedAt" : "2020-01-29T18:15:52Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6fe0d61d-e79f-4c2c-a5a8-0e0792cea259",
+        "parentId" : "beae3f77-15c5-408e-a546-4ca04d3fcf4a",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "The thing is, if a pod is in the backoff queue, it won't be attempted until it's moved back into the activeQ. And that only happens when the deadline is off. So, basically, when the max deadline is reached, we were moving the pod back to active and **also** clearing the backoff.\r\n\r\nNow, we are giving an extra buffer of max deadline for the pod to be attempted, before clearing the backoff.\r\n\r\nI agree that we need to find a better solution, but this is something that we can backport. Plus the unit test might be useful for other solutions.",
+        "createdAt" : "2020-01-29T14:52:08Z",
+        "updatedAt" : "2020-01-29T18:15:52Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4b2d1b97-d6b0-4274-8441-d057016ff164",
+        "parentId" : "beae3f77-15c5-408e-a546-4ca04d3fcf4a",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "Thanks for the explanation.\r\n\r\nIn other words, in the before, once current timestamp - pod's last attempted timestamp > maxBackoffDuration (by default 10s), it gets moved to activeQ and its entry in backoff map is cleared.\r\n\r\nNow with the PR,\r\n\r\n- if maxBackoffDuration < current timestamp - pod's last attempted timestamp < 2*maxBackoffDuration, it gets moved to activeQ, but backoff map is NOT cleared\r\n- only when current timestamp - pod's last attempted timestamp > 2*maxBackoffDuration, it behave s the same as before\r\n\r\nPlease go squashing the commits.",
+        "createdAt" : "2020-01-29T18:09:26Z",
+        "updatedAt" : "2020-01-29T18:15:52Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2980dad2-144e-4e05-b7b9-b0f44b3d0f6e",
+        "parentId" : "beae3f77-15c5-408e-a546-4ca04d3fcf4a",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Exactly :)\r\n\r\nExplanation added to the PR description. Squash done.",
+        "createdAt" : "2020-01-29T18:22:33Z",
+        "updatedAt" : "2020-01-29T18:22:33Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9d2786c383df20acdeb48dfaf2abc1c050f7dc3e",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +104,108 @@\t\t// Here we assume that maxDuration should be enough for a pod to move up the\n\t\t// active queue and get an schedule attempt.\n\t\tif value.Add(2 * pbm.maxDuration).Before(pbm.clock.Now()) {\n\t\t\tpbm.clearPodBackoff(pod)\n\t\t}"
+  },
+  {
+    "id" : "f99de625-75ff-4c9c-ad03-7c715acd1dee",
+    "prId" : 87616,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/87616#pullrequestreview-350576126",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e3dbefe5-9ae8-4fcc-a063-755d206151cc",
+        "parentId" : null,
+        "authorId" : "41c25afd-5561-4611-9b3a-7df68582aa10",
+        "body" : "s/an schedule attempt/a schedule attempt/g",
+        "createdAt" : "2020-01-30T04:29:33Z",
+        "updatedAt" : "2020-01-30T04:29:34Z",
+        "lastEditedBy" : "41c25afd-5561-4611-9b3a-7df68582aa10",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9d2786c383df20acdeb48dfaf2abc1c050f7dc3e",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +97,101 @@// lastUpdateTime + maxDuration >> timestamp\n// We should wait longer than the maxDuration so that the pod gets a chance to\n// (1) move to the active queue and (2) get an schedule attempt.\nfunc (pbm *PodBackoffMap) CleanupPodsCompletesBackingoff() {\n\tpbm.lock.Lock()"
+  },
+  {
+    "id" : "af3f2963-2ff8-4f3d-b650-f955e1a42900",
+    "prId" : 87616,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/87616#pullrequestreview-350576207",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7db5d048-e900-4e23-90bc-3f6f4af8d4c8",
+        "parentId" : null,
+        "authorId" : "41c25afd-5561-4611-9b3a-7df68582aa10",
+        "body" : "s/an schedule attempt/a schedule attempt/g\r\n\r\n",
+        "createdAt" : "2020-01-30T04:30:00Z",
+        "updatedAt" : "2020-01-30T04:30:00Z",
+        "lastEditedBy" : "41c25afd-5561-4611-9b3a-7df68582aa10",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9d2786c383df20acdeb48dfaf2abc1c050f7dc3e",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +103,107 @@\tfor pod, value := range pbm.podLastUpdateTime {\n\t\t// Here we assume that maxDuration should be enough for a pod to move up the\n\t\t// active queue and get an schedule attempt.\n\t\tif value.Add(2 * pbm.maxDuration).Before(pbm.clock.Now()) {\n\t\t\tpbm.clearPodBackoff(pod)"
+  },
+  {
+    "id" : "fdb02cb5-7150-4c4b-ac06-5cfdb8e10943",
+    "prId" : 75497,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/75497#pullrequestreview-222568647",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e8426633-ded1-4df7-a335-fb072eeb8fd2",
+        "parentId" : null,
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "Looks like your editor has a different number of whitespaces for indentation. This has created a lot of spurious diff lines. Please fix this.",
+        "createdAt" : "2019-04-03T18:39:28Z",
+        "updatedAt" : "2019-04-05T16:15:23Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d1eb0c4-b56b-454d-8849-9748e7e75875",
+        "parentId" : "e8426633-ded1-4df7-a335-fb072eeb8fd2",
+        "authorId" : "740aa7e1-09de-43aa-afe4-e89f80f4efe2",
+        "body" : "formatted and squashed the commits",
+        "createdAt" : "2019-04-04T06:00:12Z",
+        "updatedAt" : "2019-04-05T16:15:23Z",
+        "lastEditedBy" : "740aa7e1-09de-43aa-afe4-e89f80f4efe2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "151649df4ce2b63108a7f021d8e200b1c9dd299d",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +18,22 @@\nimport (\n\t\"sync\"\n\t\"time\"\n"
+  },
+  {
+    "id" : "4426db0c-457d-4a8d-b448-9be45c77c43e",
+    "prId" : 75497,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/75497#pullrequestreview-223366136",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d09c48d-0ff5-4c50-8d7f-d0f9091e2aa4",
+        "parentId" : null,
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "Many of the functions here are thread safe, but this one is not. It is left to the caller to acquire the lock. I guess the reason is that `CleanupPodsCompletesBackingoff` uses this function. Please create a thread safe version of this function which is public (starts with a capital letter) and use the new function in other modules. ",
+        "createdAt" : "2019-04-04T22:16:51Z",
+        "updatedAt" : "2019-04-05T16:15:23Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a55b82f-7dc0-4630-8fba-27dc5dcbe00a",
+        "parentId" : "3d09c48d-0ff5-4c50-8d7f-d0f9091e2aa4",
+        "authorId" : "740aa7e1-09de-43aa-afe4-e89f80f4efe2",
+        "body" : "Updated",
+        "createdAt" : "2019-04-05T16:22:50Z",
+        "updatedAt" : "2019-04-05T16:22:50Z",
+        "lastEditedBy" : "740aa7e1-09de-43aa-afe4-e89f80f4efe2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "151649df4ce2b63108a7f021d8e200b1c9dd299d",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +93,97 @@// Lock is supposed to be acquired by caller.\nfunc (pbm *PodBackoffMap) clearPodBackoff(nsPod ktypes.NamespacedName) {\n\tdelete(pbm.podAttempts, nsPod)\n\tdelete(pbm.podLastUpdateTime, nsPod)\n}"
+  }
+]

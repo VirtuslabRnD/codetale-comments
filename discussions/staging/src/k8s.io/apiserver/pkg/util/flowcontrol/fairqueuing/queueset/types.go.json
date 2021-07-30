@@ -1,0 +1,266 @@
+[
+  {
+    "id" : "07b26e37-9922-4b8d-b2ab-240e5c7eb151",
+    "prId" : 102843,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102843#pullrequestreview-684050382",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a770fda1-a730-4b57-bb86-6ffa345fea08",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "FTR - this doesn't fully fix the linked bug:\r\nhttps://github.com/kubernetes/apiserver/blob/master/pkg/util/flowcontrol/fairqueuing/queueset/queueset.go#L746\r\nis still not fixed.",
+        "createdAt" : "2021-06-14T14:02:58Z",
+        "updatedAt" : "2021-06-14T14:08:27Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "97d27bbb-20e4-4c04-9c9e-38ab5b05d4a0",
+        "parentId" : "a770fda1-a730-4b57-bb86-6ffa345fea08",
+        "authorId" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "body" : "actually, I would like to discuss this at today's meeting: here are my thoughts:\r\n\r\n`G` = estimated service time = 60s (60 service-seconds)\r\n`S` = actual service time\r\n`W` = seats = width\r\n\r\nIn the virtual world, the cost (we can compare this to size of a packet) of a request is `P = G*W `\r\nso virtual finish time is `Fi = Si + P`\r\nsimilarly, when a request completes in the real world, it took `S` seconds, so we adjust the queue's virtual start by subtracting `S` from `P`.\r\n\r\nwith `(G-S)*W` we have `(GW - SW)` - so let's say `S` = `10s` for two requests, `r1` with `W=1` and `r2` with `W=20`. aren't we being less fair to `r1` (since both requests took the same amount of time in the real world)?\r\n\r\n",
+        "createdAt" : "2021-06-14T15:02:37Z",
+        "updatedAt" : "2021-06-14T15:02:37Z",
+        "lastEditedBy" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "83cf2cd9-d4ce-41a7-808a-3f6f6d8324ad",
+        "parentId" : "a770fda1-a730-4b57-bb86-6ffa345fea08",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "Not unfair.  They took the same amount of time, but drew different amounts of power from the server during that time.\r\nBTW, IIRC, the initial guess is no longer a constant.  It's a field in the request, or is it the queue?",
+        "createdAt" : "2021-06-14T16:32:55Z",
+        "updatedAt" : "2021-06-14T16:32:55Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b95c350b-e889-43ce-8ee7-9475ca6b3378",
+        "parentId" : "a770fda1-a730-4b57-bb86-6ffa345fea08",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "> similarly, when a request completes in the real world, it took S seconds, so we adjust the queue's virtual start by subtracting S from P.\r\n\r\nI don't follow. The S is duration (in seconds) and P is \"duration width\" (in seconds x meters conceptually). So units don't match.\r\n\r\n> with (G-S)*W we have (GW - SW) - so let's say S = 10s for two requests, r1 with W=1 and r2 with W=20. aren't we being less fair to r1 (since both requests took the same amount of time in the real world)?\r\n\r\nWhy - you're multiply by W.  And we already added G*W previously:\r\nhttps://github.com/kubernetes/apiserver/blob/master/pkg/util/flowcontrol/fairqueuing/queueset/queueset.go#L640\r\n\r\nSo here we're just course-correcting.\r\n",
+        "createdAt" : "2021-06-14T17:27:15Z",
+        "updatedAt" : "2021-06-14T17:27:16Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d3409374-ff78-47d3-acce-e77fd06d092e",
+        "parentId" : "a770fda1-a730-4b57-bb86-6ffa345fea08",
+        "authorId" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "body" : "> The S is duration (in seconds) and P is \"duration width\" (in seconds x meters conceptually). So units don't match.\r\n\r\n`W` is an absolute value, so `P=G*W` gives us `P service-seconds` as opposed to `P bit-times`. \r\nI plugged in `(G-S)*W`, I will go through Mike's enhancement and will write test to experiment in both setups, but this will take time so let's go with `(G-S)*W`. \r\n\r\n",
+        "createdAt" : "2021-06-15T14:01:09Z",
+        "updatedAt" : "2021-06-15T14:01:09Z",
+        "lastEditedBy" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f7456076e0cb29a95d86cd0f54c34a04b4722ab",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +122,126 @@\t// the estimated service time of the oldest request is (G * request width)\n\testimatedServiceTime := float64(G) * float64(oldestReq.Seats())\n\treturn q.virtualStart + estimatedServiceTime\n}\n"
+  },
+  {
+    "id" : "43e12f1e-18fe-4705-bf03-2d659fa334b3",
+    "prId" : 102843,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102843#pullrequestreview-684050620",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8f8c400b-1171-4410-9b02-c7469ec12fa1",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I was wondering about performance of this method (that is now linear to J).\r\nBut looking into codebase, it seems it's only called from a single place:\r\nhttps://github.com/kubernetes/kubernetes/blob/fddb3adcfd963ef7ee1230bcbb2fd0d324fe8935/staging/src/k8s.io/apiserver/pkg/util/flowcontrol/fairqueuing/queueset/queueset.go#L678\r\nalways with J=0.\r\n\r\nSo to mitigate the potential performance impact if we start calling it for larger J, how about changing the function to sth like:\r\n```\r\nGetVirtualFinishTimeOfFirstRequest(G float64) float64 {\r\n}\r\n```\r\nand leaving the logic generic as you have here but adding a comment that the logic works also for J>0, but before starting to use it for J>0 the performance impact of it has to be carefully evaluated.",
+        "createdAt" : "2021-06-14T14:07:48Z",
+        "updatedAt" : "2021-06-14T14:08:27Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4380f5bc-4905-4f54-9ac7-e3284e8cee2f",
+        "parentId" : "8f8c400b-1171-4410-9b02-c7469ec12fa1",
+        "authorId" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "body" : "I am fine with this change, maybe `GetVirtualFinishTimeOfTheOldestRequest` is a more appropriate name? \r\n\r\nAlso I would like @MikeSpreitzer to weigh in on why we had `GetVirtualFinish` in the first place, it doesn't look like we will have a scenario where we would need to know the virtual finish time of a request with `J>0`",
+        "createdAt" : "2021-06-14T14:16:18Z",
+        "updatedAt" : "2021-06-14T14:16:18Z",
+        "lastEditedBy" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41751d8f-4bfa-4a31-8fb9-d22e4fc9dbed",
+        "parentId" : "8f8c400b-1171-4410-9b02-c7469ec12fa1",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "> I am fine with this change, maybe GetVirtualFinishTimeOfTheOldestRequest is a more appropriate name?\r\n\r\nI'm always open for better names - that makes sense to me.\r\n\r\nYes - let's wait for Mike.",
+        "createdAt" : "2021-06-14T14:17:38Z",
+        "updatedAt" : "2021-06-14T14:17:39Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3b1d5bc-15a7-4ccd-bd5c-b9776a99920a",
+        "parentId" : "8f8c400b-1171-4410-9b02-c7469ec12fa1",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "I agree with specializing this function to only get the virtual finish of the oldest request.\r\n`GetVirtualFinishTimeOfTheOldestRequest` would be a fine name.",
+        "createdAt" : "2021-06-14T16:30:40Z",
+        "updatedAt" : "2021-06-14T16:30:40Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b85efd16-aa4a-461a-8c60-dd00ef2fcaac",
+        "parentId" : "8f8c400b-1171-4410-9b02-c7469ec12fa1",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "Actually, if we are fully spelling it out, it would be `GetVirtualFinishTimeOfOldestWaitingRequest`.  That's getting a bit too verbose for my taste.  I think `GetNextFinish` would suffice.",
+        "createdAt" : "2021-06-14T17:14:26Z",
+        "updatedAt" : "2021-06-14T17:14:26Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7bb24689-44b0-4294-9385-21773047ea21",
+        "parentId" : "8f8c400b-1171-4410-9b02-c7469ec12fa1",
+        "authorId" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "body" : "okay, I picked `GetNextFinish`",
+        "createdAt" : "2021-06-15T14:01:20Z",
+        "updatedAt" : "2021-06-15T14:01:20Z",
+        "lastEditedBy" : "3e6e337f-0beb-4609-abc3-11b8e8cf5688",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f7456076e0cb29a95d86cd0f54c34a04b4722ab",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +109,113 @@\t//  evaluate and potentially improve the performance here.\n\tvar oldestReq *request\n\tq.requests.Walk(func(r *request) bool {\n\t\toldestReq = r\n\t\treturn false"
+  },
+  {
+    "id" : "4894a212-1d44-4fc5-8aec-93856e713e57",
+    "prId" : 102843,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102843#pullrequestreview-684060970",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "db1884fc-6bc8-420a-861b-ddd697a523af",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Can you add an explicit comment that if we decide to generalize this function to return time for further requests, we need to carefully evaluate and potentially improve the performance here?",
+        "createdAt" : "2021-06-15T14:12:41Z",
+        "updatedAt" : "2021-06-15T14:13:46Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f7456076e0cb29a95d86cd0f54c34a04b4722ab",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +109,113 @@\t//  evaluate and potentially improve the performance here.\n\tvar oldestReq *request\n\tq.requests.Walk(func(r *request) bool {\n\t\toldestReq = r\n\t\treturn false"
+  },
+  {
+    "id" : "cd8b768f-f940-44fb-bc71-62582a5ffd01",
+    "prId" : 90967,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90967#pullrequestreview-431566962",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4d88df57-853d-47b9-af80-62edd5eb5c0c",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "this looks improper.  The recommendation is to avoid storing context.  If we want request info and user info, let's store exactly those.",
+        "createdAt" : "2020-06-16T14:22:25Z",
+        "updatedAt" : "2020-06-16T14:22:26Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "75cc6880-0dfc-4c56-a3ec-5bd242583d7d",
+        "parentId" : "4d88df57-853d-47b9-af80-62edd5eb5c0c",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> this looks improper. The recommendation is to avoid storing context. If we want request info and user info, let's store exactly those.\r\n\r\nhm, improper, but pre-existing.  Maybe it's for a different purpose somewhere",
+        "createdAt" : "2020-06-16T14:30:52Z",
+        "updatedAt" : "2020-06-16T14:30:53Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "567becd5eedd9a1f3802f2b3b0b6b8efc445d2a1",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +29,33 @@// tracking fields required for the functionality FQScheduler\ntype request struct {\n\tctx context.Context\n\n\tqs *queueSet"
+  },
+  {
+    "id" : "9cfb40cd-3ce4-4794-b8c2-413b5f93d291",
+    "prId" : 85192,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85192#pullrequestreview-316719057",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1c5b2ec2-e4f1-4b8a-a219-8fb06df152d3",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "nit: update year",
+        "createdAt" : "2019-11-14T03:37:56Z",
+        "updatedAt" : "2019-11-14T03:40:41Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5ae01ec2-e3f4-4834-b8c8-43d84c19f85a",
+        "parentId" : "1c5b2ec2-e4f1-4b8a-a219-8fb06df152d3",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "Fixing in upcoming PR.",
+        "createdAt" : "2019-11-14T05:25:22Z",
+        "updatedAt" : "2019-11-14T05:25:22Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e10acc78dee5d90d93fc7bc0e76e97bc7bc0b3a3",
+    "line" : 2,
+    "diffHunk" : "@@ -1,1 +0,4 @@/*\nCopyright 2016 The Kubernetes Authors.\n\nLicensed under the Apache License, Version 2.0 (the \"License\");"
+  },
+  {
+    "id" : "94c1193d-6bce-48db-a1a1-311f12003535",
+    "prId" : 85192,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85192#pullrequestreview-316702708",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "03c1a76b-3954-4fd0-ade1-2514d3191ba7",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "These don't have to be fields, right ?",
+        "createdAt" : "2019-11-14T03:48:22Z",
+        "updatedAt" : "2019-11-14T03:58:41Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2bb6ee69-82a9-464b-ab1d-d71b5ae91bef",
+        "parentId" : "03c1a76b-3954-4fd0-ade1-2514d3191ba7",
+        "authorId" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "body" : "I am not sure what sense of \"have to\" you mean.  If you are suggesting that every piece of code that reads those fields has another way to get those values then I am surprised, because it did not look that way to me when I wrote this.  Look at the callers of the code that reads these fields, the call stack does not necessarily include the handler handling this particular request.",
+        "createdAt" : "2019-11-14T04:06:56Z",
+        "updatedAt" : "2019-11-14T05:25:48Z",
+        "lastEditedBy" : "7a59a326-58b3-4590-b70a-297d2e27daa5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e10acc78dee5d90d93fc7bc0e76e97bc7bc0b3a3",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +42,46 @@\t// descr1 and descr2 are not used in any logic but they appear in\n\t// log messages\n\tdescr1, descr2 interface{}\n}\n"
+  }
+]

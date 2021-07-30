@@ -1,0 +1,222 @@
+[
+  {
+    "id" : "f3fbba01-1524-4fd6-97bb-28c75e170245",
+    "prId" : 84738,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84738#pullrequestreview-311411941",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7fa1a295-3fcc-45da-9174-75a1a978c707",
+        "parentId" : null,
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "If you remove this, I believe the tests wouldn't pass since only a single priority is actually registered as a prioritizer. This is important for us as a way to revert back to the old scheduling path in case of emergencies.\r\n\r\nI think we should change the existing priorities to accept lists as we discussed before, the priority would divide by the number of labels. We still add up the weights to compensate for that.\r\n",
+        "createdAt" : "2019-11-05T10:53:44Z",
+        "updatedAt" : "2019-11-08T03:05:00Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e4389707302ef38669191a8d1efd379ee1e3b8ec",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +280,284 @@\t\t\treturn\n\t\t})\n\tregistry.RegisterPriority(serviceaffinity.Name,\n\t\tfunc(args ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {\n\t\t\tplugins.Score = appendToPluginSet(plugins.Score, serviceaffinity.Name, &args.Weight)"
+  },
+  {
+    "id" : "5651a4a0-727c-41ec-abb3-511b867127e7",
+    "prId" : 84054,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84054#pullrequestreview-303551585",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "16206442-948c-4bef-9ed8-3775e5bf4b4b",
+        "parentId" : null,
+        "authorId" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "body" : "Is it cleaner to call `RegisterPredicate` each time for each predicate instead of combining them in one \"general predicate\"? Or what's special about \"GeneralPred\" compared to others?",
+        "createdAt" : "2019-10-17T17:13:20Z",
+        "updatedAt" : "2019-10-17T17:14:19Z",
+        "lastEditedBy" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0557ddf3-4284-4058-be89-2d4e6bcd5a61",
+        "parentId" : "16206442-948c-4bef-9ed8-3775e5bf4b4b",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "Unfortunately \"GeneralPredicate\" is registered as a \"composite\" [standalone predicate](https://github.com/kubernetes/kubernetes/blob/master/pkg/scheduler/algorithmprovider/defaults/register_predicates.go#L102). By composite I mean that its implementation basically calls a group of other predicates. I think it was a mistake making it a predicate on of its own, but we are stuck with it since it is now a value that we deem valid in the schedule config file.\r\n",
+        "createdAt" : "2019-10-17T17:35:45Z",
+        "updatedAt" : "2019-10-17T17:35:45Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73087aaf-a4b3-4fe0-abbc-44b6d19b5ece",
+        "parentId" : "16206442-948c-4bef-9ed8-3775e5bf4b4b",
+        "authorId" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "body" : "ack.",
+        "createdAt" : "2019-10-17T19:31:50Z",
+        "updatedAt" : "2019-10-17T19:31:51Z",
+        "lastEditedBy" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23cd822c-0789-424d-85f1-b3aaad6730e7",
+        "parentId" : "16206442-948c-4bef-9ed8-3775e5bf4b4b",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "As @ahg-g said, we were not doing well in the \"GeneralPredicate\" thing - it shouldn't be considered as, or registered as a serious Predicate, instead, it should serve as a helper to invoke a series of **real** Predicate, and called by consumers like controller manager and kubelet.\r\n\r\nTo make our code readable and the semantics of Predicates/FilterPlugins clear, I hope we can get rid of the \"GeneralPredicate\" thing in 2 aspects:\r\n\r\n- Rename it to be not related with \"Predicate\" - just serve as a \"composite\" to invoke other Predicate/Plugin\r\n- Discard the support to expose it as a regular Predicate in Policy API.\r\n\r\nWDYT?",
+        "createdAt" : "2019-10-17T20:23:00Z",
+        "updatedAt" : "2019-10-17T20:23:00Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ae1591ed-d7c1-471f-aba4-f5349c43305f",
+        "parentId" : "16206442-948c-4bef-9ed8-3775e5bf4b4b",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "I am happy to rename/discard it, but it is part of the Policy v1 API. If someone has a custom policy configuration that included \"GeneralPredicate\" as one of the priorities, their scheduler will fail to start. \r\n\r\nHowever, if we do remove it as a predicate in the policy API, it is easy for users to migrate, they just need to modify their policy file to include the corresponding predicates, and it is backward compatible (i.e., specifying the list of corresponding predicate will work for new and older versions of the scheduler). I am fine with this if we get an API review approval for it, but that should be in a separate PR.\r\n",
+        "createdAt" : "2019-10-17T20:35:24Z",
+        "updatedAt" : "2019-10-17T20:35:25Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "68722a76-f621-4a83-820c-10dad57ab5cc",
+        "parentId" : "16206442-948c-4bef-9ed8-3775e5bf4b4b",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "> if we do remove it as a predicate in the policy API, it is easy for users to migrate, they just need to modify their policy file to include the corresponding predicates, and it is backward compatible\r\n\r\nYup, it sounds good to me.",
+        "createdAt" : "2019-10-17T21:16:04Z",
+        "updatedAt" : "2019-10-17T21:16:04Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "517116921b8a120f2c92351d080ae15ecbe783a4",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +108,112 @@\tregistry.RegisterPredicate(predicates.GeneralPred,\n\t\tfunc(_ ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {\n\t\t\t// GeneralPredicate is a combination of predicates.\n\t\t\tplugins.Filter = appendToPluginSet(plugins.Filter, noderesources.Name, nil)\n\t\t\tplugins.Filter = appendToPluginSet(plugins.Filter, nodename.Name, nil)"
+  },
+  {
+    "id" : "9e7f5fa9-7011-47bd-aae6-ca04f255862c",
+    "prId" : 83601,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83601#pullrequestreview-300371133",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "810c33e7-938f-46d3-b803-706d452e1658",
+        "parentId" : null,
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "A nit: pluginConfig -> pluginConfigs.\r\n\r\n(We have multiple places naming like this, so can be addressed in another PR.)",
+        "createdAt" : "2019-10-10T21:08:47Z",
+        "updatedAt" : "2019-10-10T21:49:50Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6831ec99-6265-4fb2-bdd3-fa53ec6f60e5",
+        "parentId" : "810c33e7-938f-46d3-b803-706d452e1658",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "ok, lets do a cleanup followup PR.",
+        "createdAt" : "2019-10-10T21:48:22Z",
+        "updatedAt" : "2019-10-10T21:49:50Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7429b0fe865af4ce5bb1ffb81154bf8fbfa8854a",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +67,71 @@\n\tregistry.RegisterPriority(priorities.TaintTolerationPriority,\n\t\tfunc(args ConfigProducerArgs) (plugins config.Plugins, pluginConfig []config.PluginConfig) {\n\t\t\tplugins.Score = appendToPluginSet(plugins.Score, tainttoleration.Name, &args.Weight)\n\t\t\treturn"
+  },
+  {
+    "id" : "e3b83cfa-2cd5-444e-adf1-331e4ca3c4b1",
+    "prId" : 83460,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83460#pullrequestreview-297729833",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "207e6039-f30c-4b7c-ace2-a1011b8b48cc",
+        "parentId" : null,
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "A question here: do we have a mechanism to keep a fixed order of the same type of plugins (e.g., FilterPlugin)",
+        "createdAt" : "2019-10-04T21:16:21Z",
+        "updatedAt" : "2019-10-05T12:43:29Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "45ce3aa1-2379-4f1a-a279-edc3a3182ba8",
+        "parentId" : "207e6039-f30c-4b7c-ace2-a1011b8b48cc",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "yes, this order is determined in the [config.Plugins](https://github.com/kubernetes/kubernetes/blob/master//pkg/scheduler/apis/config/types.go#L148:6) we pass to the framework when it is created.\r\n\r\nFor Filters that get mapped from predicates, they are added according to the predicate ordering: https://github.com/kubernetes/kubernetes/blob/master/pkg/scheduler/factory/factory.go#L557",
+        "createdAt" : "2019-10-04T21:38:14Z",
+        "updatedAt" : "2019-10-05T12:43:29Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "66386fdf49aee22bf94a4a2b3ebd559992d3f508",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +31,35 @@func NewDefaultRegistry() framework.Registry {\n\treturn framework.Registry{\n\t\ttainttoleration.Name: tainttoleration.New,\n\t}\n}"
+  },
+  {
+    "id" : "a9a40140-17aa-42f4-8416-fd0b1189f7b4",
+    "prId" : 83099,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83099#pullrequestreview-294488241",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6b2e6da5-3af1-4c08-a179-c7d1629f392d",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "It doesn't look like a Default so far",
+        "createdAt" : "2019-09-26T22:21:15Z",
+        "updatedAt" : "2019-09-30T14:37:02Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c65fbfc-84d9-4069-852b-83db2d8c3759",
+        "parentId" : "6b2e6da5-3af1-4c08-a179-c7d1629f392d",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "We will add the registration of the various plugins in this function.",
+        "createdAt" : "2019-09-27T00:56:45Z",
+        "updatedAt" : "2019-09-30T14:37:02Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "89e84125-435d-4476-87ed-ba56f7e3f347",
+        "parentId" : "6b2e6da5-3af1-4c08-a179-c7d1629f392d",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Right, that's what I figured. However, our tests are expecting a clean Registry.",
+        "createdAt" : "2019-09-27T13:42:31Z",
+        "updatedAt" : "2019-09-30T14:37:02Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0ed0439-d736-46df-8316-2fc8467bb806",
+        "parentId" : "6b2e6da5-3af1-4c08-a179-c7d1629f392d",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "Modified factory_test.go to start from an empty registry",
+        "createdAt" : "2019-09-27T18:17:42Z",
+        "updatedAt" : "2019-09-30T14:37:02Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6120fe9b1129ca10b597df7ae7421396988f3910",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +55,59 @@\n// NewDefaultConfigProducerRegistry creates a new producer registry.\nfunc NewDefaultConfigProducerRegistry() *ConfigProducerRegistry {\n\treturn &ConfigProducerRegistry{\n\t\tPredicateToConfigProducer: make(map[string]ConfigProducer),"
+  }
+]

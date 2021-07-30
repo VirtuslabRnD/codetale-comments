@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "57e17d04-3a69-4b99-84f1-9b4d652ff0c9",
+    "prId" : 7573,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "83533d68-3e0e-4836-9f15-06cb2bd99f57",
+        "parentId" : null,
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "is there a reason you're avoiding https://github.com/GoogleCloudPlatform/kubernetes/blob/master/pkg/client/cache/fifo.go#L49 ? wrapping that would be ideal\n",
+        "createdAt" : "2015-05-08T20:24:12Z",
+        "updatedAt" : "2015-05-19T22:41:01Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41de0f66-e228-4f0a-a064-1a28453bfd93",
+        "parentId" : "83533d68-3e0e-4836-9f15-06cb2bd99f57",
+        "authorId" : "aee8926e-0646-4183-b0d7-65633cf782b0",
+        "body" : "This queue can be used multiple times because the pop doesn't actually remove an element like the fifo.go implementation does.  This is needed because we continually get the list of pods while checking for the rc to submit the pods, but while that is going on kube is starting pods.  So, we need a fifo that doesn't actually remove elements on a pop.\n\nAlternately we could use a watch to determine total pods and the fifo.go to store pod states.  I'm not sure I like the complexity of adding a watch in addition to the fifo, and it won't help with apiserver stress.  If that is the direction desired, can we merge as is and handle that improvement as a separate pr?\n",
+        "createdAt" : "2015-05-08T20:34:09Z",
+        "updatedAt" : "2015-05-19T22:41:01Z",
+        "lastEditedBy" : "aee8926e-0646-4183-b0d7-65633cf782b0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb24f6eb-624a-4b7e-9105-a14965f8ebf4",
+        "parentId" : "83533d68-3e0e-4836-9f15-06cb2bd99f57",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "I think not reimplementing the fronthalf of each daemon in the form of another controller x fifo x processing logic is good. Pop is usually a destructive operation though, so you could wrap the fifo in your type, and give it a Peek method. Just a suggestion, since I haven't done a deep review of this PR.\n",
+        "createdAt" : "2015-05-08T21:58:38Z",
+        "updatedAt" : "2015-05-19T22:41:01Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "42b4ea14-90b5-4487-bd31-6a7de8f29707",
+        "parentId" : "83533d68-3e0e-4836-9f15-06cb2bd99f57",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "iirc the fifo written under client cache is a reflector vs. a simple storage buffer for the polling in the tests. \n",
+        "createdAt" : "2015-05-11T15:18:50Z",
+        "updatedAt" : "2015-05-19T22:41:01Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db113725-1990-4418-939d-adc573781a9d",
+        "parentId" : "83533d68-3e0e-4836-9f15-06cb2bd99f57",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "the fifo can be used with a reflector, its effectively a storage buffer. I don't feel that strongly about this, just the fewer places that hand manage locks the better and this is 75 lines and a new file. \n",
+        "createdAt" : "2015-05-11T15:57:19Z",
+        "updatedAt" : "2015-05-19T22:41:01Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b770961-48f0-422c-9dcd-5423f4f8a47c",
+        "parentId" : "83533d68-3e0e-4836-9f15-06cb2bd99f57",
+        "authorId" : "aee8926e-0646-4183-b0d7-65633cf782b0",
+        "body" : "@bprashanth I looked at converting to use the client/cache/fifo.go but as far as I can see no one actually uses that implementation.  There is a DeltaFIFO which is used, but it's a separate implementation.  I was able to pretty easily convert to use the cache implementation, but in its current form I don't see how it can work for this use case.  That FIFO is really built such that Add and Pop work as a FIFO would, but List does not.  List creates a new list from the hash table instead of from the internal queue so you can lose ordering in the output of List.  Since List isn't usable I don't see any way to non-destructively go through the items in the FIFO in the correct order as would be needed by the rc pod submission tracking portion of the test.\n\nAm I missing something?\n",
+        "createdAt" : "2015-05-12T17:13:55Z",
+        "updatedAt" : "2015-05-19T22:41:01Z",
+        "lastEditedBy" : "aee8926e-0646-4183-b0d7-65633cf782b0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9885776-3643-4277-a089-076873da04fc",
+        "parentId" : "83533d68-3e0e-4836-9f15-06cb2bd99f57",
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "I'll defer to you as the maintainer of this test if you think it won't help :)\n",
+        "createdAt" : "2015-05-13T03:30:15Z",
+        "updatedAt" : "2015-05-19T22:41:01Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3191b26bc6ca241fba85d0b183868f109e078213",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +15,19 @@*/\n\npackage e2e\n\nimport ("
+  }
+]

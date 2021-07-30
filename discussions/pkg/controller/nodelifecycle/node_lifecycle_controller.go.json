@@ -1,0 +1,1102 @@
+[
+  {
+    "id" : "19ccedf9-87c5-4f07-a886-3b84626ba9e9",
+    "prId" : 91046,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91046#pullrequestreview-496623348",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2fb976b1-a904-401f-83bd-e477a623fd8c",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Wondering if the primary key switch should have happened one release before the beta label was removed from kubelet. \r\n\r\nI think this can potentially break some upgrade scenarios where kubelet runs on the control plane nodes. For example:\r\n1. some critical daemonset (like CNI) uses node selector `beta.kubernetes.io/os`.\r\n2. first control plane node is upgraded to v1.19 and kubelet only sets the GA label `kubernetes.io/os` now\r\n3. kube-controller-manager is still running on v1.18 and is still expecting `beta.kubernetes.io` to be the source of truth\r\n4. new v1.19 node is stuck in NotReady because it only has the kubernetes.io/os label and v1.18 kube-controller-manager is expecting beta.kubernetes.io/os to be the source of truth.\r\n",
+        "createdAt" : "2020-09-25T17:38:54Z",
+        "updatedAt" : "2020-09-25T17:38:54Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc87ee7c-c3e6-41db-8d09-90e2062c6b66",
+        "parentId" : "2fb976b1-a904-401f-83bd-e477a623fd8c",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Ideally users should update their node selectors to use kubernetes.io/os though since that label will exist on both v1.18 and v1.19 nodes. The other workaround here is to restart the v1.18 kube-controller-manager pods and until the v1.19 kube-controller-manager is the leader.   ",
+        "createdAt" : "2020-09-25T17:41:56Z",
+        "updatedAt" : "2020-09-25T17:41:56Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c1f07470-7b28-441d-bf15-c7187f3e4500",
+        "parentId" : "2fb976b1-a904-401f-83bd-e477a623fd8c",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Fwiw I don't think this technically violates version skew policy since the issue only occurs if you run a v1.19 kubelet when kube-controller-manager is still on v1.18, which is more common when you use kubelet static pods to run the control plane.",
+        "createdAt" : "2020-09-25T17:43:35Z",
+        "updatedAt" : "2020-09-25T17:43:36Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54c0f8b677d0b82258f3b4df6d325cc3c0011661",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +148,152 @@\t\t// Reconcile the beta and the stable OS label using the stable label as the source of truth.\n\t\t// TODO(#89477): no earlier than 1.22: drop the beta labels if they differ from the GA labels\n\t\tprimaryKey:            v1.LabelOSStable,\n\t\tsecondaryKey:          kubeletapis.LabelOS,\n\t\tensureSecondaryExists: true,"
+  },
+  {
+    "id" : "354757af-b6d2-49d4-812c-2b4eb02544e8",
+    "prId" : 82489,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/82489#pullrequestreview-286653662",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "48cc6953-9a77-434a-b757-a0cec4072f43",
+        "parentId" : null,
+        "authorId" : "e2ca6907-6765-444e-8bf6-1452233150d6",
+        "body" : "wouldn't this be simplified if we didn't return a `deepCopy()` ?",
+        "createdAt" : "2019-09-09T21:39:46Z",
+        "updatedAt" : "2019-09-12T08:23:39Z",
+        "lastEditedBy" : "e2ca6907-6765-444e-8bf6-1452233150d6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a881728-6973-409e-a35b-3781634ed88e",
+        "parentId" : "48cc6953-9a77-434a-b757-a0cec4072f43",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "The problem is that in PR #81167 I want to add handler for pod updates. This handler and  tryUpdateNodeHealth method can potentially work on the same nodeHealthData at one time. The deep copy solves the problem of data object being updated by one function while being processed by other.",
+        "createdAt" : "2019-09-10T08:49:28Z",
+        "updatedAt" : "2019-09-12T08:23:39Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0f72baab-cce8-4aa5-9c4b-13d4357233d0",
+        "parentId" : "48cc6953-9a77-434a-b757-a0cec4072f43",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I agree it's needed (or rather \"will be needed\"). That said, I agree with @yastij that it's far from clear.\r\nSo I guess we need to:\r\n- change the name of the function to getDeepCopy() or sth like that (so that it's clear what it is doing)\r\n- add a comment for the function why this is needed\r\n",
+        "createdAt" : "2019-09-10T12:59:40Z",
+        "updatedAt" : "2019-09-12T08:23:39Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41a4f268-e120-4839-b26b-94384db98eda",
+        "parentId" : "48cc6953-9a77-434a-b757-a0cec4072f43",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "Done.",
+        "createdAt" : "2019-09-11T09:10:08Z",
+        "updatedAt" : "2019-09-12T08:23:39Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "029b72b5533f4a204c56424bf3cb16e9543e7671",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +198,202 @@\tn.lock.RLock()\n\tdefer n.lock.RUnlock()\n\treturn n.nodeHealths[name].deepCopy()\n}\n"
+  },
+  {
+    "id" : "1c4aeb54-0d45-437e-b3bf-1a0d58c1e7f6",
+    "prId" : 81416,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81416#pullrequestreview-277265611",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2d87a73a-aa50-47c5-b875-32c4995a2c79",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "If removing if didn't cause any tests to fail, it seems quite clear that some unit test is missing - please add test case to excercise this case.",
+        "createdAt" : "2019-08-19T19:55:32Z",
+        "updatedAt" : "2019-08-21T15:22:34Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc31faf0-ad37-48db-9f74-ee8e3443347a",
+        "parentId" : "2d87a73a-aa50-47c5-b875-32c4995a2c79",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "I've added the tests that checks if returned currentReadyCondition is the same as one calculated based on the stored node status. IMHO it should cover all of the cases: all statuses, nil status and status changed to unknown.",
+        "createdAt" : "2019-08-20T15:46:56Z",
+        "updatedAt" : "2019-08-21T15:22:34Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6842e11f7ee2fcaed8465bc07d6b887640569499",
+    "line" : 154,
+    "diffHunk" : "@@ -1,1 +953,957 @@\t\t}\n\t\t// We need to update currentReadyCondition due to its value potentially changed.\n\t\t_, currentReadyCondition = nodeutil.GetNodeCondition(&node.Status, v1.NodeReady)\n\n\t\tif !apiequality.Semantic.DeepEqual(currentReadyCondition, &observedReadyCondition) {"
+  },
+  {
+    "id" : "c81e52af-8002-430b-93e5-e011eab3ce0a",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-287409094",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e6b1fd41-4fbb-47f3-9e26-eca20487efe7",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This name is misleading - it's not podUpdated - it's more like \"was pod just assigned to node\" or sth like that.",
+        "createdAt" : "2019-09-03T11:56:12Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0761dceb-809a-49e8-a185-b2b38c8c5d86",
+        "parentId" : "e6b1fd41-4fbb-47f3-9e26-eca20487efe7",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "It's even more misleading that it puts object to the queue.\r\nMaybe somethign like queuePodUpdateIfNeeded (or sth like that).",
+        "createdAt" : "2019-09-03T12:02:29Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd81587e-d115-44d6-a634-6acbe082501c",
+        "parentId" : "e6b1fd41-4fbb-47f3-9e26-eca20487efe7",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "I want to keep same naming style as in TaintManager => podUpdated.",
+        "createdAt" : "2019-09-12T13:00:14Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 368,
+    "diffHunk" : "@@ -1,1 +1274,1278 @@}\n\nfunc (nc *Controller) podUpdated(oldPod, newPod *v1.Pod) {\n\tif newPod == nil {\n\t\treturn"
+  },
+  {
+    "id" : "59adbebd-c6a0-48a6-9afe-fdde696d2e6f",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-290425016",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "29106e0f-528b-40e0-8358-fff925511817",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This is nice refactoring, which is independent from this PR.\r\nCan you please move it to a separate PR - it would be much easier to review it.",
+        "createdAt" : "2019-09-19T09:18:51Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 278,
+    "diffHunk" : "@@ -1,1 +850,854 @@\t\t\t\tcontinue\n\t\t\t}\n\t\t\tif nc.useTaintBasedEvictions {\n\t\t\t\tnc.processTaintBaseEviction(node, &observedReadyCondition)\n\t\t\t} else {"
+  },
+  {
+    "id" : "ca56f490-72db-4886-aac2-f2ad0c88b2b4",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-296963063",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "18bbbb53-42c3-4d4b-863a-45d8eb229332",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This may have significant impact on how we rate limit.\r\nImagine that we're slowly delivering updates of pods - then for each of those we may potentially need to run a separate eviction pass (in practive probably not super probable, but still).\r\nI would like to see the explanation why we believe it's fine.\r\n\r\nConceptually, what would be more correct is: if a node has already been processed by doEvictionPass, newly added pod is immediately evicted to (without really waiting for the next eviction pass).",
+        "createdAt" : "2019-09-19T09:23:00Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4bc3f803-63c5-45ac-abaf-4c2e9589b2fe",
+        "parentId" : "18bbbb53-42c3-4d4b-863a-45d8eb229332",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "@krzysied - has this been addressed?",
+        "createdAt" : "2019-10-03T09:52:49Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea22a313-dae4-4367-8246-c645e80cd0bf",
+        "parentId" : "18bbbb53-42c3-4d4b-863a-45d8eb229332",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "I changed `podToEvictionMap` to `nodeEvictionMap`. It contains list of pods to be evicted + node eviction status.\r\nIf node eviction status == evicted, pods are deleted immediately.\r\nnodeEvictionMap is protected by evictorLock.",
+        "createdAt" : "2019-10-03T15:35:55Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 217,
+    "diffHunk" : "@@ -1,1 +748,752 @@\t\t\t\treturn false, 0\n\t\t\t}\n\t\t\tremaining, err := nodeutil.DeletePods(nc.kubeClient, pods, nc.recorder, value.Value, nodeUID, nc.daemonSetStore)\n\t\t\tif err != nil {\n\t\t\t\t// We are not setting eviction status here."
+  },
+  {
+    "id" : "7650a4d5-ca88-4aa3-ac44-765ea6d5a603",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-301875068",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "af7943c6-392e-422c-b141-290129cc45df",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Given you're touching this code already - we should extend the comment for evictorLock and explain what it is protecting.\r\nMy understand is that it is protecting zonePodEvictor and zoneNoExecuteTainter.",
+        "createdAt" : "2019-10-14T13:29:04Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a26f2857-b48c-494e-acc9-060b4e005da4",
+        "parentId" : "af7943c6-392e-422c-b141-290129cc45df",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "Done.",
+        "createdAt" : "2019-10-15T12:43:25Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 103,
+    "diffHunk" : "@@ -1,1 +288,292 @@\t// evictorLock protects zonePodEvictor and zoneNoExecuteTainter.\n\t// TODO(#83954): API calls shouldn't be executed under the lock.\n\tevictorLock     sync.Mutex\n\tnodeEvictionMap *nodeEvictionMap\n\t// workers that evicts pods from unresponsive nodes."
+  },
+  {
+    "id" : "25f62548-92fb-4546-887f-c5868487c75b",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-301306249",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8b5fccfc-a80e-4c6b-931f-2c84ca22564e",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Why we don't need to handle podDeleted? A comment in DeleteFunc (line 464) would be helpful.\r\n\r\nAlternatively (I would say even better), would be to add a handler in DeleteFunc(), just ignore the case in the handler (i.e. if newPod == nil { return })",
+        "createdAt" : "2019-10-14T13:31:07Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 147,
+    "diffHunk" : "@@ -1,1 +441,445 @@\t\t\tprevPod := prev.(*v1.Pod)\n\t\t\tnewPod := obj.(*v1.Pod)\n\t\t\tnc.podUpdated(prevPod, newPod)\n\t\t\tif nc.taintManager != nil {\n\t\t\t\tnc.taintManager.PodUpdated(prevPod, newPod)"
+  },
+  {
+    "id" : "b0fdcfea-197d-433e-af46-6633e006af56",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-301884060",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "511a1714-1cad-4283-b988-dff1ae583f5d",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "How did you come up with podUpdateWorkerSize value?",
+        "createdAt" : "2019-10-14T13:31:31Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f6a5ce6-6d4d-489d-bd97-d31a326be341",
+        "parentId" : "511a1714-1cad-4283-b988-dff1ae583f5d",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "I assumed that most handling will be fast (nothing to do). Long handling will only happen when cache is lagging, still not so many cases. IMHO 4 should be enough.",
+        "createdAt" : "2019-10-15T12:45:41Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23d03aef-8d8f-448a-90da-b4fe77c720b5",
+        "parentId" : "511a1714-1cad-4283-b988-dff1ae583f5d",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Whatever your reasoning was, please add a comment to the const defintion explaining the reasoning.",
+        "createdAt" : "2019-10-15T12:57:31Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 200,
+    "diffHunk" : "@@ -1,1 +583,587 @@\t}\n\n\tfor i := 0; i < podUpdateWorkerSize; i++ {\n\t\tgo wait.Until(nc.doPodProcessingWorker, time.Second, stopCh)\n\t}"
+  },
+  {
+    "id" : "6aee0040-146b-4048-8297-8042aba08118",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-301884060",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ba1acdd0-badb-4b9c-9f94-ec05a8d2db57",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Don't we need any special error handling here?",
+        "createdAt" : "2019-10-15T09:55:24Z",
+        "updatedAt" : "2019-11-07T11:02:54Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0cd21470-0c0c-433d-aea3-8bdbdee8b0e4",
+        "parentId" : "ba1acdd0-badb-4b9c-9f94-ec05a8d2db57",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "Requeue added.",
+        "createdAt" : "2019-10-15T12:57:58Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ad41e4f8-b371-4e90-977c-76dc12d0d241",
+        "parentId" : "ba1acdd0-badb-4b9c-9f94-ec05a8d2db57",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This one actually may fail because of no-longer-existing.\r\n\r\nSo I think it actually makes sense to already migrat to RateLimitedQueue as we speak.",
+        "createdAt" : "2019-10-15T13:15:46Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 422,
+    "diffHunk" : "@@ -1,1 +1328,1332 @@\t\tklog.Warningf(\"Failed to read node %v: %v.\", nodeName, err)\n\t\tnc.podUpdateQueue.AddRateLimited(podItem)\n\t\treturn\n\t}\n"
+  },
+  {
+    "id" : "23179571-08c0-4cc0-aa5c-c004d1c40df5",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-307063692",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c116200e-2ab8-4f9a-a84d-80284932fc7c",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This function requires extensive comment how the logic is handled:\r\n- different scenarios that may happen (e.g. pod observed, node not yet observed; pod observed, node already deleted, etc.) and how each of them is handled",
+        "createdAt" : "2019-10-22T10:41:24Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5afe8fb5-b681-4e17-991c-d2bb4f72dfeb",
+        "parentId" : "c116200e-2ab8-4f9a-a84d-80284932fc7c",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "Comment added.",
+        "createdAt" : "2019-10-22T15:45:24Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e9d1c79-940e-453b-8899-33300edb65ef",
+        "parentId" : "c116200e-2ab8-4f9a-a84d-80284932fc7c",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This comment is a big hard to parse.\r\n\r\n// processPod is processing events of assigning pods to nodes. In particular:\r\n// 1. for NodeReady=true node, taint eviction for this pod will be cancelled\r\n// 2. for NodeReady=false or unknown node, taint eviction of pod will happen and pod will be marked as not ready\r\n// 3. if node doesn't exist in cache, it will be skipped and handled later by doEvictionPass\r\n\r\n\r\n[all other cases are kind of obvious]",
+        "createdAt" : "2019-10-25T09:12:59Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 396,
+    "diffHunk" : "@@ -1,1 +1302,1306 @@// 2. for NodeReady=false or unknown node, taint eviction of pod will happen and pod will be marked as not ready\n// 3. if node doesn't exist in cache, it will be skipped and handled later by doEvictionPass\nfunc (nc *Controller) processPod(podItem podUpdateItem) {\n\tdefer nc.podUpdateQueue.Done(podItem)\n\tpod, err := nc.podLister.Pods(podItem.namespace).Get(podItem.name)"
+  },
+  {
+    "id" : "4afef9b2-b724-4bf3-bd57-dfc61e1be5ff",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-306483584",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "349974f5-e793-433f-b8a5-312b3be1883a",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Same here",
+        "createdAt" : "2019-10-23T07:06:51Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da2eac6a-7447-4702-b4ae-2e1169c6e61a",
+        "parentId" : "349974f5-e793-433f-b8a5-312b3be1883a",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "Done.",
+        "createdAt" : "2019-10-24T10:50:16Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +224,228 @@\n// nodeEvictionMap stores evictionStatus data for each node.\ntype nodeEvictionMap struct {\n\tlock          sync.Mutex\n\tnodeEvictions map[string]evictionStatus"
+  },
+  {
+    "id" : "7e431b2d-3653-4269-8a3e-6eaf442c741a",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-311786214",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f3c1af03-8fcf-4c4a-b40d-c29b0d940fc0",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "It's not obvious whether setStatus should be called after DeletePods or before it. \r\nOn one hand only when DeletePods successfully finishes, it will be fully removed from queue.\r\nOTOH, even if this is called and returns an error, some pods may have already been evicted.\r\n\r\nI guess setting it here is probably fine, because in the next attempt (retry), the pods added in the meantime will already ben in cache and thus will be used here.\r\nBut it definitely requires a comment.",
+        "createdAt" : "2019-11-05T12:59:31Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08842620-5459-403c-868d-b24d5a927f18",
+        "parentId" : "f3c1af03-8fcf-4c4a-b40d-c29b0d940fc0",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "Comment added to line 752.",
+        "createdAt" : "2019-11-05T14:48:56Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 225,
+    "diffHunk" : "@@ -1,1 +756,760 @@\t\t\t\treturn false, 0\n\t\t\t}\n\t\t\tif !nc.nodeEvictionMap.setStatus(value.Value, evicted) {\n\t\t\t\tklog.V(2).Infof(\"node %v was unregistered in the meantime - skipping setting status\", value.Value)\n\t\t\t}"
+  },
+  {
+    "id" : "57356da4-f8d3-4adf-bcfd-b62d0673d157",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-312421299",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f0c5ae58-d911-4a48-bc8d-ea98a76406d9",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "return ?",
+        "createdAt" : "2019-11-06T12:55:32Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b1e5c3c-fb1e-448b-88b4-d37f255bed4f",
+        "parentId" : "f0c5ae58-d911-4a48-bc8d-ea98a76406d9",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "It's additional pod status update call vs marking pod not ready in next pass.\r\nI assume that it is very likely that if pod eviction failed than marking pods as not ready will fail as well... `return` added.",
+        "createdAt" : "2019-11-06T13:18:20Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 439,
+    "diffHunk" : "@@ -1,1 +1345,1349 @@\t\tif err := nc.processNoTaintBaseEviction(node, currentReadyCondition, nc.nodeMonitorGracePeriod, pods); err != nil {\n\t\t\tklog.Warningf(\"Unable to process pod %+v eviction from node %v: %v.\", podItem, nodeName, err)\n\t\t\tnc.podUpdateQueue.AddRateLimited(podItem)\n\t\t\treturn\n\t\t}"
+  },
+  {
+    "id" : "f571ab4c-0ab9-41ea-b279-4bdaac92a707",
+    "prId" : 81167,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/81167#pullrequestreview-313234166",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f09ec3b9-c179-4815-9d10-fc0c816ac5aa",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "good catch\r\nthat said, it requires some unit test",
+        "createdAt" : "2019-11-07T08:50:18Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2587219c-e84a-454b-bb04-fc51435162ff",
+        "parentId" : "f09ec3b9-c179-4815-9d10-fc0c816ac5aa",
+        "authorId" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "body" : "New case to `TestMonitorNodeHealthMarkPodsNotReadyRetry` added.",
+        "createdAt" : "2019-11-07T10:15:32Z",
+        "updatedAt" : "2019-11-07T11:02:55Z",
+        "lastEditedBy" : "e25d86e1-9b84-46f1-8d7f-a44328cd9bb4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9406e5bf2aa82b27754ccbadf2048a60030d89ec",
+    "line" : 270,
+    "diffHunk" : "@@ -1,1 +842,846 @@\t\t\tif err != nil {\n\t\t\t\tutilruntime.HandleError(fmt.Errorf(\"unable to list pods of node %v: %v\", node.Name, err))\n\t\t\t\tif currentReadyCondition.Status != v1.ConditionTrue && observedReadyCondition.Status == v1.ConditionTrue {\n\t\t\t\t\t// If error happened during node status transition (Ready -> NotReady)\n\t\t\t\t\t// we need to mark node for retry to force MarkPodsNotReady execution"
+  },
+  {
+    "id" : "88cd0d74-6e08-48cf-9c71-b413bcf5166e",
+    "prId" : 80238,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80238#pullrequestreview-263086190",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3911dde9-2c65-42c6-af12-51e6e826b46e",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "add a comment that this should explicitly not be updated to check the node role label",
+        "createdAt" : "2019-07-17T02:39:46Z",
+        "updatedAt" : "2019-08-28T15:18:03Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd68b65c-367d-49af-8779-dbc39a22106f",
+        "parentId" : "3911dde9-2c65-42c6-af12-51e6e826b46e",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Do we have a central doc or exported library on reserved labels? ",
+        "createdAt" : "2019-07-17T14:26:06Z",
+        "updatedAt" : "2019-08-28T15:18:03Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a49a554211101f594e55e4b7d4574b535249db58",
+    "line" : 68,
+    "diffHunk" : "@@ -1,1 +832,836 @@// This code will not be allowed to update to use the node-role label, since\n// node-roles may not be used for feature enablement.\n// DEPRECATED: Will be removed in 1.19\nfunc legacyIsMasterNode(nodeName string) bool {\n\t// We are trying to capture \"master(-...)?$\" regexp."
+  },
+  {
+    "id" : "4fa5882e-216b-4881-81be-32af0c3c7800",
+    "prId" : 80238,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80238#pullrequestreview-263158383",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ef887284-219a-42f8-b81b-3892af12074a",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Shouldn't this be in a publicly exported place?  ",
+        "createdAt" : "2019-07-17T14:25:08Z",
+        "updatedAt" : "2019-08-28T15:18:03Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66e52bdf-1651-464c-94e8-7f06d3234e5d",
+        "parentId" : "ef887284-219a-42f8-b81b-3892af12074a",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Until it hits beta, I would say no.  Referencing constants across multiple concrete domains (controller manager / rest of kube) would be a bug.",
+        "createdAt" : "2019-07-17T16:03:08Z",
+        "updatedAt" : "2019-08-28T15:18:03Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a49a554211101f594e55e4b7d4574b535249db58",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +810,814 @@// labelNodeDisruptionExclusion is a label on nodes that controls whether they are\n// excluded from being considered for disruption checks by the node controller.\nconst labelNodeDisruptionExclusion = \"node.kubernetes.io/exclude-disruption\"\n\nfunc isNodeExcludedFromDisruptionChecks(node *v1.Node) bool {"
+  },
+  {
+    "id" : "0e2ccf9d-2744-4d8b-8199-42bd52001b38",
+    "prId" : 74442,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/74442#pullrequestreview-207123182",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "de9f04ab-ebed-4bfc-884e-de1edad45fc0",
+        "parentId" : null,
+        "authorId" : "5340f403-4d5c-46a0-a097-22d84e49be51",
+        "body" : "thanks for these inline comments, definitely improves readability here.",
+        "createdAt" : "2019-02-23T20:29:01Z",
+        "updatedAt" : "2019-03-07T01:27:28Z",
+        "lastEditedBy" : "5340f403-4d5c-46a0-a097-22d84e49be51",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd2301a62890cbf894f4231e616af3858d205ed3",
+    "line" : 153,
+    "diffHunk" : "@@ -1,1 +1243,1247 @@\n\tif node.Labels == nil {\n\t\t// Nothing to reconcile.\n\t\treturn nil\n\t}"
+  },
+  {
+    "id" : "e15ec8e6-f752-431f-b727-d32ba9a33bc1",
+    "prId" : 74442,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/74442#pullrequestreview-210585480",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bc021459-44ec-47eb-b05f-f992d9e13fc1",
+        "parentId" : null,
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "if `ensureSecondaryExists` is only one value in this PR, prefer to remove it for now; and add it back when there're other cases.",
+        "createdAt" : "2019-03-03T04:10:18Z",
+        "updatedAt" : "2019-03-07T01:27:28Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "78dd869e-28fb-437c-ae9b-b27f36913049",
+        "parentId" : "bc021459-44ec-47eb-b05f-f992d9e13fc1",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "We are going to use this mechanism, and I think leaving this actually makes the code more readable when we switch in the future.\r\n\r\nIf you're okay, I'd rather leave this as it is.",
+        "createdAt" : "2019-03-05T02:47:30Z",
+        "updatedAt" : "2019-03-07T01:27:28Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "624c3516-24e3-4db0-8851-5a7304290935",
+        "parentId" : "bc021459-44ec-47eb-b05f-f992d9e13fc1",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "that's ok",
+        "createdAt" : "2019-03-05T09:54:54Z",
+        "updatedAt" : "2019-03-07T01:27:28Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd2301a62890cbf894f4231e616af3858d205ed3",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +141,145 @@\tprimaryKey            string\n\tsecondaryKey          string\n\tensureSecondaryExists bool\n}{\n\t{"
+  },
+  {
+    "id" : "d8034ace-fbfc-4d05-909b-b6e55abbf8fe",
+    "prId" : 70045,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70045#pullrequestreview-167694685",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f3464f5a-4b9e-41a8-8272-a793d8935943",
+        "parentId" : null,
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "we do not need to check kubeClient again, I'm ok to handle it in a separated PR.",
+        "createdAt" : "2018-10-23T11:47:43Z",
+        "updatedAt" : "2018-10-23T11:47:43Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "838031de-3fca-4f77-b766-af92177ed340",
+        "parentId" : "f3464f5a-4b9e-41a8-8272-a793d8935943",
+        "authorId" : "074ba44e-c752-4224-9178-a63cd27ed62e",
+        "body" : "@k82cn ok, i will create a new pull request",
+        "createdAt" : "2018-10-24T00:54:41Z",
+        "updatedAt" : "2018-10-24T00:54:41Z",
+        "lastEditedBy" : "074ba44e-c752-4224-9178-a63cd27ed62e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f4713d43c3eed2d89e1aa6699422abc5c6b2684e",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +276,280 @@\t\t})\n\n\tif kubeClient != nil && kubeClient.CoreV1().RESTClient().GetRateLimiter() != nil {\n\t\tmetrics.RegisterMetricAndTrackRateLimiterUsage(\"node_lifecycle_controller\", kubeClient.CoreV1().RESTClient().GetRateLimiter())\n\t}"
+  },
+  {
+    "id" : "d2dfbb29-bcc0-4c74-b97b-c23f62acd4a2",
+    "prId" : 69305,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69305#pullrequestreview-160492460",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ed6c525a-7a77-4434-af46-0197c28288d1",
+        "parentId" : null,
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "The commit message is slightly misleading since you also changed this to a pointer. ",
+        "createdAt" : "2018-10-01T21:02:54Z",
+        "updatedAt" : "2018-10-02T06:27:50Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c9cbb90f-f433-4dad-812c-3e4f9be1959f",
+        "parentId" : "ed6c525a-7a77-4434-af46-0197c28288d1",
+        "authorId" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "body" : "Updated the commit message to include the pointer change now. :)",
+        "createdAt" : "2018-10-01T21:27:07Z",
+        "updatedAt" : "2018-10-02T06:27:50Z",
+        "lastEditedBy" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "88e7e186f05eaa3ec7ee1f3ac7702d7e20619a86",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +136,140 @@\tprobeTimestamp           metav1.Time\n\treadyTransitionTimestamp metav1.Time\n\tstatus                   *v1.NodeStatus\n}\n"
+  },
+  {
+    "id" : "25429ff9-cdc1-4304-93bd-40a7d09f1113",
+    "prId" : 69241,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69241#pullrequestreview-161982173",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4ba67b01-47d2-4fdf-8420-22e0d7b06b80",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "All the changes in this file look reasonable to me.\r\n\r\n@gmarek - would you be able to take a look too?",
+        "createdAt" : "2018-10-05T10:56:16Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e35d808aa2b19782fd16e770617c75dafac87adc",
+    "line" : 182,
+    "diffHunk" : "@@ -1,1 +1003,1007 @@\t\t\t\tprobeTimestamp:           nc.nodeHealthMap[node.Name].probeTimestamp,\n\t\t\t\treadyTransitionTimestamp: nc.now(),\n\t\t\t\tlease:                    observedLease,\n\t\t\t}\n\t\t\treturn gracePeriod, observedReadyCondition, currentReadyCondition, nil"
+  },
+  {
+    "id" : "d0166953-122c-411b-9eec-779434a88c9a",
+    "prId" : 69241,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69241#pullrequestreview-163991017",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "parentId" : null,
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "When do we expect the node to be in the `nodeHealthMap` but does not have the ready condition set?",
+        "createdAt" : "2018-10-09T21:24:23Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eca6508a-4f61-41dc-958c-b786b337fd9f",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "Another question is whether it's possible that `nc.nodeHealthMap[node.Name]` is set to nil? \r\n\r\nIt's not obvious to me that when setting the value in line 929 below `nc.nodeHealthMap[node.Name] = savedNodeHealth`, the `savedNodeHealth` will always be non-nil...",
+        "createdAt" : "2018-10-09T21:45:06Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a7bfc96-017c-4d8b-b4f4-93d6277f5ea0",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "body" : "> When do we expect the node to be in the `nodeHealthMap` but does not have the ready condition set?\r\n\r\nLook at this example:\r\n- time t0: Node is created.\r\n- time t1: Node renew lease, but NodeStatus does not have ready condition. And `found` is false. We create and save a fake ready condition (unknown) here. And we also save the lease below.\r\n- time t2: Still, NodeStatus does not have ready condition. So `currentReadyCondition` is still nil. We saved the node at t1 with unknown ready condition. So `found` is true.\r\n\r\n\r\n> Another question is whether it's possible that `nc.nodeHealthMap[node.Name]` is set to nil?\r\n\r\n`savedNodeHealth` is always not nil at line 929. So once this function runs at least once, `nc.nodeHealthMap[node.Name]` is always non-nil.\r\n\r\nConsider 2 cases:\r\n- If currentReadyCondition is nil, we either use the existing one or create a fake one. Then `savedNodeHealth` on line 855 is not nil.\r\n- If currentReadyCondition is not nil, and if at this point we do not have any saved copy, i.e., `nc.nodeHealthMap[node.Name]` is nil for now. Then at line 855, we check it again, we will have `found` to be false, so we **create** a `savedNodeHealth` at line 879, and then assign it to `nc.nodeHealthMap[node.Name]` at line 929.",
+        "createdAt" : "2018-10-09T22:59:40Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fffc3046-6b20-4c92-834e-a1cdf49e2cda",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "Thanks for explaining. I think the code here is not very easy to follow (not this PR's fault). \r\n\r\nOne case that seems a bit strange to me is that even if the node doesn't have status, as long as the it continues renewing the lease, the controller will take no action. I think this is by design, but still feels strange :\\",
+        "createdAt" : "2018-10-10T00:18:20Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c02b66c2-e955-41d7-bc07-f2227997c96d",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "body" : "In terms of heartbeat, I think renewing the lease satisfy the need of making sure node is alive.\r\n\r\n@wojtek-t, WDYT?",
+        "createdAt" : "2018-10-10T00:30:29Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e99ff462-d794-470e-ac07-4e30ddd6b496",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "> In terms of heartbeat, I think renewing the lease satisfy the need of making sure node is alive.\r\n\r\nI think it does.\r\n\r\nThough I kind of agree with @yujuhong that it's a bit strange (but depending how exactly we implement stuff in kubelet (things like retries etc.), I think in the desired implementation it should never happen in practice).",
+        "createdAt" : "2018-10-10T07:44:01Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26e71a76-4c12-401f-b141-5af3c60ec6de",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "body" : "According to [KEP-0009](https://github.com/kubernetes/community/blob/master/keps/sig-node/0009-node-heartbeat.md), there will be NodeStatus update at least once per `node-status-update-period` (a new parameter to be added). So the situation where a node does not have status, but keeps renewing lease depends on the value of `node-status-update-period`.",
+        "createdAt" : "2018-10-10T07:59:15Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e877e41-eb40-4231-8216-3b8143ff45dd",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "body" : "Well, there is already `nodeStatusUpdateFrequency`, which controls how often node updates status for now. It will become the one that controls how often node **computes** status later. I would suggest using `nodeStatusReportPeriod` instead of `nodeStatusUpdatePeriod`, as `update` is an overloading term. (Or `nodeStatusReportFrequency`, to be consistent with the update frequency naming convension)",
+        "createdAt" : "2018-10-10T08:17:09Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dbb73045-6a4f-4461-b116-2b71b9b9cd8f",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "> So the situation where a node does not have status, but keeps renewing lease depends on the value of node-status-update-period.\r\n\r\nSo what we have been thinking is to switch:\r\n- set lease refresh period (however we call it) to how frequently we update node status now\r\n- decrease frequency of node status updates to something like 1 minute\r\n- but still compute node statuses with the same frequency (equal of lease refresh period)\r\n\r\nSo if we make leases and node-statuses independent, then yes - there may be small period when there is no node status (this can pretty much happen only after node registration though, because after that it should always be there).\r\nBut if we would make them somehow correlated (I'm not saying we should do that - I'm saying it's theoretically possible), then it would only happen on races.\r\n\r\nBut yeah - I agree the latter probably doesn't make much sense.",
+        "createdAt" : "2018-10-10T09:33:35Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "708bcb10-6356-46a9-a722-e805808689a6",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "body" : "@yujuhong, does this small period that there is no node status sound ok?",
+        "createdAt" : "2018-10-11T18:08:48Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88c1d307-b5f5-4e40-81ef-2de3672dcf99",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "I was more interested in the pathological case where kubelet could not post the status ever, while it could still sending heartbeats. I think this theoretically could happen if we decouple heartbeat and status updates in kubelet (which is probably the right thing to do to not add more complexity and dependency). I don't think we need to deal with the pathological case now, but in case we want to put a safeguard in the future, let's settle on leaving a comment saying something like `If kubelet never posted the node status, but continues renewing the heartbeat leases, the node controller will assume the node is healthy and take no action`. ",
+        "createdAt" : "2018-10-11T18:44:03Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb72f946-6573-4f6e-bd63-804efa38951c",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "+1",
+        "createdAt" : "2018-10-11T18:56:33Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b44aa458-7281-4e34-b50f-24653906015e",
+        "parentId" : "f37a8d78-f94a-4c82-ab8f-a8fde93c57ad",
+        "authorId" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "body" : "Done. Added the comments at line 923 now. PTAL",
+        "createdAt" : "2018-10-11T20:02:19Z",
+        "updatedAt" : "2018-10-11T23:24:49Z",
+        "lastEditedBy" : "4186ed58-9575-4126-b730-073268bc67cb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e35d808aa2b19782fd16e770617c75dafac87adc",
+    "line" : 130,
+    "diffHunk" : "@@ -1,1 +838,842 @@\t\t}\n\t\tgracePeriod = nc.nodeStartupGracePeriod\n\t\tif _, found := nc.nodeHealthMap[node.Name]; found {\n\t\t\tnc.nodeHealthMap[node.Name].status = &node.Status\n\t\t} else {"
+  },
+  {
+    "id" : "b400c316-f906-4c44-adaa-1e3276289cde",
+    "prId" : 68408,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/68408#pullrequestreview-154036125",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5a6e2168-c42e-4273-966d-328181a8caf8",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "just to double check, doNoScheduleTaintingPass doesn't mutate anything on the node object, right?",
+        "createdAt" : "2018-09-11T03:06:57Z",
+        "updatedAt" : "2018-09-11T13:43:39Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8cfa92e-c5a8-4ecc-bc0f-09f764fcc3ea",
+        "parentId" : "5a6e2168-c42e-4273-966d-328181a8caf8",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "yes, we only need to get node's condition and taints, and sent update request if condition/taint did not match.",
+        "createdAt" : "2018-09-11T03:10:06Z",
+        "updatedAt" : "2018-09-11T13:43:39Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "97ba8b477a37afd78579f4133a1f8dde595e4828",
+    "line" : 97,
+    "diffHunk" : "@@ -1,1 +487,491 @@\nfunc (nc *Controller) doNoScheduleTaintingPass(nodeName string) error {\n\tnode, err := nc.nodeLister.Get(nodeName)\n\tif err != nil {\n\t\t// If node not found, just ignore it."
+  },
+  {
+    "id" : "3618547f-35bb-410a-9fcb-8a81da39c555",
+    "prId" : 67864,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67864#pullrequestreview-150793133",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d5cf4f6e-ec62-4dfd-b541-b2c29a3888d5",
+        "parentId" : null,
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "move this line under line 390 makes more sense to me.",
+        "createdAt" : "2018-08-29T23:34:38Z",
+        "updatedAt" : "2018-09-01T01:57:16Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85a19b109a048170c870bcb37817410c0c2607ca",
+    "line" : 84,
+    "diffHunk" : "@@ -1,1 +422,426 @@\t\t}(stopCh)\n\t\t// Close node update queue to cleanup go routine.\n\t\tdefer nc.nodeUpdateQueue.ShutDown()\n\n\t\t// Start workers to update NoSchedule taint for nodes."
+  },
+  {
+    "id" : "570701ad-6436-4d39-84b2-d96900948f74",
+    "prId" : 67734,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67734#pullrequestreview-149843232",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "79b966d1-5c2c-4b2f-a0f8-f59d96210ca6",
+        "parentId" : null,
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "If you look at line 70, it seems that NodeUnreachable should be a NoExecute taint, i.e. causes eviction of running pods. If that's true, we should not always use NoSchedule here, at line 455.",
+        "createdAt" : "2018-08-23T01:14:27Z",
+        "updatedAt" : "2018-08-27T23:19:15Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a71d1234-55d2-47f8-9054-abc3198ffc33",
+        "parentId" : "79b966d1-5c2c-4b2f-a0f8-f59d96210ca6",
+        "authorId" : "1758d494-172d-4f17-8c32-edbe17bccd6d",
+        "body" : "`NoSchedule` is used for scheduling, which is different. This fix can address issue that scheduler still schedule pods to NotReady node.\r\nAnother question, did you try shutting down node and see whether both `node.kubernetes.io/not-ready:NoSchedule` and `node.kubernetes.io/not-ready:NoExecute` taint are there?  Code https://github.com/kubernetes/kubernetes/blob/master/pkg/util/taints/taints.go#L277 seems did not do the job.",
+        "createdAt" : "2018-08-23T02:59:48Z",
+        "updatedAt" : "2018-08-27T23:19:15Z",
+        "lastEditedBy" : "1758d494-172d-4f17-8c32-edbe17bccd6d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e12e2fb5-ab49-4ad6-b77f-ed4df29ca112",
+        "parentId" : "79b966d1-5c2c-4b2f-a0f8-f59d96210ca6",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "@bsalamat `UnreachableTaintTemplate` in line 70 (a.k.a unreachable/NoExecute taint) is applied when `TaintBasedEvictions` is enabled - although the name is ambiguous.\r\n\r\nI think the idea here is to differentiate NoSchedule and NoExecute taint:\r\n- TaintBasedEvictions controls `not-ready/NoExecute` and `unreachable/NoExecute`\r\n- TaintNodesByCondition controls `xyz/NoSchedule`\r\n\r\nAnd I found another bug that when TaintBasedEvictions and TaintNodesByCondition are both enabled, `xyz/NoSchedule` taint will **overwrite** existing `xyz/NoExecute` taints. It's because the logic below only check if the taintKey is found or not, regardless the effect:\r\nhttps://github.com/kubernetes/kubernetes/blob/7a9a30a4f7eae900bffd4b477a431a999de350dd/pkg/controller/nodelifecycle/node_lifecycle_controller.go#L474-L483\r\n\r\nIn latest commit, it's resolved.\r\n\r\nSo right now when TaintBasedEvictions and TaintNodesByCondition are both enabled, the behavior is like this:\r\n\r\n- create a 2-node cluster\r\n- create a deployment with 8 replicas - 4 landed on node1, 4 landed on node2\r\n- break node1's network connectivity to apiserver\r\n- node1 is applied with following taints:\r\n    ```yaml\r\n    spec:\r\n      taints:\r\n      - effect: NoSchedule\r\n        key: node.kubernetes.io/unreachable\r\n        timeAdded: 2018-08-23T19:21:58Z\r\n      - effect: NoExecute\r\n        key: node.kubernetes.io/unreachable\r\n        timeAdded: 2018-08-23T19:22:03Z\r\n    ```\r\n- also pods landed on node1 are applied `NoExecute` toleration - means it will be evicted in 300 seconds:\r\n    ```yaml\r\n      tolerations:\r\n      - effect: NoExecute\r\n        key: node.kubernetes.io/not-ready\r\n        operator: Exists\r\n        tolerationSeconds: 300\r\n      - effect: NoExecute\r\n        key: node.kubernetes.io/unreachable\r\n        operator: Exists\r\n        tolerationSeconds: 300\r\n    ```\r\n- 300 seconds later, node lifecycle manager starts to evicts pods are spawn new pods - due to introduced `unreachable/NoSchedule` taint, new pods all landed to node2\r\n    ```yaml\r\n    # k get po -o wide\r\n    NAME                     READY     STATUS        RESTARTS   AGE       IP            NODE          NOMINATED NODE\r\n    pause-54dfd6bf9c-2nwrm   1/1       Running       0          8m9s      10.244.3.4    kube-node-2   <none>\r\n    pause-54dfd6bf9c-6v62c   1/1       Running       0          44s       10.244.3.9    kube-node-2   <none>\r\n    pause-54dfd6bf9c-8c7rh   1/1       Running       0          44s       10.244.3.8    kube-node-2   <none>\r\n    pause-54dfd6bf9c-8nw4s   1/1       Terminating   0          8m9s      10.244.2.4    kube-node-1   <none>\r\n    pause-54dfd6bf9c-b2sng   1/1       Terminating   0          8m9s      10.244.2.6    kube-node-1   <none>\r\n    pause-54dfd6bf9c-bczdb   1/1       Running       0          8m9s      10.244.3.5    kube-node-2   <none>\r\n    pause-54dfd6bf9c-fms72   1/1       Running       0          44s       10.244.3.7    kube-node-2   <none>\r\n    pause-54dfd6bf9c-g7nnv   1/1       Running       0          8m9s      10.244.3.3    kube-node-2   <none>\r\n    pause-54dfd6bf9c-gv8d5   1/1       Running       0          44s       10.244.3.10   kube-node-2   <none>\r\n    pause-54dfd6bf9c-n5njz   1/1       Running       0          8m9s      10.244.3.6    kube-node-2   <none>\r\n    pause-54dfd6bf9c-sfj6h   1/1       Terminating   0          8m9s      10.244.2.3    kube-node-1   <none>\r\n    pause-54dfd6bf9c-zqtdc   1/1       Terminating   0          8m9s      10.244.2.5    kube-node-1   <none>\r\n    # k get deploy\r\n    NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE\r\n    pause     8         8         8            8           8m21s\r\n    # k get rs\r\n    NAME               DESIRED   CURRENT   READY     AGE\r\n    pause-54dfd6bf9c   8         8         8         8m28s\r\n    ```\r\n- the 4 Terminating pods still shows is b/c kubelet in node1 can't talk to apiserver, hence still have those orphan containers living - but they doesn't count into replicas of the deployment. They are cleaned up gracefully after node1 gets recovered.\r\n",
+        "createdAt" : "2018-08-23T19:52:26Z",
+        "updatedAt" : "2018-08-27T23:19:15Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07baf4ae-e18d-43c2-b422-c93521332c5d",
+        "parentId" : "79b966d1-5c2c-4b2f-a0f8-f59d96210ca6",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "@liqlin2015 yeap, I see both taints. See above comment for more details.",
+        "createdAt" : "2018-08-23T19:53:26Z",
+        "updatedAt" : "2018-08-27T23:19:15Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c0c8f19b-e6d5-4d2f-980e-412c2de2b259",
+        "parentId" : "79b966d1-5c2c-4b2f-a0f8-f59d96210ca6",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "> I think the idea here is to differentiate NoSchedule and NoExecute taint:\r\n\r\nRegarding `TaintBasedEviction`, node lifecycle already has feature to evict/kill pod when there's some issue to the node before toleration/taint; and then we leverage NoExecute to do that.\r\n\r\nRegarding `TaintNodeByCondition`, there's a requirements to make pod tolerating some condition (e.g. network unavailable for who's using host network) which is hard code in scheduler before.\r\n\r\n\r\n> taintutils.TaintSetFilter\r\n\r\n+1",
+        "createdAt" : "2018-08-24T02:14:05Z",
+        "updatedAt" : "2018-08-27T23:19:15Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "28a2344e-a24d-4843-8b9c-17904edb9379",
+        "parentId" : "79b966d1-5c2c-4b2f-a0f8-f59d96210ca6",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "Thanks, @Huang-Wei for the detailed explanation.",
+        "createdAt" : "2018-08-27T19:08:29Z",
+        "updatedAt" : "2018-08-27T23:19:15Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "61e6acb1a80d52ecd5e0a34cc1283ef713a075fa",
+    "line" : 61,
+    "diffHunk" : "@@ -1,1 +451,455 @@\tfor _, condition := range node.Status.Conditions {\n\t\tif taintMap, found := nodeConditionToTaintKeyStatusMap[condition.Type]; found {\n\t\t\tif taintKey, found := taintMap[condition.Status]; found {\n\t\t\t\ttaints = append(taints, v1.Taint{\n\t\t\t\t\tKey:    taintKey,"
+  },
+  {
+    "id" : "e56c0a84-eac7-4466-8568-b9e06201dfa6",
+    "prId" : 67734,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67734#pullrequestreview-149072091",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9271f854-8192-4630-baca-a1ab8fe34424",
+        "parentId" : null,
+        "authorId" : "e4b03d1a-8620-4310-9c5c-493d80e551a3",
+        "body" : "Does it mean NodeCondition with type = `NodeReady` and status = `ConditionUnknown` should be considered as `NodeUnreachable`?\r\n\r\nIt is a little ambiguous. Perhaps a new type `NodeReachable` is more reasonable.\r\nhttps://github.com/kubernetes/kubernetes/blob/5a16163c87fe2a90916a51b52771a668bcaf2a0d/staging/src/k8s.io/api/core/v1/types.go#L4019-L4023",
+        "createdAt" : "2018-08-23T03:38:35Z",
+        "updatedAt" : "2018-08-27T23:19:15Z",
+        "lastEditedBy" : "e4b03d1a-8620-4310-9c5c-493d80e551a3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "754af160-7707-4b26-b773-d971412c435f",
+        "parentId" : "9271f854-8192-4630-baca-a1ab8fe34424",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "> Does it mean NodeCondition with type = NodeReady and status = ConditionUnknown should be considered as NodeUnreachable?\r\n\r\nyeap.\r\n\r\n\r\n\r\n> It is a little ambiguous. Perhaps a new type NodeReachable is more reasonable.\r\n\r\nAgree, that's the ideal case. I would also like to see this kind of status :)\r\n\r\nBut that should be considered by sig/node, maybe as a new feature.",
+        "createdAt" : "2018-08-23T19:55:03Z",
+        "updatedAt" : "2018-08-27T23:19:15Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "61e6acb1a80d52ecd5e0a34cc1283ef713a075fa",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +85,89 @@\t\tv1.NodeReady: {\n\t\t\tv1.ConditionFalse:   algorithm.TaintNodeNotReady,\n\t\t\tv1.ConditionUnknown: algorithm.TaintNodeUnreachable,\n\t\t},\n\t\tv1.NodeMemoryPressure: {"
+  }
+]

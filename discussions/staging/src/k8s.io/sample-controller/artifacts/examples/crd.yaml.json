@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "2181342f-c147-444f-89ca-18dca6c30554",
+    "prId" : 101871,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101871#pullrequestreview-658230943",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7e736019-073a-475c-b3ae-07dccc1557d3",
+        "parentId" : null,
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "I forgot if [pruning](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#field-pruning) works on `status`. Let me verify",
+        "createdAt" : "2021-05-12T17:57:29Z",
+        "updatedAt" : "2021-05-12T17:57:33Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5fa2d961-02ef-4c63-9803-f72421e106a6",
+        "parentId" : "7e736019-073a-475c-b3ae-07dccc1557d3",
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "yes, pruning works on `status`:\r\n\r\nhaving a CR with status in etcd:\r\n```\r\n$ kubectl get foo my-foo -oyaml\r\napiVersion: samplecontroller.k8s.io/v1alpha1\r\nkind: Foo\r\nmetadata:\r\n  annotations:\r\n    kubectl.kubernetes.io/last-applied-configuration: |\r\n      {\"apiVersion\":\"samplecontroller.k8s.io/v1alpha1\",\"kind\":\"Foo\",\"metadata\":{\"annotations\":{},\"name\":\"my-foo\",\"namespace\":\"default\"},\"spec\":{\"deploymentName\":\"my-deployment\",\"replicas\":1},\"status\":{\"availableReplicas\":1}}\r\n  creationTimestamp: \"2021-05-12T18:07:50Z\"\r\n  generation: 1\r\n  name: my-foo\r\n  namespace: default\r\n  resourceVersion: \"537\"\r\n  uid: 920b53d2-baee-473d-9d25-bcf8dbdb8294\r\nspec:\r\n  deploymentName: my-deployment\r\n  replicas: 1\r\nstatus:\r\n  availableReplicas: 1\r\n```\r\nedit the CRD to omit status in the schema\r\n```\r\n$ cat crd.yaml\r\napiVersion: apiextensions.k8s.io/v1\r\nkind: CustomResourceDefinition\r\nmetadata:\r\n  name: foos.samplecontroller.k8s.io\r\n  # for more information on the below annotation, please see\r\n  # https://github.com/kubernetes/enhancements/blob/master/keps/sig-api-machinery/2337-k8s.io-group-protection/README.md\r\n  annotations:\r\n    \"api-approved.kubernetes.io\": \"unapproved, experimental-only; please get an approval from Kubernetes API reviewers if you're trying to develop a CRD in the *.k8s.io or *.kubernetes.io groups\"\r\nspec:\r\n  group: samplecontroller.k8s.io\r\n  versions:\r\n    - name: v1alpha1\r\n      served: true\r\n      storage: true\r\n      schema:\r\n        # schema used for validation\r\n        openAPIV3Schema:\r\n          type: object\r\n          properties:\r\n            spec:\r\n              type: object\r\n              properties:\r\n                deploymentName:\r\n                  type: string\r\n                image:\r\n                  type: string\r\n                replicas:\r\n                  type: integer\r\n                  minimum: 1\r\n                  maximum: 10\r\n      # subresources for the custom resource\r\n      subresources:\r\n        # enables the status subresource\r\n        status: {}\r\n  names:\r\n    kind: Foo\r\n    plural: foos\r\n  scope: Namespaced\r\n```\r\nread the CR again. Note the `status` is pruned\r\n```\r\n$ kubectl get foo my-foo -oyaml\r\napiVersion: samplecontroller.k8s.io/v1alpha1\r\nkind: Foo\r\nmetadata:\r\n  annotations:\r\n    kubectl.kubernetes.io/last-applied-configuration: |\r\n      {\"apiVersion\":\"samplecontroller.k8s.io/v1alpha1\",\"kind\":\"Foo\",\"metadata\":{\"annotations\":{},\"name\":\"my-foo\",\"namespace\":\"default\"},\"spec\":{\"deploymentName\":\"my-deployment\",\"replicas\":1},\"status\":{\"availableReplicas\":1}}\r\n  creationTimestamp: \"2021-05-12T18:07:50Z\"\r\n  generation: 1\r\n  name: my-foo\r\n  namespace: default\r\n  resourceVersion: \"537\"\r\n  uid: 920b53d2-baee-473d-9d25-bcf8dbdb8294\r\nspec:\r\n  deploymentName: my-deployment\r\n  replicas: 1\r\n```",
+        "createdAt" : "2021-05-12T18:14:23Z",
+        "updatedAt" : "2021-05-12T18:14:23Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1b52c92-0de7-4922-845a-4a7e11bc72be",
+        "parentId" : "7e736019-073a-475c-b3ae-07dccc1557d3",
+        "authorId" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "body" : "please add the following to the schema in both `crd.yaml` and `crd-status-subresource.yaml`\r\n```\r\n            status:\r\n              type: object\r\n              properties:\r\n                availableReplicas:\r\n                  type: integer\r\n```\r\n",
+        "createdAt" : "2021-05-12T18:16:13Z",
+        "updatedAt" : "2021-05-12T18:16:13Z",
+        "lastEditedBy" : "695b6860-569c-4e63-a215-7342e2279a94",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fd0ac9c8d169169c8072639970565cda9fb9499a",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +26,30 @@                  type: integer\n                  minimum: 1\n                  maximum: 10\n            status:\n              type: object"
+  }
+]

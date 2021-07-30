@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "65c5f18e-f63f-49e3-afde-44b582c7d4ff",
+    "prId" : 101265,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101265#pullrequestreview-664307009",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a95bd585-97a5-4961-99de-4334ed328b27",
+        "parentId" : null,
+        "authorId" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "body" : "I guess the same SocketID should be on the same NUMANodeID in a real machine, because physical CPU sockets are on each numa node.",
+        "createdAt" : "2021-04-21T00:12:35Z",
+        "updatedAt" : "2021-04-21T00:15:56Z",
+        "lastEditedBy" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e76fc50-f491-4041-9591-2d09e2f50e40",
+        "parentId" : "a95bd585-97a5-4961-99de-4334ed328b27",
+        "authorId" : "dcab10bd-e585-4065-b62c-ab73b7a208ac",
+        "body" : "Thanks for your review.\r\n\r\nNUMANodesInSockets returns all of the NUMANodeIDs associated with the given SocketIDs.\r\nFor example, if the SocketID are associated with two NUMANodeIDs, it returns two NUMANodeIDs.\r\nI chose this value to test this behavior.\r\nShould I change that the same SocketID only have the same NUMANodeID?",
+        "createdAt" : "2021-04-21T04:24:04Z",
+        "updatedAt" : "2021-04-21T04:24:04Z",
+        "lastEditedBy" : "dcab10bd-e585-4065-b62c-ab73b7a208ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "589ff2b6-8864-4974-8120-58dbb1d6a2e5",
+        "parentId" : "a95bd585-97a5-4961-99de-4334ed328b27",
+        "authorId" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "body" : "> if the SocketID are associated with two NUMANodeIDs\r\n\r\nIs the above situation common?\r\nThat means physical CPU socket on multiple NUMA nodes.",
+        "createdAt" : "2021-04-21T21:32:30Z",
+        "updatedAt" : "2021-04-21T21:33:07Z",
+        "lastEditedBy" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6adbde8e-c7c5-4156-bad4-43eb638a300b",
+        "parentId" : "a95bd585-97a5-4961-99de-4334ed328b27",
+        "authorId" : "dcab10bd-e585-4065-b62c-ab73b7a208ac",
+        "body" : "> Is the above situation common?\r\n> That means physical CPU socket on multiple NUMA nodes.\r\n\r\nIn the Linux kernel, NUMA nodes were associated with the CPU cores.\r\nSo, I think that physical CPU socket may be associated with multiple NUMA nodes.\r\n\r\nReference information:\r\nhttps://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/arch/x86/mm/numa.c?h=v5.12.2\r\n```\r\n/*\r\n * There are unfortunately some poorly designed mainboards around that\r\n * only connect memory to a single CPU. This breaks the 1:1 cpu->node\r\n * mapping. To avoid this fill in the mapping for all possible CPUs,\r\n * as the number of CPUs is not known yet. We round robin the existing\r\n * nodes.\r\n */\r\nstatic void __init numa_init_array(void)\r\n{\r\n\tint rr, i;\trr = first_node(node_online_map);\r\n\tfor (i = 0; i < nr_cpu_ids; i++) {\r\n\t\tif (early_cpu_to_node(i) != NUMA_NO_NODE)\r\n\t\t\tcontinue;\r\n\t\tnuma_set_node(i, rr);\r\n\t\trr = next_node_in(rr, node_online_map);\r\n\t}\r\n}\r\n```",
+        "createdAt" : "2021-05-11T01:38:34Z",
+        "updatedAt" : "2021-05-11T01:38:35Z",
+        "lastEditedBy" : "dcab10bd-e585-4065-b62c-ab73b7a208ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5765f69a-ddfe-429e-8820-8790e069b2af",
+        "parentId" : "a95bd585-97a5-4961-99de-4334ed328b27",
+        "authorId" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "body" : "Thanks for your explanation, I see the `poorly designed mainboards` at the above comment lines ;-)\r\n\r\nOne comment based on your explanation: Current following test pattern is based on `poorly designed mainboards` case:\r\n```\r\ndetails = map[int]CPUInfo{\r\n  0: {SocketID: 0, NUMANodeID: 0},\r\n  1: {SocketID: 0, NUMANodeID: 1},\r\n  2: {SocketID: 1, NUMANodeID: 2},\r\n  3: {SocketID: 2, NUMANodeID: 3},\r\n}\r\n```\r\nHow about having 2 separated patterns like\r\n```\r\ndetails = map[int]CPUInfo{\r\n  0: {SocketID: 0, NUMANodeID: 0},\r\n  1: {SocketID: 1, NUMANodeID: 0},\r\n  2: {SocketID: 2, NUMANodeID: 1},\r\n  3: {SocketID: 3, NUMANodeID: 1},\r\n}\r\n```\r\nand\r\n```\r\ndetails = map[int]CPUInfo{\r\n  0: {SocketID: 0, NUMANodeID: 0},\r\n  1: {SocketID: 0, NUMANodeID: 1},\r\n  2: {SocketID: 1, NUMANodeID: 2},\r\n  3: {SocketID: 1, NUMANodeID: 3},\r\n}\r\n```\r\n?\r\nThen last test pattern would be better to contain your explanation (`poorly designed mainboards` etc.) as a comment to avoid confusion in the future.",
+        "createdAt" : "2021-05-11T02:08:41Z",
+        "updatedAt" : "2021-05-11T02:08:41Z",
+        "lastEditedBy" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "108af963-58e8-42a7-8b02-af63db6e6a0a",
+        "parentId" : "a95bd585-97a5-4961-99de-4334ed328b27",
+        "authorId" : "dcab10bd-e585-4065-b62c-ab73b7a208ac",
+        "body" : "I updated. Could you check it?",
+        "createdAt" : "2021-05-12T07:57:20Z",
+        "updatedAt" : "2021-05-12T07:57:20Z",
+        "lastEditedBy" : "dcab10bd-e585-4065-b62c-ab73b7a208ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "012492d3-fff1-4d20-9db1-5847284c5c2e",
+        "parentId" : "a95bd585-97a5-4961-99de-4334ed328b27",
+        "authorId" : "b15151c4-81af-487d-8c8f-a4f39690bd34",
+        "body" : "In general, I saw architectures with multi NUMA per socket, NUMA mostly referred to the memory controller and not to the socket, please see - https://developer.amd.com/wp-content/resources/56338_1.00_pub.pdf, so IMHO it a little bi harsh comment :)",
+        "createdAt" : "2021-05-12T09:40:05Z",
+        "updatedAt" : "2021-05-12T09:51:15Z",
+        "lastEditedBy" : "b15151c4-81af-487d-8c8f-a4f39690bd34",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8118fde4-93c3-4837-b800-09cf464386e0",
+        "parentId" : "a95bd585-97a5-4961-99de-4334ed328b27",
+        "authorId" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "body" : "In general it can go both ways. There can be multiple sockets-per-numa OR multiple numa-per-socket. In fact, multiple numa-per-socket (NPS for short) is starting to become quite common (please see something like the AMD Rome architecture for reference):\r\n\r\nhttps://hpcadvisorycouncil.atlassian.net/wiki/spaces/HPCWORKS/pages/1280442391/AMD+2nd+Gen+EPYC+CPU+Tuning+Guide+for+InfiniBand+HPC#NPS-Configuration",
+        "createdAt" : "2021-05-20T12:00:47Z",
+        "updatedAt" : "2021-05-20T12:17:30Z",
+        "lastEditedBy" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e6a5afe5-823f-4207-a399-ea2b4a7ddeb0",
+        "parentId" : "a95bd585-97a5-4961-99de-4334ed328b27",
+        "authorId" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "body" : "Also, this upcoming PR will support both socket-per-numa and numa-per-socket in the CPUManager's allocation algorithm: https://github.com/kubernetes/kubernetes/pull/102015",
+        "createdAt" : "2021-05-20T12:20:22Z",
+        "updatedAt" : "2021-05-20T12:20:22Z",
+        "lastEditedBy" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1dea66439cbf8d14a469268951d3c81d904fc8d6",
+    "line" : 90,
+    "diffHunk" : "@@ -1,1 +284,288 @@\tdetails2 = map[int]CPUInfo{\n\t\t0: {SocketID: 0, NUMANodeID: 0},\n\t\t1: {SocketID: 0, NUMANodeID: 1},\n\t\t2: {SocketID: 1, NUMANodeID: 2},\n\t\t3: {SocketID: 1, NUMANodeID: 3},"
+  }
+]

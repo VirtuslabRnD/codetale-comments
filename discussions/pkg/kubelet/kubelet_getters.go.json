@@ -1,0 +1,563 @@
+[
+  {
+    "id" : "1236e5c7-2e42-4e1c-99d0-50ff4640e60e",
+    "prId" : 99336,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99336#pullrequestreview-596746423",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "079c5b2a-ae47-4fe8-a7e5-5e987374f16c",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "/hold\r\n\r\nquickly returning `initialNode()` before the node informer has synced is not correct... doesn't that mean existing pods that are currently running could be evicted on a kubelet restart if their node selectors did not match the kubelet's self-computed initial labels?",
+        "createdAt" : "2021-02-23T03:21:20Z",
+        "updatedAt" : "2021-04-21T19:57:53Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb4a98cd-f890-4684-aa97-bc9e521badec",
+        "parentId" : "079c5b2a-ae47-4fe8-a7e5-5e987374f16c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this seems like it is reintroducing the correctness problem https://github.com/kubernetes/kubernetes/pull/94087 fixed",
+        "createdAt" : "2021-02-23T03:21:49Z",
+        "updatedAt" : "2021-04-21T19:57:53Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "13ea40c9-d110-4fc5-841f-c4a98788231d",
+        "parentId" : "079c5b2a-ae47-4fe8-a7e5-5e987374f16c",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "> doesn't that mean existing pods that are currently running could be evicted on a kubelet restart if their node selectors did not match the kubelet's self-computed initial labels?\r\n\r\ni did not see it in practice after a kubelet restart, but could happen in theory.\r\n\r\n> this seems like it is reintroducing the correctness problem #94087 fixed\r\n\r\nas mentioned on https://github.com/kubernetes/kubernetes/pull/94087, the wait for sync can also happen once on startup. \r\nbut IIUC this means the kubelet has to start the static pods and wait for sync, without calling on GetNode().\r\n\r\nwill experiment more, but https://github.com/kubernetes/kubernetes/pull/94087 has to be iterated on.\r\n",
+        "createdAt" : "2021-02-23T04:32:25Z",
+        "updatedAt" : "2021-04-21T19:57:53Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c127d12e-f189-4c68-8f6f-3b14aed8abde",
+        "parentId" : "079c5b2a-ae47-4fe8-a7e5-5e987374f16c",
+        "authorId" : "5e225159-999d-430a-8b58-d5220dc1429d",
+        "body" : "We meet #94087 sometimes and finally, we use a logic that is similar to comments here https://github.com/kubernetes/kubernetes/issues/92067#issuecomment-643711902 to avoid re-scheduling pods after kubelet restart. It works well in our product env.\r\n\r\nAs #94087 described,\r\n\r\n> **Special notes for your reviewer:**\r\n> still under discussion where to best wait (in getter, or in main kubelet startup)\r\n\r\nI prefer to wait in getter only.",
+        "createdAt" : "2021-02-23T05:41:49Z",
+        "updatedAt" : "2021-04-21T19:57:53Z",
+        "lastEditedBy" : "5e225159-999d-430a-8b58-d5220dc1429d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8f528f9-76e5-4024-a822-f1c609537827",
+        "parentId" : "079c5b2a-ae47-4fe8-a7e5-5e987374f16c",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "> We meet #94087 sometimes and finally, we use a logic that is similar to comments here #92067 (comment) to avoid re-scheduling pods after kubelet restart. It works well in our product env.\r\n\r\nlooking at the code in the comment, it's returning the initial node if `kl.nodeLister.Get()` fails. this current PR is returning `kl.nodeLister.Get()` only after the informer sync. so this is similar.\r\n\r\nbased on your comment and the linked comment, does that confirm that returning the initial node mitigates the re-schedule on restart problem?\r\n\r\n> I prefer to wait in getter only.\r\n\r\nin general, for a system that is not only kubernetes, i would say i prefer waiting for a module to be ready before using it in getters. but i don't mind fixing the problem one way or the other, because the users will soon start reporting the timing issue (EDIT: looks like they have started linking to our issue..)\r\n",
+        "createdAt" : "2021-02-23T14:22:24Z",
+        "updatedAt" : "2021-04-21T19:57:53Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "97e61900-d8ea-4382-9033-106d51a7fee1",
+        "parentId" : "079c5b2a-ae47-4fe8-a7e5-5e987374f16c",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "What if we have an alternative `nodeLister.GetForStaticPods()` method that doesn't have the poll? That way, static pods are created ASAP with a best-effort Node.",
+        "createdAt" : "2021-02-23T15:33:32Z",
+        "updatedAt" : "2021-04-21T19:57:53Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5eb45d82-dd75-4b22-b22a-f6f73b10b937",
+        "parentId" : "079c5b2a-ae47-4fe8-a7e5-5e987374f16c",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "part of the slowness problem here is that GetNode and getNodeAnyway are called so many times that it just creates a lot of polls.\r\n\r\nexample patch:\r\n\r\n<details>\r\n\r\n```\r\ndiff --git a/pkg/kubelet/kubelet_getters.go b/pkg/kubelet/kubelet_getters.go\r\nindex 32e80cc863a..34da817ab3a 100644\r\n--- a/pkg/kubelet/kubelet_getters.go\r\n+++ b/pkg/kubelet/kubelet_getters.go\r\n@@ -22,6 +22,7 @@ import (\r\n        \"io/ioutil\"\r\n        \"net\"\r\n        \"path/filepath\"\r\n+       \"runtime\"\r\n        \"time\"\r\n \r\n        cadvisorapiv1 \"github.com/google/cadvisor/info/v1\"\r\n@@ -238,10 +239,22 @@ func (kl *Kubelet) GetNode() (*v1.Node, error) {\r\n                return kl.initialNode(context.TODO())\r\n        }\r\n        // if we have a valid kube client, we wait for initial lister to sync\r\n+\r\n        if !kl.nodeHasSynced() {\r\n+\r\n+               pc, fn, line, _ := runtime.Caller(1)\r\n+               klog.Infof(\"------------ %v %v %v\", runtime.FuncForPC(pc).Name(), fn, line)\r\n+               pc, fn, line, _ = runtime.Caller(2)\r\n+               klog.Infof(\"----------------- %v %v %v\", runtime.FuncForPC(pc).Name(), fn, line)\r\n+\r\n+               t := time.Now().UnixNano()\r\n+\r\n+               klog.Info(\"----- start poll\", t)\r\n                err := wait.PollImmediate(time.Second, maxWaitForAPIServerSync, func() (bool, error) {\r\n                        return kl.nodeHasSynced(), nil\r\n                })\r\n+               klog.Info(\"----- end poll\", t)\r\n+\r\n                if err != nil {\r\n                        return nil, fmt.Errorf(\"nodes have not yet been read at least once, cannot construct node object\")\r\n                }\r\n\r\n```\r\n\r\n</details>\r\n\r\n\r\noutput:\r\n\r\n<details>\r\n\r\n```\r\nlubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 271\r\nфев 23 17:57:14 lubo-it kubelet[34967]: I0223 17:57:14.674992   34967 kubelet_getters.go:247] ----------------- k8s.io/kubernetes/pkg/kubelet.(*Kubelet).getHostIPsAnyWay /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 300\r\nфев 23 17:57:14 lubo-it kubelet[34967]: I0223 17:57:14.674995   34967 kubelet_getters.go:251] ----- start poll1614095834674993617\r\nфев 23 17:57:23 lubo-it kubelet[34967]: I0223 17:57:23.395489   34967 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet/server/stats.(*summaryProviderImpl).Get /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/server/stats/summary.go 70\r\nфев 23 17:57:23 lubo-it kubelet[34967]: I0223 17:57:23.395516   34967 kubelet_getters.go:247] ----------------- k8s.io/kubernetes/pkg/kubelet/eviction.(*managerImpl).synchronize /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/eviction/eviction_manager.go 253\r\nфев 23 17:57:23 lubo-it kubelet[34967]: I0223 17:57:23.395536   34967 kubelet_getters.go:251] ----- start poll1614095843395523312\r\nфев 23 17:57:23 lubo-it kubelet[34967]: I0223 17:57:23.611550   34967 kubelet_getters.go:255] ----- end poll1614095833609464983\r\nфев 23 17:57:23 lubo-it kubelet[34967]: I0223 17:57:23.713866   34967 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).fastStatusUpdateOnce /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet.go 2271\r\nфев 23 17:57:23 lubo-it kubelet[34967]: I0223 17:57:23.713939   34967 kubelet_getters.go:251] ----- start poll1614095843713931550\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.675760   34967 kubelet_getters.go:255] ----- end poll1614095834674898274\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.675759   34967 kubelet_getters.go:255] ----- end poll1614095834674993617\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.689038   34967 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).syncPod /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet.go 1668\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.689045   34967 kubelet_getters.go:247] ----------------- k8s.io/kubernetes/pkg/kubelet.(*podWorkers).managePodLoop.func1 /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/pod_workers.go 175\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.689048   34967 kubelet_getters.go:251] ----- start poll1614095844689046894\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.689673   34967 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).getNodeAnyWay /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 271\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.689678   34967 kubelet_getters.go:247] ----------------- k8s.io/kubernetes/pkg/kubelet/lifecycle.(*predicateAdmitHandler).Admit /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/lifecycle/predicate.go 63\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.689681   34967 kubelet_getters.go:251] ----- start poll1614095844689679754\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.689714   34967 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).getNodeAnyWay /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 271\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.689718   34967 kubelet_getters.go:247] ----------------- k8s.io/kubernetes/pkg/kubelet.(*Kubelet).getHostIPsAnyWay /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 300\r\nфев 23 17:57:24 lubo-it kubelet[34967]: I0223 17:57:24.689721   34967 kubelet_getters.go:251] ----- start poll1614095844689719986\r\nфев 23 17:57:33 lubo-it kubelet[34967]: I0223 17:57:33.397687   34967 kubelet_getters.go:255] ----- end poll1614095843395523312\r\nфев 23 17:57:33 lubo-it kubelet[34967]: I0223 17:57:33.714370   34967 kubelet_getters.go:255] ----- end poll1614095843713931550\r\nфев 23 17:57:33 lubo-it kubelet[34967]: I0223 17:57:33.815646   34967 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).fastStatusUpdateOnce /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet.go 2271\r\nфев 23 17:57:33 lubo-it kubelet[34967]: I0223 17:57:33.815662   34967 kubelet_getters.go:251] ----- start poll1614095853815659396\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.690466   34967 kubelet_getters.go:255] ----- end poll1614095844689719986\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.690703   34967 kubelet_getters.go:255] ----- end poll1614095844689679754\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.690745   34967 kubelet_getters.go:255] ----- end poll1614095844689046894\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.711520   34967 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).syncPod /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet.go 1668\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.711529   34967 kubelet_getters.go:247] ----------------- k8s.io/kubernetes/pkg/kubelet.(*podWorkers).managePodLoop.func1 /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/pod_workers.go 175\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.711533   34967 kubelet_getters.go:251] ----- start poll1614095854711531429\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.718926   34967 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).getNodeAnyWay /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 271\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.718933   34967 kubelet_getters.go:247] ----------------- k8s.io/kubernetes/pkg/kubelet/lifecycle.(*predicateAdmitHandler).Admit /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/lifecycle/predicate.go 63\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.718936   34967 kubelet_getters.go:251] ----- start poll1614095854718935029\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.718990   34967 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).getNodeAnyWay /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 271\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.718994   34967 kubelet_getters.go:247] ----------------- k8s.io/kubernetes/pkg/kubelet.(*Kubelet).getHostIPsAnyWay /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 300\r\nфев 23 17:57:34 lubo-it kubelet[34967]: I0223 17:57:34.718997   34967 kubelet_getters.go:251] ----- start poll1614095854718995561\r\nфев 23 17:57:47 lubo-it kubelet[35849]: I0223 17:57:47.010245   35849 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).getNodeAnyWay /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 271\r\nфев 23 17:57:47 lubo-it kubelet[35849]: I0223 17:57:47.010251   35849 kubelet_getters.go:247] ----------------- k8s.io/kubernetes/pkg/kubelet.(*Kubelet).initializeRuntimeDependentModules /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet.go 1370\r\nфев 23 17:57:47 lubo-it kubelet[35849]: I0223 17:57:47.010253   35849 kubelet_getters.go:251] ----- start poll1614095867010252303\r\nфев 23 17:57:47 lubo-it kubelet[35849]: I0223 17:57:47.044750   35849 kubelet_getters.go:245] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).fastStatusUpdateOnce /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet.go 2271\r\nфев 23 17:57:47 lubo-it kubelet[35849]: I0223 17:57:47.044759   35849 kubelet_getters.go:251] ----- start poll1614095867044757891\r\nфев 23 17:58:16 lubo-it kubelet[37741]: I0223 17:58:16.913919   37741 kubelet_getters.go:246] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).getNodeAnyWay /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet_getters.go 272\r\nфев 23 17:58:16 lubo-it kubelet[37741]: I0223 17:58:16.913925   37741 kubelet_getters.go:248] ----------------- k8s.io/kubernetes/pkg/kubelet.(*Kubelet).initializeRuntimeDependentModules /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet.go 1370\r\nфев 23 17:58:16 lubo-it kubelet[37741]: I0223 17:58:16.913929   37741 kubelet_getters.go:252] ----- start poll1614095896913927359\r\nфев 23 17:58:16 lubo-it kubelet[37741]: I0223 17:58:16.958365   37741 kubelet_getters.go:246] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).fastStatusUpdateOnce /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet.go 2271\r\nфев 23 17:58:16 lubo-it kubelet[37741]: I0223 17:58:16.958388   37741 kubelet_getters.go:252] ----- start poll1614095896958386116\r\nфев 23 17:58:26 lubo-it kubelet[37741]: I0223 17:58:26.915966   37741 kubelet_getters.go:256] ----- end poll1614095896913927359\r\nфев 23 17:58:26 lubo-it kubelet[37741]: I0223 17:58:26.948723   37741 kubelet_getters.go:246] ------------ k8s.io/kubernetes/pkg/kubelet/server/stats.(*summaryProviderImpl).Get /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/server/stats/summary.go 70\r\nфев 23 17:58:26 lubo-it kubelet[37741]: I0223 17:58:26.948727   37741 kubelet_getters.go:248] ----------------- k8s.io/kubernetes/pkg/kubelet/eviction.(*managerImpl).synchronize /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/eviction/eviction_manager.go 253\r\nфев 23 17:58:26 lubo-it kubelet[37741]: I0223 17:58:26.948730   37741 kubelet_getters.go:252] ----- start poll1614095906948729209\r\nфев 23 17:58:26 lubo-it kubelet[37741]: I0223 17:58:26.961188   37741 kubelet_getters.go:256] ----- end poll1614095896958386116\r\nфев 23 17:58:27 lubo-it kubelet[37741]: I0223 17:58:27.061588   37741 kubelet_getters.go:246] ------------ k8s.io/kubernetes/pkg/kubelet.(*Kubelet).fastStatusUpdateOnce /home/lubo/go/src/k8s.io/kubernetes/_output/local/go/src/k8s.io/kubernetes/pkg/kubelet/kubelet.go 2271\r\nфев 23 17:58:27 lubo-it kubelet[37741]: I0223 17:58:27.061598   37741 kubelet_getters.go:252] ----- start poll1614095907061596323\r\n\r\n```\r\n\r\n</details>\r\n\r\n\r\nEDIT: during the SIG CL meeting today we were scratching our heads on why so many polls are happening and why it's not blocking per go-routine.\r\n\r\nEDIT2: looks like it's blocking per go routine, it's just GetNode is called from a number of places on startup, so having a poll in there doesn't feel right.\r\n",
+        "createdAt" : "2021-02-23T15:59:41Z",
+        "updatedAt" : "2021-04-21T19:57:53Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7823b0d8-c69a-4c7b-b5b6-e7452ca9356a",
+        "parentId" : "079c5b2a-ae47-4fe8-a7e5-5e987374f16c",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "https://github.com/kubernetes/kubernetes/pull/99336#issuecomment-784473647",
+        "createdAt" : "2021-02-23T20:01:56Z",
+        "updatedAt" : "2021-04-21T19:57:53Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7deac5e6970aa98fbcfc1d4f021c98cca3797051",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +234,238 @@func (kl *Kubelet) GetNode() (*v1.Node, error) {\n\tif kl.kubeClient == nil {\n\t\treturn kl.initialNode(context.TODO())\n\t}\n\treturn kl.nodeLister.Get(string(kl.nodeName))"
+  },
+  {
+    "id" : "12e1ac05-fa17-4ddd-b3b5-a6dc9790853d",
+    "prId" : 95301,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95301#pullrequestreview-579842203",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "is that possible that containerPath is empty Dir?",
+        "createdAt" : "2021-01-26T10:17:15Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e6b5ac1d-2a12-4a41-aab6-696aae0da35d",
+        "parentId" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "authorId" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "body" : "Does that matter? The code would clean up an empty directory at containerPath. Or do you mean a K8s emptyDir volume? That shouldn't be possible as we're one level too high for that.",
+        "createdAt" : "2021-01-26T11:19:25Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "111d1fab-29ef-4b17-99e2-57c809c792ea",
+        "parentId" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "will the return volumes contains containerPath if it is an emptyDir? The code only remove any dir that is listed in the volumes?",
+        "createdAt" : "2021-01-26T21:27:06Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f3e4658-ff1f-4dfd-a8d1-93ab3172e709",
+        "parentId" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "authorId" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "body" : "The code will never remove a volume which contains even a single file. Even if the volume is not a mount. It intentionally uses the `rmdir` syscall (and its equivalent on Windows) which fails if there is anything still in there. The code path we're talking about also doesn't care about emptyDirs as it only deals with subpaths.",
+        "createdAt" : "2021-01-26T21:36:45Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c4c0e1ab-b769-4b31-82a5-5157e5315948",
+        "parentId" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "i got that. The question I have here is say volumePluginDir is an empty dir, containerDirs will be empty list, and the returned volumes will be an empty list too?",
+        "createdAt" : "2021-01-26T22:18:45Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2983396-f2a1-4296-96f7-0cc8c3c4520a",
+        "parentId" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "authorId" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "body" : "If volumePluginDir is an empty dir then the loop over containerDirs will not execute as there's no items and thus no volumes will be added to the output.",
+        "createdAt" : "2021-01-26T22:32:26Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5cf9247c-5a08-4a1c-b764-27bc378a67b8",
+        "parentId" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "so in this case, volumePluginDir will not be removed. Is this desired behavior or we also want to remove the dir if it is empty.",
+        "createdAt" : "2021-01-27T03:08:37Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95111386-3f42-4be6-aad5-ac2729079ef1",
+        "parentId" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "authorId" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "body" : "It will be removed by the subsequent RemoveAllOneFilesystem call.",
+        "createdAt" : "2021-01-27T10:03:20Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0067b93c-e06e-4581-8dd3-7db0e79320ca",
+        "parentId" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I see. but since RemoveAllOneFilesystem can remove all dir/files if it can, the purpose of removing dir here is to reduce log spam? But the log will only appears once if RemoveAllOneFilesystem can clean up dir. The case you are trying to fix is RemoveAllOneFilesystem fails, and it will keep logging the message?",
+        "createdAt" : "2021-01-30T18:29:50Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c846d86e-7a57-4706-aac2-3eb545120751",
+        "parentId" : "55cd8a24-d416-4175-ad05-729b1833e425",
+        "authorId" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "body" : "No, the Kubelet code currently bails and logs an error if any volume directory still exists. `RemoveAllOneFilesystem` is not actually being called.",
+        "createdAt" : "2021-01-31T00:10:22Z",
+        "updatedAt" : "2021-02-01T19:10:48Z",
+        "lastEditedBy" : "b1b2eb10-b0ac-41b5-8354-7697c1bce7f9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ea27d9225ce0563266a189a613e126addec8ae45",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +388,392 @@\t\t\t// Switch to ReadDirNoStat at the subPathIndex level to prevent issues with stat'ing\n\t\t\t// mount points that may not be responsive\n\t\t\tsubPaths, err := utilpath.ReadDirNoStat(containerPath)\n\t\t\tif err != nil {\n\t\t\t\treturn volumes, fmt.Errorf(\"could not read directory %s: %v\", containerPath, err)"
+  },
+  {
+    "id" : "396aed5e-7945-429e-bb62-064770fac1c2",
+    "prId" : 95239,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95239#pullrequestreview-500711709",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "67270f01-0103-47c9-9fae-6bb6c2d8890f",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Since callers of this always extract the IP at index 0, would it be better to keep this as GetHostIP and and return index 0 from the returned list at GetNodeHostIPs? ",
+        "createdAt" : "2020-10-01T19:14:15Z",
+        "updatedAt" : "2020-10-07T21:28:03Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5772f52f-c303-43f6-8632-1e8c163a72a0",
+        "parentId" : "67270f01-0103-47c9-9fae-6bb6c2d8890f",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "I guess there's only one caller... I don't know, it seemed more appropriate to me to have the function return all the relevant information, and let the caller discard the secondary IP if it doesn't need it...",
+        "createdAt" : "2020-10-01T19:44:56Z",
+        "updatedAt" : "2020-10-07T21:28:03Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5285a567-8358-490b-a38f-36ff4f3419d4",
+        "parentId" : "67270f01-0103-47c9-9fae-6bb6c2d8890f",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Okay good point, missed that there is only 1 caller.",
+        "createdAt" : "2020-10-01T20:56:01Z",
+        "updatedAt" : "2020-10-07T21:28:03Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "971477d9b5cc4bf5ae62abe3bbc46e534f481e1b",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +264,268 @@\n// GetHostIPs returns host IPs or nil in case of error.\nfunc (kl *Kubelet) GetHostIPs() ([]net.IP, error) {\n\tnode, err := kl.GetNode()\n\tif err != nil {"
+  },
+  {
+    "id" : "301d9a7e-5234-4c31-a179-ac01c06e7462",
+    "prId" : 95239,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95239#pullrequestreview-503942676",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "03309aac-428a-4431-aef4-5addf34fcf77",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "DO we now need to pluralize pod.status.hostIP ?",
+        "createdAt" : "2020-10-07T04:51:58Z",
+        "updatedAt" : "2020-10-07T21:28:03Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a975839-6a83-4a6e-b8fc-b3d37ef755f8",
+        "parentId" : "03309aac-428a-4431-aef4-5addf34fcf77",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "there is an open issue about that https://github.com/kubernetes/kubernetes/issues/85443\r\nIt seems so",
+        "createdAt" : "2020-10-07T14:19:01Z",
+        "updatedAt" : "2020-10-07T21:28:03Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1fc22a1e-d5c0-4c87-b766-7970ceb822de",
+        "parentId" : "03309aac-428a-4431-aef4-5addf34fcf77",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "I mentioned that in the KEP; it's not a critical fix, since for the most part, every client in a dual-stack cluster ought to be able to reach either node IP, so having easy API access to one of them but not the other should not be fatal. But probably should be fixed for beta.",
+        "createdAt" : "2020-10-07T14:29:31Z",
+        "updatedAt" : "2020-10-07T21:28:03Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "971477d9b5cc4bf5ae62abe3bbc46e534f481e1b",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +269,273 @@\t\treturn nil, fmt.Errorf(\"cannot get node: %v\", err)\n\t}\n\treturn utilnode.GetNodeHostIPs(node)\n}\n"
+  },
+  {
+    "id" : "014e50d9-4c29-4e22-87ad-5084f0e0914d",
+    "prId" : 94087,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94087#pullrequestreview-469837482",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c41712fb-cd95-42bd-8668-7e448b08328c",
+        "parentId" : null,
+        "authorId" : "8e9f49fc-1050-4601-b81c-83bf660c5eb8",
+        "body" : "pretty sure this whole function collapses to just `return kl.GetNode()` since `GetNode()` contains the standalone logic",
+        "createdAt" : "2020-08-18T21:14:02Z",
+        "updatedAt" : "2020-09-01T16:17:52Z",
+        "lastEditedBy" : "8e9f49fc-1050-4601-b81c-83bf660c5eb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e6ccac3-6e0a-4018-b5e0-b83bc57abeb3",
+        "parentId" : "c41712fb-cd95-42bd-8668-7e448b08328c",
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "GetNode does not guarantee a response in case where kubeclient is not nil, whereas getNodeAnyway does (it falls back to initial node).",
+        "createdAt" : "2020-08-18T21:17:37Z",
+        "updatedAt" : "2020-09-01T16:17:52Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "752135242e49dc571159eb51328bcfc7734e6033",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +257,261 @@func (kl *Kubelet) getNodeAnyWay() (*v1.Node, error) {\n\tif kl.kubeClient != nil {\n\t\tif n, err := kl.GetNode(); err == nil {\n\t\t\treturn n, nil\n\t\t}"
+  },
+  {
+    "id" : "68d148aa-857c-408f-99c0-e72ac4e11a8b",
+    "prId" : 94087,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94087#pullrequestreview-596454120",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "83532ce7-063e-4941-8af7-018cedaca87e",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "this poll is problematic.\r\nGetNode is called in a hot loop, which means that the poll is present on each call.\r\n\r\nthe sequence looks like:\r\n- GetNode()\r\n  - Poll for nodeHasSynced()\r\n  - Poll ....\r\n- GetNode()\r\n  - Poll for nodeHasSynced()\r\n  - Poll ....\r\n\r\nif there is a valid client, arguably the informer sync check should be outside of this loop.\r\n",
+        "createdAt" : "2021-02-21T02:44:02Z",
+        "updatedAt" : "2021-02-21T02:54:33Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0fb72ae3-1c22-473f-86c0-4e67e6b5765f",
+        "parentId" : "83532ce7-063e-4941-8af7-018cedaca87e",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Wouldn't it be enough to check `HasSynced` once before creating the Kubelet object?",
+        "createdAt" : "2021-02-23T14:42:35Z",
+        "updatedAt" : "2021-02-23T14:42:35Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "186e6899-8ac3-438b-8728-727fd9f388bd",
+        "parentId" : "83532ce7-063e-4941-8af7-018cedaca87e",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "it would only sync after the api server is up.",
+        "createdAt" : "2021-02-23T14:55:13Z",
+        "updatedAt" : "2021-02-23T14:55:13Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2832a23e-98df-43ee-a2bd-5713288597fa",
+        "parentId" : "83532ce7-063e-4941-8af7-018cedaca87e",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "if the API server is down, there is nothing to sync. Am I missing something?",
+        "createdAt" : "2021-02-23T15:12:18Z",
+        "updatedAt" : "2021-02-23T15:12:18Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c03e2c1f-ec9d-48fe-b9db-d4e4680ca757",
+        "parentId" : "83532ce7-063e-4941-8af7-018cedaca87e",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "BTW we are discussion how to improve this in:\r\nhttps://github.com/kubernetes/kubernetes/pull/99336\r\n\r\nif the kubelet is managing the first server instance in the cluster as a static pod and if the HasSynced check is before the kubelet object creation this means for such a kubelet instance the single HasSynced check will always be false.\r\n\r\nmaybe that's what we want, given this is the first node in the cluster and there is no need to sync it on the first kubelet run (ever).\r\n\r\nfor subsequent runs from the same kubelet or additional kubelet the check should pass if there is an api server.\r\n",
+        "createdAt" : "2021-02-23T15:20:02Z",
+        "updatedAt" : "2021-02-23T15:21:26Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "752135242e49dc571159eb51328bcfc7734e6033",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +246,250 @@\t\t\treturn nil, fmt.Errorf(\"nodes have not yet been read at least once, cannot construct node object\")\n\t\t}\n\t}\n\treturn kl.nodeLister.Get(string(kl.nodeName))\n}"
+  },
+  {
+    "id" : "15dbdca7-7c17-4d1e-b545-b4a46ec6807a",
+    "prId" : 83931,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83931#pullrequestreview-305585975",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8f21dcab-8e53-4cac-9beb-9f189569b1ab",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "What's TODO here? Is the idea to plumb the context through as an arg to `GetNode()`? Or should this just be `context.Background()`?",
+        "createdAt" : "2019-10-23T00:45:16Z",
+        "updatedAt" : "2019-10-23T00:45:19Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9dd86160-303e-4fa9-aa75-3098a626f6fd",
+        "parentId" : "8f21dcab-8e53-4cac-9beb-9f189569b1ab",
+        "authorId" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "body" : "My thought was that yes, it would get plumbed through GetNode(), but I'm trying to handle this in small chunks. I started trying to do this more globally with https://github.com/kubernetes/kubernetes/pull/58532 and gave up as it seemed too much to review. So now I'm trying to wire it through in stages.",
+        "createdAt" : "2019-10-23T01:05:12Z",
+        "updatedAt" : "2019-10-23T01:05:12Z",
+        "lastEditedBy" : "7aca96c2-45d7-4567-99be-0323d7556c55",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d9e57861e5c6c0c9bcada9b08e743c3e47897eb9",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +227,231 @@func (kl *Kubelet) GetNode() (*v1.Node, error) {\n\tif kl.kubeClient == nil {\n\t\treturn kl.initialNode(context.TODO())\n\t}\n\treturn kl.nodeInfo.GetNodeInfo(string(kl.nodeName))"
+  },
+  {
+    "id" : "e9f0b7d5-c2bc-4782-b962-d19354f1cbb8",
+    "prId" : 61071,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/61071#pullrequestreview-104042861",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "456ed3f8-657a-4175-a22b-7dc29c7a34ce",
+        "parentId" : null,
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "this function is not called",
+        "createdAt" : "2018-03-14T13:35:22Z",
+        "updatedAt" : "2018-03-15T22:35:49Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c86f347a-160d-455a-b440-83f9f4e447c0",
+        "parentId" : "456ed3f8-657a-4175-a22b-7dc29c7a34ce",
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "Yeah, not sure why this function was introduced and then got commented out in code below.",
+        "createdAt" : "2018-03-14T13:41:27Z",
+        "updatedAt" : "2018-03-15T22:35:49Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3f1d9a39-776f-4efb-bcba-a18f1c964cc4",
+        "parentId" : "456ed3f8-657a-4175-a22b-7dc29c7a34ce",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "sorry for the confusion. It is being called. I was testing at that time.",
+        "createdAt" : "2018-03-15T00:21:14Z",
+        "updatedAt" : "2018-03-15T22:35:49Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9bd006de40b670c6e4fb444fd042e9bf0ef916dd",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +275,279 @@}\n\nfunc (kl *Kubelet) getMountedVolumePathListFromDisk(podUID types.UID) ([]string, error) {\n\tmountedVolumes := []string{}\n\tvolumePaths, err := kl.getPodVolumePathListFromDisk(podUID)"
+  },
+  {
+    "id" : "81c26568-835f-4c93-b1e0-e5aaed404cc6",
+    "prId" : 27970,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e96843ee-8cff-45d7-be81-636392058015",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Not yours, but please fix: Comment does not align with method name\n",
+        "createdAt" : "2016-08-12T18:12:30Z",
+        "updatedAt" : "2016-08-15T18:29:44Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "91aae93e-1413-44da-ba23-62c01fdce278",
+        "parentId" : "e96843ee-8cff-45d7-be81-636392058015",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I checked but they are the same?\n",
+        "createdAt" : "2016-08-12T18:24:32Z",
+        "updatedAt" : "2016-08-15T18:29:44Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f19a1148db1b7584be6b6b60abaf8c0bd1503ed3",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +93,97 @@// which volumes are created for the specified pod.  This directory may not\n// exist if the pod does not exist.\nfunc (kl *Kubelet) getPodVolumesDir(podUID types.UID) string {\n\treturn path.Join(kl.getPodDir(podUID), options.DefaultKubeletVolumesDirName)\n}"
+  },
+  {
+    "id" : "f7d27c66-1e16-4048-882f-26190b83fb57",
+    "prId" : 27970,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3ef789c1-62c9-4392-bab2-5c94d33872c6",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Not yours, but please fix: Comment does not align with method name\n",
+        "createdAt" : "2016-08-12T18:12:43Z",
+        "updatedAt" : "2016-08-15T18:29:44Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca0804eb-d8da-42f7-8e5e-08ee3a755b67",
+        "parentId" : "3ef789c1-62c9-4392-bab2-5c94d33872c6",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "Aren't they the same?\n",
+        "createdAt" : "2016-08-12T18:25:05Z",
+        "updatedAt" : "2016-08-15T18:29:44Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3241de8-2faf-41e8-8315-2cbc9ce571e3",
+        "parentId" : "3ef789c1-62c9-4392-bab2-5c94d33872c6",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Oh yes, github UI collapsed lines which confused me. Thanks.\n",
+        "createdAt" : "2016-08-13T00:27:57Z",
+        "updatedAt" : "2016-08-15T18:29:44Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f19a1148db1b7584be6b6b60abaf8c0bd1503ed3",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +97,101 @@}\n\n// getPodVolumeDir returns the full path to the directory which represents the\n// named volume under the named plugin for specified pod.  This directory may not\n// exist if the pod does not exist."
+  }
+]

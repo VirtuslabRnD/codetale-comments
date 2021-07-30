@@ -1,0 +1,156 @@
+[
+  {
+    "id" : "06af2710-f943-4fcd-bc7c-473ede68514b",
+    "prId" : 83022,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83022#pullrequestreview-293040825",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this change seems to go against the documented behavior of the method. it seems likely clients could be depending on getting a copy rather than modifying the reference in-place in the object.",
+        "createdAt" : "2019-09-24T16:15:08Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af9847cd-3fb5-4262-a033-658c86a6fcd4",
+        "parentId" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "What if we do:\r\n```\r\nreturn &(*refs[i])\r\n```\r\n\r\nThen we at least avoid copying all refs if there are more.",
+        "createdAt" : "2019-09-24T17:07:40Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76a100c6-b2d8-4736-bb18-f98b927188a4",
+        "parentId" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "that seems ok. does the benchmark still show improvement with that?",
+        "createdAt" : "2019-09-24T17:10:59Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "219ab3a6-736c-487e-b890-83e3a2b1cdc4",
+        "parentId" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "The current benchmark will, because there are many owner refs. In practice it won't be super helpful, because in majority of cases we have a single owner ref. But it also won't be worse (i.e. we will be copying exactly one item, instead of all).",
+        "createdAt" : "2019-09-24T19:10:57Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "128fa721-85a8-4b44-8209-766851094231",
+        "parentId" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> we will be copying exactly one item, instead of all\r\n\r\nwe were iterating, but only allocating a single item, right?",
+        "createdAt" : "2019-09-24T19:16:32Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57aa7da6-46f7-4a16-9c0d-5036c4f8636c",
+        "parentId" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "authorId" : "efa0987e-7d25-471d-9dea-9daaf77c2120",
+        "body" : "Thanks, Jordan. That's a really great point. \r\n\r\nI changed the method to return the copy to fulfill the contract from the method doc. Unfortunately, this reduced the performance improvement from 10x to 10%, but it's still something. \r\nIn addition I added a new flavor of this method that doesn't copy and used it in the IsControllerdBy method. This is a really low hanging fruit that should give us some improvement. We can change more callers in future, if there is a need / gain in that. ",
+        "createdAt" : "2019-09-25T12:07:26Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "efa0987e-7d25-471d-9dea-9daaf77c2120",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "679ec549-7f22-450a-a045-f198eac63941",
+        "parentId" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "authorId" : "efa0987e-7d25-471d-9dea-9daaf77c2120",
+        "body" : "I also updated the benchmark to be more realistic.",
+        "createdAt" : "2019-09-25T12:11:54Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "efa0987e-7d25-471d-9dea-9daaf77c2120",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62a161b1-6f85-4fba-91bb-11ac9395b135",
+        "parentId" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "sounds good. Looks like there are a few other call sites in common controller utils we can easily update:\r\n* realHistory#ListControllerRevisions could switch to use IsControlledBy\r\n* realHistory#AdoptControllerRevision could switch to GetControllerOfNoCopy\r\n* BaseControllerRefManager#ClaimObject could switch to GetControllerOfNoCopy",
+        "createdAt" : "2019-09-25T12:28:17Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "06231086-c69a-4d94-bf82-2f6376badfac",
+        "parentId" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "+1\r\n\r\nlet's change it in this PR given you're touching this code already",
+        "createdAt" : "2019-09-25T12:33:22Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fff44b15-a659-4527-bb20-124cd8d52eaa",
+        "parentId" : "9da81890-b600-4c78-bdab-cd62a21e8afe",
+        "authorId" : "efa0987e-7d25-471d-9dea-9daaf77c2120",
+        "body" : "Changed these 3 places as well.",
+        "createdAt" : "2019-09-25T12:35:23Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "efa0987e-7d25-471d-9dea-9daaf77c2120",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "01ccd2e19eb709d63fe770a70fcc817695dc7e32",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +45,49 @@\tfor i := range refs {\n\t\tif refs[i].Controller != nil && *refs[i].Controller {\n\t\t\treturn &refs[i]\n\t\t}\n\t}"
+  },
+  {
+    "id" : "a0f2b35a-2838-428e-994a-bd462b2a46e3",
+    "prId" : 83022,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83022#pullrequestreview-293051301",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "91d3899c-c57c-4c47-9631-3bb484e4be92",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "nit:\r\n```\r\nreturn &(*ref)\r\n```\r\n\r\n?",
+        "createdAt" : "2019-09-25T12:32:59Z",
+        "updatedAt" : "2019-09-25T13:08:05Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b50a1591-b5db-477d-bf8f-5d32ce30a6cc",
+        "parentId" : "91d3899c-c57c-4c47-9631-3bb484e4be92",
+        "authorId" : "efa0987e-7d25-471d-9dea-9daaf77c2120",
+        "body" : "Unfortunately, it doesn't work. Compiler optimizes this and returns the pointer to the original object",
+        "createdAt" : "2019-09-25T12:52:26Z",
+        "updatedAt" : "2019-09-25T13:08:06Z",
+        "lastEditedBy" : "efa0987e-7d25-471d-9dea-9daaf77c2120",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "01ccd2e19eb709d63fe770a70fcc817695dc7e32",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +36,40 @@\t\treturn nil\n\t}\n\tcp := *ref\n\treturn &cp\n}"
+  }
+]

@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "5a5631fd-844b-48ee-9501-4e1a4df24320",
+    "prId" : 93702,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/93702#pullrequestreview-478450822",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d2179b49-9940-4d13-9d49-aaacf3e2a7c9",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "i'm trying to understand what happens here.\r\n\r\nthis call to EvalSymlinks results in a path that does not end in /\r\nhttps://github.com/kubernetes/kubernetes/blob/323f34858de18b862d43c40b2cced65ad8e24052/cmd/kubeadm/app/cmd/phases/reset/cleanupnode.go#L97\r\n\r\nwhen iterating the lines in /proc/mounts we find an entry that is `device /var/lib/kubelet`, thus it ends up being unmounted as it is not skipped here:\r\n\r\n```\r\nif len(m) < 2 || !strings.HasPrefix(m[1], absoluteKubeletRunDirectory) {\r\n```\r\n\r\nyour change makes the if condition above skip the block device mount of /var/lib/kubelet?\r\n",
+        "createdAt" : "2020-08-05T13:11:17Z",
+        "updatedAt" : "2020-08-05T20:17:19Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "093691c5-a133-4ab9-ae82-8d580c6baec8",
+        "parentId" : "d2179b49-9940-4d13-9d49-aaacf3e2a7c9",
+        "authorId" : "a9396453-5dd8-4e28-b947-58ca166c44a7",
+        "body" : "Thanks for review, please correct me if I am wrong here, this was an attempt to replicate the following fixes https://github.com/kubernetes/kubernetes/pull/71663/files\r\n\r\nHere is the sample test case from the above code snippets:\r\n```\r\n# mount | grep kubelet\r\n/dev/sdc1 on /var/lib/kubelet type ext4 (rw,relatime,seclabel,data=ordered)\r\n# awk '$2 ~ path {print $2}' path=/var/lib/kubelet/ /proc/mounts <== PR #71663 fixes this by adding a \"/\"\r\n# awk '$2 ~ path {print $2}' path=/var/lib/kubelet /proc/mounts\r\n/var/lib/kubelet\r\n```\r\nSo in short, yes it will skip the `/var/lib/kubelet` directory during the loop",
+        "createdAt" : "2020-08-05T16:48:07Z",
+        "updatedAt" : "2020-08-05T20:17:19Z",
+        "lastEditedBy" : "a9396453-5dd8-4e28-b947-58ca166c44a7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4b995e44-b54f-464b-8db7-d6b97d3efa2d",
+        "parentId" : "d2179b49-9940-4d13-9d49-aaacf3e2a7c9",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "thanks for the confirmation.",
+        "createdAt" : "2020-08-05T17:16:29Z",
+        "updatedAt" : "2020-08-05T20:17:19Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7bde1753-56c5-4dce-a27d-78c7be4b3964",
+        "parentId" : "d2179b49-9940-4d13-9d49-aaacf3e2a7c9",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "> i'm trying to understand what happens here.\r\n> \r\n> this call to EvalSymlinks results in a path that does not end in /\r\n\r\nLet's say that it's not guaranteed (especially if `kubeadmconstants.KubeletRunDirectory` is not a symlink). We shouldn't rely on `EvalSymlinks` to return a result with a trailing slash.\r\n\r\n> https://github.com/kubernetes/kubernetes/blob/323f34858de18b862d43c40b2cced65ad8e24052/cmd/kubeadm/app/cmd/phases/reset/cleanupnode.go#L97\r\n> \r\n> when iterating the lines in /proc/mounts we find an entry that is `device /var/lib/kubelet`, thus it ends up being unmounted as it is not skipped here:\r\n> \r\n> ```\r\n> if len(m) < 2 || !strings.HasPrefix(m[1], absoluteKubeletRunDirectory) {\r\n> ```\r\n> \r\n> your change makes the if condition above skip the block device mount of /var/lib/kubelet?\r\n\r\nYes. The paths in `/proc/mounts` don't have trailing slashes so adding an extra slash to `absoluteKubeletRunDirectory` would save the day.",
+        "createdAt" : "2020-08-05T17:52:46Z",
+        "updatedAt" : "2020-08-05T20:17:19Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0bddfa04-a14a-4180-a1d6-1d50c1b203ca",
+        "parentId" : "d2179b49-9940-4d13-9d49-aaacf3e2a7c9",
+        "authorId" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "body" : "@rosti @thtanaka @neolit123 \r\n\r\n> We shouldn't rely on EvalSymlinks to return a result with a trailing slash.\r\n\r\nAccording to the [official golang documentation](https://golang.org/pkg/path/filepath/#EvalSymlinks) EvalSymlinks calls filepath.Clean on the result.\r\n[Clean docs state that](https://golang.org/pkg/path/filepath/#Clean) ```The returned path ends in a slash only if it represents a root directory```\r\n\r\nSo, to my understanding, we can rely on the opposite, i.e. on EvalSymlinks to return a result without a trailing slash.",
+        "createdAt" : "2020-08-31T09:19:15Z",
+        "updatedAt" : "2020-08-31T09:20:08Z",
+        "lastEditedBy" : "f46daf11-7000-4650-ae5b-dd25c29b4e29",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2e2d0845cd99fcf55246655cbef970b877dd536c",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +38,42 @@\t\tabsoluteKubeletRunDirectory += \"/\"\n\t}\n\n\tmounts := strings.Split(string(raw), \"\\n\")\n\tfor _, mount := range mounts {"
+  },
+  {
+    "id" : "115918d4-ce34-40c3-9c32-d490f086b8e2",
+    "prId" : 93702,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/93702#pullrequestreview-461893666",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0c318f1c-e702-444a-8b55-c0f9116482c8",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "@thtanaka can we add a comment above the `if` statement as to why this is necessary for posterity?",
+        "createdAt" : "2020-08-05T17:54:38Z",
+        "updatedAt" : "2020-08-05T20:17:19Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2e2d0845cd99fcf55246655cbef970b877dd536c",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +33,37 @@\t\treturn err\n\t}\n\n\tif !strings.HasSuffix(absoluteKubeletRunDirectory, \"/\") {\n\t\t// trailing \"/\" is needed to ensure that possibly mounted /var/lib/kubelet is skipped"
+  }
+]

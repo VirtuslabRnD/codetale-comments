@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "388e74fd-39ec-4349-abe6-dbd4aa73d1bc",
+    "prId" : 102477,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102477#pullrequestreview-675428051",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "125fb45c-6ddd-49a1-bc20-a2404647fc54",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "don't we need the same locks for the pvs list/create handlers?",
+        "createdAt" : "2021-06-01T14:10:56Z",
+        "updatedAt" : "2021-06-01T14:10:57Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34407fd2-c8f9-44c4-86a1-2cdbc534d4b3",
+        "parentId" : "125fb45c-6ddd-49a1-bc20-a2404647fc54",
+        "authorId" : "ac20bfc0-048b-4f7c-8f40-c004ff5299e1",
+        "body" : "This data race is concurrent read and write in `volumeAttachments.Items`, but i did not reproduce it in local env, so just add lock for attach case.",
+        "createdAt" : "2021-06-02T02:28:50Z",
+        "updatedAt" : "2021-06-02T02:28:50Z",
+        "lastEditedBy" : "ac20bfc0-048b-4f7c-8f40-c004ff5299e1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01b4c24f-34f4-4ebb-be56-44c078f6d8a6",
+        "parentId" : "125fb45c-6ddd-49a1-bc20-a2404647fc54",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "by inspection, both need locks, so go ahead and add those, then lgtm",
+        "createdAt" : "2021-06-03T15:37:58Z",
+        "updatedAt" : "2021-06-03T15:37:58Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0b8dc56408fd04e5073a9bbe262729424a56f99f",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +191,195 @@\t\treturn true, createAction.GetObject(), nil\n\t})\n\n\tpvs = &v1.PersistentVolumeList{}\n\tfakeClient.AddReactor(\"list\", \"persistentvolumes\", func(action core.Action) (handled bool, ret runtime.Object, err error) {"
+  },
+  {
+    "id" : "71f34e19-257b-499a-8bf9-69ec2afb15ea",
+    "prId" : 66884,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/66884#pullrequestreview-145769949",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "49a960db-f2e5-4e2c-b337-ff7407c5f51f",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Hm, I wonder if this would cause any issues for attachable plugins if they had been keeping some state in the Attacher object.",
+        "createdAt" : "2018-08-10T21:19:15Z",
+        "updatedAt" : "2018-08-14T03:15:11Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba9cb0e5-d3b3-47fb-881d-ce91374d5858",
+        "parentId" : "49a960db-f2e5-4e2c-b337-ff7407c5f51f",
+        "authorId" : "cf088828-7f69-4b6e-8956-1842c94daa02",
+        "body" : "The refactor move `MountDevice()` and `GetDeviceMountPath()` from `Attacher` to `DeviceMounter`.\r\nThe difference is: \r\nBefore this change: we will create an `Attacher` and let it call `WaitForAttach`, `GetDeviceMountPath()` and `MountDevice()`\r\nAfter this change: we will create an `Attacher` and a `DeviceMounter`,  let `Attacher` call `WaitForAttach` , let `DeviceMounter` call `GetDeviceMountPath()` and `MountDevice()`.\r\n\r\nHere, It seems that `GetDeviceMountPath()` and `MountDevice()` will not change the state kept in Attacher object(which is `attachedVolumeMap`), and also the `ErrorEncountered` will not affect the logic, since we will return directly if error occurs\r\n\r\nBTW: for now, we will create a new `Attacher` in both `GenerateMountVolumeFunc` and `GenerateAttachVolumeFunc` which are called by different components. It seems that we should avoid keeping state in Attacher object.\r\n\r\nplease correct me if i am wrong.",
+        "createdAt" : "2018-08-11T02:21:49Z",
+        "updatedAt" : "2018-08-14T03:15:11Z",
+        "lastEditedBy" : "cf088828-7f69-4b6e-8956-1842c94daa02",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62072c5b-09c1-4a97-9a77-1ea2314aeed5",
+        "parentId" : "49a960db-f2e5-4e2c-b337-ff7407c5f51f",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "I'm worried about situations where a plugin may have kept some state to serialize between WaitForAttach and MountDevice, like a lock or some cached data.",
+        "createdAt" : "2018-08-11T03:28:42Z",
+        "updatedAt" : "2018-08-14T03:15:11Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d24f083b-1fab-49d7-8462-751e9ad38a7e",
+        "parentId" : "49a960db-f2e5-4e2c-b337-ff7407c5f51f",
+        "authorId" : "cf088828-7f69-4b6e-8956-1842c94daa02",
+        "body" : "Got it, for now, i can not find the state kept between WaitForAttach and MountDevice through the plugins.\r\nBut should we cache the attacher info for the situations you are worried about ? e.g. if the attacher is created before, we do not need to create a new one in NewDeviceMounter...\r\n\r\n/cc @jsafrane @saad-ali ",
+        "createdAt" : "2018-08-11T04:01:55Z",
+        "updatedAt" : "2018-08-14T03:15:11Z",
+        "lastEditedBy" : "cf088828-7f69-4b6e-8956-1842c94daa02",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af59f451-50c2-4a3f-9921-b81a93746c3e",
+        "parentId" : "49a960db-f2e5-4e2c-b337-ff7407c5f51f",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "I went through volume plugins, none of them really passes information from WaitForAttach to MountDevice via the attacher instance.",
+        "createdAt" : "2018-08-13T15:38:56Z",
+        "updatedAt" : "2018-08-14T03:15:11Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10ca3202-2ef9-4787-9a16-802093c25a1a",
+        "parentId" : "49a960db-f2e5-4e2c-b337-ff7407c5f51f",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Thanks guys for searching!  This sounds fine to me then.",
+        "createdAt" : "2018-08-13T18:05:08Z",
+        "updatedAt" : "2018-08-14T03:15:11Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "55784f88d443c4d9b6c5263721c0256faa935aa0",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +296,300 @@\nfunc (plugin *TestPlugin) NewDeviceMounter() (volume.DeviceMounter, error) {\n\treturn plugin.NewAttacher()\n}\n"
+  }
+]

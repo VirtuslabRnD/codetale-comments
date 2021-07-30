@@ -1,0 +1,354 @@
+[
+  {
+    "id" : "77ab0ef5-45b2-4008-ae53-46ad8804bda7",
+    "prId" : 75234,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/75234#pullrequestreview-242145857",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "we rely on the correctness of mount.PathExists(dir) to return not exist only if path is really no longer exist. but the current implementation seems still has problem. https://github.com/kubernetes/kubernetes/blob/master/pkg/util/mount/mount_helper_common.go#L101\r\nshould we fix that too?",
+        "createdAt" : "2019-04-26T16:47:02Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "42c78930-f7f6-491f-a8ba-2eae6db36d6c",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "body" : "hi @jingxu97 originally I fixed this issue like this:\r\nhttps://github.com/andyzhangx/kubernetes/commit/f99d3ab223eda0a1c341b67b04aa968b83f8a2d6\r\nWhich way do you perfer?  also loop in @gnufied  @msau42 ",
+        "createdAt" : "2019-04-27T00:27:46Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0bd049e-ea60-4c45-8be0-f3f664224d1e",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I think your current fix plus the fix you had for mount.PathExists(dir)  is good enough.",
+        "createdAt" : "2019-04-27T01:08:42Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df3b1234-823a-4481-8601-3bc249340c3b",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "I think the main concern is if we fix PathExists, that impacts all plugins",
+        "createdAt" : "2019-04-27T01:12:10Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8edc5350-f79e-42ed-99dd-cf686d5d761f",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "understand. But if os.IsNotExist(err) is not true, we are not sure the path exists or not. Currently plugins will return nil instead of unmounting if path does not exists (but it might exist due to the issue of current implementation), which is wrong. I think the change is  actually makes the system perform in a safer way. ",
+        "createdAt" : "2019-04-27T01:50:54Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "21020407-5499-4818-8569-6eff2ca74bad",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "body" : "@jingxu97 @msau42 PTAL, I have changed the code of function `PathExits`, it will always return `<true, error>` if path has error",
+        "createdAt" : "2019-04-29T07:13:29Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49d93958-69c7-4ccd-abd0-175cc15e5af7",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I have looked at all the places of calling PathExists, there are two ways of checking\r\n1. If PathErr != nil: First check whether there is error or not, if there is error, return the **error** immediately in the function. Otherwise, it checks !pathExists, if it is true (not exist), skip cleanup steps and immediately return. If it is false (exist), it will do cleanup step \r\n2. If !PathExists: First check whether the boolean value of PathExists is false or not. If it is false, normally skip some cleanup steps and return **nil** (no error)\r\n\r\nWith this the change of returning true instead of false in PathExists, I think it is safe to use in both checking approaches. \r\nFor option 1, if PathErr != nil, it excludes the cases of PathExists=true without error or PathExists=false (basically we are sure of path either exists or not exists without any other checking errors). After this step, it continues to check PathExists or not and determine the action.\r\nFor option 2, if !PathExists is true, the new change we have here means that we are sure that path does not exist, and we can safely skip some clean up action. Before we have the problem of setting !PathExists is true even in some error cases that we are actually not sure about the existence.\r\nIn summary, I think it is safe to make this change.",
+        "createdAt" : "2019-04-29T20:02:48Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "94d29008-305e-49ac-8888-f284174e15d4",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Why do we need to check pathExists again here? It's already been changed https://github.com/kubernetes/kubernetes/pull/75234/files#diff-e39e9fce3fb72bfbb3f128662eb6639dR46\r\n\r\nI think this change is related, and may potentially be needed? https://github.com/kubernetes/kubernetes/pull/75645\r\n\r\nBefore, if there's some non-corrupted error, pathExists = false and the Unmount operation will get skipped and return success.  Now with this change, pathExists = true and pathErr != nil, TearDown returns early before calling Unmount, so now, Teardown returns error forever.",
+        "createdAt" : "2019-04-29T23:00:46Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3517b55a-982c-470a-8070-c9408be8f549",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "body" : "@msau42 good catch, I have changed the code, PTAL, thanks.",
+        "createdAt" : "2019-04-30T08:52:18Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "79b4cb36-da76-40e6-829b-2085e068a4e4",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Thanks, while I agree fixing PathExists is the correct thing to do, I think we need to investigate and update all the callers to due to the issue I pointed above. ",
+        "createdAt" : "2019-05-01T18:47:34Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df1b792b-207d-4ecb-b366-ab57dba8b024",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "Please see my comments here https://github.com/kubernetes/kubernetes/pull/75645#issuecomment-488757177",
+        "createdAt" : "2019-05-02T17:19:18Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0b2f3f2c-cb48-4c3f-bed5-4747ad9cd59a",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "body" : "@jingxu97 I see PR: https://github.com/kubernetes/kubernetes/pull/75645 is fixing all the pathExists issue, shall I make this PR code change only in flexvolume, I would like to cherry-pick to old release, would like to make it as small as possible. Thanks.",
+        "createdAt" : "2019-05-10T03:20:48Z",
+        "updatedAt" : "2019-05-22T08:53:20Z",
+        "lastEditedBy" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a6f642a8-f2ba-406c-a624-728e71cc2d9f",
+        "parentId" : "30a6d5f1-c1ec-464f-9941-75a707e489a5",
+        "authorId" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "body" : "ping @jingxu97 @msau42 PTAL, thanks.",
+        "createdAt" : "2019-05-27T08:04:58Z",
+        "updatedAt" : "2019-05-27T08:04:59Z",
+        "lastEditedBy" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fb81a28a474ab6b44f0f01b924b9309f7b8840a9",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +48,52 @@\t\tklog.Warningf(\"Error checking path: %v\", pathErr)\n\t} else {\n\t\tif !pathExists {\n\t\t\tklog.Warningf(\"Warning: Unmount skipped because path does not exist: %v\", dir)\n\t\t\treturn nil"
+  },
+  {
+    "id" : "5c5e6d44-944f-4ea7-b27f-eb445f1d6559",
+    "prId" : 75234,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/75234#pullrequestreview-245204272",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bf27e7e7-5872-4693-b5ac-052fcb167701",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "how about \r\nif !pathExists & pathErr == nil {\r\n    return nil\r\n}\r\n...",
+        "createdAt" : "2019-05-23T01:46:25Z",
+        "updatedAt" : "2019-05-23T02:01:44Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1e094fa7-9b0e-4132-8212-605c2aa80429",
+        "parentId" : "bf27e7e7-5872-4693-b5ac-052fcb167701",
+        "authorId" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "body" : "then this function would depend on return value of PathExists, if it return <false, error>, it won't proceed, mainly I would like to cherry pick to old release, only for flexvol.TearDownAt func",
+        "createdAt" : "2019-05-23T01:49:59Z",
+        "updatedAt" : "2019-05-23T01:49:59Z",
+        "lastEditedBy" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a079703-1a9f-40c6-ba91-fb7842c52583",
+        "parentId" : "bf27e7e7-5872-4693-b5ac-052fcb167701",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "oh, sorry my mistake. I corrected it. \r\nonly if it return (false, nil) which means path is definitely not exist , it will return immediately without any further actions.",
+        "createdAt" : "2019-05-23T02:01:25Z",
+        "updatedAt" : "2019-05-23T02:02:03Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a128e14e-2657-4f70-a588-f7794421a1f1",
+        "parentId" : "bf27e7e7-5872-4693-b5ac-052fcb167701",
+        "authorId" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "body" : "Hi @jingxu97 logic of this PR is identical to this your suggested comment:\r\n```\r\n\tif pathErr != nil {\r\n\t\t// only log warning here since plugins should anyways have to deal with errors\r\n\t\tklog.Warningf(\"Error checking path: %v\", pathErr)\r\n\t} else {\r\n\t\tif !pathExists {\r\n\t\t\tklog.Warningf(\"Warning: Unmount skipped because path does not exist: %v\", dir)\r\n\t\t\treturn nil\r\n\t\t}\r\n\t}\r\n```",
+        "createdAt" : "2019-05-23T03:04:50Z",
+        "updatedAt" : "2019-05-23T03:05:17Z",
+        "lastEditedBy" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8273fd96-fda8-4e6b-ba57-fb7799f03646",
+        "parentId" : "bf27e7e7-5872-4693-b5ac-052fcb167701",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "yes, the logic is the same.  I am thinking to make it easier to read. And I think the other PR  #75645 also uses the simpler way.",
+        "createdAt" : "2019-06-03T23:06:29Z",
+        "updatedAt" : "2019-06-03T23:06:30Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0aad2654-eaa5-4969-904e-ed7e0622b424",
+        "parentId" : "bf27e7e7-5872-4693-b5ac-052fcb167701",
+        "authorId" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "body" : "@jingxu97 shall we go with this PR first, and I would like to cherry pick this PR to old release, thanks.",
+        "createdAt" : "2019-06-04T02:10:42Z",
+        "updatedAt" : "2019-06-04T02:10:43Z",
+        "lastEditedBy" : "e0218e0a-9e55-43f5-8929-04673eea9015",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fb81a28a474ab6b44f0f01b924b9309f7b8840a9",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +44,48 @@func (f *flexVolumeUnmounter) TearDownAt(dir string) error {\n\tpathExists, pathErr := mount.PathExists(dir)\n\tif pathErr != nil {\n\t\t// only log warning here since plugins should anyways have to deal with errors\n\t\tklog.Warningf(\"Error checking path: %v\", pathErr)"
+  },
+  {
+    "id" : "8bd69280-9a71-4ee0-9184-51e2c5ba750e",
+    "prId" : 67097,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67097#pullrequestreview-146137790",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "15b0ef4d-04ad-43cd-946f-64f727ef05ce",
+        "parentId" : null,
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "I have been thinking about - https://github.com/kubernetes/kubernetes/issues/67132 too and I am wondering if it is sensible to allow call to `unmount` to flex driver when `ENOTCONN` is raised.  @nkkashyap why do you think it is sensible to allow unmount call even if volume is known to be corrupted?",
+        "createdAt" : "2018-08-13T18:20:51Z",
+        "updatedAt" : "2018-08-13T18:20:51Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e1300e04-889d-4aa0-8197-13b4456d069d",
+        "parentId" : "15b0ef4d-04ad-43cd-946f-64f727ef05ce",
+        "authorId" : "cb578771-ab57-49a0-afd6-27da11c87c6d",
+        "body" : "@gnufied for some filesystems this may be required. The unmount call from the flexvolume can always fail if it cannot unmount.",
+        "createdAt" : "2018-08-14T16:05:14Z",
+        "updatedAt" : "2018-08-14T16:05:14Z",
+        "lastEditedBy" : "cb578771-ab57-49a0-afd6-27da11c87c6d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "93a19fce28b2fb0d38415149b2d40f70a2a042f3",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +54,58 @@\t\treturn fmt.Errorf(\"Error checking path: %v\", pathErr)\n\t}\n\n\tcall := f.plugin.NewDriverCall(unmountCmd)\n\tcall.Append(dir)"
+  },
+  {
+    "id" : "6d3aa706-9ece-4343-b14c-ef1a4bdb0f67",
+    "prId" : 49118,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/49118#pullrequestreview-50696715",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e590ad7b-6811-4788-94ca-b645cc979779",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "is this assuming it is a directory as well? is that going to be problematic if the flex plugin was mounting a file or dir that should not be removed?",
+        "createdAt" : "2017-07-18T16:56:42Z",
+        "updatedAt" : "2017-07-24T11:34:36Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "50edccc0-d115-4590-abab-499b5cf0e36e",
+        "parentId" : "e590ad7b-6811-4788-94ca-b645cc979779",
+        "authorId" : "da523544-ad2f-4e22-9115-9603ed247391",
+        "body" : "We don't add any removal here, do we?\r\nThe file / directory which was mounted is not really worked with in this function, the `dir` is the mountpoint. And the goal here is to just run the driver to do the unmount, without checking whether the mountpoint seems mounted.\r\nOf course, the driver can do whatever checks it needs to do to be extra safe.\r\nIf you are worried about this check being removed, what we could do is check whether during mounting, the mountpoint started to look like mountpoint (== the filesystem id of the mountpoint and of its parent got different). But I'm not sure if we'd be able to store/persist that check result until the unmount time.",
+        "createdAt" : "2017-07-18T17:54:20Z",
+        "updatedAt" : "2017-07-24T11:34:36Z",
+        "lastEditedBy" : "da523544-ad2f-4e22-9115-9603ed247391",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0bf23db8-d1d6-4bb3-ae9d-a677b8b1ad3d",
+        "parentId" : "e590ad7b-6811-4788-94ca-b645cc979779",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I meant the existing `os.Remove(dir)` call below",
+        "createdAt" : "2017-07-18T17:59:28Z",
+        "updatedAt" : "2017-07-24T11:34:36Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8886ddd9-7b93-414f-82c4-e8d42d4ba594",
+        "parentId" : "e590ad7b-6811-4788-94ca-b645cc979779",
+        "authorId" : "da523544-ad2f-4e22-9115-9603ed247391",
+        "body" : "Ah. Well, it's a directory / location that was created in the pod's directory by the driver during mounting, to have the mountpoint exist, in https://github.com/kubernetes/kubernetes/blob/master/pkg/volume/flexvolume/util.go#L71. It's per-driver per-mountpoint named.\r\nI can't think of use-case when leaving it behind might be useful. It's not like this was the location where any other software might expect for the data to keep on living.",
+        "createdAt" : "2017-07-18T18:07:40Z",
+        "updatedAt" : "2017-07-24T11:34:36Z",
+        "lastEditedBy" : "da523544-ad2f-4e22-9115-9603ed247391",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d6e81c7-e833-49c3-ba4f-93a4dcd7f14d",
+        "parentId" : "e590ad7b-6811-4788-94ca-b645cc979779",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "ok",
+        "createdAt" : "2017-07-18T18:10:43Z",
+        "updatedAt" : "2017-07-24T11:34:36Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6b7d4b792209b03273b62326af10d64ee23c4d5f",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +62,66 @@\t}\n\n\t// Flexvolume driver may remove the directory. Ignore if it does.\n\tif pathExists, pathErr := util.PathExists(dir); pathErr != nil {\n\t\treturn fmt.Errorf(\"Error checking if path exists: %v\", pathErr)"
+  },
+  {
+    "id" : "fb6b4835-48d4-4e04-80b1-81f07da7c322",
+    "prId" : 41804,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/41804#pullrequestreview-23581686",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4a90dc70-bb08-463d-ae67-7134b33b23a0",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Ditto the `UnmountDevice` command comment:  I suggest removing this logic. If a driver implements this call they can implement these checks. If they don't then the default `TearDownAt` command should just call UnmountPath(...) from pkg/volume/util/util.go which has the most robust implementation of this logic.\r\n",
+        "createdAt" : "2017-02-23T22:15:59Z",
+        "updatedAt" : "2017-02-25T01:18:26Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0d2af70e95dc25141d6d179a088b3d1af26eb206",
+    "line" : 47,
+    "diffHunk" : "@@ -1,1 +45,49 @@func (f *flexVolumeUnmounter) TearDownAt(dir string) error {\n\n\tif pathExists, pathErr := util.PathExists(dir); pathErr != nil {\n\t\treturn fmt.Errorf(\"Error checking if path exists: %v\", pathErr)\n\t} else if !pathExists {"
+  }
+]

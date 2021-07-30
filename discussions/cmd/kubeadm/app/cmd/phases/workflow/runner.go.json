@@ -1,0 +1,266 @@
+[
+  {
+    "id" : "15da0673-092d-4244-9ecb-3172ffdef9e6",
+    "prId" : 77400,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/77400#pullrequestreview-236005867",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5a412409-2462-4635-a6fa-0f20928ad42a",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "Is there any reason to do this? I am not a particular fan of imposing `cobra.MaximumNArgs(1)` in this way.",
+        "createdAt" : "2019-05-09T09:01:55Z",
+        "updatedAt" : "2019-05-10T13:20:13Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cbba3cce-9f96-4865-b659-117cfa376dca",
+        "parentId" : "5a412409-2462-4635-a6fa-0f20928ad42a",
+        "authorId" : "27315fad-771e-420e-af79-534db73fcb49",
+        "body" : "~~? I'm not sure I understand this.~~ What I mean to accomplish here is if you did not set any Args in the phase, to just use the parent commands arg checker. right?",
+        "createdAt" : "2019-05-09T12:09:31Z",
+        "updatedAt" : "2019-05-10T13:20:13Z",
+        "lastEditedBy" : "27315fad-771e-420e-af79-534db73fcb49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e1bd892c-ff48-48a3-9900-bee08f0c894f",
+        "parentId" : "5a412409-2462-4635-a6fa-0f20928ad42a",
+        "authorId" : "27315fad-771e-420e-af79-534db73fcb49",
+        "body" : "Also, I believe this is what @fabriziopandini wanted https://github.com/kubernetes/kubeadm/issues/1375#issuecomment-468949883",
+        "createdAt" : "2019-05-09T12:14:45Z",
+        "updatedAt" : "2019-05-10T13:20:13Z",
+        "lastEditedBy" : "27315fad-771e-420e-af79-534db73fcb49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db61eb8e-351e-4fd1-a3c2-a618efa0495f",
+        "parentId" : "5a412409-2462-4635-a6fa-0f20928ad42a",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "I just took the `join` case, for `init` this would be `cobra.NoArgs`. This means that we need to test all the phases to check for CLI breakages (especially the init phases).\r\n\r\nThe original proposal by @fabriziopandini (in kubernetes/kubeadm#1375) states:\r\n> More specifically, we would like to have leaf phases without discovery flags using Args: cobra.NoArgs (while the top-level command/all the other leaf phases will use Args: cobra.MaximumNArgs(1))\r\n\r\nI agree with this, except for the fact, that `init`s top level cmd should use `cobra.NoArgs` too (which it does ATM).\r\n\r\nThe way you do it gets the job done, but I distaste the implicit behavior of this. Without full test coverage for all possible phases it can can cause problems in the future.\r\nWhat I think is a bit more appropriate with respect to the above concern is to make stuff explicit - don't inherit anything from the parent command, but explicitly add the positional args verifier per phase. This will make the things more verbose though and the patch larger in size.",
+        "createdAt" : "2019-05-09T12:27:10Z",
+        "updatedAt" : "2019-05-10T13:20:13Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca6cff2b-87a8-4919-9682-85108e45b3a5",
+        "parentId" : "5a412409-2462-4635-a6fa-0f20928ad42a",
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "I understand @rosti  point that implicit behavior is ... not explicit when you read the code\r\n\r\nI considered three options \r\na) to apply by default the parent arg validation of parent phase to leaf phases (current implementation)\r\nb) to apply a predefined default to all phases e.g. NoArgs \r\nc) to not apply any default for leaf phases, but to set args validation only if requested\r\n\r\nThe option c) goes in the direction of being explicit, but in the end, you have to set args for all phases, and I don't like the idea to add more knobs to all the phases (we already have eeetooomuch flags)\r\n\r\nI discarded b) because choosing a default is tricky (why NoArgs instead of something else?)\r\n\r\nSo I'm back again to a), the current implementation, that IMO makes sense because phases are pieces of the main command,  and so it is very likely that the args value of the parent command will make sense for leaf phases as well. In practices:\r\n\r\n- init has noArgs, and all the init phases will get NoArgs.\r\n- join has MaximumNArgs(1), this makes sense for many join phases as well, but you can set NoArgs by exception where this does not make sense: control-plane-prepare/control-plane, control-plane-join/*\r\n\r\nThat means that with this approach  we are changing only 4 phases over 20/30 phases currently in place",
+        "createdAt" : "2019-05-09T20:29:57Z",
+        "updatedAt" : "2019-05-10T13:20:13Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8f19115-2813-4290-9c24-1b9135a0f3c1",
+        "parentId" : "5a412409-2462-4635-a6fa-0f20928ad42a",
+        "authorId" : "27315fad-771e-420e-af79-534db73fcb49",
+        "body" : "The 4 select phases have been updated to `NoArg` I will squash and push when you all give the word. (if you like it that is.)",
+        "createdAt" : "2019-05-10T04:16:08Z",
+        "updatedAt" : "2019-05-10T13:20:13Z",
+        "lastEditedBy" : "27315fad-771e-420e-af79-534db73fcb49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "40703dc8-4d36-4bd2-a500-d43b2d698d59",
+        "parentId" : "5a412409-2462-4635-a6fa-0f20928ad42a",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "Ok, let's go with inheriting then.\r\n+1 for some of the control-plane join phases to use NoArgs.",
+        "createdAt" : "2019-05-10T09:19:36Z",
+        "updatedAt" : "2019-05-10T13:20:13Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2b69699f6765610b700ef942990cb3e8336c0c07",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +375,379 @@\t\t} else {\n\t\t\tif p.ArgsValidator == nil {\n\t\t\t\tphaseCmd.Args = cmd.Args\n\t\t\t} else {\n\t\t\t\tphaseCmd.Args = p.ArgsValidator"
+  },
+  {
+    "id" : "744eb94d-cfbf-4223-beee-555e3e5a22c1",
+    "prId" : 73348,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/73348#pullrequestreview-196807751",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "069c0cb5-7f1d-44cd-bdeb-abd5473c0b9e",
+        "parentId" : null,
+        "authorId" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "body" : "```suggestion\r\n\t\t// TODO: this logic is currently lacking verification if a subphase name is valid!\r\n```",
+        "createdAt" : "2019-01-27T00:36:51Z",
+        "updatedAt" : "2019-01-27T00:42:36Z",
+        "lastEditedBy" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1b0ba920feb4cc34b53f69a1df2a8a5cd34f6fe1",
+    "line" : 53,
+    "diffHunk" : "@@ -1,1 +310,314 @@\t\tUse:   \"phase\",\n\t\tShort: fmt.Sprintf(\"use this command to invoke single phase of the %s workflow\", cmd.Name()),\n\t\t// TODO: this logic is currently lacking verification if a suphase name is valid!\n\t}\n"
+  },
+  {
+    "id" : "2da29030-ca52-4af0-a051-27ac8a6ed232",
+    "prId" : 73029,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/73029#pullrequestreview-194395216",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f48c4d4c-ad8d-4093-a23a-0d3b5af4447b",
+        "parentId" : null,
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "If we are moving this here, please remove it from L#396",
+        "createdAt" : "2019-01-20T13:44:33Z",
+        "updatedAt" : "2019-01-20T14:32:11Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f2a0cf9a-6b4b-48f2-93c4-a2105f7ea75c",
+        "parentId" : "f48c4d4c-ad8d-4093-a23a-0d3b5af4447b",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "looks like i copied instead of moving.\r\n",
+        "createdAt" : "2019-01-20T14:30:51Z",
+        "updatedAt" : "2019-01-20T14:32:11Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9744d40f37cfa2dd003919989b08a0638bb63478",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +297,301 @@func (e *Runner) BindToCommand(cmd *cobra.Command) {\n\t// keep track of the command triggering the runner\n\te.runCmd = cmd\n\n\t// return early if no phases were added"
+  },
+  {
+    "id" : "13e4fb25-103c-430c-aac4-52289cb82d16",
+    "prId" : 71069,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/71069#pullrequestreview-175391922",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "15127456-6e11-433a-81b5-cee516015590",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "We need a test for the phase runner changes, otherwise LGTM",
+        "createdAt" : "2018-11-15T15:02:31Z",
+        "updatedAt" : "2018-11-16T17:55:33Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "225c75289bcc9bf760a666003c5079dc99f12442",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +214,218 @@\t\t// Errors if phases that are meant to create special subcommands only\n\t\t// are wrongly assigned Run Methods\n\t\tif p.RunAllSiblings && (p.RunIf != nil || p.Run != nil) {\n\t\t\treturn errors.Wrapf(err, \"phase marked as RunAllSiblings can not have Run functions %s\", p.generatedName)\n\t\t}"
+  },
+  {
+    "id" : "ecb92b75-15ab-4666-8b9a-b4b2fb4430eb",
+    "prId" : 69684,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69684#pullrequestreview-164275160",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4500c048-bd77-4912-8dd5-531e4d1d2a6e",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "There are a lot of pre-existing dag or tree libraries that exist.  We need to be sure we are scoping the usage correctly and only building what we need.  ",
+        "createdAt" : "2018-10-11T16:18:04Z",
+        "updatedAt" : "2018-10-12T15:55:21Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7279ecbc-9963-48a1-bf11-1058120f2d37",
+        "parentId" : "4500c048-bd77-4912-8dd5-531e4d1d2a6e",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Could you put a //TODO: If we ever decide to get more sophisticated we can swap this type with a well defined dag or tree library. ",
+        "createdAt" : "2018-10-12T14:48:41Z",
+        "updatedAt" : "2018-10-12T15:55:21Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a8ace5c657e27ae40f9511671e6a8ec78f7112a",
+    "line" : 76,
+    "diffHunk" : "@@ -1,1 +74,78 @@\n\t// provide access to the parent phase in the workflow managed by the Runner.\n\tparent *phaseRunner\n\n\t// level define the level of nesting of this phase into the workflow managed by"
+  },
+  {
+    "id" : "39115d5f-e9d7-407f-bb7b-b7157871e72e",
+    "prId" : 69684,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69684#pullrequestreview-164306194",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "705325a4-015a-4dcf-9247-83fdcf11f89f",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Please add a comment that order matters here and that this needs to be done at the end once your phases are all added. ",
+        "createdAt" : "2018-10-12T15:01:04Z",
+        "updatedAt" : "2018-10-12T15:55:21Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2dacc65-ab1e-4e06-9425-b865d51e4919",
+        "parentId" : "705325a4-015a-4dcf-9247-83fdcf11f89f",
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "done",
+        "createdAt" : "2018-10-12T15:56:53Z",
+        "updatedAt" : "2018-10-12T15:56:53Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a8ace5c657e27ae40f9511671e6a8ec78f7112a",
+    "line" : 270,
+    "diffHunk" : "@@ -1,1 +268,272 @@// command help, adding phase related flags and by adding phases subcommands\n// Please note that this command needs to be done once all the phases are added to the Runner.\nfunc (e *Runner) BindToCommand(cmd *cobra.Command) {\n\tif len(e.Phases) == 0 {\n\t\treturn"
+  },
+  {
+    "id" : "d1308f7e-7635-4186-b0d6-c43a44f45a1f",
+    "prId" : 69684,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69684#pullrequestreview-164464493",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8a7e1294-4ac6-4a10-bab5-633bc4e268f5",
+        "parentId" : null,
+        "authorId" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "body" : "What is the benefit of the type alias here?\r\n \r\nversus type definition like this \r\n\r\n```\r\ntype RunData interface{}\r\n```",
+        "createdAt" : "2018-10-12T20:06:21Z",
+        "updatedAt" : "2018-10-12T20:15:07Z",
+        "lastEditedBy" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c08f173e-5466-4b72-9ed1-29e0212a4f6d",
+        "parentId" : "8a7e1294-4ac6-4a10-bab5-633bc4e268f5",
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "@chuckha \r\nI simply found ugly using interface{}, and thus created an alias for it. \r\n",
+        "createdAt" : "2018-10-13T14:14:03Z",
+        "updatedAt" : "2018-10-13T14:14:03Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a8ace5c657e27ae40f9511671e6a8ec78f7112a",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +41,45 @@\n// RunData defines the data shared among all the phases included in the workflow, that is any type.\ntype RunData = interface{}\n\n// Runner implements management of composable kubeadm workflows."
+  }
+]

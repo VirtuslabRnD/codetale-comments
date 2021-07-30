@@ -1,0 +1,299 @@
+[
+  {
+    "id" : "d8658905-e506-4b4f-852d-39ba648eff88",
+    "prId" : 103562,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103562#pullrequestreview-701536001",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f1cbe337-1cd7-4218-9735-698d1d8b7e11",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "FYI, this calls:\r\nhttps://github.com/kubernetes/kubernetes/blob/master/cmd/kubeadm/app/apis/kubeadm/v1beta3/defaults.go#L74-L79\r\n\r\nthe problem in the linked issue is only caused by the lack of calling:\r\n- SetDefaults_NodeRegistration()\r\n\r\nbut also calling:\r\n- SetDefaults_BootstrapTokens(obj)\r\n- SetDefaults_APIEndpoint(&obj.LocalAPIEndpoint)\r\n\r\nis fine because:\r\n- tokens receive sane defaults, like tiimeouts\r\n- apiendpoint receives the default port, but is later overriden by the dynamic defaults in this getInitConfigurationFromCluster() function.\r\n\r\nstatically defaulting the InitConfiguration during the \"fetch from cluster\" feels like something that was missing.\r\nkubeadm join also constructs an InitConfiguration but overrides the NodeRegistration with with value from JoinConfiguration:\r\nhttps://github.com/kubernetes/kubernetes/blob/master/cmd/kubeadm/app/cmd/join.go#L548",
+        "createdAt" : "2021-07-08T00:01:06Z",
+        "updatedAt" : "2021-07-08T01:41:54Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6cf3e36c3706669f5f98ed7b6c083daee7d64512",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +72,76 @@\t// Take an empty versioned InitConfiguration, statically default it and convert it to the internal type\n\tversionedInitcfg := &kubeadmapiv1.InitConfiguration{}\n\tkubeadmscheme.Scheme.Default(versionedInitcfg)\n\tinitcfg := &kubeadmapi.InitConfiguration{}\n\tif err := kubeadmscheme.Scheme.Convert(versionedInitcfg, initcfg, nil); err != nil {"
+  },
+  {
+    "id" : "b551a44e-1adf-4593-b4f9-437dac0b676f",
+    "prId" : 94555,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94555#pullrequestreview-487843608",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "77d82be0-a795-4657-b483-50d1219986e4",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "@SataQiu based on the comments above the assignment this seems fine.\r\n\r\nlooks like @rosti is on vacation this week, so i'm going to LGTM / approve this, but let's iterate again in the 1.20 cycle if more changes are needed.\r\n\r\nthanks.\r\n",
+        "createdAt" : "2020-09-14T14:43:15Z",
+        "updatedAt" : "2020-09-14T14:43:16Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c318973cecf8fe002bc5f62f53deb6eb23054cd5",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +126,130 @@\t\t// Thus it's necessary to supply some default value, that will avoid the call to DetectCRISocket() and as\n\t\t// initcfg.NodeRegistration is discarded, setting whatever value here is harmless.\n\t\tinitcfg.NodeRegistration.CRISocket = \"/var/run/unknown.sock\"\n\t}\n\treturn initcfg, nil"
+  },
+  {
+    "id" : "e48b2bf3-d93a-4170-b00e-bf0ea0d2d0ce",
+    "prId" : 87656,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/87656#pullrequestreview-351857501",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "202ee495-25d3-4f6b-a187-03b4552420eb",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "can be:\r\n```\r\n\tvar errs []error\r\n\tif err := getAPIEndpointFromPodAnnotationWithRetry(client, nodeName, apiEndpoint); err == nil {\r\n\t\treturn nil\r\n\t}\r\n\terrs = append(errs, errors.WithMessagef(err, \"could not retrieve API endpoints for node %q using pod annotations\", nodeName))\r\n\tif err := getAPIEndpointFromClusterStatus(client, nodeName, apiEndpoint); err == nil {\r\n\t\treturn nil\r\n\t}\r\n\terrs = append(errs, errors.WithMessagef(err, \"could not retrieve API endpoints for node %q using cluster status\", nodeName))\r\n\treturn errorsutil.NewAggregate(errs)\r\n```",
+        "createdAt" : "2020-02-01T00:58:24Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5873e2be-76de-41c2-bcd7-6ebed69300ff",
+        "parentId" : "202ee495-25d3-4f6b-a187-03b4552420eb",
+        "authorId" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "body" : "Hm, I think in your suggestion `err` is out of scope.",
+        "createdAt" : "2020-02-01T01:38:27Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c0b8c746-8686-44fa-adfb-6d305959bc83",
+        "parentId" : "202ee495-25d3-4f6b-a187-03b4552420eb",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "seems like so.\r\n\r\nalternatively:\r\n\r\n```\r\n\tvar err error\r\n\tvar errs []error\r\n\tif err = getAPIEndpointFromPodAnnotationWithRetry(client, nodeName, apiEndpoint); err == nil {\r\n\t\treturn nil\r\n\t}\r\n\terrs = append(errs, errors.WithMessagef(err, \"could not retrieve API endpoints for node %q using pod annotations\", nodeName))\r\n\tif err = getAPIEndpointFromClusterStatus(client, nodeName, apiEndpoint); err == nil {\r\n\t\treturn nil\r\n\t}\r\n\terrs = append(errs, errors.WithMessagef(err, \"could not retrieve API endpoints for node %q using cluster status\", nodeName))\r\n\treturn errorsutil.NewAggregate(errs)\r\n",
+        "createdAt" : "2020-02-01T01:42:14Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5a5b26d0-682f-4a9d-ab99-1079fa4fc1b4",
+        "parentId" : "202ee495-25d3-4f6b-a187-03b4552420eb",
+        "authorId" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "body" : "I think I favour the explicit `else` branches, is it too bad for you?",
+        "createdAt" : "2020-02-01T01:45:52Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "52c68553-6f80-4539-a9ae-8bdc96f21d72",
+        "parentId" : "202ee495-25d3-4f6b-a187-03b4552420eb",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "yes, it's fine.\r\ni remember staticcheck complaining about similar branching, but hopefully the scoped `err` will not trigger this.\r\n",
+        "createdAt" : "2020-02-01T01:58:03Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3e59a0651f168331dfc51a056ee3f5b25be431bd",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +226,230 @@\terrs = append(errs, errors.WithMessagef(err, \"could not retrieve API endpoints for node %q using cluster status\", nodeName))\n\n\treturn errorsutil.NewAggregate(errs)\n}\n"
+  },
+  {
+    "id" : "ed8be47d-6a0e-4475-905f-9c252723a279",
+    "prId" : 87656,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/87656#pullrequestreview-356597748",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f0417d71-999b-49e4-800a-e2270164a0c0",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "from my experiments the mirroring is usually done right away once a static is running.\r\nwhat cases are we trying to cover with a back of 30+ seconds?\r\n\r\ncan this backoff be reduced or made exponential?\r\n",
+        "createdAt" : "2020-02-10T14:38:20Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74f0a8aa-4e58-495d-befb-3d40e774db99",
+        "parentId" : "f0417d71-999b-49e4-800a-e2270164a0c0",
+        "authorId" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "body" : "On some instances I've seen seconds since a `kubeadm init` finished until the static pods replicate on the apiserver.\r\n\r\nThere are two different things to consider here: one is the api endpoints, the other is the etcd endpoints.\r\n\r\n* For API endpoints I agree that having a big wait is not a big advantage, because this code path is mainly exercised during upgrades, and in that case, pods have been running for quite some time.\r\n\r\n* For etcd endpoints, this strategy mainly covers the `kubeadm init` -> first `kubeadm join` of a control plane. In this case, we want to wait for the static pod mirroring so the secondary control plane can discover at least one etcd endpoint. For other secondary control planes (like a third), this is not so relevant, because the first etcd static pod mirror will be present already, and we'll use etcd itself to sync the client (so it's not that important if the two existing etcd endpoints are mirrored -- with one is enough).\r\n\r\nAs for the timings I truly don't have a good estimate. I believe we can optimize later on.",
+        "createdAt" : "2020-02-10T15:53:12Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43bb94c1-4846-4c4b-93c8-ece4c1fea0b3",
+        "parentId" : "f0417d71-999b-49e4-800a-e2270164a0c0",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "I have seen some severe delays (in some instances up to several minutes). It is not uncommon to get a working cluster with almost all static pods not showing initially. I guess that mirror pod creation does seem to have some sort of a backoff and, if for some reason it fails initially, it can lead to a noticeable delay in mirror pod creation.",
+        "createdAt" : "2020-02-11T11:54:27Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3e59a0651f168331dfc51a056ee3f5b25be431bd",
+    "line" : 84,
+    "diffHunk" : "@@ -1,1 +233,237 @@\tvar lastErr error\n\t// Let's tolerate some unexpected transient failures from the API server or load balancers. Also, if\n\t// static pods were not yet mirrored into the API server we want to wait for this propagation.\n\terr := wait.ExponentialBackoff(backoff, func() (bool, error) {\n\t\trawAPIEndpoint, lastErr = getRawAPIEndpointFromPodAnnotationWithoutRetry(client, nodeName)"
+  },
+  {
+    "id" : "0fb3066a-8649-4231-b37f-84ffbd4988c6",
+    "prId" : 87656,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/87656#pullrequestreview-357635826",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6931dc97-f6d4-454c-a432-c25d9e8dbda1",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "do we need the `...WithoutRetry` here, given there are no other `getRawAPIEndpointFromPodAnnotation` variants?\r\ni think i saw comments on this topic before.\r\n\r\nEDIT: ok i see there is also getRawEtcdEndpointsFromPodAnnotation (plural) and getRawEtcdEndpointsFromPodAnnotationWithoutRetry.\r\nIMO the default should be \"without-retry\".\r\n\r\ni must admit the interface is becoming a bit confusing to me with some many func. variants.\r\n",
+        "createdAt" : "2020-02-10T14:43:23Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8100c65-1d36-4db3-9039-f30740ece529",
+        "parentId" : "6931dc97-f6d4-454c-a432-c25d9e8dbda1",
+        "authorId" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "body" : "The way functions were splitted were to ease unit testing for each one:\r\n\r\n* `getAPIEndpoint` just calls to `getAPIEndpointWithBackoff` with `constants.StaticPodMirroringDefaultRetry`: no explicit testing needed here.\r\n\r\n* `getAPIEndpointWithBackoff`: first tries to retrieve the endpoint with `getAPIEndpointFromPodAnnotation`, if it's not present, try to use the cluster status with `getAPIEndpointFromClusterStatus`. Tests ensure that this behavior happens.\r\n\r\n* `getAPIEndpointFromPodAnnotation`: tries to fetch the api endpoint from pod annotations with a backoff. Tests ensure that this behavior happens. Calls to `getAPIEndpointFromPodAnnotationWithoutRetry`.\r\n\r\n* `getAPIEndpointFromPodAnnotationWithoutRetry`: tries to fetch the api endpoint from pod annotations without any kind of retry. Tests ensure that this behavior happens.\r\n\r\n* `getAPIEndpointFromClusterStatus`: already existed.\r\n\r\nPlease, note that this will be very simplified when we remove the ClusterStatus. I tried to separate all concerns on this interim while we must fallback to the cluster status if pod annotations are missing.",
+        "createdAt" : "2020-02-10T15:59:05Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "46502056-e2a1-4a8e-8304-b9da088b0144",
+        "parentId" : "6931dc97-f6d4-454c-a432-c25d9e8dbda1",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "I see where you are going, but can't we merge `getAPIEndpointWithBackoff` and `getAPIEndpoint`?",
+        "createdAt" : "2020-02-11T13:27:45Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6c315678-a338-47f9-8756-382c9568dc0e",
+        "parentId" : "6931dc97-f6d4-454c-a432-c25d9e8dbda1",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "in the code base we already have the \"WithRetry\" naming, but not \"WithoutRetry\"\r\nit seems a bit odd that we now have a default that always retries.\r\n",
+        "createdAt" : "2020-02-12T16:35:37Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa5b2e9b-7e42-4613-b0c3-7cca282dd287",
+        "parentId" : "6931dc97-f6d4-454c-a432-c25d9e8dbda1",
+        "authorId" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "body" : "Requested here: https://github.com/kubernetes/kubernetes/pull/87656#discussion_r373976594",
+        "createdAt" : "2020-02-12T17:14:34Z",
+        "updatedAt" : "2020-02-20T11:19:18Z",
+        "lastEditedBy" : "67bc6085-2cd9-4674-9dbc-d2a266f478be",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3e59a0651f168331dfc51a056ee3f5b25be431bd",
+    "line" : 111,
+    "diffHunk" : "@@ -1,1 +256,260 @@}\n\nfunc getRawAPIEndpointFromPodAnnotationWithoutRetry(client clientset.Interface, nodeName string) (string, error) {\n\tpodList, err := client.CoreV1().Pods(metav1.NamespaceSystem).List(\n\t\tcontext.TODO(),"
+  },
+  {
+    "id" : "1b531cd6-3c71-40d2-bfed-1d2af2164c21",
+    "prId" : 70603,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70603#pullrequestreview-174563403",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f19cff1c-a8b0-4e9c-8ce5-4bf9eb68509f",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "these Wrap calls are possibly outside of the scope of the PR?\r\nbut SGTM still.",
+        "createdAt" : "2018-11-02T23:03:40Z",
+        "updatedAt" : "2018-11-13T18:10:36Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e0fad7d-e14c-4ad0-ab9b-63649e52b37e",
+        "parentId" : "f19cff1c-a8b0-4e9c-8ce5-4bf9eb68509f",
+        "authorId" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "body" : "Oh yeah, I added these because when I wanted them when I was debugging. not strictly necessary, but imo an improvement",
+        "createdAt" : "2018-11-05T19:26:33Z",
+        "updatedAt" : "2018-11-13T18:10:36Z",
+        "lastEditedBy" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cba0a9c1-caee-4457-8f5b-43a6d18be939",
+        "parentId" : "f19cff1c-a8b0-4e9c-8ce5-4bf9eb68509f",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "I will never complain about this... ",
+        "createdAt" : "2018-11-13T20:12:42Z",
+        "updatedAt" : "2018-11-13T20:13:20Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9a37f2d878c30ccf1cf26851d20834957b92265f",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +92,96 @@\tconfigMap, err := client.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(constants.KubeadmConfigConfigMap, metav1.GetOptions{})\n\tif err != nil {\n\t\treturn nil, errors.Wrap(err, \"failed to get config map\")\n\t}\n"
+  },
+  {
+    "id" : "a0cc4a66-98e8-49a1-9b43-5abf7b4528fa",
+    "prId" : 67944,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67944#pullrequestreview-151854175",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4111f9bd-6e22-4ca2-ae2f-f4d1f7aab7d7",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "do we have a tracking issue?",
+        "createdAt" : "2018-09-03T16:39:46Z",
+        "updatedAt" : "2018-09-04T07:12:07Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a8963458-9e10-45e9-8350-f640914ab28f",
+        "parentId" : "4111f9bd-6e22-4ca2-ae2f-f4d1f7aab7d7",
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "Not yet. I will send tracking issues for TODOs soonish (after lgtm)",
+        "createdAt" : "2018-09-03T17:22:13Z",
+        "updatedAt" : "2018-09-04T07:12:07Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d9b4b1fc1ad00e61c286187abbf63a5ad78d0a84",
+    "line" : 223,
+    "diffHunk" : "@@ -1,1 +214,218 @@\t// We are only putting one certificate in the certificate pem file, so it's safe to just pick the first one\n\t// TODO: Support multiple certs here in order to be able to rotate certs\n\tcert := certs[0]\n\n\t// gets the node name from the certificate common name"
+  }
+]

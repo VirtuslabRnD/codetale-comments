@@ -1,0 +1,1311 @@
+[
+  {
+    "id" : "61e4d343-52ab-4acd-8a6a-57461548b953",
+    "prId" : 98127,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98127#pullrequestreview-604335649",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "parentId" : null,
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "Would it be possible to add another condition to indicate we're hitting failSafe rather than just disruptions allowed.  We could consume that info here: https://github.com/kubernetes/kubernetes/blob/release-1.20/pkg/registry/core/pod/storage/eviction.go#L208\r\n\r\nOtherwise, we might evict pods with DesiredHealthy && CurrentHealthy being stale.\r\n\r\nMaybe we can still achieve this by testing Reason == policy.SyncFailedReason if we have a util function, but sync failure seems like it should be it's own status condition rather than embedded in DisruptionsAllowed.  WDYT?",
+        "createdAt" : "2021-02-24T23:04:35Z",
+        "updatedAt" : "2021-03-05T03:03:15Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09d5cdd3-a927-4b7f-bad4-9d4aef35cec0",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "We could add a separate condition for this, but I wanted to avoid creating more conditions than necessary. So if we did this, it would be something like a `SyncFailed` condition? I'm not sure what kind of reasons we would use here, but maybe we could enumerate the \"likely\" errors we might encounter.\r\n\r\nAnd would conditions be the appropriate way to handle this? The `pdb.Status.DisruptionsAllowed` would be useful here since it is updated by the eviction api, but I guess it doesn't work here since we don't know if a value of zero means we have the minimum number of pods to satisfy the PDB or if we have fewer than we need. Would it be an option to also decrement the `pdb.Status.CurrentHealthy` count after eviction?",
+        "createdAt" : "2021-02-25T02:59:57Z",
+        "updatedAt" : "2021-03-05T03:03:15Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04f4ed0b-cd0c-4587-b4b5-f2033c10a119",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> Otherwise, we might evict pods with DesiredHealthy && CurrentHealthy being stale.\r\n\r\nis that true? failSafe sets DisruptionsAllowed to 0, which prevents evictions, right?\r\n\r\nif SyncFailed=True always implies DisruptionAllowed=False, that seems like a good use of the distinct reason field on a DisruptionAllowed=False condition rather than a separate condition",
+        "createdAt" : "2021-02-25T05:34:17Z",
+        "updatedAt" : "2021-03-05T03:03:15Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e3022e81-a2b5-46a9-b305-d62b27e30cad",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "Currently, DisruptionsAllowed is an integer, and this is the 'budget' used to determine how many pods are evicted.  If we are hoping to explicitly disallow eviction because the PDB has gone stale, we need another field.\r\n\r\nI don't have a strong preference on the field name or type, so long as it's for that specific purpose.",
+        "createdAt" : "2021-02-25T13:31:50Z",
+        "updatedAt" : "2021-03-05T03:03:15Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73a87fcb-3a44-4adc-9e2f-2c56e0247cf4",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "the same controller that would add the \"I am stale because I can't sync\" condition is already setting DisruptionsAllowed to 0 when it can't sync... I don't see why another field is required",
+        "createdAt" : "2021-02-25T15:35:27Z",
+        "updatedAt" : "2021-03-05T03:03:15Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43c5a8c7-f0e6-48b4-a8c6-647e1ecfc134",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "Because eviction sometimes doesn't consider DisruptionsAllowed if a pod is unready and there is enough CurrentHealthy: https://github.com/kubernetes/kubernetes/blob/release-1.20/pkg/registry/core/pod/storage/eviction.go#L208\r\n\r\nWe need to know if CurrentHealthy is stale or not, we *want* to remove unready pods when DisruptionsAllowed==0 && CurrentHealthy >= DesiredHealthy.",
+        "createdAt" : "2021-02-25T15:39:38Z",
+        "updatedAt" : "2021-03-05T03:03:15Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "880ad590-ca7d-4402-8975-01bde4933c3a",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I see.",
+        "createdAt" : "2021-02-25T15:43:58Z",
+        "updatedAt" : "2021-03-05T03:03:15Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e45e075c-74e0-462e-8e3b-4837dd071caa",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "Could we address this by decrementing the `CurrentHealthy` field at the same time we are decrementing `DisruptionsAllowed` in `EvictionREST#checkAndDecrement`? \r\n https://github.com/kubernetes/kubernetes/blob/master/pkg/registry/core/pod/storage/eviction.go#L333 ? \r\n\r\nI think that would make sure the value of that field isn't stale (at least to the same extent as the `DisruptionsAllowed` field). And it seems reasonable to decrement this value at that point since we are just about to terminate a healthy pod.",
+        "createdAt" : "2021-02-25T16:23:06Z",
+        "updatedAt" : "2021-03-05T03:03:15Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fdb254f4-353c-43e0-acaa-fe64b2873c19",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "That seems reasonable.  I don't have a strong preference on what the signal is, just as long as it is able to accomplish what we need.  If we go this route, please let's add some comments so we don't regress.  This would also prevent us from needing specific tests in the eviction API, but we will ideally have tests on the PDB side.",
+        "createdAt" : "2021-02-25T16:37:46Z",
+        "updatedAt" : "2021-03-05T03:03:15Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2f99631-3f2f-4854-9844-d655e8d93549",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "Looking at this again, my proposal in the previous comment doesn't actually address the problem. To handle the issue where sync fails, we would either need to set `CurrentHealthy` to 0 at the same time we are setting `DisruptionsAllowed` to 0 in the [failSafe function](https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/disruption/disruption.go#L782), introduce a new field, or let the eviction API look at the conditions. \r\n\r\nForcing the value of `CurrentHealthy` to 0 doesn't seem great as someone might use this field (although the value will be stale in this situation). \r\n\r\nIntroducing a new field seems a bit superfluous since the information is already available in the condition.\r\n\r\nI think I would prefer that we handle this with the suggested `DisruptionsAllowed` condition, and we just let the eviction API look at the `Reason` field. Conditions are part of the public API, so I don't think there is any major issues with doing it this way.\r\n\r\n@liggitt Do you have a preference here? It seems like this is something that could block the PDB to GA effort unless we find a solution pretty quickly.\r\n\r\n@michaelgugino Is there an existing github issue describing this problem? If not, can you create one so we can move the discussion there? It is mostly unrelated to this PR.",
+        "createdAt" : "2021-03-01T00:14:59Z",
+        "updatedAt" : "2021-03-05T03:03:16Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "154ff057-6fa4-42c9-b210-34f0b1cda260",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> Because eviction sometimes doesn't consider DisruptionsAllowed if a pod is unready and there is enough CurrentHealthy: https://github.com/kubernetes/kubernetes/blob/release-1.20/pkg/registry/core/pod/storage/eviction.go#L208\r\n> \r\n> We need to know if CurrentHealthy is stale or not, we _want_ to remove unready pods when DisruptionsAllowed==0 && CurrentHealthy >= DesiredHealthy.\r\n\r\nactually, I'm not sure I understand why we need to check CurrentHealthy / DesiredHealthy in this case... removing a not-ready pod should always be ok, right?",
+        "createdAt" : "2021-03-01T14:22:15Z",
+        "updatedAt" : "2021-03-05T03:03:16Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "113a1f03-8583-4a80-a678-4aaa3da80c13",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "If we do end up needing to determine if the controller is failing to sync, checking for `DisruptionsAllowed=False, Reason= SyncFailed` could be reasonable, *but* observers cannot depend on this condition being added/removed reliably until clusters are completely upgraded to v1.21. That means code we release in 1.21 has to tolerate the condition not being added/removed reliably:\r\n\r\n* a multi-server cluster where the active controller-manager is still 1.20 will not have this condition added\r\n* a multi-server cluster where the leader controller-manager changed to 1.21, added the SyncFailed condition, then changed back to 1.20 will not have this condition removed",
+        "createdAt" : "2021-03-01T14:28:37Z",
+        "updatedAt" : "2021-03-05T03:03:16Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "693232fd-fd93-4a93-8f42-0363b11880a0",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "I added the discussion issue here: https://github.com/kubernetes/kubernetes/issues/99598\r\n\r\nThe current patch is fine if we don't like manipulating CurrentHealthy.  My suggestion is to add a util function to detect this specific status, and ensure that document the intent to others that 'SyncFailed' means you probably should not rely on the PDB status counts as they may be stale.\r\n\r\nThis is somewhat of an edge case that probably we should have accounted for prior to the eviction API change, but I missed it.",
+        "createdAt" : "2021-03-01T16:24:49Z",
+        "updatedAt" : "2021-03-05T03:03:16Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4b324b66-7a0b-4dcb-8888-dccd67244566",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "Replied in https://github.com/kubernetes/kubernetes/issues/99598",
+        "createdAt" : "2021-03-01T20:58:51Z",
+        "updatedAt" : "2021-03-05T03:03:16Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a6d23363-6d6f-4980-aeaa-09e77930995b",
+        "parentId" : "f5d2abf4-1480-4a8f-82aa-4923fa53a78a",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "addressing this in a separate PR sounds good to me. I don't think this change makes the issue worse, and gives us a potential tool to address the issue in a follow up",
+        "createdAt" : "2021-03-04T17:09:20Z",
+        "updatedAt" : "2021-03-05T03:03:16Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b08eb95168a482c315b5c1c9e869ca41325f32c1",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +778,782 @@// this field correctly, we will prevent the /evict handler from approving an\n// eviction when it may be unsafe to do so.\nfunc (dc *DisruptionController) failSafe(pdb *policy.PodDisruptionBudget, err error) error {\n\tnewPdb := pdb.DeepCopy()\n\tnewPdb.Status.DisruptionsAllowed = 0"
+  },
+  {
+    "id" : "b90ea71f-ad41-4f8e-9064-0c3e94060f05",
+    "prId" : 76294,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76294#pullrequestreview-240973029",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c0b3d606-32ef-4d08-9503-0503e3c41369",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this API is unfortunate... we're throwing away the version information we just got from our restmapper. if we know the full group/version/resource we want, we should be able to invoke it directly, and the scale client would be way simpler (it wouldn't need a restmapper internally). can you open a follow up issue to improve this?",
+        "createdAt" : "2019-05-22T19:17:13Z",
+        "updatedAt" : "2019-05-23T22:57:14Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ef77121-fa36-48f4-b746-905a15586ed0",
+        "parentId" : "c0b3d606-32ef-4d08-9503-0503e3c41369",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "Created issue: https://github.com/kubernetes/kubernetes/issues/78231",
+        "createdAt" : "2019-05-23T03:25:56Z",
+        "updatedAt" : "2019-05-23T22:57:14Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd60d45602515753b51e2c69d6478bb1b0bf7316",
+    "line" : 194,
+    "diffHunk" : "@@ -1,1 +295,299 @@\tgr := mapping.Resource.GroupResource()\n\n\tscale, err := dc.scaleNamespacer.Scales(namespace).Get(gr, controllerRef.Name)\n\tif err != nil {\n\t\tif errors.IsNotFound(err) {"
+  },
+  {
+    "id" : "742a65f4-69da-4fd3-b3d2-f3f4e42f4c63",
+    "prId" : 76294,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76294#pullrequestreview-241258613",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dafb61f7-0772-4310-9f70-5ca515924e84",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "a nil controller didn't log an error previously, right?",
+        "createdAt" : "2019-05-22T19:18:27Z",
+        "updatedAt" : "2019-05-23T22:57:14Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5ef52ebc-c7e5-42c0-8595-85077ba6f366",
+        "parentId" : "dafb61f7-0772-4310-9f70-5ca515924e84",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "A pod without a controller was considered an error before this change. We just happened to check all the finder functions before returning the error. This just bails out early if there is no controllerRef.\r\nhttps://github.com/kubernetes/kubernetes/blob/25b0d2dbf4521bd1e7bae471d85c369eb89f9555/pkg/controller/disruption/disruption.go#L599-L603",
+        "createdAt" : "2019-05-23T01:10:26Z",
+        "updatedAt" : "2019-05-23T22:57:14Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41bea738-f833-4fa2-a0b0-e5b72ebbb1e2",
+        "parentId" : "dafb61f7-0772-4310-9f70-5ca515924e84",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "ah, got it, thanks.",
+        "createdAt" : "2019-05-23T14:53:40Z",
+        "updatedAt" : "2019-05-23T22:57:14Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd60d45602515753b51e2c69d6478bb1b0bf7316",
+    "line" : 235,
+    "diffHunk" : "@@ -1,1 +633,637 @@\t\tcontrollerRef := metav1.GetControllerOf(pod)\n\t\tif controllerRef == nil {\n\t\t\terr = fmt.Errorf(\"found no controller ref for pod %q\", pod.Name)\n\t\t\tdc.recorder.Event(pdb, v1.EventTypeWarning, \"NoControllerRef\", err.Error())\n\t\t\treturn"
+  },
+  {
+    "id" : "cd273876-b59d-4b0a-96a5-b5946a72fac8",
+    "prId" : 76294,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76294#pullrequestreview-241540709",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e63ea2ab-2e29-43b9-b56e-948f1c5684f7",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "pre-existing, but the same group check (\"apps\" or \"extensions\") should be done when resolving the deployment controllerref below. up to you whether you do that here or in a follow-up",
+        "createdAt" : "2019-05-23T14:57:24Z",
+        "updatedAt" : "2019-05-23T22:57:14Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bb7a7926-d225-4920-9fea-a1b7b463911c",
+        "parentId" : "e63ea2ab-2e29-43b9-b56e-948f1c5684f7",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "Updated the PR to include the group test on the deployment controller ref.",
+        "createdAt" : "2019-05-24T03:40:35Z",
+        "updatedAt" : "2019-05-24T03:40:35Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd60d45602515753b51e2c69d6478bb1b0bf7316",
+    "line" : 136,
+    "diffHunk" : "@@ -1,1 +235,239 @@\t}\n\trs, err := dc.rsLister.ReplicaSets(namespace).Get(controllerRef.Name)\n\tif err != nil {\n\t\t// The only possible error is NotFound, which is ok here.\n\t\treturn nil, nil"
+  },
+  {
+    "id" : "273acfb8-be9b-4038-b834-30f214701464",
+    "prId" : 49861,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/49861#pullrequestreview-56790995",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b8cddf1c-a186-46f4-bbf4-b457880b72bd",
+        "parentId" : null,
+        "authorId" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "body" : "You can combine these lines into a short declaration.",
+        "createdAt" : "2017-08-01T23:47:03Z",
+        "updatedAt" : "2017-08-14T07:41:25Z",
+        "lastEditedBy" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf89c731-d8ac-4161-8564-c4f2ca5b7e09",
+        "parentId" : "b8cddf1c-a186-46f4-bbf4-b457880b72bd",
+        "authorId" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "body" : "this results in `err` being shadowed, hence leaving it as is.",
+        "createdAt" : "2017-08-14T07:42:38Z",
+        "updatedAt" : "2017-08-14T07:42:38Z",
+        "lastEditedBy" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c5646050-080c-4a9f-b1ec-35f12228276c",
+        "parentId" : "b8cddf1c-a186-46f4-bbf4-b457880b72bd",
+        "authorId" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "body" : "Ah I see. I didn't notice this function is using named return values.\r\n\r\nTechnically since this would be a multi-variable short declaration and `controllerNScale` would be a new variable, `err` would not be shadowed but rather reused. However, I agree it's better to leave it as is rather than relying on that obscure rule.",
+        "createdAt" : "2017-08-16T23:20:04Z",
+        "updatedAt" : "2017-08-16T23:20:04Z",
+        "lastEditedBy" : "97dce74b-9a86-4bd2-812f-a7a70df47473",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "de3f09780b4abc853b0a114b4e45aa57e52db7a0",
+    "line" : 105,
+    "diffHunk" : "@@ -1,1 +589,593 @@\t\tfor _, finder := range dc.finders() {\n\t\t\tvar controllerNScale *controllerAndScale\n\t\t\tcontrollerNScale, err = finder(pod)\n\t\t\tif err != nil {\n\t\t\t\treturn"
+  },
+  {
+    "id" : "154c0e44-ae45-495d-97ea-ee0b88aa077d",
+    "prId" : 46590,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/46590#pullrequestreview-41800457",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a99d2fdd-6345-4e18-a9f0-2d678ebbb633",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Did you do audit of where this is called and that any caller is not modifying the received objects?\r\nAlso, I would like to see a comment that callers of this method should not modify the received objects.",
+        "createdAt" : "2017-05-29T10:51:51Z",
+        "updatedAt" : "2017-05-29T13:42:00Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f798802f-6288-4e90-bb20-33e12e92daac",
+        "parentId" : "a99d2fdd-6345-4e18-a9f0-2d678ebbb633",
+        "authorId" : "e2ca6907-6765-444e-8bf6-1452233150d6",
+        "body" : "audit done, on different code paths, callers do not modify pods currently.\r\nI can also add a comment to state that we should not modify returned pods.",
+        "createdAt" : "2017-05-29T10:59:51Z",
+        "updatedAt" : "2017-05-29T13:42:00Z",
+        "lastEditedBy" : "e2ca6907-6765-444e-8bf6-1452233150d6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe0cc533-af3b-4e14-96b5-3b4924f3bc34",
+        "parentId" : "a99d2fdd-6345-4e18-a9f0-2d678ebbb633",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "This is a shallow copy anyway",
+        "createdAt" : "2017-06-02T15:02:01Z",
+        "updatedAt" : "2017-06-02T15:02:01Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cc5977aaa00811cbeb796408cdfa742757e38219",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +436,440 @@\t\treturn []*v1.Pod{}, err\n\t}\n\treturn pods, nil\n}\n"
+  },
+  {
+    "id" : "4798e643-ff5f-416e-af6e-2b69d1781a0a",
+    "prId" : 45587,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/45587#pullrequestreview-38315352",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "449d1a52-ecaa-4c83-8c6c-3524f2f107e4",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "There is a PR that switches the PDB controller to take into account owner references. Do we want to get that in first?\r\n\r\nhttps://github.com/kubernetes/kubernetes/pull/45003",
+        "createdAt" : "2017-05-16T07:57:18Z",
+        "updatedAt" : "2017-05-23T14:42:37Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f7bb073-a2c8-4d6a-adaa-2d66ec250f00",
+        "parentId" : "449d1a52-ecaa-4c83-8c6c-3524f2f107e4",
+        "authorId" : "e535b047-00fc-4269-992a-b8d65bd7c57b",
+        "body" : "They seem mutually exclusive and should be a trivial rebase in whichever order they merge IIUC",
+        "createdAt" : "2017-05-16T08:01:40Z",
+        "updatedAt" : "2017-05-23T14:42:37Z",
+        "lastEditedBy" : "e535b047-00fc-4269-992a-b8d65bd7c57b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "48d76edc744ea2f8857717b51e6a564a4d49544b",
+    "line" : 124,
+    "diffHunk" : "@@ -1,1 +588,592 @@\t\t\tdc.recorder.Event(pdb, v1.EventTypeWarning, \"NoControllers\", err.Error())\n\t\t\treturn\n\t\t} else if controllerCount > 1 {\n\t\t\terr = fmt.Errorf(\"pod %q has %v>1 controllers\", pod.Name, controllerCount)\n\t\t\tdc.recorder.Event(pdb, v1.EventTypeWarning, \"TooManyControllers\", err.Error())"
+  },
+  {
+    "id" : "aac87205-f47b-47e3-829a-ed4763053ec1",
+    "prId" : 45003,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/45003#pullrequestreview-39336880",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "30a791d1-e946-4b96-86a7-c1e551a0a247",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "We also have Deployments in the apps group. I think you need to use both but I am not fairly certain.",
+        "createdAt" : "2017-05-20T14:57:42Z",
+        "updatedAt" : "2017-05-24T02:43:47Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2802f51a-9e47-4136-a9ec-78dc0cb0f758",
+        "parentId" : "30a791d1-e946-4b96-86a7-c1e551a0a247",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Hm, you just compare UID and Kind so it may not be needed after all",
+        "createdAt" : "2017-05-20T14:58:50Z",
+        "updatedAt" : "2017-05-24T02:43:47Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3ab60829584dbb16e24fcc78c40dfe6bb53ea96d",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +180,184 @@\tcontrollerKindSS  = apps.SchemeGroupVersion.WithKind(\"StatefulSet\")\n\tcontrollerKindRC  = v1.SchemeGroupVersion.WithKind(\"ReplicationController\")\n\tcontrollerKindDep = v1beta1.SchemeGroupVersion.WithKind(\"Deployment\")\n)\n"
+  },
+  {
+    "id" : "c13439a4-fbee-42e0-89b1-624dbe51171c",
+    "prId" : 45003,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/45003#pullrequestreview-39878955",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dcd2873d-3a58-4f34-a403-671ef853ba5b",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Since it's only one parent that you are returning now, switch all these helpers to return a single object.",
+        "createdAt" : "2017-05-20T14:59:40Z",
+        "updatedAt" : "2017-05-24T02:43:47Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "672eeb77-fb83-40d3-b714-498b280c46f5",
+        "parentId" : "dcd2873d-3a58-4f34-a403-671ef853ba5b",
+        "authorId" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "body" : "@kargakis i was hoping to do that change in a subsequent PR, since that would also involve modifying the callers and understanding that logic. Is that ok ?",
+        "createdAt" : "2017-05-22T05:58:44Z",
+        "updatedAt" : "2017-05-24T02:43:47Z",
+        "lastEditedBy" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b05b8421-5a26-4808-a903-cd373627cda6",
+        "parentId" : "dcd2873d-3a58-4f34-a403-671ef853ba5b",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "sure",
+        "createdAt" : "2017-05-23T21:52:39Z",
+        "updatedAt" : "2017-05-24T02:43:47Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3ab60829584dbb16e24fcc78c40dfe6bb53ea96d",
+    "line" : 100,
+    "diffHunk" : "@@ -1,1 +229,233 @@\t}\n\n\tcasSlice = append(casSlice, controllerAndScale{ss.UID, *(ss.Spec.Replicas)})\n\treturn casSlice, nil\n}"
+  },
+  {
+    "id" : "5cc96614-3a87-4505-8996-bcbd36a5e56b",
+    "prId" : 36196,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36196#pullrequestreview-7331810",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4f5b8f02-736c-432d-b29e-c174006e0625",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "currentTime is observed in the controller manager process while the time the pod was evicted is observed in the api server. If the controller manager runs in a separate machine (is it possible currently?) then you get into clock-skew issues.\n",
+        "createdAt" : "2016-11-04T16:45:39Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "154f0d7c-c84f-48fc-bba2-242026bb6476",
+        "parentId" : "4f5b8f02-736c-432d-b29e-c174006e0625",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "Yes, but on properly running cluster i expect the time to be set with ~1sec accuracy. Also the deleteTimestamp propagation should be done in 1-2 sec max. The controller has the tolerance up to 1 min.\n",
+        "createdAt" : "2016-11-04T17:58:16Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6239b6e2-24db-4922-9776-7aafa45801e4",
+        "parentId" : "4f5b8f02-736c-432d-b29e-c174006e0625",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Can you add a comment? It would be good for us to document these assumptions. (And I assume it's 2 min now.)\n",
+        "createdAt" : "2016-11-05T06:25:00Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a76b6a5-de79-4c4d-9ac3-29a3fe4ca9f3",
+        "parentId" : "4f5b8f02-736c-432d-b29e-c174006e0625",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "Done.\n",
+        "createdAt" : "2016-11-05T22:54:31Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3660307-3463-488b-b5bd-75004054cdf2",
+        "parentId" : "4f5b8f02-736c-432d-b29e-c174006e0625",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "I meant a comment about the clock skew issue if the controller manager and API server are running on different nodes.\n",
+        "createdAt" : "2016-11-06T02:41:32Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9fed9df7-5cf1-46e4-8200-2591437f1538",
+        "parentId" : "4f5b8f02-736c-432d-b29e-c174006e0625",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "Added. Done.\n",
+        "createdAt" : "2016-11-06T12:21:06Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1fee246ca9550e689e6dd21032ceb07fe29462b1",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +494,498 @@\n\tcurrentTime := time.Now()\n\tdisruptedPods, recheckTime := buildDisruptedPodMap(pods, pdb, currentTime)\n\tcurrentHealthy := countHealthyPods(pods, disruptedPods, currentTime)\n\terr = dc.updatePdbStatus(pdb, currentHealthy, desiredHealthy, expectedCount, disruptedPods)"
+  },
+  {
+    "id" : "5c65a78d-ba81-438a-a5b8-e0024644058f",
+    "prId" : 36196,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36196#pullrequestreview-7254392",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7511a987-44f0-4981-8a9d-a6aad419941d",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "So the only reason you need a second queue is to ratelimit the requeues in case DeleteTimeout is yet to be exceeded and the deletion timestamp is yet to be added, right?\n",
+        "createdAt" : "2016-11-04T17:00:43Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3017f961-f9dc-43f9-ba9c-93ede6c0863e",
+        "parentId" : "7511a987-44f0-4981-8a9d-a6aad419941d",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "Yes.\n",
+        "createdAt" : "2016-11-04T18:01:02Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1fee246ca9550e689e6dd21032ceb07fe29462b1",
+    "line" : 84,
+    "diffHunk" : "@@ -1,1 +454,458 @@\t}\n\tdefer dc.recheckQueue.Done(dKey)\n\tdc.queue.AddRateLimited(dKey)\n\treturn true\n}"
+  },
+  {
+    "id" : "968ddb50-17fd-47e0-afd5-f4025f1178c0",
+    "prId" : 36196,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36196#pullrequestreview-7323757",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d59cc123-1a82-41c6-9a31-b2139cdb2118",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "I wonder if this should be smaller than DeletionTimeout. Let's say for some reason it is common that PDB controller sees deletionTimestamp set after seeing PDBStatus updated to add the evicted pod. Then IIUC pods will frequently stay in PDStatus for DeletionTimeout seconds, which would be bad. So maybe the requeue interval should be something much shorter, like 10 seconds?\n",
+        "createdAt" : "2016-11-05T06:05:37Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "532e911c-aa19-4ee5-a459-052213731a81",
+        "parentId" : "d59cc123-1a82-41c6-9a31-b2139cdb2118",
+        "authorId" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "body" : "If a pod changes its status/deletion timestamp then pdb update will be triggered as well and the entry in DisruptedPods will be removed. Here we are dealing with situation when the pod is not changed at all. \n",
+        "createdAt" : "2016-11-05T23:42:44Z",
+        "updatedAt" : "2016-11-06T18:38:07Z",
+        "lastEditedBy" : "ab8bc7c5-233d-47c1-b03a-767fb930c021",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1fee246ca9550e689e6dd21032ceb07fe29462b1",
+    "line" : 161,
+    "diffHunk" : "@@ -1,1 +616,620 @@\t\t\tcontinue\n\t\t}\n\t\texpectedDeletion := disruptionTime.Time.Add(DeletionTimeout)\n\t\tif expectedDeletion.Before(currentTime) {\n\t\t\tglog.V(1).Infof(\"Pod %s/%s was expected to be deleted at %s but it wasn't, updating pdb %s/%s\","
+  },
+  {
+    "id" : "358a4766-6c29-4127-a96b-4e6986861ece",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "99f0bcf7-56fe-493f-bc4c-393a8f4d9fd6",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Could you document intended behavior of said controller or link to spec please.  \n",
+        "createdAt" : "2016-06-28T15:28:09Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +44,48 @@type updater func(*policy.PodDisruptionBudget) error\n\ntype DisruptionController struct {\n\tkubeClient *client.Client\n"
+  },
+  {
+    "id" : "a9b38014-b958-42b3-a04d-2a0621634d3e",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "So is all of this simply to update the state of the disruption budget annotation given the state of the system?  \n\nBecause it seems super heavy weight, you're watching a ton of stuff that other controllers are already watching. \n",
+        "createdAt" : "2016-06-28T21:34:49Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9796420d-0892-45f4-8843-a204d87e04b8",
+        "parentId" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "> Because it seems super heavy weight, you're watching a ton of stuff that other controllers are already watching. \n\nWouldn't shared caches solve this problem?\n",
+        "createdAt" : "2016-06-29T08:12:00Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2c5bb1bb-3c9f-4619-8d0f-3c1e318c6eb0",
+        "parentId" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "> Wouldn't shared caches solve this problem? \n\nIf we have them across \\* resource objects then yes.  \n",
+        "createdAt" : "2016-06-29T13:17:19Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "97482020-d11a-448b-bac6-d5f2f7b51d4c",
+        "parentId" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "I think this is the intention, coupled with the mutation detector @deads2k built.\n",
+        "createdAt" : "2016-06-29T14:50:44Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "27e0c4a2-bebe-47e5-869d-c14d7440325b",
+        "parentId" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Well a part of me wonders why most of this logic isn't in a library called from all the other controllers.  \n",
+        "createdAt" : "2016-06-29T15:12:49Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ab8e4cc8-9b69-46b4-8b06-a08ff21f0dd2",
+        "parentId" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "> Because it seems super heavy weight, you're watching a ton of stuff that other controllers are already watching.\n\nDo you have an alternative idea?\n",
+        "createdAt" : "2016-07-11T18:08:09Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1919640c-04d9-4183-a874-3f5e208640d3",
+        "parentId" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "It would be great for someone to fix the lack of code and storage sharing across controllers, but I don't think this PR is the right place to do it. \n",
+        "createdAt" : "2016-07-12T06:25:16Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "05cb9c3f-fcbc-4954-a3ac-2ff5bdf11f2b",
+        "parentId" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "It would be useful to open follow-up issues for all the work that needs to be done. \n",
+        "createdAt" : "2016-07-20T21:30:13Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cba58db4-243c-466f-ab68-9709b1acd2ea",
+        "parentId" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "@deads2k can you link to the shared informer tracking issues here?  \n",
+        "createdAt" : "2016-08-03T14:35:45Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ccf8a36-103b-4dab-9337-f9710624d924",
+        "parentId" : "ab5311d0-089a-4fbe-85a5-075ec56286a9",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> @deads2k can you link to the shared informer tracking issues here?\n\nWe have a couple open pulls.  I've opened https://github.com/kubernetes/kubernetes/issues/30016 to try to coordinate the effort.\n",
+        "createdAt" : "2016-08-03T19:53:15Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +456,460 @@\n\tcurrentHealthy := countHealthyPods(pods)\n\terr = dc.updatePdbSpec(pdb, currentHealthy, desiredHealthy, expectedCount)\n\n\treturn err"
+  },
+  {
+    "id" : "8a81a4a3-5778-4cfd-a2f6-6aeb2990e88d",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8fa3d015-f6b1-4285-bf2e-a3c444c14175",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "All the informers should be shared, not just the pod informer.\n",
+        "createdAt" : "2016-06-29T08:13:10Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +85,89 @@type podControllerFinder func(*api.Pod) ([]controllerAndScale, error)\n\nfunc NewDisruptionController(podInformer framework.SharedIndexInformer, kubeClient *client.Client) *DisruptionController {\n\tdc := &DisruptionController{\n\t\tkubeClient:    kubeClient,"
+  },
+  {
+    "id" : "0b12071c-bcf8-4399-a87c-6fb022e23085",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "14dd4acb-f776-4728-9ff3-a6e39940f229",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Can we revisit this time? In my experience, if your event handlers work as expected, this isn't needed to be that tight.\n",
+        "createdAt" : "2016-06-29T08:15:33Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f00176d1-acd9-4d25-8ca4-a95af9c41c9c",
+        "parentId" : "14dd4acb-f776-4728-9ff3-a6e39940f229",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "+1\n",
+        "createdAt" : "2016-07-14T20:52:53Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "50d2be7d-7163-4f9a-a9bc-81c52d619c32",
+        "parentId" : "14dd4acb-f776-4728-9ff3-a6e39940f229",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "@wojtek-t can we change all of the 30*time.Second intervals here to something a lot higher?\n",
+        "createdAt" : "2016-08-14T07:55:17Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 116,
+    "diffHunk" : "@@ -1,1 +114,118 @@\t\t},\n\t\t&policy.PodDisruptionBudget{},\n\t\t30*time.Second,\n\t\tframework.ResourceEventHandlerFuncs{\n\t\t\tAddFunc:    dc.addDb,"
+  },
+  {
+    "id" : "467426bf-be80-4386-895f-bcf091b7f05a",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "21796a02-4070-40cf-addc-adfa0507f094",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "why nil instead of err?\n",
+        "createdAt" : "2016-07-09T23:19:57Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a679b74-9e28-4e85-a265-3793ad046947",
+        "parentId" : "21796a02-4070-40cf-addc-adfa0507f094",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "Added a comment.\n",
+        "createdAt" : "2016-07-11T18:29:03Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +220,224 @@\t// don't return that as an error to the caller.\n\tif err != nil {\n\t\treturn cas, nil\n\t}\n\tcontrollerScale := map[types.UID]int32{}"
+  },
+  {
+    "id" : "f8011668-a8b2-4f5d-a791-1dd70588b599",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f72e19c6-9945-485a-a7c8-17efa2426c51",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "why not return err?\n",
+        "createdAt" : "2016-07-09T23:28:05Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "933fb2b7-c5a2-42e5-92b8-f3cbfe312f77",
+        "parentId" : "f72e19c6-9945-485a-a7c8-17efa2426c51",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "Added a comment.\n",
+        "createdAt" : "2016-07-11T18:31:13Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +359,363 @@\tif err != nil {\n\t\tglog.V(0).Infof(\"No PodDisruptionBudgets found for pod %v, PodDisruptionBudget controller will avoid syncing.\", pod.Name)\n\t\treturn nil\n\t}\n"
+  },
+  {
+    "id" : "570ddb54-06ec-4845-8657-69c83eced55a",
+    "prId" : 25921,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/25921#pullrequestreview-497003146",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "473e8bce-4148-4727-9d86-2dab727aab94",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "empty selector is supposed to match all\n",
+        "createdAt" : "2016-07-09T23:31:17Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b77a3eb-dbd0-4079-b06a-fd700e4bcdff",
+        "parentId" : "473e8bce-4148-4727-9d86-2dab727aab94",
+        "authorId" : "2d9afee7-a404-4340-8fd9-d3187ed4f1da",
+        "body" : "See #95083.",
+        "createdAt" : "2020-09-26T12:59:23Z",
+        "updatedAt" : "2020-09-26T12:59:23Z",
+        "lastEditedBy" : "2d9afee7-a404-4340-8fd9-d3187ed4f1da",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 374,
+    "diffHunk" : "@@ -1,1 +372,376 @@func (dc *DisruptionController) getPodsForPdb(pdb *policy.PodDisruptionBudget) ([]*api.Pod, error) {\n\tsel, err := unversioned.LabelSelectorAsSelector(pdb.Spec.Selector)\n\tif sel.Empty() {\n\t\treturn []*api.Pod{}, nil\n\t}"
+  },
+  {
+    "id" : "889b45d5-1519-49fe-8f2f-d6f14ae7aff7",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1347d930-a36e-41f6-95f9-320cf76470c6",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Please add a comment for this section, something like:\n\n```\nWhen the user specifies a fraction of pods that must be available, we use as the\nfraction's denominator the sum of the values of the /scale subresource for the\npods' controllers. \n```\n\nAlso would be good to say why we use the ScaleStatus.Replicas value rather than Replicas field of the controller's Status. (I can't remember what is the difference anymore.)\n",
+        "createdAt" : "2016-07-10T04:15:59Z",
+        "updatedAt" : "2016-08-16T22:20:58Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "82e572b0-e62f-45cd-a539-de7886ab7a71",
+        "parentId" : "1347d930-a36e-41f6-95f9-320cf76470c6",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "I added a comment for the first point.\n\nFor the second point, I'm not sure the difference either, but I note that I'm not actually doing that.  So added comments for me to do that before submit, and to document why.\n",
+        "createdAt" : "2016-07-11T18:55:16Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 468,
+    "diffHunk" : "@@ -1,1 +466,470 @@\t\tdesiredHealthy = pdb.Spec.MinAvailable.IntVal\n\t\texpectedCount = int32(len(pods))\n\t} else if pdb.Spec.MinAvailable.Type == intstr.String {\n\t\t// When the user specifies a fraction of pods that must be available, we\n\t\t// use as the fraction's denominator"
+  },
+  {
+    "id" : "6632433c-1b95-4723-8564-16b9bb2590d0",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9e084ad7-fd2f-4dca-b2ec-eeb723239e6d",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "I guess it doesn't matter much but other controllers use their own names instead of \"controllermanager\"\n",
+        "createdAt" : "2016-07-20T21:07:34Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1d5fc3ab-dee3-4404-ba12-2a0b6f4c4cf1",
+        "parentId" : "9e084ad7-fd2f-4dca-b2ec-eeb723239e6d",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/node/nodecontroller.go#L162 but I can fix both of these in a followup PR.\n",
+        "createdAt" : "2016-07-25T16:16:47Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e84f3caf-b728-4af3-9fa5-70aa0e393989",
+        "parentId" : "9e084ad7-fd2f-4dca-b2ec-eeb723239e6d",
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "ok\n",
+        "createdAt" : "2016-08-16T10:35:08Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 94,
+    "diffHunk" : "@@ -1,1 +92,96 @@\t\tbroadcaster:   record.NewBroadcaster(),\n\t}\n\tdc.recorder = dc.broadcaster.NewRecorder(api.EventSource{Component: \"controllermanager\"})\n\n\tdc.getUpdater = func() updater { return dc.writePdbStatus }"
+  },
+  {
+    "id" : "c7edbfbd-b876-4c2e-b56d-4eb414f409d5",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a850e80a-27f2-4617-947f-b389e9425958",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Why not just return the replica set instead of using a special type? You are fetching them anyway.\n",
+        "createdAt" : "2016-07-20T21:11:35Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20dec7b9-dbbe-4e98-a6f9-f5762ad2e1ee",
+        "parentId" : "a850e80a-27f2-4617-947f-b389e9425958",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "Well, I _am_ returning the ReplicaSet, but I'm also returning the scale in such a way that the caller doesn't need to know how to deal with a ReplicaSet, or a ReplicationController.\n\nAlso there may be more than one controller, and that's a condition we need to be aware of.\n\nI could have returned a map instead of a list of pairs, but this seemed natural and perfectly fine.\n",
+        "createdAt" : "2016-07-25T16:21:55Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +187,191 @@\n// getPodReplicaSets finds replicasets which have no matching deployments.\nfunc (dc *DisruptionController) getPodReplicaSets(pod *api.Pod) ([]controllerAndScale, error) {\n\tcas := []controllerAndScale{}\n\trss, err := dc.rsLister.GetPodReplicaSets(pod)"
+  },
+  {
+    "id" : "f524e85e-6db9-4c5e-abf4-3cb1ff79cd1a",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5294df26-d85a-4b4b-af9a-1679c5e6705c",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Same comments as above\n",
+        "createdAt" : "2016-07-20T21:12:05Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +214,218 @@\n// getPodDeployments finds deployments for any replicasets which are being managed by deployments.\nfunc (dc *DisruptionController) getPodDeployments(pod *api.Pod) ([]controllerAndScale, error) {\n\tcas := []controllerAndScale{}\n\trss, err := dc.rsLister.GetPodReplicaSets(pod)"
+  },
+  {
+    "id" : "a7e5ccc0-2f0a-4623-9ec4-f0542c37b93b",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fb073e73-3319-4ef6-8522-f8a6bd0e3e9a",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "This may be a `DeleteFinalStateUnknown` so you need to do something like [this](https://github.com/kubernetes/kubernetes/blob/afe4977c9badb90f8c883d76fac07ab5c26d13d9/pkg/controller/deployment/deployment_controller.go#L382)\n",
+        "createdAt" : "2016-07-20T21:14:58Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 287,
+    "diffHunk" : "@@ -1,1 +285,289 @@\nfunc (dc *DisruptionController) removeDb(obj interface{}) {\n\tpdb := obj.(*policy.PodDisruptionBudget)\n\tglog.V(4).Infof(\"remove DB %q\", pdb.Name)\n\tdc.enqueuePdb(pdb)"
+  },
+  {
+    "id" : "5e476772-d5de-4339-8403-d8efe7dd9726",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4d7eebde-0168-441b-9ef3-b5ff99163299",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Should be a `RateLimitingInterface`\n",
+        "createdAt" : "2016-07-20T21:18:18Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9db2251d-fabb-43ef-a26b-771caca15e43",
+        "parentId" : "4d7eebde-0168-441b-9ef3-b5ff99163299",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "What is that?  And why should my queue be one?\n",
+        "createdAt" : "2016-07-25T16:27:00Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 68,
+    "diffHunk" : "@@ -1,1 +66,70 @@\tdLister     cache.StoreToDeploymentLister\n\n\tqueue *workqueue.Type\n\n\tbroadcaster record.EventBroadcaster"
+  },
+  {
+    "id" : "0d401b3d-e4cb-4cdc-9238-4f16194c5a8b",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8c1a8303-02e7-40fe-9856-55793a77c32f",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "You should ignore updates that have no change in the pdb.\n",
+        "createdAt" : "2016-07-20T21:32:36Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8405ed32-a1a8-4499-9b87-4e1d0b914423",
+        "parentId" : "8c1a8303-02e7-40fe-9856-55793a77c32f",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "Added a TODO comment.\n",
+        "createdAt" : "2016-08-16T01:09:38Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +279,283 @@func (dc *DisruptionController) updateDb(old, cur interface{}) {\n\t// TODO(mml) ignore updates where 'old' is equivalent to 'cur'.\n\tpdb := cur.(*policy.PodDisruptionBudget)\n\tglog.V(4).Infof(\"update DB %q\", pdb.Name)\n\tdc.enqueuePdb(pdb)"
+  },
+  {
+    "id" : "5a83d571-0259-45bb-8624-c076d5b37bd7",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "06d86e53-2c14-4777-8dd6-569e24bc631b",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "It seems that if you error out when updating you have already deep-copied once. Feels like `failSafe` should do some error handling and **not** deep-copy if we failed during the pdb update.\n",
+        "createdAt" : "2016-07-20T21:41:02Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +544,548 @@// eviction when it may be unsafe to do so.\nfunc (dc *DisruptionController) failSafe(pdb *policy.PodDisruptionBudget) error {\n\tobj, err := api.Scheme.DeepCopy(*pdb)\n\tif err != nil {\n\t\treturn err"
+  },
+  {
+    "id" : "b3bfd145-38a3-4142-a5e0-cd0cbb6c39e3",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ea60078e-1340-46c8-835d-bf9a4238d164",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "Can you add a comment explaining this field? Just by reading the godoc from pkg/apis/policy/types.go\n\n``` go\n// Whether or not a disruption is currently allowed.\nPodDisruptionAllowed bool `json:\"disruptionAllowed\"`\n```\n\nI still can't figure out what this field is supposed to do. What should clients do with it? Disallow scaling down?\n",
+        "createdAt" : "2016-07-20T21:43:38Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7be05f82-0734-42ec-9d97-af91ead5640f",
+        "parentId" : "ea60078e-1340-46c8-835d-bf9a4238d164",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "OK, this is a pretty glaring problem in terms of documentation.  I don't think I'll clarify it here (if you're here reading this code, you'd better understand what this component does), but your comment points out that we need to explain how this works better _somewhere_.\n\nTo answer your question: if this is true, it's OK to allow one eviction of one pod covered by this PDB.  If you (meaning the evict subresource handler yet to be written) do so, you're expected to set this bit to false.  If later the DisruptionController determines that conditions are such that a disruption is permitted, it sets the bit back to true.\n",
+        "createdAt" : "2016-07-25T16:33:37Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "98af6c01-f9c2-4c00-80c8-1ea023a27065",
+        "parentId" : "ea60078e-1340-46c8-835d-bf9a4238d164",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "The Godoc for the API field can certainly be several sentences long, explaining more details about the implications you describe here.  The Godoc for disruption budget the type can be several paragraphs, and go into more detail about how it's used.  That's at least documentation available in the CLI (to `kubectl explain disruptionbudget`)\n",
+        "createdAt" : "2016-08-03T14:37:46Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "935b374f-d3e9-479a-90ed-90d388a2cfd8",
+        "parentId" : "ea60078e-1340-46c8-835d-bf9a4238d164",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "@mml I agree you should write some kind of comment explaining this function, even if it can't be understood without additional context. I agree this isn't the right place to explain how the whole controller works and interacts with the eviction requests, but you could explain why a function called failSafe does what this function does.\n",
+        "createdAt" : "2016-08-14T19:55:14Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "93202103-035a-48cb-bd31-0b73b991d599",
+        "parentId" : "ea60078e-1340-46c8-835d-bf9a4238d164",
+        "authorId" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "body" : "OK.  Tried to clarify.  LMK if it's still not enough.\n",
+        "createdAt" : "2016-08-16T01:19:33Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "d324e241-a7f0-4ace-bda2-4174b07bdb18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 551,
+    "diffHunk" : "@@ -1,1 +549,553 @@\t}\n\tnewPdb := obj.(policy.PodDisruptionBudget)\n\tnewPdb.Status.PodDisruptionAllowed = false\n\n\treturn dc.getUpdater()(&newPdb)"
+  },
+  {
+    "id" : "7aa204bb-fbd9-4e37-b80c-554756874e9a",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f94460f2-21b3-4cde-aa20-f1c8818551d3",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "nit: drop else\n",
+        "createdAt" : "2016-07-20T21:44:27Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 590,
+    "diffHunk" : "@@ -1,1 +588,592 @@\tif err == nil {\n\t\treturn newPdb\n\t} else {\n\t\treturn pdb\n\t}"
+  },
+  {
+    "id" : "8e90c7cd-eb9b-4d37-b08e-1570f966b21a",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d8e18853-358a-4a56-b37a-349fb9a30da1",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "This function takes pdb as an argument but doesn't use it. It also doesn't use dc so I guess it technically doesn't need to be a member function, but that doesn't seem like a big deal.\n",
+        "createdAt" : "2016-08-14T19:46:25Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 536,
+    "diffHunk" : "@@ -1,1 +534,538 @@\t\t}\n\t}\n\n\treturn\n}"
+  },
+  {
+    "id" : "5117621a-69e5-44fe-8479-5a3774d54e7d",
+    "prId" : 25921,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d59b6955-a846-46ad-87e6-f811154da815",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "These error conditions (0 controllers or more than 1 controller) are only enforced if MinAvailable is specified as a percentage, not as an integer. It seems like we should enforce the same rules regardless of how the MinAvailable is specified? (Also, expectedCount is calculated very differently in the two cases...)\n",
+        "createdAt" : "2016-08-14T21:32:32Z",
+        "updatedAt" : "2016-08-16T22:20:59Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d60ba3c6e2b7d57441405a108fbfe2b8e38495cc",
+    "line" : 483,
+    "diffHunk" : "@@ -1,1 +481,485 @@\t\tcontrollerScale := map[types.UID]int32{}\n\n\t\t// 1. Find the controller(s) for each pod.  If any pod has 0 controllers,\n\t\t// that's an error.  If any pod has more than 1 controller, that's also an\n\t\t// error."
+  }
+]

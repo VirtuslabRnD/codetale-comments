@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "2a85637b-e7fd-4eb7-83b3-de83e99c6d9b",
+    "prId" : 73891,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/73891#pullrequestreview-228899429",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ff9a005d-96c2-4d8b-a321-447087054f51",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Update the \"gRPC Service Lifecycle\" section of `pluginmanager/pluginwatcher/README.md` file to indicate that if any of the steps in registration fails, on retry registration will start from scratch.\r\nFor example, imagine for a new socket:\r\n\r\n* Registration.GetInfo is called against socket. Succeeds.\r\n* Validate is called against internal plugin type handler. Succeeds.\r\n* Register is called against internal plugin type handler. Fails.\r\n* NotifyRegistrationStatus is called against socket to indicate registration failed. Succeeds.\r\n\r\nAfter some back off time time, the `pluginmanager` will try again from the begining:\r\n\r\n* GetInfo is called against socket, again. Succeeds.\r\n* Validate is called against internal plugin type handler again. Succeeds.\r\n* Register is called against internal plugin type handler again. Succeeds this time.\r\n* NotifyRegistrationStatus is called against socket to indicate registration succeed. Succeeds.\r\n* Plugin is successfully registered.\r\n\r\nMay also be a good to document what happens if for `GetInfo` call to socket returns a different \"type\", \"endpoint\" or \"supported version\" then a previous successful registration for the same \"socket path\" in the readme.",
+        "createdAt" : "2019-04-04T00:20:52Z",
+        "updatedAt" : "2019-05-30T23:01:15Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a3327e3-83e5-4a2f-afc2-0161070d1dcc",
+        "parentId" : "ff9a005d-96c2-4d8b-a321-447087054f51",
+        "authorId" : "f8f9446d-82d7-43cf-88d1-cecfb048866d",
+        "body" : "@saad-ali I'm finishing off the last bit of changes but this will no longer be true:\r\n```\r\nwhat happens if for GetInfo call to socket returns a different \"type\", \"endpoint\" or \r\n\"supported version\" then a previous successful registration for the same \r\n\"socket path\"\r\n```\r\nBecause `GetInfo` is now called in the register and unregister calls (`GenerateRegisterPluginFunc` and `GenerateUnregisterPluginFunc`), I've updated the actual/desired state caches so they no longer keep information about plugins except for the socket path and `foundInDeprecatedDir`. As a result, we won't be able to check if a plugin exists for the same socket path but other information has changed. I think this is okay because `plugin_watcher` only trigger plugin creation when a new file is detected, so the scenario of plugin information changing for an existing socket file won't happen since I'm leaving the [`Start()` method](https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/util/pluginwatcher/plugin_watcher.go#L89) untouched",
+        "createdAt" : "2019-04-12T23:08:15Z",
+        "updatedAt" : "2019-05-30T23:01:15Z",
+        "lastEditedBy" : "f8f9446d-82d7-43cf-88d1-cecfb048866d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3bc9ebd6-3652-4dcf-9fae-7d6684201017",
+        "parentId" : "ff9a005d-96c2-4d8b-a321-447087054f51",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "The problem is that if a file is deleted and recreated very quickly, the reconciler may not even notice that it was removed from the desired state. So reregistration won't happen.\r\n\r\n@msau42 had a great suggestion for how we can still retain the cool reregisteration behavior:\r\n\r\n1. Generate and store current timestamp during `desiredStateOfWorld.AddPlugin(...)` to the `desiredStateOfWorld` struct.\r\n2. Upon successful registration during `actualStateOfWorld.AddPlugin(...)` copy the timestamp from `desiredStateOfWorld` to the `actualStateOfWorld` struct.\r\n3. Have `desiredStateOfWorld.PluginExists(...)` verify that the timestamps in desired and actual state match, if not return false.\r\n\r\nThis way, after a successful registration, when the socket is deleted and recreated, it will force a reregistration because the timestamp of the socket in the desired state will be newer then the timestamp of the socket in the actual state. Specifically reconciler will first check for volume plugins to unregister, it will run `desiredStateOfWorld.PluginExists` which will return false. This will start a unregistration operation. Once the unregsitration is complete the socket will be removed from actual state. The reconciler will see the desired state has a socket that actual state doesn't and will start a registration operation. ",
+        "createdAt" : "2019-04-16T02:25:23Z",
+        "updatedAt" : "2019-05-30T23:01:15Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "84683226-453b-4e32-b1c6-6b2d3dad1ed0",
+        "parentId" : "ff9a005d-96c2-4d8b-a321-447087054f51",
+        "authorId" : "f8f9446d-82d7-43cf-88d1-cecfb048866d",
+        "body" : "@saad-ali @msau42 how do we determine whether to add a plugin to the desired state of world cache when traversing directories in `plugin_watcher`? In the case when the socket is deleted (and the socket is not removed from the desired state cache because it happens very quickly) and recreated, if we do what you suggested in number 3\r\n\r\n> Have `desiredStateOfWorld.PluginExists(...)` verify that the timestamps in desired and actual state match, if not return false.\r\n\r\nwhen we are traversing directories in `plugin_watcher`, in `handlePluginRegistration(...)` `desiredStateOfWorld.PluginExists(...)` will return true because the timestamps in desired and actual state match, and a reregistration won't eventually happen. ",
+        "createdAt" : "2019-04-20T20:44:16Z",
+        "updatedAt" : "2019-05-30T23:01:15Z",
+        "lastEditedBy" : "f8f9446d-82d7-43cf-88d1-cecfb048866d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23a14b00-69c7-4903-a1d5-192aaa639311",
+        "parentId" : "ff9a005d-96c2-4d8b-a321-447087054f51",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "@taragu, I forgot that `pluginwatcher` called `desiredStateOfWorld.PluginExists(...)` before calling `desiredStateOfWorld.AddPlugin(...)`. What if we modified `handlePluginRegistration` in `pluginwatcher` to always call `desiredStateOfWorld.AddPlugin(...)`. And rename `desiredStateOfWorld.AddPlugin(...)` to `desiredStateOfWorld.AddOrUpdatePlugin(...)`. And then have the method update the time stamp? ",
+        "createdAt" : "2019-04-21T05:35:04Z",
+        "updatedAt" : "2019-05-30T23:01:15Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5e185544421d5504b0fe2ae32c8ebfb3000a1224",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +32,36 @@\tv1beta1 \"k8s.io/kubernetes/pkg/kubelet/pluginmanager/pluginwatcher/example_plugin_apis/v1beta1\"\n\tv1beta2 \"k8s.io/kubernetes/pkg/kubelet/pluginmanager/pluginwatcher/example_plugin_apis/v1beta2\"\n)\n\ntype exampleHandler struct {"
+  }
+]

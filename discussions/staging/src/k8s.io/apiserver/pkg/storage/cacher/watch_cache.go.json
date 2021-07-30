@@ -1,0 +1,717 @@
+[
+  {
+    "id" : "629bf3d8-2d52-4bef-801f-99a0552830cc",
+    "prId" : 95145,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95145#pullrequestreview-498669873",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "aaa9cd22-f6c4-4388-af51-96c84926a60b",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "How does this prevent out of order execution? The prior code arguably might have been serialized but this code could end up with e.g. two copies of this goroutine both waiting on the lock, then the \"wrong\" one gets it first.",
+        "createdAt" : "2020-09-29T15:40:58Z",
+        "updatedAt" : "2020-09-29T16:16:05Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4b9a4ecf-c8c6-48a5-b06a-bafd5fea7280",
+        "parentId" : "aaa9cd22-f6c4-4388-af51-96c84926a60b",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This is relying on the reflector implementation that all Add/Update/Delete and UpdateResourceVersion are happening synchronously:\r\nhttps://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/client-go/tools/cache/reflector.go#L493",
+        "createdAt" : "2020-09-29T15:44:15Z",
+        "updatedAt" : "2020-09-29T16:16:05Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e2080ab1-12e8-4433-8993-ff57a53000d6",
+        "parentId" : "aaa9cd22-f6c4-4388-af51-96c84926a60b",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Updated the comment to reflect that.",
+        "createdAt" : "2020-09-29T16:04:03Z",
+        "updatedAt" : "2020-09-29T16:16:05Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8d86540-3e49-4a13-ac46-3482a4e2c374",
+        "parentId" : "aaa9cd22-f6c4-4388-af51-96c84926a60b",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "I can believe it for the below section, but not for this bit running in a goroutine.\r\n\r\n1. Imagine 3 successive calls A, B, C resulting in a run of this goroutine.\r\n2. Call A happens first, takes the lock, and then the CPU context-switches away.\r\n3. Then call B starts and blocks waiting for the lock.\r\n4. Then call C starts and blocks waiting for the lock.\r\n5. Then call A gets another timeslice, completes, and releases the lock.\r\n6. Then call **C** acquires the lock and sets RV\r\n7. Then call **B** acquires the lock and sets RV, making it go back in time.",
+        "createdAt" : "2020-09-29T16:14:11Z",
+        "updatedAt" : "2020-09-29T16:16:05Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "142ce838-27a9-4c66-ae6b-c2bb5608d7d9",
+        "parentId" : "aaa9cd22-f6c4-4388-af51-96c84926a60b",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "OOps - thanks for catching this bug.\r\nIt wasn't supposed to be goroutine - it was supposed to be just func to lock only that instruction.\r\n\r\nFixed now - PTAL",
+        "createdAt" : "2020-09-29T16:16:31Z",
+        "updatedAt" : "2020-09-29T16:16:31Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73cb57c5-abb6-427b-9851-6d4adb330b3f",
+        "parentId" : "aaa9cd22-f6c4-4388-af51-96c84926a60b",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Ah that makes more sense :)",
+        "createdAt" : "2020-09-29T16:26:32Z",
+        "updatedAt" : "2020-09-29T16:26:32Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0bd8104809922aae504fc9be2e853650ecd17b8a",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +393,397 @@\t\tw.Lock()\n\t\tdefer w.Unlock()\n\t\tw.resourceVersion = rv\n\t}()\n"
+  },
+  {
+    "id" : "ffbea16d-c3c5-4d05-94de-ba91a8d78ce4",
+    "prId" : 91417,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91417#pullrequestreview-418373828",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ae098076-ae7a-44e7-a589-f1f5cfe93632",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I don't think `startIndex == 0` means no event was removed from the buffer since relist... startIndex can end up being 0 due to a resize that shrinks the watch cache, right?\r\n\r\n```\r\n\t\t// adjust startIndex if cache capacity shrink.\r\n\t\tw.startIndex = w.endIndex - capacity\r\n```",
+        "createdAt" : "2020-05-26T14:31:05Z",
+        "updatedAt" : "2020-05-26T15:01:24Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "94263807-b0ea-4bfd-97e9-714f4014b2a5",
+        "parentId" : "ae098076-ae7a-44e7-a589-f1f5cfe93632",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this seems to be mixing semantic meaning with what I would have expected to be internal details of a ring buffer... ",
+        "createdAt" : "2020-05-26T14:34:24Z",
+        "updatedAt" : "2020-05-26T15:01:24Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce4d6c09-f528-4d26-ad76-21e2ae8d4fcc",
+        "parentId" : "ae098076-ae7a-44e7-a589-f1f5cfe93632",
+        "authorId" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "body" : "> I don't think `startIndex == 0` means no event was removed from the buffer since relist... startIndex can end up being 0 due to a resize that shrinks the watch cache, right?\r\n> \r\n> ```\r\n> \t\t// adjust startIndex if cache capacity shrink.\r\n> \t\tw.startIndex = w.endIndex - capacity\r\n> ```\r\n\r\nstartIndex would never be reduced, this increase startIndex by capacity/2 when capacity reduced by half",
+        "createdAt" : "2020-05-26T14:42:34Z",
+        "updatedAt" : "2020-05-26T15:01:24Z",
+        "lastEditedBy" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8bac1a8b-8e5b-47f6-a4fe-e10263da5cb0",
+        "parentId" : "ae098076-ae7a-44e7-a589-f1f5cfe93632",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "ah, true...",
+        "createdAt" : "2020-05-26T14:47:04Z",
+        "updatedAt" : "2020-05-26T15:01:24Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ef1e5b6d3ac25431d890bfe4f540d9aa956a856d",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +535,539 @@\tvar oldest uint64\n\tswitch {\n\tcase w.listResourceVersion > 0 && w.startIndex == 0:\n\t\t// If no event was removed from the buffer since last relist, the oldest watch\n\t\t// event we can deliver is one greater than the resource version of the list."
+  },
+  {
+    "id" : "4bc6c54a-a5a8-46e5-b9ed-890879dcf990",
+    "prId" : 90091,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90091#pullrequestreview-393034880",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1049e3b0-a1ec-41e4-a0e5-9daede692268",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Please encapsulate this resizing logic into a separate function - it would make testing simpler.",
+        "createdAt" : "2020-04-14T15:20:38Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56407b656c7acf6039cead0192070429e53a0c70",
+    "line" : 129,
+    "diffHunk" : "@@ -1,1 +359,363 @@\t\t}\n\t\treturn\n\t}\n}\n"
+  },
+  {
+    "id" : "f5bd6f87-e695-4806-8433-d1da009fd2c8",
+    "prId" : 90091,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90091#pullrequestreview-393446621",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e60228aa-9951-438e-a606-63eca2689444",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "As mentioned by @lavalamp in the bug, we need a maximum cache size that we can't exceed.\r\n\r\nWe probably also want a minimum.\r\n\r\nAs for the values, we need some kind of heuristic.\r\nMy current best estimation is assume that leases are the most frequent and happen once per 10s.\r\nFor 5k-node clusters, that gives 5000*6=30k per minute, so 150k per 5 minutes. So set the max to 150k.",
+        "createdAt" : "2020-04-14T15:23:39Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1aa9d380-0a23-49a1-bced-4300d87cb82b",
+        "parentId" : "e60228aa-9951-438e-a606-63eca2689444",
+        "authorId" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "body" : "Can we set lower bound as 100(minimum in [NewHeuristicWatchCacheSizes](https://github.com/kubernetes/kubernetes/blob/master/pkg/registry/cachesize/cachesize.go#L25)), but I don't know its meaning.",
+        "createdAt" : "2020-04-14T16:02:44Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90920925-18b8-4e26-a1f0-2197a8034832",
+        "parentId" : "e60228aa-9951-438e-a606-63eca2689444",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I would like to go lower than 100, but for now maybe 100 is good enough, as we won't regress anyway.",
+        "createdAt" : "2020-04-14T17:10:47Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "de522ac6-7321-492f-bacc-6748c2354e19",
+        "parentId" : "e60228aa-9951-438e-a606-63eca2689444",
+        "authorId" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "body" : "I'd like to change default lower or upper bound if there is a better value.",
+        "createdAt" : "2020-04-15T04:22:57Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56407b656c7acf6039cead0192070429e53a0c70",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +48,52 @@\n\t// eventFreshDuration is time duration of events we want to keep.\n\teventFreshDuration = 5 * time.Minute\n\n\t// defaultLowerBoundCapacity is a default value for event cache capacity's lower bound."
+  },
+  {
+    "id" : "59728d50-b363-4dd6-a1ab-750c16d45640",
+    "prId" : 90091,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90091#pullrequestreview-393444601",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a63ed5dd-52e8-4039-9487-01811bb75184",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "instead of having \"else if\", let's add a return in the if",
+        "createdAt" : "2020-04-14T17:18:20Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "64167a4c-e769-4d6d-917c-069a1d52b1f3",
+        "parentId" : "a63ed5dd-52e8-4039-9487-01811bb75184",
+        "authorId" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "body" : "addressed",
+        "createdAt" : "2020-04-15T04:15:15Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56407b656c7acf6039cead0192070429e53a0c70",
+    "line" : 120,
+    "diffHunk" : "@@ -1,1 +350,354 @@\t\tif capacity > w.capacity {\n\t\t\tw.doCacheResizeLocked(capacity)\n\t\t}\n\t\treturn\n\t}"
+  },
+  {
+    "id" : "9127ac42-0af9-49f0-a7d8-777e441c4db8",
+    "prId" : 90091,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90091#pullrequestreview-393578728",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "71f4ff46-afda-4791-97a0-bd1ceccafef8",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "nit:\r\nTODO: Figure out, to what value we can decreased it.",
+        "createdAt" : "2020-04-15T05:57:22Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "978394ab-6dcc-413e-a8f5-100de23b3bd3",
+        "parentId" : "71f4ff46-afda-4791-97a0-bd1ceccafef8",
+        "authorId" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "body" : "Done.",
+        "createdAt" : "2020-04-15T08:51:22Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56407b656c7acf6039cead0192070429e53a0c70",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +50,54 @@\teventFreshDuration = 5 * time.Minute\n\n\t// defaultLowerBoundCapacity is a default value for event cache capacity's lower bound.\n\t// 100 is minimum in NewHeuristicWatchCacheSizes.\n\t// TODO: Figure out, to what value we can decreased it."
+  },
+  {
+    "id" : "fb57aff1-c63a-4f55-a633-0f213de237c3",
+    "prId" : 90091,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90091#pullrequestreview-393695493",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5182b744-27d5-4ffa-8db5-9112fd927fa6",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "That is lower than 150k that I initially proposed. And it's already clear we want be able to keep 5 minutes of history of leases in 5k-node cluster.That is probably fine, but we should mention it explicitly in the comment.",
+        "createdAt" : "2020-04-15T06:00:03Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "92ca3a26-954f-40e0-988c-704c7adf7b85",
+        "parentId" : "5182b744-27d5-4ffa-8db5-9112fd927fa6",
+        "authorId" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "body" : "Done",
+        "createdAt" : "2020-04-15T08:51:04Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "866397b0-7fb4-493b-9797-a04dc718efe0",
+        "parentId" : "5182b744-27d5-4ffa-8db5-9112fd927fa6",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "This isn't fully true now, because 102400 is not enough to keep 5min of leases in 5k-node cluster.\r\nLet's change to sth like:\r\n```\r\n// defaultUpperBoundCapacity  should be able to keep eventFreshDuration of history.\r\n// With the current 102400 value though, it's not not enough for leases in 5k-node cluster, but that is conscious decision.\r\n// TODO: Validate if the current value is high enough for large scale clusters.",
+        "createdAt" : "2020-04-15T09:04:47Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "306827b5-e66a-4e5e-8911-c5b304c8cd42",
+        "parentId" : "5182b744-27d5-4ffa-8db5-9112fd927fa6",
+        "authorId" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "body" : "Done.",
+        "createdAt" : "2020-04-15T11:43:18Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56407b656c7acf6039cead0192070429e53a0c70",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +59,63 @@\t// but that is conscious decision.\n\t// TODO: Validate if the current value is high enough for large scale clusters.\n\tdefaultUpperBoundCapacity = 100 * 1024\n)\n"
+  },
+  {
+    "id" : "45f74450-1df4-49d4-bbb8-bdd0269ac05d",
+    "prId" : 90091,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90091#pullrequestreview-393578328",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0bc6a4d3-d239-4433-b026-c5f8c45be3b6",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "FTR - I would like to get rid of passing \"capacity\" as an argument to newWatchCache at all (to get rid of all those magic constants). So it's fine for now, but you should add a TODO next to upperBoundCapacity and lowerBoundCapacity fields to get rid of them once we stop passing capacity as a parameter to watch cache.",
+        "createdAt" : "2020-04-15T06:09:28Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "21690462-656f-493e-a631-3acd893c6679",
+        "parentId" : "0bc6a4d3-d239-4433-b026-c5f8c45be3b6",
+        "authorId" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "body" : "Done.",
+        "createdAt" : "2020-04-15T08:50:53Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56407b656c7acf6039cead0192070429e53a0c70",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +207,211 @@\t\tcache:        make([]*watchCacheEvent, capacity),\n\t\t// TODO get rid of them once we stop passing capacity as a parameter to watch cache.\n\t\tlowerBoundCapacity:  min(capacity, defaultLowerBoundCapacity),\n\t\tupperBoundCapacity:  max(capacity, defaultUpperBoundCapacity),\n\t\tstartIndex:          0,"
+  },
+  {
+    "id" : "e431a598-9549-49ad-8a90-f3c17a9986d5",
+    "prId" : 90091,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90091#pullrequestreview-393710073",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "243701cf-0b7b-4acd-a597-cdd68c015584",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "set w.capacity = capacity here (and remove it from both places above)",
+        "createdAt" : "2020-04-15T11:39:14Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7c3d99a-172b-44e9-ab3d-799fb13d4e90",
+        "parentId" : "243701cf-0b7b-4acd-a597-cdd68c015584",
+        "authorId" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "body" : "Done",
+        "createdAt" : "2020-04-15T12:06:35Z",
+        "updatedAt" : "2020-04-17T06:03:44Z",
+        "lastEditedBy" : "ffdbc0a5-19fd-4509-a56e-a4979ac0c1d7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56407b656c7acf6039cead0192070429e53a0c70",
+    "line" : 149,
+    "diffHunk" : "@@ -1,1 +379,383 @@\t\tnewCache[i%capacity] = w.cache[i%w.capacity]\n\t}\n\tw.cache = newCache\n\trecordsWatchCacheCapacityChange(w.objectType.String(), w.capacity, capacity)\n\tw.capacity = capacity"
+  },
+  {
+    "id" : "d617ed81-a93d-496f-9aea-e71fc45fc3f7",
+    "prId" : 90091,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90091#pullrequestreview-395623011",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d2269c7-467b-4c59-82b0-d68f1eaefa8f",
+        "parentId" : null,
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "I'm fairly concerned about this. Do we already have a scalability run planned? I'd like to make sure don't drop this. I would expect that open issue to make sure we do it if it's not already started should be sufficient. (cc @wojtek-t)",
+        "createdAt" : "2020-04-17T15:56:46Z",
+        "updatedAt" : "2020-04-17T16:31:12Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90a3cf66-52e9-4479-bfa1-187b649f8bd1",
+        "parentId" : "3d2269c7-467b-4c59-82b0-d68f1eaefa8f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Yes - I believe this is fine. I don't think we will get any useful data from a single run in this case - we will be monitoring tests over next weeks (it's consciously merged early in the cycle).",
+        "createdAt" : "2020-04-17T16:37:49Z",
+        "updatedAt" : "2020-04-17T16:37:49Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a0e9e24-76b9-4a4d-8490-f60ad5de1257",
+        "parentId" : "3d2269c7-467b-4c59-82b0-d68f1eaefa8f",
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "Thanks @wojtek-t With you keeping an eye on this, I'm satisfied.",
+        "createdAt" : "2020-04-17T17:00:35Z",
+        "updatedAt" : "2020-04-17T17:00:36Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56407b656c7acf6039cead0192070429e53a0c70",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +58,62 @@\t// With the current 102400 value though, it's not enough for leases in 5k-node cluster,\n\t// but that is conscious decision.\n\t// TODO: Validate if the current value is high enough for large scale clusters.\n\tdefaultUpperBoundCapacity = 100 * 1024\n)"
+  },
+  {
+    "id" : "314b4bfa-a2a5-4bdf-ab2f-4144f725dd67",
+    "prId" : 90091,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90091#pullrequestreview-395623284",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b0a60d01-52b0-4d0c-ae28-7fdaef09c9a7",
+        "parentId" : null,
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "Do we need `w.isCacheFullLocked()` for this? based on the godoc for `resizeCacheLocked` I would have expected the decrease to happen even if the cache is not full.",
+        "createdAt" : "2020-04-17T16:28:30Z",
+        "updatedAt" : "2020-04-17T16:31:12Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1bc74d32-db7e-4e4a-a9fc-9097de1c647c",
+        "parentId" : "b0a60d01-52b0-4d0c-ae28-7fdaef09c9a7",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "That was my suggestion. I don't want to downsize if the cache is not full, to avoid potential flapping.",
+        "createdAt" : "2020-04-17T16:35:32Z",
+        "updatedAt" : "2020-04-17T16:35:32Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0265c4b3-6d1e-48a5-9a8c-f9f994f18236",
+        "parentId" : "b0a60d01-52b0-4d0c-ae28-7fdaef09c9a7",
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "Gotcha.",
+        "createdAt" : "2020-04-17T17:01:00Z",
+        "updatedAt" : "2020-04-17T17:01:01Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56407b656c7acf6039cead0192070429e53a0c70",
+    "line" : 123,
+    "diffHunk" : "@@ -1,1 +353,357 @@\t\treturn\n\t}\n\tif w.isCacheFullLocked() && eventTime.Sub(w.cache[(w.endIndex-w.capacity/4)%w.capacity].RecordTime) > eventFreshDuration {\n\t\tcapacity := max(w.capacity/2, w.lowerBoundCapacity)\n\t\tif capacity < w.capacity {"
+  },
+  {
+    "id" : "d9129fb4-7d0a-4193-8b99-014b43c72ec4",
+    "prId" : 85445,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85445#pullrequestreview-352179114",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b85c4227-5ce6-4fb6-82e4-652e232eac84",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "This appears to find the first one with a match and return only that. Is that the right behavior? I.e. is it the case that objects must match all the values, so that it doesn't matter which index we search? Please add a comment explaining.",
+        "createdAt" : "2019-12-06T17:12:50Z",
+        "updatedAt" : "2020-02-05T09:39:13Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "443a80da-891e-4ee1-a784-46b45137718f",
+        "parentId" : "b85c4227-5ce6-4fb6-82e4-652e232eac84",
+        "authorId" : "bae8b8b8-e8b6-45cc-9aa4-ab1e581edf1a",
+        "body" : "Yes, the objects should match all the values. So the objects indexed by field and label will be filtered by field and label selectors again in later. In future, we will compare different MatchValues, return the  least objects",
+        "createdAt" : "2019-12-08T09:50:24Z",
+        "updatedAt" : "2020-02-05T09:39:13Z",
+        "lastEditedBy" : "bae8b8b8-e8b6-45cc-9aa4-ab1e581edf1a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0f3cf926-dc91-458c-b8bf-c6a23a545200",
+        "parentId" : "b85c4227-5ce6-4fb6-82e4-652e232eac84",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Let me clarify one thing - this isn't the place where we do \"final filtering\" - only some \"prefiltering\" is happening here.\r\nThe final filtering is happening here:\r\nhttps://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/storage/cacher/cacher.go#L720\r\n\r\nSo the only requirement here is to NOT miss anything that should be returned. We can return as many non-matching items as we want - they will be filtered out later. The fact that we return less things is only further performance improvement.",
+        "createdAt" : "2019-12-17T14:59:23Z",
+        "updatedAt" : "2020-02-05T09:39:13Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa7343c1-fe2b-4495-8eb3-5b46288651f2",
+        "parentId" : "b85c4227-5ce6-4fb6-82e4-652e232eac84",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "@shaloulcy - it's probably worth adding a comment about that (something along the lines what I wrote above)",
+        "createdAt" : "2020-02-03T08:08:26Z",
+        "updatedAt" : "2020-02-05T09:39:13Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7bb9e300-6f84-4f15-be2e-d54d2fb06036",
+        "parentId" : "b85c4227-5ce6-4fb6-82e4-652e232eac84",
+        "authorId" : "bae8b8b8-e8b6-45cc-9aa4-ab1e581edf1a",
+        "body" : "done",
+        "createdAt" : "2020-02-03T11:12:45Z",
+        "updatedAt" : "2020-02-05T09:39:13Z",
+        "lastEditedBy" : "bae8b8b8-e8b6-45cc-9aa4-ab1e581edf1a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa9ba80a67deeb9089e1be8ebac21063ebc07904",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +361,365 @@\t// want - they will be filtered out later. The fact that we return less things is only further performance improvement.\n\t// TODO: if multiple indexes match, return the one with the fewest items, so as to do as much filtering as possible.\n\tfor _, matchValue := range matchValues {\n\t\tif result, err := w.store.ByIndex(matchValue.IndexName, matchValue.Value); err == nil {\n\t\t\treturn result, w.resourceVersion, nil"
+  },
+  {
+    "id" : "a7dccdf5-35f4-4931-b3c9-13edc35cbbb8",
+    "prId" : 83520,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83520#pullrequestreview-312134086",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b817ab3b-2f86-4371-b533-0a2842cbd600",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "is this a nice-to-have, or does the client implementation depend on this?",
+        "createdAt" : "2019-11-05T22:05:15Z",
+        "updatedAt" : "2019-11-06T06:06:26Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "de7938ef-11d5-48c9-86c8-648031cdf234",
+        "parentId" : "b817ab3b-2f86-4371-b533-0a2842cbd600",
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "This is a nice to have. @smarterclayton had noticed that everywhere else we return resource expired except for there (get,list,watch for watch cache both enabled and disabled). The HTTP Status code is 410 for both responses.",
+        "createdAt" : "2019-11-06T00:37:48Z",
+        "updatedAt" : "2019-11-06T06:06:26Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c60fa97-9e45-4774-aa9d-fc6354b1006c",
+        "parentId" : "b817ab3b-2f86-4371-b533-0a2842cbd600",
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "I still check for both on the client side, of course.",
+        "createdAt" : "2019-11-06T00:38:24Z",
+        "updatedAt" : "2019-11-06T06:06:26Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "57b451cfb6738fca45fc05cd50c1ff6d7240e3a7",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +469,473 @@\t}\n\tif resourceVersion < oldest-1 {\n\t\treturn nil, errors.NewResourceExpired(fmt.Sprintf(\"too old resource version: %d (%d)\", resourceVersion, oldest-1))\n\t}\n"
+  },
+  {
+    "id" : "b094d2e4-8e34-45e7-a653-1c027342019e",
+    "prId" : 76702,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76702#pullrequestreview-228614918",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b7dd6191-0554-4790-bc0c-db7a8fee5ad7",
+        "parentId" : null,
+        "authorId" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "body" : "Include this info in the godoc for the function? It's an important part of this function's contract.",
+        "createdAt" : "2019-04-18T21:16:31Z",
+        "updatedAt" : "2019-04-19T08:22:09Z",
+        "lastEditedBy" : "d4f34d8f-5341-4ac1-b8b2-5e5f11e23a5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3359a55b-5f1c-4eb2-8dc6-5b06f9d98aa8",
+        "parentId" : "b7dd6191-0554-4790-bc0c-db7a8fee5ad7",
+        "authorId" : "2298dd66-0920-41ef-85a0-e8d08cffdc22",
+        "body" : "we use w.Lock() to protect w.cache and w.onEvent both, which should be fixed too.\r\n```\r\nfunc (w *watchCache) SetOnEvent(onEvent func(*watchCacheEvent)) {\r\n\tw.Lock()\r\n\tdefer w.Unlock()\r\n\tw.onEvent = onEvent\r\n}\r\n```",
+        "createdAt" : "2019-04-19T06:46:04Z",
+        "updatedAt" : "2019-04-19T08:22:09Z",
+        "lastEditedBy" : "2298dd66-0920-41ef-85a0-e8d08cffdc22",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe456d16-3ca1-43c8-a7db-54130781553c",
+        "parentId" : "b7dd6191-0554-4790-bc0c-db7a8fee5ad7",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Refactored to eliminate SetOnEvent method - we don't need to allow modifying this once watchCache is created.",
+        "createdAt" : "2019-04-19T07:51:57Z",
+        "updatedAt" : "2019-04-19T08:22:09Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e6e43828284c6e83cf2b4658fa377b4cc7dec0c3",
+    "line" : 85,
+    "diffHunk" : "@@ -1,1 +258,262 @@\n\t// Avoid calling event handler under lock.\n\t// This is safe as long as there is at most one call to processEvent in flight\n\t// at any point in time.\n\tif w.eventHandler != nil {"
+  },
+  {
+    "id" : "03f4d6cf-9cc9-43d6-8e7b-f0a11575f65d",
+    "prId" : 76702,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76702#pullrequestreview-231131402",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7fa56199-35d4-4ade-a928-d970d3dd9db1",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "How about we acquire the lock after watchCacheEvent is constructed (after PrevObjFields is assigned) ?\r\nWe can check whether the previousElem is the same as (current) object from store. If they are not same, we construct watchCacheEvent again.",
+        "createdAt" : "2019-04-25T21:18:40Z",
+        "updatedAt" : "2019-04-25T21:18:40Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a19eebf-902a-43ed-a2d9-79a55051e4ef",
+        "parentId" : "7fa56199-35d4-4ade-a928-d970d3dd9db1",
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "this is what I meant:\r\nhttps://pastebin.com/G2EM5B6v",
+        "createdAt" : "2019-04-25T21:28:39Z",
+        "updatedAt" : "2019-04-25T21:28:39Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a579e4c-d7fd-4c61-bbe9-38f37735feb3",
+        "parentId" : "7fa56199-35d4-4ade-a928-d970d3dd9db1",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "i don't understand how that helps - you still do Get() under lock, so this doesn't buy as almost anything for lock contention, and it add additional load.",
+        "createdAt" : "2019-04-26T06:38:10Z",
+        "updatedAt" : "2019-04-26T06:38:11Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f219fee2-18b6-4386-8122-a3ac9586e590",
+        "parentId" : "7fa56199-35d4-4ade-a928-d970d3dd9db1",
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "We can call Get() under read lock.\r\nBut w.updateCache() should be called under write lock (by which time the entry may have changed).\r\n\r\nLet me think more on this.",
+        "createdAt" : "2019-04-26T12:36:13Z",
+        "updatedAt" : "2019-04-26T12:36:13Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e6e43828284c6e83cf2b4658fa377b4cc7dec0c3",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +245,249 @@\t\t\twatchCacheEvent.PrevObject = previousElem.Object\n\t\t\twatchCacheEvent.PrevObjLabels = previousElem.Labels\n\t\t\twatchCacheEvent.PrevObjFields = previousElem.Fields\n\t\t}\n"
+  },
+  {
+    "id" : "d26a1356-bb98-4740-b4a9-d9521a60b8f8",
+    "prId" : 75474,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/75474#pullrequestreview-221467398",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c6c44134-bd36-499f-908b-df0246988ea9",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Please identify watchcache - there is separate one per object type.",
+        "createdAt" : "2019-04-02T06:30:26Z",
+        "updatedAt" : "2019-04-16T11:06:05Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d70edd3d39d4430d71c4b7c9adba8df5ba7f16c8",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +388,392 @@\t}\n\tw.cond.Broadcast()\n\tklog.V(3).Infof(\"Replace watchCache (rev: %v) \", resourceVersion)\n\treturn nil\n}"
+  }
+]

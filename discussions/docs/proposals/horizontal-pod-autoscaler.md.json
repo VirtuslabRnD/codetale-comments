@@ -1,0 +1,398 @@
+[
+  {
+    "id" : "153ebceb-3648-421c-9e6e-27258562bfd8",
+    "prId" : 12859,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "31e13f78-201d-4b42-bd7f-39a63d3f4892",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "What is the purpose of this? Is it ever different from the selector in the RC or Deployment that this is a subresource for, other than due to race conditions (RC/Deployment spec has been updated, but current replicas in status represents query using previous spec's selector)?\n",
+        "createdAt" : "2015-08-19T05:17:46Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9625573f-f0fb-4aee-b0bb-d0acaa42ea4e",
+        "parentId" : "31e13f78-201d-4b42-bd7f-39a63d3f4892",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "The reason is that autoscaler has only reference to scale subresource. It doesn't have reference to RC/Deployment (and we do not want to introduce it). But autoscaler needs a way to take labels, so we have to include them in scale suberesource.\n",
+        "createdAt" : "2015-08-19T08:56:22Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e871c99c-aa28-4fcc-92d0-c58323171201",
+        "parentId" : "31e13f78-201d-4b42-bd7f-39a63d3f4892",
+        "authorId" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "body" : "Maybe this is what @davidopp alluded to, but seems like there could be a discrepancy with two different places `ReplicationController{Spec,Status}.Replicas` (directly or via the deployment config) and  `Scale{Status,Spec}`  having the same information. And if I understood this correctly, this information is in the RC/DC and HorizontalPodAutoscaler. How would it all play out [config-wise] in the scenario someone manually scales up an RC or deployment?\nOr is the proposal to move that `ReplicationController{Spec,Status}.Replicas` information to under the scale sub-resource?\n",
+        "createdAt" : "2015-08-19T18:14:28Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a50328de-f78a-464d-aa06-d90bc21bf6f1",
+        "parentId" : "31e13f78-201d-4b42-bd7f-39a63d3f4892",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "@jszczepkowski Is there a reason why autoscaler has reference to scale subresource instead of to RC or Deployment? Is scale subresource stored in a separate object in etcd than the rest of the RC or Deployment?\n\n(And yeah, as @ramr alludes to, the same question I asked about Selector can be asked about Replicas, which is also already in the top-level object's Status.)\n\nRegardless, you should document why this field exists, otherwise people will wonder. \n",
+        "createdAt" : "2015-08-19T19:29:18Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a905beff-d38a-4081-a63e-cc441f8439ea",
+        "parentId" : "31e13f78-201d-4b42-bd7f-39a63d3f4892",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "@ramr @davidopp @bgrant0607 \nWe decided that instead of hard-coding all types that autoscaler can work on (RC, deployment, other future types?) we will implement a generic way of scaling different types of object: scale subresource. The wider discussion regarding scale took place in #1629. The main advanatage of scale resource is that whenever we introduce another type we want to auto-scale, we just need to implement scale for it (w/o modifying autoscaler code or API).\n\nHowever, as you correctly noticed, scale subresource has some drawback because some fields become redundant with what we already have in RC object: Spec.Replicas, Status.Replicas and Status.Selector. In my opinion, we should get rid of the redundancy in future by removing redundant fields from RC.Spec/RC.Status. We should also introduce Deployment object in a way that it doesn't have the redundant fields (but relies on Scale). Unlucky, proposed changes in RC will break v1 API, so, proper converters will need to be written and both versions should be supported for some time.\n\nIf we all agree that removing the redundancy is the way to go, I'll update the design doc and describe it. Please note that autoscaler API will be in experimental for some time, and there are also other obvious changes we need to introduce before moving it v1/v2 (e.g.: custom metrics).\n",
+        "createdAt" : "2015-08-20T15:58:23Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "afb2ca38-f3fb-4dc9-8616-974d179713f6",
+        "parentId" : "31e13f78-201d-4b42-bd7f-39a63d3f4892",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "On Aug 20, 2015, at 11:58 AM, Jerzy Szczepkowski notifications@github.com\nwrote:\n\nIn docs/proposals/horizontal-pod-autoscaler.md\nhttps://github.com/kubernetes/kubernetes/pull/12859#discussion_r37546968:\n\n> - Status ScaleStatus\n>   +}\n>   +\n>   +// ScaleSpec describes the attributes a Scale subresource\n>   +type ScaleSpec struct {\n> - // Replicas is the number of desired replicas.\n> - Replicas int\n>   +}\n>   +\n>   +// ScaleStatus represents the current status of a Scale subresource.\n>   +type ScaleStatus struct {\n> - // Replicas is the number of actual replicas.\n> - Replicas int\n>   +\n> - // Selector is a label query over pods that should match the replicas count.\n> - Selector map[string]string\n\n@ramr https://github.com/ramr @davidopp https://github.com/davidopp\n@bgrant0607 https://github.com/bgrant0607\nWe decided that instead of hard-coding all types that autoscaler can work\non (RC, deployment, other future types?) we will implement a generic way of\nscaling different types of object: scale subresource. The wider discussion\nregarding scale took place in #1629\nhttps://github.com/kubernetes/kubernetes/issues/1629. The main advanatage\nof scale resource is that whenever we introduce another type we want to\nauto-scale, we just need to implement scale for it (w/o modifying\nautoscaler code or API).\n\nHowever, as you correctly noticed, scale subresource has some drawback\nbecause some fields become redundant with what we already have in RC\nobject: Spec.Replicas, Status.Replicas and Status.Selector. In my opinion,\nwe should get rid of the redundancy in future by removing redundant fields\nfrom RC.Spec/RC.Status. We should also introduce Deployment object in a way\nthat it doesn't have the redundant fields (but relies on Scale). Unlucky,\nproposed changes in RC will break v1 API, so, proper converters will need\nto be written and both versions should be supported for some time.\n\nAs a client, I should be able to atomically create an RC and set replicas\nand selector.  The scale resource is a different view of the RC -\nredundancy is not an issue.  If scale clients need that info, they should\nbe accessing the scale resource (interface) for it.  RC is the type, Scale\nis an interface.\n\nOr is the concern just duplicating the Go struct types?\n\nIf we all agree that removing the redundancy is the way to go, I'll update\nthe design doc and describe it. Please note that autoscaler API will be in\nexperimental for some time, and there are also other obvious changes we\nneed to introduce before moving it v1/v2 (e.g.: custom metrics).\n\n—\nReply to this email directly or view it on GitHub\nhttps://github.com/kubernetes/kubernetes/pull/12859/files#r37546968.\n",
+        "createdAt" : "2015-08-20T16:26:30Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7be488c-240c-4e0b-9a03-54dfc6485466",
+        "parentId" : "31e13f78-201d-4b42-bd7f-39a63d3f4892",
+        "authorId" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "body" : "I agree with @smarterclayton. Scale is just a view on top of RC, so redundancy is not a problem. Replicas is an integral part of RC, which are also exposed by interface called \"Scale\".\n",
+        "createdAt" : "2015-08-21T09:57:21Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "df06b0d6-fd6c-44d1-8008-efeaccd16cd5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce36c5ca-a806-4be9-9d4c-cc73118e7176",
+        "parentId" : "31e13f78-201d-4b42-bd7f-39a63d3f4892",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "I've corrected the document as it was bit uncear (we do not store Scale subresource in etcd). As @smarterclayton pointed out, Scale is just another special interface, so, redundancy in interfaces is fine. I hope the document is fine and clear now.\n",
+        "createdAt" : "2015-08-21T21:37:17Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354b8d2abf51778cdbf20469c313332bbd4a0761",
+    "line" : 99,
+    "diffHunk" : "@@ -1,1 +97,101 @@\n\t// Selector is a label query over pods that should match the replicas count.\n\tSelector map[string]string\n}\n"
+  },
+  {
+    "id" : "af4759ef-dd24-47ab-8fee-97f8b10c0ff3",
+    "prId" : 12859,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "49b07c89-0b17-4be7-a80f-c361a0c4d30c",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "To make it more explicit that you only support one resource at a time, I would say: Currently this can be either \"cpu\" or \"memory\"\n",
+        "createdAt" : "2015-08-19T05:18:19Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a36548d4-9a22-47be-a68f-82197b70813e",
+        "parentId" : "49b07c89-0b17-4be7-a80f-c361a0c4d30c",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "Done.\n",
+        "createdAt" : "2015-08-19T08:53:40Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354b8d2abf51778cdbf20469c313332bbd4a0761",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +143,147 @@\t// to maintain by adjusting the desired number of pods.\n\t// Currently this can be either \"cpu\" or \"memory\".\n\tTarget ResourceConsumption\n}\n"
+  },
+  {
+    "id" : "5795423e-dec8-4001-88b5-2b703bbf112a",
+    "prId" : 12859,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eb997fd6-2def-4d43-b527-00de002a7bbf",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Do we know if it makes sense to use memory as a signal for scaling? What would cause an application to consume more memory under higher load? More simultaneous connections thus more total connection state (including things like caches)?  I assume horizontal pod autoscaling primarily targets stateless front-ends, and stateful applications that can dynamically re-shard. I don't know enough about these apps to know whether memory is a useful metric to use to trigger scaling.\n",
+        "createdAt" : "2015-08-19T05:18:47Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eccbef56-31ce-40d4-bda7-0a4c5efdeaf1",
+        "parentId" : "eb997fd6-2def-4d43-b527-00de002a7bbf",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "There was a discussion about it in https://github.com/kubernetes/kubernetes/pull/12344#discussion_r36553868. AFAIK, memory is usually not the best signal for auto-scaling, however, seems there are cases when it is good. We didn't want to hard-code only CPU in the first version and it was relatively simple to support also memory (we have all the necessary pieces for it). Most probably, in a near future, we will support autoscaling based on a custom metric, so the choice here will be even greater.\n",
+        "createdAt" : "2015-08-19T09:11:01Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354b8d2abf51778cdbf20469c313332bbd4a0761",
+    "line" : 193,
+    "diffHunk" : "@@ -1,1 +191,195 @@The autoscaler will be implemented as a control loop.\nIt will periodically (e.g.: every 1 minute) query pods described by ```Status.PodSelector``` of Scale subresource,\nand check their average CPU or memory usage from the last 1 minute\n(there will be API on master for this purpose, see\n[#11951](https://github.com/GoogleCloudPlatform/kubernetes/issues/11951)."
+  },
+  {
+    "id" : "5e670f29-1c91-4b40-a84f-ef20724680c2",
+    "prId" : 12859,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b5aab40b-8975-4689-96a5-fb6473152ca9",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Related to my previous comment... Some apps will grow in memory consumption over time due to memory leaks. They may never stabilize. And in fact the increase in memory consumption may be solely due to memory leaks, and unrelated to load. I guess we would just tell people running such apps not to use memory-based autoscaling...\n",
+        "createdAt" : "2015-08-19T05:19:21Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "faf68fc2-7dc8-4029-8e8d-62486d719207",
+        "parentId" : "b5aab40b-8975-4689-96a5-fb6473152ca9",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "Yes. I think people should be aware what they are doing and how their application behave.\n",
+        "createdAt" : "2015-08-19T09:13:33Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e044299e-6b1d-433b-93f6-20d9bf0dab49",
+        "parentId" : "b5aab40b-8975-4689-96a5-fb6473152ca9",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "In practice we've had two concrete memory consumption based scalers -\nsharded redis clusters, and sharded frontends that are keeping in memory\nstores.  However, typically it requires them have some way to allocate\nkeys, so it's practically more useful for cassandra or redis than for web\nfrontends.\n\nOn Wed, Aug 19, 2015 at 1:19 AM, David Oppenheimer <notifications@github.com\n\n> wrote:\n> \n> In docs/proposals/horizontal-pod-autoscaler.md\n> https://github.com/kubernetes/kubernetes/pull/12859#discussion_r37380628\n> :\n> \n> > +the current number, while scale-down will happen only when the ceiling of `TargetNumOfPods` is lower than\n> > +the current number.\n> > +\n> > +The decision to scale-up will be executed instantly.\n> > +However, we will execute scale-down only if the sufficient time has past from the last scale-up (e.g.: 10 minutes).\n> > +Such approach has two benefits:\n> > +\n> > +\\* Autoscaler works in a conservative way.\n> > -  If new user load appears, it is important for us to rapidly increase the number of pods,\n> > -  so that user requests will not be rejected.\n> > -  Lowering the number of pods is not that urgent.\n> >   +\n> >   +\\* Autoscaler avoids thrashing, i.e.: prevents rapid execution of conflicting decision if the load is not stable.\n> >   +\n> >   +\n> >   +As the CPU consumption of a pod immediately after start may be highly variable due to initialization/startup,\n> \n> Related to my previous comment... Some apps will grow in memory\n> consumption over time due to memory leaks. They may never stabilize. And in\n> fact the increase in memory consumption may be solely due to memory leaks,\n> and unrelated to load. I guess we would just tell people running such apps\n> not to use memory-based autoscaling...\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/12859/files#r37380628.\n\n## \n\nClayton Coleman | Lead Engineer, OpenShift\n",
+        "createdAt" : "2015-08-19T14:53:39Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3082bfc6-37be-4d4e-ba32-4798ea0e79d7",
+        "parentId" : "b5aab40b-8975-4689-96a5-fb6473152ca9",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "I've corrected the document as it was bit uncear (we do not store Scale subresource in etcd). As @smarterclayton pointed out, Scale is just another special interface, so, redundancy in interfaces is fine. I hope the document is fine and clear now.\n",
+        "createdAt" : "2015-08-21T12:57:19Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d6b33ba-bbeb-4922-9d7a-751522b725cc",
+        "parentId" : "b5aab40b-8975-4689-96a5-fb6473152ca9",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "Sorry, I've put the above comment in the wrong place. Moving it to correct place now.\n",
+        "createdAt" : "2015-08-21T21:36:54Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354b8d2abf51778cdbf20469c313332bbd4a0761",
+    "line" : 222,
+    "diffHunk" : "@@ -1,1 +220,224 @@\n\nAs the CPU consumption of a pod immediately after start may be highly variable due to initialization/startup,\nautoscaler will skip metrics from the first minute of pod lifecycle.\n"
+  },
+  {
+    "id" : "e485d458-488e-4e4a-bc82-6e107bc0dbcf",
+    "prId" : 12859,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "67c35420-9b4f-4622-9034-bf91fd5440f0",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "This is automatically true since you can include multiple objects in the same config file, right?\n",
+        "createdAt" : "2015-08-19T05:19:26Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49f485f7-5b88-4ec1-b88c-1901b2e905c0",
+        "parentId" : "67c35420-9b4f-4622-9034-bf91fd5440f0",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "I just wanted to mention this use case. Added clarification.\n",
+        "createdAt" : "2015-08-19T08:48:57Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354b8d2abf51778cdbf20469c313332bbd4a0761",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +246,250 @@* When running an image with ```kubectl run```, there should be an additional option to create\n  an autoscaler for it.\n* When creating a replication controller or deployment with ```kubectl create [-f]```, there should be\n  a possibility to specify an additional autoscaler object.\n  (This should work out-of-the-box when creation of autoscaler is supported by kubectl as we may include"
+  },
+  {
+    "id" : "3b2bf297-0f2e-45ce-a2af-22497819ce51",
+    "prId" : 12859,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f077ed3f-9ee7-4f25-a2c7-f6b172f781ff",
+        "parentId" : null,
+        "authorId" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "body" : "Am not clear here what you meant by writing to `ScaleSpec.Count` - did you mean `ScaleSpec.Replicas` above or an API call to do partial PUTs? \nPlus a typo, the current scale status information is in `ScaleStatus.Replicas` and `ScaleStatus.PodSelector` fields.\n",
+        "createdAt" : "2015-08-19T18:18:03Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "717f92d1-d588-4e24-912f-f07aaf18767e",
+        "parentId" : "f077ed3f-9ee7-4f25-a2c7-f6b172f781ff",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "They were just typs. Fixed.\n",
+        "createdAt" : "2015-08-21T12:21:45Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354b8d2abf51778cdbf20469c313332bbd4a0761",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +106,110 @@```ScaleStatus.Replicas``` will report how many pods are currently running in the replication controller/deployment,\nand ```ScaleStatus.Selector``` will return selector for the pods.\n\n## HorizontalPodAutoscaler Object\n"
+  },
+  {
+    "id" : "a32d13a5-1981-4587-813b-1ae6c296ad69",
+    "prId" : 12859,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1157ba42-8068-47d8-af57-6947c1e7cc6b",
+        "parentId" : null,
+        "authorId" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "body" : ":+1:  this is also useful to prevent flapping (scale up/down in successive intervals).\n\nUpdate: nm about the `flapping` comment - saw that you mentioned scale down would occur only at 10 mins past the scale up.\n",
+        "createdAt" : "2015-08-19T18:19:39Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "842a12a4-de3c-4888-a7f8-4d8ef79aa80b",
+        "parentId" : "1157ba42-8068-47d8-af57-6947c1e7cc6b",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "Ack.\n",
+        "createdAt" : "2015-08-21T12:21:59Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354b8d2abf51778cdbf20469c313332bbd4a0761",
+    "line" : 165,
+    "diffHunk" : "@@ -1,1 +163,167 @@\t// LastScaleTimestamp is the last time the HorizontalPodAutoscaler scaled the number of pods.\n\t// This is used by the autoscaler to controll how often the number of pods is changed.\n\tLastScaleTimestamp *util.Time\n}\n"
+  },
+  {
+    "id" : "4fac51d1-128f-4125-8ad9-54fe1e4e3ccc",
+    "prId" : 12859,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d1432997-f04d-4fda-994a-7d5520a5a27b",
+        "parentId" : null,
+        "authorId" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "body" : "Some components do take a while to spin up once the pod is started - have seen times of about 10-30 seconds, so maybe a good idea to make this configurable - might need a couple of minutes (and possibly more in some cases). Scaling up more aggressively probably won't hurt in most cases but for a densely packed environment, there might be a need to better control that.\n",
+        "createdAt" : "2015-08-19T18:34:56Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f482536c-c315-4f04-b5c6-19a438c33bc5",
+        "parentId" : "d1432997-f04d-4fda-994a-7d5520a5a27b",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "I think 1 minute is a reasonable value to start with in initial version. Later, if it is needed, we may make it configurable.\n",
+        "createdAt" : "2015-08-21T12:55:19Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354b8d2abf51778cdbf20469c313332bbd4a0761",
+    "line" : 223,
+    "diffHunk" : "@@ -1,1 +221,225 @@\nAs the CPU consumption of a pod immediately after start may be highly variable due to initialization/startup,\nautoscaler will skip metrics from the first minute of pod lifecycle.\n\n## Relative vs. absolute metrics"
+  },
+  {
+    "id" : "e9a98dea-ffa5-438f-ba9e-1d7b811cd216",
+    "prId" : 12859,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "af811c81-8cb5-4092-b1c3-cc01a8fc1bd9",
+        "parentId" : null,
+        "authorId" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "body" : "Yeah, something akin to `wake on lan` (un-idling) would be of very useful for hosted/densely packed environments.\n",
+        "createdAt" : "2015-08-19T18:41:00Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "41e5d26f-389d-4a5f-9b7d-3ee293c72e42",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "188af147-207a-425e-99b1-8bb7468afbd1",
+        "parentId" : "af811c81-8cb5-4092-b1c3-cc01a8fc1bd9",
+        "authorId" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "body" : "Ack.\n",
+        "createdAt" : "2015-08-21T12:22:25Z",
+        "updatedAt" : "2015-08-21T22:00:17Z",
+        "lastEditedBy" : "c929c906-4dfb-433b-9bc7-1b4b05c176f8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "354b8d2abf51778cdbf20469c313332bbd4a0761",
+    "line" : 267,
+    "diffHunk" : "@@ -1,1 +265,269 @@  and then turned-on when there is a demand for them.\n  When a request to service with no pods arrives, kube-proxy will generate an event for autoscaler\n  to create a new pod.\n  Discussed in [#3247](https://github.com/GoogleCloudPlatform/kubernetes/issues/3247).\n* When scaling down, make more educated decision which pods to kill (e.g.: if two or more pods are on the same node, kill one of them)."
+  }
+]

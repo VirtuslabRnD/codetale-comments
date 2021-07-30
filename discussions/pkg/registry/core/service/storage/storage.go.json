@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "f495d582-8690-4f97-9543-9c0ff68b6a21",
+    "prId" : 95894,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95894#pullrequestreview-519931142",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6fa566d8-9f67-406a-ac52-021ac4c32991",
+        "parentId" : null,
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "gate should be on `defaultOnRead(..)` first thing. Instead of for-each-item-on-list.",
+        "createdAt" : "2020-10-27T18:33:46Z",
+        "updatedAt" : "2020-10-30T03:40:57Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7cd8863c-8179-41a4-b302-dc372740051a",
+        "parentId" : "6fa566d8-9f67-406a-ac52-021ac4c32991",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "The question is whether we expect `clusterIPs` to have a value when the gate is disabled?  Based on the logic in `dropServiceDisabledFields()`, I assumed that was your intention:\r\n\r\n```\r\nif !utilfeature.DefaultFeatureGate.Enabled(features.IPv6DualStack) && !strategy.serviceDualStackFieldsInUse(oldSvc) {\r\n        newSvc.Spec.IPFamilies = nil\r\n        newSvc.Spec.IPFamilyPolicy = nil\r\n        if len(newSvc.Spec.ClusterIPs) > 1 {\r\n            newSvc.Spec.ClusterIPs = newSvc.Spec.ClusterIPs[0:1]\r\n        }\r\n    }\r\n```\r\n\r\nIf we leave that as-is, then we really need to populate it on read (regardless of the gate).  If we don't populate on read (when gated off), we should just set it to nil when writing.  It either always has a value or never.  But lots of internal logic depends on it having a value, so this seemed cleaner.",
+        "createdAt" : "2020-10-28T18:59:22Z",
+        "updatedAt" : "2020-10-30T03:40:57Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e887e8c6-95df-4af4-b29c-f3f39f724d2f",
+        "parentId" : "6fa566d8-9f67-406a-ac52-021ac4c32991",
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "oh yes. I missed that one.",
+        "createdAt" : "2020-10-29T17:53:53Z",
+        "updatedAt" : "2020-10-30T03:40:57Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4c9330683c55c9bbebece2ad305f939e725aff0",
+    "line" : 97,
+    "diffHunk" : "@@ -1,1 +176,180 @@\n\t// The rest of this does not apply unless dual-stack is enabled.\n\tif !utilfeature.DefaultFeatureGate.Enabled(features.IPv6DualStack) {\n\t\treturn nil\n\t}"
+  },
+  {
+    "id" : "8353dac5-dd87-43bd-9e51-9106fa767fcf",
+    "prId" : 95894,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95894#pullrequestreview-520124514",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c046bfd0-983b-42bd-9cfc-4d94fd2c482a",
+        "parentId" : null,
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "the Decorator is called on Create, Get and Update too,\r\nhttps://github.com/kubernetes/kubernetes/blob/ecfcd5fe596b2683d5419b8ce2460272889f2d94/staging/src/k8s.io/apiserver/pkg/registry/generic/registry/store.go\r\n\r\nI've done a quick test and it seems that indeed is called for each operation\r\nWe are going to call `NormalizeClusterIPs` twice, no?",
+        "createdAt" : "2020-10-29T08:44:54Z",
+        "updatedAt" : "2020-10-30T03:40:57Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "83ac62e9-5a39-4c2f-a7df-f7e27decc712",
+        "parentId" : "c046bfd0-983b-42bd-9cfc-4d94fd2c482a",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Decorator is called at the very end of every operation.  For Create that should be a no-op and and for Update that isn't workable.  It should be a no-op in Update.  If we really want it ONLY on read, we would need a different hook, which seems unlikely to be warranted.",
+        "createdAt" : "2020-10-29T17:48:28Z",
+        "updatedAt" : "2020-10-30T03:40:57Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c753ffb6-bf84-4a51-b728-519f634bef27",
+        "parentId" : "c046bfd0-983b-42bd-9cfc-4d94fd2c482a",
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "ahhh, got it svcreg.NormalizeClusterIPs(nil, service), we pass nil as first argument\r\nThanks",
+        "createdAt" : "2020-10-29T22:09:30Z",
+        "updatedAt" : "2020-10-30T03:40:57Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4c9330683c55c9bbebece2ad305f939e725aff0",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +129,133 @@// defaultOnRead sets interlinked fields that were not previously set on read.\n// We can't do this in the normal defaulting path because that same logic\n// applies on Get, Create, and Update, but we need to distinguish between them.\n//\n// This will be called on both Service and ServiceList types."
+  },
+  {
+    "id" : "eb8f1fe2-17ab-4d47-a875-04cd274952a6",
+    "prId" : 59510,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59510#pullrequestreview-98649624",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4da20d07-39f6-4cbc-acf7-a5b21ec652aa",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "why the name change?",
+        "createdAt" : "2018-02-10T21:06:25Z",
+        "updatedAt" : "2018-02-23T04:26:30Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2e080c9-dee4-439e-872c-fe6ded926e9d",
+        "parentId" : "4da20d07-39f6-4cbc-acf7-a5b21ec652aa",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "There are two storage REST types.  One is the raw underlying layer, one is the wrapper.  Rather than use \"storage\" and \"rest\", and given that rest is our consistently used name now, used \"REST\" for the wrapper that is consumed and \"GenericREST\" for the inner wrapper.",
+        "createdAt" : "2018-02-11T01:51:52Z",
+        "updatedAt" : "2018-02-23T04:26:30Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "558c190d-784e-40b8-b100-30c2883ab4df",
+        "parentId" : "4da20d07-39f6-4cbc-acf7-a5b21ec652aa",
+        "authorId" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "body" : ":+1:",
+        "createdAt" : "2018-02-22T17:04:46Z",
+        "updatedAt" : "2018-02-23T04:26:30Z",
+        "lastEditedBy" : "f0985d19-4073-49b4-832a-0b89b15a1431",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "98cf7e6ae2e3368d355aca690a7ab931f15e096f",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +31,35 @@)\n\ntype GenericREST struct {\n\t*genericregistry.Store\n}"
+  }
+]

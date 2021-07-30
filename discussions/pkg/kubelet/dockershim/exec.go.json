@@ -1,0 +1,343 @@
+[
+  {
+    "id" : "2128f874-b765-4073-804d-a4f81bcea1bc",
+    "prId" : 100200,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/100200#pullrequestreview-627859134",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "The thinking here was that the timeout is always respected, but the kubelet just ignores it from the prober:\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/4bb30c3b0e9167eb85b1e3b0c9a3bab3b351a3e2/pkg/probe/exec/exec.go#L72-L79\r\n\r\nIs that behavior not happening?",
+        "createdAt" : "2021-03-29T18:29:39Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37c3d0d1-2a1f-40e5-96e0-610c769f1a18",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "body" : "What's happening in the `ExecProbeTimeout=false` configuration is that (1) the timeout being reached does not initiate a container reset and (2) if the actual exec command fails *after* the configured timeout configuration then similarly the container reset does not happen.\r\n\r\nThe additional test case in `test/e2e/common/node/container_probe.go` expresses the scenario that *does not currently work* in the `ExecProbeTimeout=false` config context.",
+        "createdAt" : "2021-03-29T18:36:46Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5ec641a6-96c4-4ef3-b4a5-1c6189b0d221",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "body" : "Also, again: we've only observed this `ExecProbeTimeout=false` pathology in dockershim-enabled clusters (hence the change in this surface are). So this is a docker-only thing as far as we've discovered.",
+        "createdAt" : "2021-03-29T18:40:04Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "24a610a6-2b94-4d52-a2fc-12cbbb7fe09b",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "> What's happening in the ExecProbeTimeout=false configuration is that (1) the timeout being reached does not initiate a container reset and (2) if the actual exec command fails after the configured timeout configuration then similarly the container reset does not happen.\r\n\r\nSorry I think I'm still missing context -- I _think_ this the old behavior we're trying to preserve? Prior to implementing exec probe timeouts, this was the behavior from dockershim:\r\n* ignore probe timeouts entirely, where timedout liveness probe do not restart containers\r\n* if the exec probe fails after the timeout (or after 10 seconds), it is not evaluated from the prober",
+        "createdAt" : "2021-03-29T18:55:25Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6f03eb54-ddb5-4eb4-9681-6a32f2d5fcae",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "body" : "Agree 100% the intent is to preserve the pre-1.20.0 dockershim behavior.\r\n\r\nWhat we see doesn't match the 2nd bullet point above. If the exec probe fails after the timeout, it *is* evaluated from the prober.\r\n\r\nI have a PR in the aks-engine project that shows this happening:\r\n\r\nhttps://github.com/Azure/aks-engine/pull/4325\r\n\r\nBasically, the new tests pass in 1.18 and 1.19, but fail in 1.20. The one that's important is this one:\r\n\r\nhttps://github.com/Azure/aks-engine/pull/4325/files#diff-0bd2bb48395375d835916863ebd4b2bf05747e18d16d8e551588bec8a447b470\r\n\r\nThe above spec checks out in 1.18 and 1.19: pod restarts are observed on 5+ second failures despite the fact that the 1 second timeout is \"ignored\".",
+        "createdAt" : "2021-03-29T19:02:15Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c412cb0f-4591-457a-a5f5-c5add28b490e",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "> What we see doesn't match the 2nd bullet point above. If the exec probe fails after the timeout, it is evaluated from the prober.\r\n\r\nAh, this is the part I was missing :) So a probe failing after the timeout does trigger a container restart when ExecProbeTimeout=false?",
+        "createdAt" : "2021-03-29T19:09:59Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e1a87e5b-c1f6-4305-8db2-cb7c974b28dd",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "body" : "We've tested 1.18 and 1.19 (there is no ExecProbeTimeout feature flag there). The behavior in 1.18 and 1.19 is that a failing probe that takes longer than a timeout triggers a container restart. That's what we want 1.20+ and `ExecProbeTimeout=false` to replicate.\r\n\r\nBut what we see is that 1.20+ and `ExecProbeTimeout=false` do not restart containers when the probe fails after the timeout period.\r\n\r\ntl;dr for dockershim: (pre-1.20) compared to (1.20 + `ExecProbeTimeout=false`) are not equivalent.",
+        "createdAt" : "2021-03-29T19:14:20Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2474c3fc-58c1-4b65-95d1-4f8cc07874c1",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Gotcha, thanks for clarifying.\r\n\r\n> The behavior in 1.18 and 1.19 is that a failing probe that takes longer than a timeout triggers a container restart.\r\n\r\nOne clarifying question on this, do you know if this is true for timeouts greater than 10 seconds?",
+        "createdAt" : "2021-03-29T19:17:48Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f0c26e51-8e5c-48d5-b5e5-b4b59328043e",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "body" : "I'll test and report back!",
+        "createdAt" : "2021-03-29T19:20:39Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "541e99b0-cbf1-4507-ade4-11e8d448f0e7",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "body" : "10+ second probe failure restarts the container as expected in 1.19.8:\r\n\r\n```\r\nSTEP: Validating that the exec livenessProbe caused at least one pod restart due to command failure, even if timeout is not respected\r\n2021/03/29 13:15:43 $ k describe pod exec-liveness-timeout-always-fail -n default\r\n2021/03/29 13:15:44 #### $ k describe pod exec-liveness-timeout-always-fail -n default completed in 256.907866ms\r\n2021/03/29 13:15:44 \r\nName:         exec-liveness-timeout-always-fail\r\nNamespace:    default\r\nPriority:     0\r\nNode:         k8s-agentpool1-28118473-vmss000001/10.240.0.65\r\nStart Time:   Mon, 29 Mar 2021 13:14:56 -0700\r\nLabels:       test=liveness\r\nAnnotations:  kubernetes.io/psp: privileged\r\nStatus:       Running\r\nIP:           10.240.0.68\r\nIPs:\r\n  IP:  10.240.0.68\r\nContainers:\r\n  exec-liveness-timeout-always-fail:\r\n    Container ID:  docker://6a9a11af16d487e3722cfa33e2565550f425f70d5c726da6d69b3e9bea337b5b\r\n    Image:         busybox:1.31.1\r\n    Image ID:      docker-pullable://busybox@sha256:95cf004f559831017cdf4628aaf1bb30133677be8702a8c5f2994629f637a209\r\n    Port:          <none>\r\n    Host Port:     <none>\r\n    Args:\r\n      /bin/sh\r\n      -c\r\n      while true; do rm -f /tmp/healthy; sleep 5; done\r\n    State:          Running\r\n      Started:      Mon, 29 Mar 2021 13:15:43 -0700\r\n    Last State:     Terminated\r\n      Reason:       Error\r\n      Exit Code:    137\r\n      Started:      Mon, 29 Mar 2021 13:15:28 -0700\r\n      Finished:     Mon, 29 Mar 2021 13:15:43 -0700\r\n    Ready:          True\r\n    Restart Count:  3\r\n    Liveness:       exec [sh -c sleep 11 && test -f /tmp/healthy] delay=1s timeout=1s period=1s #success=1 #failure=1\r\n    Environment:    <none>\r\n    Mounts:\r\n      /var/run/secrets/kubernetes.io/serviceaccount from default-token-fzsh5 (ro)\r\nConditions:\r\n  Type              Status\r\n  Initialized       True \r\n  Ready             True \r\n  ContainersReady   True \r\n  PodScheduled      True \r\nVolumes:\r\n  default-token-fzsh5:\r\n    Type:        Secret (a volume populated by a Secret)\r\n    SecretName:  default-token-fzsh5\r\n    Optional:    false\r\nQoS Class:       BestEffort\r\nNode-Selectors:  kubernetes.io/os=linux\r\nTolerations:     node.kubernetes.io/not-ready:NoExecute op=Exists for 300s\r\n                 node.kubernetes.io/unreachable:NoExecute op=Exists for 300s\r\nEvents:\r\n  Type     Reason     Age               From               Message\r\n  ----     ------     ----              ----               -------\r\n  Normal   Scheduled  47s               default-scheduler  Successfully assigned default/exec-liveness-timeout-always-fail to k8s-agentpool1-28118473-vmss000001\r\n  Warning  Unhealthy  3s (x3 over 33s)  kubelet            Liveness probe failed:\r\n  Normal   Killing    3s (x3 over 33s)  kubelet            Container exec-liveness-timeout-always-fail failed liveness probe, will be restarted\r\n  Normal   Pulled     1s (x4 over 46s)  kubelet            Container image \"busybox:1.31.1\" already present on machine\r\n  Normal   Created    1s (x4 over 46s)  kubelet            Created container exec-liveness-timeout-always-fail\r\n  Normal   Started    0s (x4 over 46s)  kubelet            Started container exec-liveness-timeout-always-fail\r\n```",
+        "createdAt" : "2021-03-29T20:19:45Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "aa111d77-fac6-440e-b034-3710cc9b43f3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "048778a7-1338-44f9-8405-2b3207d34383",
+        "parentId" : "ce8a61ea-10b5-495e-bc52-1c442247851e",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "The current change looks good to me for preserving pre-1.20 behavior. Rather than checking for TimeoutError now to warn about exceeding the timeout, should we now check the actual time it took to execute the probe and warn if that exceeded the configured timeout?\r\n\r\nAs a follow-up, in 1.22 (and maybe picked back to 1.21 / 1.20), I'd actually like to see a metric published for probes whose execution time exceeds their timeout (or maybe exceeds 90% of the timeout or something) so admins can determine whether it is safe to set ExecProbeTimeout=true.",
+        "createdAt" : "2021-04-05T13:53:18Z",
+        "updatedAt" : "2021-04-07T19:38:42Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5a43067915c7aaccbbdeddd6552028959a8a88c2",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +109,113 @@\t}\n\n\tif timeout > 0 && utilfeature.DefaultFeatureGate.Enabled(features.ExecProbeTimeout) {\n\t\tvar cancel context.CancelFunc\n\t\tctx, cancel = context.WithTimeout(ctx, timeout)"
+  },
+  {
+    "id" : "fe0912d5-1eab-4def-85ea-2a9a51184cde",
+    "prId" : 96495,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96495#pullrequestreview-532074458",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8e002644-0220-4f87-be6a-4813e0fb1bea",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "nothing bad will happen, but maybe need to call `cancel()`?",
+        "createdAt" : "2020-11-17T01:06:09Z",
+        "updatedAt" : "2020-11-17T15:02:43Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76ba1c5f-76c6-452b-a3e8-fd21405d3e10",
+        "parentId" : "8e002644-0220-4f87-be6a-4813e0fb1bea",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "cancel is called with defer on line 112",
+        "createdAt" : "2020-11-17T03:51:45Z",
+        "updatedAt" : "2020-11-17T15:02:43Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e60d8058-8181-4e0c-a014-c68e7cd168db",
+        "parentId" : "8e002644-0220-4f87-be6a-4813e0fb1bea",
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "yes, totally. My comment is that we can cancel timeout in case the exec has already finished =) ",
+        "createdAt" : "2020-11-17T07:17:19Z",
+        "updatedAt" : "2020-11-17T15:02:43Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f5a82f70e5e4cb6b957961166533023d2c79b00e",
+    "line" : 71,
+    "diffHunk" : "@@ -1,1 +124,128 @@\t\treturn ctx.Err()\n\tcase err := <-execErr:\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}"
+  },
+  {
+    "id" : "10c7fc0e-1513-4ef7-8904-8bb28d3d170c",
+    "prId" : 94115,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94115#pullrequestreview-510870013",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dd76ec5a-d5b5-4776-828a-e27149c6c22d",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "This needs to be `default` instead of `<-ticker.C`, otherwise we delay the initial InspectExec by 2 seconds. ",
+        "createdAt" : "2020-08-20T18:03:26Z",
+        "updatedAt" : "2020-11-09T18:05:18Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74a4d624-0cbb-43f7-b3be-e4bbdb1849e5",
+        "parentId" : "dd76ec5a-d5b5-4776-828a-e27149c6c22d",
+        "authorId" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "body" : "Nice comment, how about writing it on here as `NOTE`?",
+        "createdAt" : "2020-10-01T04:59:36Z",
+        "updatedAt" : "2020-11-09T18:05:18Z",
+        "lastEditedBy" : "c2df03b8-26df-4018-9f8f-4ddea7f8f6cc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ad619cf-407c-4dda-b392-47f695446b1c",
+        "parentId" : "dd76ec5a-d5b5-4776-828a-e27149c6c22d",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Done, thanks",
+        "createdAt" : "2020-10-17T03:24:18Z",
+        "updatedAt" : "2020-11-09T18:05:18Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "af40d18b6792cee723f1f25bd5bfd2db79de0fd7",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +132,136 @@\t\t\treturn exec.NewTimeoutError(fmt.Errorf(\"command %q timed out\", strings.Join(cmd, \" \")), timeout)\n\t\t// need to use \"default\" here instead of <-ticker.C, otherwise we delay the initial InspectExec by 2 seconds.\n\t\tdefault:\n\t\t\tinspect, inspectErr := client.InspectExec(execObj.ID)\n\t\t\tif inspectErr != nil {"
+  },
+  {
+    "id" : "1aeec91f-2808-48e9-8487-0cf18593ceba",
+    "prId" : 94115,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94115#pullrequestreview-510858876",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fa91f681-640c-491f-a4bb-07dcb716c855",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "this needs to be only done when feature flag is set. Otherwise this will change the today's behavior.",
+        "createdAt" : "2020-10-16T19:01:09Z",
+        "updatedAt" : "2020-11-09T18:05:18Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e1fa900-a16a-48a1-8803-453d8c93c9b2",
+        "parentId" : "fa91f681-640c-491f-a4bb-07dcb716c855",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Good catch -- updated so that execTimeout is nil if the gate is not enabled.",
+        "createdAt" : "2020-10-17T00:49:06Z",
+        "updatedAt" : "2020-11-09T18:05:18Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "af40d18b6792cee723f1f25bd5bfd2db79de0fd7",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +116,120 @@\n\t// if ExecProbeTimeout feature gate is disabled, preserve existing behavior to ignore exec timeouts\n\tvar execTimeout <-chan time.Time\n\tif timeout > 0 && utilfeature.DefaultFeatureGate.Enabled(features.ExecProbeTimeout) {\n\t\texecTimeout = time.After(timeout)"
+  },
+  {
+    "id" : "9977cb5d-f170-46fb-aa9d-1426df311663",
+    "prId" : 94115,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94115#pullrequestreview-639280264",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3c2947c9-041b-4314-89e6-203b29a65a5a",
+        "parentId" : null,
+        "authorId" : "c9d613ec-720d-413d-b3d4-f9f9fe0fc878",
+        "body" : "Doesn't this mean that any probe, **without timeout**, taking longer than 10 seconds will automatically be **no error**, independent of what the actual exit of the command is?",
+        "createdAt" : "2021-04-19T16:30:01Z",
+        "updatedAt" : "2021-04-19T16:30:45Z",
+        "lastEditedBy" : "c9d613ec-720d-413d-b3d4-f9f9fe0fc878",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41098391-c3a2-489a-aa37-9aedc02301e8",
+        "parentId" : "3c2947c9-041b-4314-89e6-203b29a65a5a",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "There have been a number of follow-ups to this PR since it landed so I suggest you take a look at what's committed on the master branch.",
+        "createdAt" : "2021-04-19T17:13:40Z",
+        "updatedAt" : "2021-04-19T17:13:40Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c4c391f-0b27-429f-85a4-599848ef3a39",
+        "parentId" : "3c2947c9-041b-4314-89e6-203b29a65a5a",
+        "authorId" : "c9d613ec-720d-413d-b3d4-f9f9fe0fc878",
+        "body" : "Ignore my question - interpretation error from my side, on master (and probably on this commit as well) `client.StartExec()` is blocking and thus this code block happens **after** the command has finished in some form. It is 10 seconds maximum for gathering the exit info, although the code on master is slightly different with the same effect.",
+        "createdAt" : "2021-04-19T20:30:05Z",
+        "updatedAt" : "2021-04-19T20:30:06Z",
+        "lastEditedBy" : "c9d613ec-720d-413d-b3d4-f9f9fe0fc878",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "af40d18b6792cee723f1f25bd5bfd2db79de0fd7",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +154,158 @@\t\t\t\t\treturn nil\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t<-ticker.C"
+  },
+  {
+    "id" : "ebf33f20-9d03-4ebd-9568-9dabb39f8eb5",
+    "prId" : 47991,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/47991#pullrequestreview-46136766",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "16329212-f229-4827-83b7-cd786255ef01",
+        "parentId" : null,
+        "authorId" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "body" : "Should we fix this comment to reflect the \"delay\"?",
+        "createdAt" : "2017-06-23T20:53:10Z",
+        "updatedAt" : "2017-07-31T15:52:55Z",
+        "lastEditedBy" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "94335c5f-21cf-4bb4-b113-0b50a53e08c3",
+        "parentId" : "16329212-f229-4827-83b7-cd786255ef01",
+        "authorId" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "body" : "@dims what delay?",
+        "createdAt" : "2017-06-23T20:54:21Z",
+        "updatedAt" : "2017-07-31T15:52:55Z",
+        "lastEditedBy" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "afbad7e1-5858-4e79-ba3e-4878848fb887",
+        "parentId" : "16329212-f229-4827-83b7-cd786255ef01",
+        "authorId" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "body" : "@ncdc - \"Delay attempting to send a terminal resize\" mentioned in the body of the PR",
+        "createdAt" : "2017-06-25T02:03:20Z",
+        "updatedAt" : "2017-07-31T15:52:55Z",
+        "lastEditedBy" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4811daf31844476ff0f160285f0e6c088db4662",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +151,155 @@\t}\n\n\t// Have to start this before the call to client.StartExec because client.StartExec is a blocking\n\t// call :-( Otherwise, resize events don't get processed and the terminal never resizes.\n\t//"
+  }
+]

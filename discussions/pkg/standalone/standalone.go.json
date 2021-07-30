@@ -1,0 +1,365 @@
+[
+  {
+    "id" : "7af75d41-d487-45c0-844d-412869896364",
+    "prId" : 3356,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "38c230d5-9bbd-466e-a06f-251254515272",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Sorry I didn't see this when it went in. Whatever caused kc.EtcdClient to contain a nil pointer is in error.\n",
+        "createdAt" : "2015-01-13T20:00:07Z",
+        "updatedAt" : "2015-01-13T20:00:07Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "307d954f-2172-4758-a2ea-8e0d736ee715",
+        "parentId" : "38c230d5-9bbd-466e-a06f-251254515272",
+        "authorId" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "body" : "kc.EtcdClient will be nil when kubelet is used standalone which is the case of its usage in the container-vm image. Or do I misunderstand your comment?\n",
+        "createdAt" : "2015-01-14T03:56:32Z",
+        "updatedAt" : "2015-01-14T03:56:32Z",
+        "lastEditedBy" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7fe3a0b7-85d2-445a-a80d-46817d84b9e5",
+        "parentId" : "38c230d5-9bbd-466e-a06f-251254515272",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Please read http://golang.org/doc/faq#nil_error.\n\nSomeone has stored a nil pointer inside this interface instead of setting the interface to nil. \n",
+        "createdAt" : "2015-01-14T07:20:37Z",
+        "updatedAt" : "2015-01-14T07:20:37Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d58bdd16-2f6e-4b15-81f0-0f4682825729",
+        "parentId" : "38c230d5-9bbd-466e-a06f-251254515272",
+        "authorId" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "body" : "Hmmm, so what you're saying is that `kubelet.EtcdClientOrDie()` should return type `tools.EtcdClient` (the interface) and not `*etcd.Client` (pointer to the real type) is that it? In that case the `return nil` there would create a real `nil` that could be compared here without using the `reflect` package, is that correct?\n\nOn the other hand, using `reflect` here works, so is there an advantage to having it be a real `nil` instead of a value that evaluates to `nil` under reflection?\n",
+        "createdAt" : "2015-01-14T15:38:03Z",
+        "updatedAt" : "2015-01-14T15:38:03Z",
+        "lastEditedBy" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "28f46bd9-e3b0-4c3a-b46e-f8ca59bb80b2",
+        "parentId" : "38c230d5-9bbd-466e-a06f-251254515272",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "That's one solution, yes. Or you could just check that you didn't get a nil *tools.EtcdClient before storing it in kc.EtcdClient.\n\nreflect here works, but we do NOT want to get into the habit of making people open up interfaces with reflect to do a simple nil check. It's hard enough to remember to check for nils as it is. Allowing for the possibility of needing this reflect line is a way to get subtle, rare bugs.\n\nThe C++ analog is passing around a void*\\* when a void\\* would work fine. Language purists might argue that you shouldn't be able to have a nil at all, but we don't have to go that far to agree that checking for two nils is worse than checking for one nil.\n\nPlease also note that @dchen1107's fix here only checks the inner value and will crash if it ever gets a true nil interface value. See: http://play.golang.org/p/gJIcCiqf0r\n",
+        "createdAt" : "2015-01-14T18:37:27Z",
+        "updatedAt" : "2015-01-14T18:37:27Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d4ecd7c5-71e7-405d-9ba0-6a89fc18eede",
+        "parentId" : "38c230d5-9bbd-466e-a06f-251254515272",
+        "authorId" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "body" : "Sure that makes sense.\n\nThough, if you ask me, it doesn't make sense to have an interface `(*<anytype>, nil) != nil` since the bug of returning a type and assigning it to an interface making nil become non-nil is also subtle.\n\nI'll send a PR to undo this use of `reflect` and return the interface from `kubelet.EtcdClientOrDie()`.\n\nCheers,\nFilipe\n",
+        "createdAt" : "2015-01-14T18:44:27Z",
+        "updatedAt" : "2015-01-14T18:44:27Z",
+        "lastEditedBy" : "fd5eb1fb-f30a-4735-908c-944e87d99845",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bc58f1c7-7dc1-4b25-a110-c1f8d473e056",
+        "parentId" : "38c230d5-9bbd-466e-a06f-251254515272",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Yeah, I think go's designers could have made a more user-friendly choice here.\n",
+        "createdAt" : "2015-01-14T18:52:03Z",
+        "updatedAt" : "2015-01-14T18:52:03Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6e6f465a3699ffc080628310694810ad04c7d498",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +227,231 @@\t\tconfig.NewSourceURL(kc.ManifestURL, kc.HttpCheckFrequency, cfg.Channel(kubelet.HTTPSource))\n\t}\n\tif !reflect.ValueOf(kc.EtcdClient).IsNil() {\n\t\tglog.Infof(\"Watching for etcd configs at %v\", kc.EtcdClient.GetCluster())\n\t\tconfig.NewSourceEtcd(config.EtcdKeyForHost(kc.Hostname), kc.EtcdClient, cfg.Channel(kubelet.EtcdSource))"
+  },
+  {
+    "id" : "e8cade48-57d8-498b-96f9-75ad3ed9e919",
+    "prId" : 3270,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0cf4b9c1-6731-4649-8a99-2db66479376a",
+        "parentId" : null,
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "This would be a fine place for a warning.  Actually, a fatal seems fine with me.\n",
+        "createdAt" : "2015-01-07T19:41:57Z",
+        "updatedAt" : "2015-01-07T19:41:57Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ba53d723d31024dd2924f2d8d6a1e7d9fd78ca63",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +61,65 @@\tauthInfo, err := clientauth.LoadFromFile(authPath)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tclientConfig, err := authInfo.MergeWithConfig(client.Config{})"
+  },
+  {
+    "id" : "e8bf3749-2ac3-49b3-9ca2-e62334e53e6d",
+    "prId" : 3270,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e808df8e-fefe-4544-a790-4fc5b49ef348",
+        "parentId" : null,
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "Same.\n",
+        "createdAt" : "2015-01-07T19:42:11Z",
+        "updatedAt" : "2015-01-07T19:42:11Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ba53d723d31024dd2924f2d8d6a1e7d9fd78ca63",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +64,68 @@\t}\n\tclientConfig, err := authInfo.MergeWithConfig(client.Config{})\n\tif err != nil {\n\t\treturn nil, err\n\t}"
+  },
+  {
+    "id" : "e5c020cf-f62b-4862-ad80-bb7c9f238f68",
+    "prId" : 3270,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ac236f77-6f61-43a2-8b8e-9b1d071117b3",
+        "parentId" : null,
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "empty apiServerList is valid.\n",
+        "createdAt" : "2015-01-07T19:43:06Z",
+        "updatedAt" : "2015-01-07T19:43:06Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "30504596-f5f8-498a-9ff8-d3890c5085b9",
+        "parentId" : "ac236f77-6f61-43a2-8b8e-9b1d071117b3",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Why is no apiServerList valid for creating a client?\n",
+        "createdAt" : "2015-01-07T21:10:24Z",
+        "updatedAt" : "2015-01-07T21:10:24Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f702951-ba7c-41de-afdb-f4c56611eca9",
+        "parentId" : "ac236f77-6f61-43a2-8b8e-9b1d071117b3",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "based on the current callsite.  If you want to change callsite to not call GetAPIServerClient in the case of zero length, then sure you can make it an error here.\n",
+        "createdAt" : "2015-01-07T23:39:44Z",
+        "updatedAt" : "2015-01-07T23:39:44Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ba53d723d31024dd2924f2d8d6a1e7d9fd78ca63",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +67,71 @@\t\treturn nil, err\n\t}\n\tif len(apiServerList) < 1 {\n\t\treturn nil, fmt.Errorf(\"no api servers specified.\")\n\t}"
+  },
+  {
+    "id" : "cfeb827f-e567-4291-85b6-1c26c3ce1a3a",
+    "prId" : 3270,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2b1174d7-55c5-422a-8362-4576aab2a756",
+        "parentId" : null,
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "warning or fatal fine here.\n",
+        "createdAt" : "2015-01-07T19:43:57Z",
+        "updatedAt" : "2015-01-07T19:43:57Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ba53d723d31024dd2924f2d8d6a1e7d9fd78ca63",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +76,80 @@\tclientConfig.Host = apiServerList[0]\n\tc, err := client.New(&clientConfig)\n\tif err != nil {\n\t\treturn nil, err\n\t}"
+  },
+  {
+    "id" : "5292d5ac-9c65-49f4-a428-6d7d5a4e86a5",
+    "prId" : 3270,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a7b5e10d-3756-41a4-8487-b25f1c89d23e",
+        "parentId" : null,
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "suggest calling this GetAPIServerClientOrDie, and hoisting the check for apiServerList < 1 outside of this function so it is called \n  if len(apiServerList) > 0 {\n    cl = GetApiserverClientOrDie(...)\n  } else {\n    cl = nil\n  }\n",
+        "createdAt" : "2015-01-07T19:46:28Z",
+        "updatedAt" : "2015-01-07T19:46:28Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3c7fd22e-92a1-455e-b380-d93cfd182a23",
+        "parentId" : "a7b5e10d-3756-41a4-8487-b25f1c89d23e",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "I believe GetAPIServerClient is not the go-zealot-recommended capitalization.\n",
+        "createdAt" : "2015-01-07T19:47:01Z",
+        "updatedAt" : "2015-01-07T19:47:01Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bae64a88-33a4-491f-b0d6-dae2d7a5f765",
+        "parentId" : "a7b5e10d-3756-41a4-8487-b25f1c89d23e",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "API is an initialism, so I don't know why it wouldn't be capitalized if HTTP is?\n\n----- Original Message -----\n\n> > @@ -55,6 +56,31 @@ func (h *delegateHandler) ServeHTTP(w\n> > http.ResponseWriter, req *http.Request) {\n> >     w.WriteHeader(http.StatusNotFound)\n> >  }\n> > \n> > +// TODO: replace this with clientcmd\n> > +func GetAPIServerClient(authPath string, apiServerList util.StringList)\n> > (*client.Client, error) {\n> \n> I believe GetAPIServerClient is not the go-zealot-recommended capitalization.\n> \n> ---\n> \n> Reply to this email directly or view it on GitHub:\n> https://github.com/GoogleCloudPlatform/kubernetes/pull/3270/files#r22610358\n",
+        "createdAt" : "2015-01-07T21:10:53Z",
+        "updatedAt" : "2015-01-07T21:10:53Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "12f0642b-c5a2-4089-a24c-d49db5d406a4",
+        "parentId" : "a7b5e10d-3756-41a4-8487-b25f1c89d23e",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I'm not a fan of Die - for one thing, it means if someone doesn't want to die, they duplicate the method, instead of just handling error.  We should definitely not try to initialize it if apiserverlist is empty - would that work instead?\n\n----- Original Message -----\n\n> > @@ -55,6 +56,31 @@ func (h *delegateHandler) ServeHTTP(w\n> > http.ResponseWriter, req *http.Request) {\n> >     w.WriteHeader(http.StatusNotFound)\n> >  }\n> > \n> > +// TODO: replace this with clientcmd\n> > +func GetAPIServerClient(authPath string, apiServerList util.StringList)\n> > (*client.Client, error) {\n> \n> suggest calling this GetAPIServerClientOrDie, and hoisting the check for\n> apiServerList < 1 outside of this function so it is called\n>   if len(apiServerList) > 0 {\n>     cl = GetApiserverClientOrDie(...)\n>   } else {\n>     cl = nil\n>   }\n> \n> ---\n> \n> Reply to this email directly or view it on GitHub:\n> https://github.com/GoogleCloudPlatform/kubernetes/pull/3270/files#r22610319\n",
+        "createdAt" : "2015-01-07T21:11:54Z",
+        "updatedAt" : "2015-01-07T21:11:54Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d6f0f66-ee30-4b3f-b9e7-28f50317c164",
+        "parentId" : "a7b5e10d-3756-41a4-8487-b25f1c89d23e",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "https://github.com/golang/go/wiki/CodeReviewComments#initialisms\n",
+        "createdAt" : "2015-01-07T23:38:10Z",
+        "updatedAt" : "2015-01-07T23:38:10Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6dea97c6-e4a1-4667-b6b1-6d68428daf0a",
+        "parentId" : "a7b5e10d-3756-41a4-8487-b25f1c89d23e",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "sure to your suggestion of not initialize of apiserverlist is empty.\n",
+        "createdAt" : "2015-01-07T23:38:46Z",
+        "updatedAt" : "2015-01-07T23:38:46Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d160a11e-2be4-4d26-9492-e1fd1f7b6243",
+        "parentId" : "a7b5e10d-3756-41a4-8487-b25f1c89d23e",
+        "authorId" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "body" : "Hmm.  Re-reading that link, it seems you are right about how you capitalized.  comment withdrawn.\n",
+        "createdAt" : "2015-01-07T23:41:59Z",
+        "updatedAt" : "2015-01-07T23:41:59Z",
+        "lastEditedBy" : "020e031c-c298-4e7e-a533-9a04439c203c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c04af2a4-c358-468f-8ddf-5c93cf2150e9",
+        "parentId" : "a7b5e10d-3756-41a4-8487-b25f1c89d23e",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Are you referring to the variable?  IIRC all variables start lowercase, even as initialisms (httpServer, url).  Or something else?\n\n> On Jan 7, 2015, at 6:38 PM, Eric Tune notifications@github.com wrote:\n> \n> In pkg/standalone/standalone.go:\n> \n> > @@ -55,6 +56,31 @@ func (h *delegateHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {\n> >     w.WriteHeader(http.StatusNotFound)\n> >  }\n> > \n> > +// TODO: replace this with clientcmd\n> > +func GetAPIServerClient(authPath string, apiServerList util.StringList) (*client.Client, error) {\n> > https://github.com/golang/go/wiki/CodeReviewComments#initialisms\n> \n> —\n> Reply to this email directly or view it on GitHub.\n",
+        "createdAt" : "2015-01-07T23:49:59Z",
+        "updatedAt" : "2015-01-07T23:49:59Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ba53d723d31024dd2924f2d8d6a1e7d9fd78ca63",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +58,62 @@\n// TODO: replace this with clientcmd\nfunc GetAPIServerClient(authPath string, apiServerList util.StringList) (*client.Client, error) {\n\tauthInfo, err := clientauth.LoadFromFile(authPath)\n\tif err != nil {"
+  },
+  {
+    "id" : "ab1b30bd-2b68-4531-8de1-ed9618431dc1",
+    "prId" : 2291,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c5921ce3-10a3-405b-9f28-73ef09fd288c",
+        "parentId" : null,
+        "authorId" : "e19009d8-ed5c-45bb-b5ce-4f8d956c6c45",
+        "body" : "This is a time bomb.  We don't need to support it everywhere but we should at least fail more gracefully someplace.  See: http://play.golang.org/p/FohloSEumN for ideas.\n",
+        "createdAt" : "2014-11-11T17:19:59Z",
+        "updatedAt" : "2014-11-11T17:51:50Z",
+        "lastEditedBy" : "e19009d8-ed5c-45bb-b5ce-4f8d956c6c45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8db723d3-b13a-435a-bbaf-8c4665049ffc",
+        "parentId" : "c5921ce3-10a3-405b-9f28-73ef09fd288c",
+        "authorId" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "body" : "done.\n",
+        "createdAt" : "2014-11-11T17:31:57Z",
+        "updatedAt" : "2014-11-11T17:51:50Z",
+        "lastEditedBy" : "d0e97b49-eba2-4b22-8695-df4f8a6776ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f9b02cc0-ec76-4553-a15c-fc39fa89313a",
+        "parentId" : "c5921ce3-10a3-405b-9f28-73ef09fd288c",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "I filed #2264; I think this is a big-ish problem, and we should fix it for real by putting int64 everywhere. I started this and it got big quickly so put it on hold.\n\nFor a temporary solution-- I really think we should just not let systems with 32 bit int run at the moment. Covering it up like this is bad news and will come back to bite us.\n",
+        "createdAt" : "2014-11-11T17:41:58Z",
+        "updatedAt" : "2014-11-11T17:51:50Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ffcdb9dfb756bb926e62892b4053337258db1edb",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +121,125 @@\tnodeResources := &api.NodeResources{\n\t\tCapacity: api.ResourceList{\n\t\t\tresources.CPU:    util.NewIntOrStringFromInt(int(nodeMilliCPU)),\n\t\t\tresources.Memory: util.NewIntOrStringFromInt(int(nodeMemory)),\n\t\t},"
+  },
+  {
+    "id" : "785f3187-b301-494e-a5f1-aee301ed9fcd",
+    "prId" : 2121,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6929b8f5-1e7d-4e0e-948a-a6f205429421",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "This apiserver setup code looks wrong. https://github.com/GoogleCloudPlatform/kubernetes/blob/master/cmd/apiserver/apiserver.go is quite different.\n\nShould extract code into a library-- perhaps in pkg/master/cmd/ or something.\n\nNot much point to an all-in-one binary if it doesn't behave the same as our current binaries.\n",
+        "createdAt" : "2014-11-13T00:44:05Z",
+        "updatedAt" : "2014-11-13T00:44:05Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2c1221864df05a1fe1f8cdc362ea8121d2c2330b",
+    "line" : 102,
+    "diffHunk" : "@@ -1,1 +100,104 @@\tapiserver.NewAPIGroup(m.API_v1beta1()).InstallREST(mux, \"/api/v1beta1\")\n\tapiserver.NewAPIGroup(m.API_v1beta2()).InstallREST(mux, \"/api/v1beta2\")\n\tapiserver.InstallSupport(mux)\n\thandler.delegate = mux\n"
+  }
+]

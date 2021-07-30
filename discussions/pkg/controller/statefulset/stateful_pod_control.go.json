@@ -1,0 +1,156 @@
+[
+  {
+    "id" : "c5a04aaf-796e-4290-867d-a5f0edb8e889",
+    "prId" : 93457,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/93457#pullrequestreview-478407795",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "28cf86af-19ad-4640-a7ee-5a42c089acdc",
+        "parentId" : null,
+        "authorId" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "body" : "cc @janetkuo @msau42 I think we should check the API server if the `pvc.DeletionTimestamp == nil`. Otherwise, we didn't solve the cache inconsistency issue. ",
+        "createdAt" : "2020-08-27T15:55:23Z",
+        "updatedAt" : "2020-08-27T15:55:24Z",
+        "lastEditedBy" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f4603cc-5a10-448d-ac17-cde64dc227ac",
+        "parentId" : "28cf86af-19ad-4640-a7ee-5a42c089acdc",
+        "authorId" : "552e1980-bb56-43fb-bf92-144998b578d3",
+        "body" : "@cofyc \r\nDoes this change make sense?\r\nhttps://github.com/kubernetes/kubernetes/pull/93457/files#r478778760",
+        "createdAt" : "2020-08-28T01:19:47Z",
+        "updatedAt" : "2020-08-28T01:19:47Z",
+        "lastEditedBy" : "552e1980-bb56-43fb-bf92-144998b578d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c325e765-3eb2-4536-a3d4-0e59dfad022b",
+        "parentId" : "28cf86af-19ad-4640-a7ee-5a42c089acdc",
+        "authorId" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "body" : "no, we can first check the informer cache, then check the API server only if the `pvc.DeletionTimestamp == nil`.\r\n\r\n- if the PVC in informer cache is in terminating state, we don't need to check API server (good performance)\r\n  - the terminating state cann't be rollbacked, so this is reliable \r\n- if the PVC in informer cache is not in terminating state (`pvc.DeletionTimestamp == nil`), we need to check the API server, because it's possible there is a delay between the API server and informer cache",
+        "createdAt" : "2020-08-28T01:38:45Z",
+        "updatedAt" : "2020-08-28T01:40:26Z",
+        "lastEditedBy" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95558a90-8744-4452-ada1-bf71e19fa4b1",
+        "parentId" : "28cf86af-19ad-4640-a7ee-5a42c089acdc",
+        "authorId" : "552e1980-bb56-43fb-bf92-144998b578d3",
+        "body" : "@cofyc \r\nOK, so how about this?  looks good?\r\nhttps://github.com/kubernetes/kubernetes/pull/93457#discussion_r478793874",
+        "createdAt" : "2020-08-28T02:21:10Z",
+        "updatedAt" : "2020-08-28T02:21:10Z",
+        "lastEditedBy" : "552e1980-bb56-43fb-bf92-144998b578d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "961e933f-6c02-43f2-82cd-2a446167e467",
+        "parentId" : "28cf86af-19ad-4640-a7ee-5a42c089acdc",
+        "authorId" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "body" : "This looks good to me! @tnozicka what do you think?",
+        "createdAt" : "2020-08-28T02:35:57Z",
+        "updatedAt" : "2020-08-28T02:35:57Z",
+        "lastEditedBy" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ee13886-5538-4919-9770-39cffb7cf5d0",
+        "parentId" : "28cf86af-19ad-4640-a7ee-5a42c089acdc",
+        "authorId" : "443f9b92-20b0-45c2-a13f-20c6f64f89eb",
+        "body" : "how does the live call help? sounds racy the same way\r\n\r\nmaybe the statefulset should reconcile PVC (not only on pod creation) but that would be a bigger change",
+        "createdAt" : "2020-08-31T07:59:56Z",
+        "updatedAt" : "2020-08-31T07:59:56Z",
+        "lastEditedBy" : "443f9b92-20b0-45c2-a13f-20c6f64f89eb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "722e163e-1682-4154-a659-0a5900a26488",
+        "parentId" : "28cf86af-19ad-4640-a7ee-5a42c089acdc",
+        "authorId" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "body" : "this can help if the PVC is always deleted before the pod\r\n\r\nhttps://github.com/kubernetes/kubernetes/issues/74374#issuecomment-682024912\r\n\r\n> maybe the statefulset should reconcile PVC (not only on pod creation) but that would be a bigger change\r\n\r\nyes, after some investigations, we found that hitting the issue (pod has no PVC to use) is high if the PVC is deleted after the controller checks the PVC's state because the PVC can be deleted successfully if the newly created pod is not scheduled, see the discussion here: https://github.com/kubernetes/kubernetes/issues/74374 \r\n\r\nmy suggestions:\r\n\r\n- checking the deletion timestamp (live call maybe is not needed as we will have PVC reconciliation) \r\n- add PVC reconciliation ",
+        "createdAt" : "2020-08-31T08:12:16Z",
+        "updatedAt" : "2020-08-31T08:12:16Z",
+        "lastEditedBy" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17af029bc55fdf210a72f3ad7817b470b8d80bbc",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +198,202 @@\t\t\tif pvc.DeletionTimestamp != nil {\n\t\t\t\terrs = append(errs, fmt.Errorf(\"pvc %s is being deleted\", claim.Name))\n\t\t\t}\n\t\t}\n\t\t// TODO: Check resource requirements and accessmodes, update if necessary"
+  },
+  {
+    "id" : "11ffb93b-4cc7-4291-be01-153c90ca3d87",
+    "prId" : 93457,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/93457#pullrequestreview-583069325",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d2b2341f-e622-4ee7-9794-9b75ecab0177",
+        "parentId" : null,
+        "authorId" : "552e1980-bb56-43fb-bf92-144998b578d3",
+        "body" : "```suggestion\r\n\t\tcase err == nil:\r\n\t\t\tif pvc.DeletionTimestamp == nil {\r\n\t\t\t\t// consult apiserver to get the latest state\r\n\t\t\t\tpvc, err = spc.client.CoreV1().PersistentVolumeClaims(claim.Namespace).Get(context.TODO(), claim.Name, metav1.GetOptions{})\r\n\t\t\t\tif err != nil {\r\n\t\t\t\t\terrs = append(errs, fmt.Errorf(\"failed to retrieve PVC %s: %s\", claim.Name, err))\r\n\t\t\t\t\tbreak\r\n\t\t\t\t}\r\n\t\t\t}\r\n\t\t\tif pvc.DeletionTimestamp != nil {\r\n\t\t\t\terrs = append(errs, fmt.Errorf(\"pvc %s is being deleted\", claim.Name))\r\n\t\t\t}\r\n```",
+        "createdAt" : "2020-08-28T02:20:08Z",
+        "updatedAt" : "2020-08-28T02:20:09Z",
+        "lastEditedBy" : "552e1980-bb56-43fb-bf92-144998b578d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af110434-e44d-4bd3-92f1-9c31b6e3de74",
+        "parentId" : "d2b2341f-e622-4ee7-9794-9b75ecab0177",
+        "authorId" : "afb8d48d-3751-43d7-84e6-e7d6e22965ee",
+        "body" : "Why this is not added finally in the PR？",
+        "createdAt" : "2021-02-04T06:19:37Z",
+        "updatedAt" : "2021-02-04T06:19:37Z",
+        "lastEditedBy" : "afb8d48d-3751-43d7-84e6-e7d6e22965ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d08356b-9bef-41c1-91b6-c84e25315d2d",
+        "parentId" : "d2b2341f-e622-4ee7-9794-9b75ecab0177",
+        "authorId" : "552e1980-bb56-43fb-bf92-144998b578d3",
+        "body" : "Because this is not perfect too.  See https://github.com/kubernetes/kubernetes/pull/93457#discussion_r479962362",
+        "createdAt" : "2021-02-04T06:26:22Z",
+        "updatedAt" : "2021-02-04T06:26:23Z",
+        "lastEditedBy" : "552e1980-bb56-43fb-bf92-144998b578d3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17af029bc55fdf210a72f3ad7817b470b8d80bbc",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +198,202 @@\t\t\tif pvc.DeletionTimestamp != nil {\n\t\t\t\terrs = append(errs, fmt.Errorf(\"pvc %s is being deleted\", claim.Name))\n\t\t\t}\n\t\t}\n\t\t// TODO: Check resource requirements and accessmodes, update if necessary"
+  },
+  {
+    "id" : "ae67a71b-f1d1-4f7e-9848-db5eca6b3741",
+    "prId" : 40838,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/40838#pullrequestreview-20182093",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dc87b8e1-f8d9-457d-aa7c-c215a2fc9975",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "It's really strange to have a method that updates ss in an interface for pods.",
+        "createdAt" : "2017-02-05T23:24:37Z",
+        "updatedAt" : "2017-02-09T16:45:02Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4d99b4d825a74f7f22f1709e580574b70fe796d9",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +50,54 @@\t// updates made to the set are made visible as mutations to the parameter. If the method is successful, the\n\t// returned error is nil, and set has its Status.Replicas field set to replicas.\n\tUpdateStatefulSetReplicas(set *apps.StatefulSet, replicas int32) error\n}\n"
+  }
+]

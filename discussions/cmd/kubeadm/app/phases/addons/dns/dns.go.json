@@ -1,0 +1,607 @@
+[
+  {
+    "id" : "2b0f94c9-6e2f-4f93-882e-5b44271a50cd",
+    "prId" : 94299,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94299#pullrequestreview-479301141",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "67e24a4c-1635-44dd-9c6d-c15666605a76",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "this would return a valid version for an invalid digest in a Pod that is pending.\r\n\r\n/cc @rajansandeep \r\n\r\nshould this block until the Pods are running?\r\n",
+        "createdAt" : "2020-08-28T13:35:38Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e0810b2-2367-48b9-8bfb-8c4bea6ef46e",
+        "parentId" : "67e24a4c-1635-44dd-9c6d-c15666605a76",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "we also have a panic related to this area of the code:\r\nhttps://github.com/kubernetes/kubeadm/issues/2267",
+        "createdAt" : "2020-08-28T13:45:23Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "96c79a03-c4ab-4711-beeb-975851dca53f",
+        "parentId" : "67e24a4c-1635-44dd-9c6d-c15666605a76",
+        "authorId" : "6f944810-c490-4e34-9792-19715a133bef",
+        "body" : "> should this block until the Pods are running?\r\n\r\nYes, I am leaning towards that. \r\nIt seems this issue is caused due to either the coredns pod being in a `Pending` state(kubernetes/kubeadm#2267) or it being in a `ContainerCreating ` state (#94286).\r\n\r\nSkipping the check if the coredns pod is not running might result in a false validation. (especially if all coredns pods are in not running state)  ",
+        "createdAt" : "2020-08-28T15:39:42Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "6f944810-c490-4e34-9792-19715a133bef",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "169cd787-faf0-4db1-9a40-3a3b53ac14b3",
+        "parentId" : "67e24a4c-1635-44dd-9c6d-c15666605a76",
+        "authorId" : "dfd76e41-2089-43f2-b91d-5ac73825e4fb",
+        "body" : "If there is no running pod, then select the image name as the validated object and output a warning log?",
+        "createdAt" : "2020-08-29T09:17:10Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "dfd76e41-2089-43f2-b91d-5ac73825e4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e909115-4ec6-4413-a775-6a4235eb3e21",
+        "parentId" : "67e24a4c-1635-44dd-9c6d-c15666605a76",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "for the time being we should apply a waiting function to get all the Pods as \"Running\", before checking the containers / SHAs.\r\n\r\nthe alternative is to relax the version validation and only use the image version/tag.\r\n",
+        "createdAt" : "2020-08-30T21:56:17Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7c098398-96ba-497c-9a5e-4da53c1e7d03",
+        "parentId" : "67e24a4c-1635-44dd-9c6d-c15666605a76",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "It probably does make sense to have some wait if the pods are stuck in a `ContainerCreating` state. However, I am certain that this may not be the case with `PodPending`. If a pod is stuck in that state for more than a few seconds, then there's something elsewhere that needs tackling. In that case it's best to just return a proper error as we are clearly trying to perform this operation on a cluster that's in a bad state.",
+        "createdAt" : "2020-08-31T08:52:25Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b561afa5-2504-42f7-9de1-7a477bf7661b",
+        "parentId" : "67e24a4c-1635-44dd-9c6d-c15666605a76",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "we can have a 10seconds timeout with checks every 500ms?\r\n\r\n@zouyee please adjust the PR description to \"Fixes\" this issue instead:\r\nhttps://github.com/kubernetes/kubeadm/issues/2267\r\n\r\nwe should include a PollImmediate call (see example here):\r\nhttps://github.com/kubernetes/kubernetes/blob/3a2e96efff7860ffb06eeba6d8603be53cb5125e/cmd/kubeadm/app/util/apiclient/idempotency.go#L64\r\n\r\nthat goes to the list of pods:\r\n- checks if they are running\r\n- have a valid container\r\n- store the image ID of the container in a slice.\r\n\r\niterate over the retrieved imageIDs in the slice and set isValidVersion = false based on \"migration.Released\"\r\n\r\n@zouyee do you want to work on this fix in this PR?\r\n",
+        "createdAt" : "2020-08-31T15:47:29Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "082c5ed2-0a54-4c36-990d-b83ec10d3e8a",
+        "parentId" : "67e24a4c-1635-44dd-9c6d-c15666605a76",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "@rajansandeep @rosti just to double check, our preflight has downloaded the new coredns image at this point, so we don't have to wait for the download too?",
+        "createdAt" : "2020-08-31T15:50:54Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "45115fd2-5f1d-4543-884a-22c5b8cdf95b",
+        "parentId" : "67e24a4c-1635-44dd-9c6d-c15666605a76",
+        "authorId" : "dfd76e41-2089-43f2-b91d-5ac73825e4fb",
+        "body" : "> @zouyee do you want to work on this fix in this PR?\r\n\r\nyes\r\n\r\n",
+        "createdAt" : "2020-09-01T01:42:53Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "dfd76e41-2089-43f2-b91d-5ac73825e4fb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fc0bda5a3c4928f195219fde70409e184bfb05d5",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +415,419 @@\t\t\tlastError = err\n\t\t\treturn false, nil\n\t\t}\n\n\t\tfor _, pod := range coreDNSPodList.Items {"
+  },
+  {
+    "id" : "888a74dd-f495-4a94-baf4-cb282eae5469",
+    "prId" : 94299,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94299#pullrequestreview-480756477",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "beff19aa-16ad-48c5-b483-fc15345d41a1",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "i think we can have the call to get the list outside of (before) the poll.\r\nthe purpose of the poll would be to get the pods in a Running state and have containers where we can get the ImageIDs.\r\n",
+        "createdAt" : "2020-09-01T20:23:00Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd536121-a476-4207-b1a8-24684d2b195a",
+        "parentId" : "beff19aa-16ad-48c5-b483-fc15345d41a1",
+        "authorId" : "dfd76e41-2089-43f2-b91d-5ac73825e4fb",
+        "body" : "IMO, the poll function should be used to obtain a list of pods, and whether the list is empty as a loop condition.",
+        "createdAt" : "2020-09-02T09:38:31Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "dfd76e41-2089-43f2-b91d-5ac73825e4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95f7b872-aa90-41f7-aa98-d37e96486b9a",
+        "parentId" : "beff19aa-16ad-48c5-b483-fc15345d41a1",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "ok, agreed.",
+        "createdAt" : "2020-09-02T12:12:45Z",
+        "updatedAt" : "2020-09-03T02:43:19Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fc0bda5a3c4928f195219fde70409e184bfb05d5",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +406,410 @@\tpollTimeout := 10 * time.Second\n\terr := wait.PollImmediate(kubeadmconstants.APICallRetryInterval, pollTimeout, func() (bool, error) {\n\t\tcoreDNSPodList, err := client.CoreV1().Pods(metav1.NamespaceSystem).List(\n\t\t\tcontext.TODO(),\n\t\t\tmetav1.ListOptions{"
+  },
+  {
+    "id" : "9c129433-b256-40ac-a942-5f8b5ea28a8f",
+    "prId" : 88811,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88811#pullrequestreview-368996629",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f525cc8e-9841-4c12-ada8-d288a9f70625",
+        "parentId" : null,
+        "authorId" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "body" : "Should `setCorefile()` be after this too?  Just in case this fails?",
+        "createdAt" : "2020-03-04T17:56:58Z",
+        "updatedAt" : "2020-03-11T15:33:03Z",
+        "lastEditedBy" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fcd229e4bd81f5da8801c7e13dff34e0f630b374",
+    "line" : 128,
+    "diffHunk" : "@@ -1,1 +447,451 @@\n\tfmt.Println(\"[addons] Migrating CoreDNS Corefile\")\n\tchanges, err := migration.Deprecated(currentInstalledCoreDNSVersion, kubeadmconstants.CoreDNSVersion, corefile)\n\tif err != nil {\n\t\treturn errors.Wrap(err, \"unable to get list of changes to the configuration.\")"
+  },
+  {
+    "id" : "b5f4b236-4032-44aa-8322-7b6345230c54",
+    "prId" : 85837,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85837#pullrequestreview-330845273",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3eb63d47-fca0-4107-8f6f-f2b4c489aa83",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "This func is a bit confusing at first sight. It is supposed to return the number of DNS replicas, but if it fails it returns a default value (supplied as a param). It seems like a copy of `DeployedDNSAddon` too.\r\nCan we modify `DeployedDNSAddon` to return the replica count too and reuse that instead?",
+        "createdAt" : "2019-12-11T12:50:34Z",
+        "updatedAt" : "2019-12-12T12:07:21Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e14e533f-1af8-48ad-b8c6-20d20af65704",
+        "parentId" : "3eb63d47-fca0-4107-8f6f-f2b4c489aa83",
+        "authorId" : "e578350c-df02-4732-b27d-34fb62a8fbb9",
+        "body" : "It is a copy. I was hesitant to modify `DeployedDNSAddon` as it's exported and referenced in a few places and I didn't want to have ignored return values in other places. But, I also know we don't want to have duplicate code. Happy to hear your thoughts on the best approach for this @rosti ",
+        "createdAt" : "2019-12-11T21:11:06Z",
+        "updatedAt" : "2019-12-12T12:07:21Z",
+        "lastEditedBy" : "e578350c-df02-4732-b27d-34fb62a8fbb9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0e4469cddda05078511140bee84c405ba5d30086",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +83,87 @@\n// deployedDNSReplicas returns the replica count for the current DNS deployment\nfunc deployedDNSReplicas(client clientset.Interface, replicas int32) (*int32, error) {\n\tdeploymentsClient := client.AppsV1().Deployments(metav1.NamespaceSystem)\n\tdeployments, err := deploymentsClient.List(metav1.ListOptions{LabelSelector: \"k8s-app=kube-dns\"})"
+  },
+  {
+    "id" : "860e3029-b1c5-4a07-a5ad-a04676a5dca8",
+    "prId" : 85837,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85837#pullrequestreview-330857100",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9723062a-177a-4022-ba20-e7cc6aa6827b",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "This is going to result in a couple of kube-dns replicas (instead of 1 as it is today).",
+        "createdAt" : "2019-12-11T12:53:24Z",
+        "updatedAt" : "2019-12-12T12:07:21Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ee5a8ae-b259-4665-855f-6d80b6f65b3a",
+        "parentId" : "9723062a-177a-4022-ba20-e7cc6aa6827b",
+        "authorId" : "e578350c-df02-4732-b27d-34fb62a8fbb9",
+        "body" : "I have updated this. But don't like that we are calling two funcs that ultimately could be merged into 1. Waiting to hear back on the other comment for the best way forward on this.",
+        "createdAt" : "2019-12-11T21:18:46Z",
+        "updatedAt" : "2019-12-12T12:07:21Z",
+        "lastEditedBy" : "e578350c-df02-4732-b27d-34fb62a8fbb9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "18d41847-9e27-4cce-a65f-2fd30a42b804",
+        "parentId" : "9723062a-177a-4022-ba20-e7cc6aa6827b",
+        "authorId" : "e578350c-df02-4732-b27d-34fb62a8fbb9",
+        "body" : "I have shuffled this around to use each of the DNS options defaults. I will wait to see your thoughts on calling two funcs that ultimately do the same thing and the result of your other open comment above and we can go from there in making this nicer.",
+        "createdAt" : "2019-12-11T21:32:29Z",
+        "updatedAt" : "2019-12-12T12:07:21Z",
+        "lastEditedBy" : "e578350c-df02-4732-b27d-34fb62a8fbb9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0e4469cddda05078511140bee84c405ba5d30086",
+    "line" : 56,
+    "diffHunk" : "@@ -1,1 +112,116 @@\t\treturn err\n\t}\n\treturn kubeDNSAddon(cfg, client, replicas)\n}\n"
+  },
+  {
+    "id" : "1487dc25-54d3-469d-ba03-6fc9fc4d105e",
+    "prId" : 85837,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85837#pullrequestreview-331102914",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "64be0d13-adc1-43a8-bca9-2e7ecedcacee",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "This should be a \"best effort\" function. Let's just warn on error. That way this won't be fatal for folks who have skipped installing a DNS addon, but are reintroducing it later on.",
+        "createdAt" : "2019-12-12T09:47:22Z",
+        "updatedAt" : "2019-12-12T12:07:21Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0e4469cddda05078511140bee84c405ba5d30086",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +103,107 @@\tif cfg.DNS.Type == kubeadmapi.CoreDNS {\n\t\treplicas, err := deployedDNSReplicas(client, coreDNSReplicas)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}"
+  },
+  {
+    "id" : "9a7a69b7-6363-44da-96ae-d39021df1297",
+    "prId" : 78033,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78033#pullrequestreview-244402597",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7bd01c27-de2a-403c-b556-95fe5b07efa6",
+        "parentId" : null,
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "This change seems unrelated to the corefile migration.\r\nWhat is the rational behind this change?",
+        "createdAt" : "2019-05-30T06:10:33Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7cb65100-2b31-4df5-a831-bda447ef2262",
+        "parentId" : "7bd01c27-de2a-403c-b556-95fe5b07efa6",
+        "authorId" : "6f944810-c490-4e34-9792-19715a133bef",
+        "body" : "When there is no `kube-dns ConfigMap`, the function should return `/etc/resolv.conf`. Else, the CoreDNS Corefile will break with no resolver to the `forward` plugin.\r\nI found this bug while manually testing the upgrades. Probably didn't cause an issue previously because the CoreDNS ConfigMap was always retained and not updated when it already existed. ",
+        "createdAt" : "2019-05-30T17:47:09Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "6f944810-c490-4e34-9792-19715a133bef",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f5f3fa65-087d-4096-afcd-ae6a1b3f1a4f",
+        "parentId" : "7bd01c27-de2a-403c-b556-95fe5b07efa6",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "I wonder if this can cause issues with `systemd-resolved` enabled systems (like recent Ubuntu versions)? Have you tried  this @rajansandeep ?",
+        "createdAt" : "2019-05-31T12:20:14Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9fb2b66d-aa43-44ce-9d01-f8c6f3586766",
+        "parentId" : "7bd01c27-de2a-403c-b556-95fe5b07efa6",
+        "authorId" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "body" : "@rosti, IIUC, kubeadm already detects `systemd-resolved` systems, and configures `kubelet` to use an alternate `resolv.conf`.  From the perspective of Pods however, the path to this alternate `resolv.conf` is always `/etc/resolv.conf`, regardless of the original path.",
+        "createdAt" : "2019-05-31T16:30:14Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b6da3e41c9594c7e43e2050fc58b6317b49add24",
+    "line" : 145,
+    "diffHunk" : "@@ -1,1 +459,463 @@// in the form of Proxy for the CoreDNS Corefile.\nfunc translateUpstreamNameServerOfKubeDNSToUpstreamForwardCoreDNS(dataField string, kubeDNSConfigMap *v1.ConfigMap) (string, error) {\n\tif kubeDNSConfigMap == nil {\n\t\treturn \"/etc/resolv.conf\", nil\n\t}"
+  },
+  {
+    "id" : "3655f92d-e981-412c-a4c2-7987fe7393b4",
+    "prId" : 78033,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78033#pullrequestreview-266344518",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e265db97-71a4-4fe7-b661-215e804bea02",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "a question here,\r\n\r\ngiven we are not passing a k8s version to `Default`, what if the default Corefile changes between two k8s versions? in such a case the Corefile kubeadm has might be a default one, but the migration will still be required to a new default format.\r\n\r\nso perhaps the name `IsCoreDNSConfigMapMigrationRequired` might be misleading in such a case and the function should be called in the lines of `IsCoreDNSCorefileEmptyOrDefault`?\r\n\r\nwhat i'm starting to realize that we are coupling kubeadm to https://github.com/coredns/corefile-migration/blob/master/migration/versions.go\r\n\r\nthus when we are updating CoreDNS in kubeadm we also need to update the `github.com/coredns/corefile-migration/migration` vendored tag, which is not necessarily a bad thing at this point, and until we have it as a true addon (e.g. operator based or not).\r\n",
+        "createdAt" : "2019-07-25T00:20:04Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b6da3e41c9594c7e43e2050fc58b6317b49add24",
+    "line" : 45,
+    "diffHunk" : "@@ -1,1 +313,317 @@// IsCoreDNSConfigMapMigrationRequired checks if a migration of the CoreDNS ConfigMap is required.\nfunc IsCoreDNSConfigMapMigrationRequired(corefile string) bool {\n\tif corefile == \"\" || migration.Default(\"\", corefile) {\n\t\treturn false\n\t}"
+  },
+  {
+    "id" : "9622479b-d5f9-40c2-a62c-fab853368ec8",
+    "prId" : 78033,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78033#pullrequestreview-268240990",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a8db798b-14e5-4e10-8307-b6521b980bff",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "@rajansandeep @chrisohaver \r\n\r\n[1]\r\n\r\nshouldn't we, as per the suggestion in https://github.com/kubernetes/kubernetes/pull/78033#issuecomment-498319442 , be doing:\r\n\r\n- obtain the Deployment for CoreDNS\r\n- create a new ConfigMap with the new Corefile\r\n- change the Deployment to use the new ConfigMap\r\n\r\nit feels to me naming the ConfigMaps is the tricky part...\r\nif we keep the `coredns` name we prevent breaking existing users, though an \"action required\" is still an option here.\r\ni'd prefer if we don't have k8s or CoreDNS versions in the CM names.\r\n\r\nwe can do this:\r\n- copy the `coredns` ConfigMap into `coredns-backup`\r\n- point the Deployment at the backup\r\n- wait for update\r\n- create a new ConfigMap called `coredns` that has the new config\r\n- point the Deployment at `coredns`\r\n- wait for update\r\n- if the update is not good point the Deployment back at `coredns-backup` and copy `coredns-backup` into `coredns`.\r\n\r\nbut it requires two rolling updates...\r\n\r\nWDYT?\r\n\r\nEDIT: added related comments near patchCoreDNSDeployment()",
+        "createdAt" : "2019-07-25T01:19:22Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e3f51fc2-43b3-4e03-a41f-99f4470447bf",
+        "parentId" : "a8db798b-14e5-4e10-8307-b6521b980bff",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "@neolit123 Let's not get things too complicated.\r\n- We don't have the rollback capabilities on upgrade in kubeadm. Even if we had it, upgrading the addons is the last things we do (in fact, upgrading the DNS addon is second to last, with kube-proxy being the last), so not many things can go wrong after that.\r\n- We don't do backups for any other of the configs.\r\n- We don't want to reimplement the functionality of cluster backup tools (such as Velero).",
+        "createdAt" : "2019-07-25T11:42:12Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "14721f1e-f9f6-4897-971b-99578edb4b90",
+        "parentId" : "a8db798b-14e5-4e10-8307-b6521b980bff",
+        "authorId" : "6f944810-c490-4e34-9792-19715a133bef",
+        "body" : "> we can do this:\r\n> - copy the coredns ConfigMap into coredns-backup\r\n> - point the Deployment at the backup\r\n> - wait for update\r\n> - create a new ConfigMap called coredns that has the new config\r\n> point the Deployment at coredns\r\n> - wait for update\r\n> - if the update is not good point the Deployment back at coredns-backup and copy coredns-backup into coredns.\r\nbut it requires two rolling updates...\r\nWDYT?\r\n\r\nThis is somewhat how it is implemented currently except for the last step. \r\nIf creating a separate configmap for backup is not liked like @rosti pointed out, then I can create a Data backup of the Corefile in the same ConfigMap. \r\n\r\nWhat I suggest: \r\n\r\n- Copy the `Corefile` data as `Corefile-<version>` as backup. \r\n- Point the Deployment key to the `Corefile-<version>` data and wait for update.\r\n- Migrate the `Corefile` data which will be compatible with the latest CoreDNS release and \r\nAt this point, the ConfigMap will look as follows:\r\n```\r\napiVersion: v1\r\nkind: ConfigMap\r\nmetadata:\r\n  name: coredns\r\n  namespace: kube-system\r\ndata:\r\n  Corefile:  <Migrated Data>\r\n  Corefile-<version>: <Backup Data>\r\n```\r\n- Now point the Deployment key back to `Corefile` and wait for the update to happen successfully.\r\n- If the update is successful, then we can leave it as-is. \r\n- If not, we will copy the `Corefile-<version>` to the `Corefile`, rolling back the deployment, notifying the user that migration failed. \r\n\r\n@chrisohaver @neolit123 @rosti let me know if this makes sense.\r\n\r\n@rosti, while this might be a little complicated, the requirement that there be a fail-safe route with at least 1 CoreDNS pod running in the case migration fails.\r\n [This discussion and requirement](https://github.com/kubernetes/kubernetes/pull/78033#issuecomment-498328908) is what prevented it from this change not happening in k8s 1.15.\r\n",
+        "createdAt" : "2019-07-29T14:52:12Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "6f944810-c490-4e34-9792-19715a133bef",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "794d3271-7109-467e-b142-a4f436b016c5",
+        "parentId" : "a8db798b-14e5-4e10-8307-b6521b980bff",
+        "authorId" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "body" : "Makes sense to me.  This lines up with what we had hashed out on the whiteboard last week.  Is it useful to leave the `Corefile-<version>`in place after the migration is over?  It's really there for fall back if the deployment of the migrated Corefile fails.  Certainly if that step fails, then it's not useful and should be removed. It is possible that the step would pass (CoreDNS not crashing), but leave CoreDNS in an otherwise degraded state (e.g. not behaving as expected for some zone) - in which case it might be useful to an admin to reference the previous version of the config.",
+        "createdAt" : "2019-07-29T15:25:35Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "40bc85ef-791e-4188-ae92-35e31c0da589",
+        "parentId" : "a8db798b-14e5-4e10-8307-b6521b980bff",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "from https://github.com/kubernetes/kubernetes/pull/78033#issuecomment-498328908\r\n\r\n> all thats needed for this would be to create the new ConfigMap under the new name, and update the Deployment to use the new ConfigMap. Then Kubernetes rolling update takes over from there.\r\n\r\ni was under the impression that we should not create backup `Corefile-back` Data entry, but instead backup a whole ConfigMap and point Deployment at that, but OK.\r\n\r\n> Point the Deployment key to the Corefile-<version> data and wait for update.\r\n\r\ni guess by patching this part?\r\nhttps://github.com/kubernetes/kubernetes/blob/master/cmd/kubeadm/app/phases/addons/dns/manifests.go#L301-L302\r\n\r\ni'd still use `Corefile-backup` instead of `Corefile-version`.\r\n\r\n>  Is it useful to leave the Corefile-<version>in place after the migration is over? \r\n\r\n1) if we keep a lot of `Corefile-<version>` entries it can inflate the size of the CM indefinitely.\r\n2) if we keep only one version `Corefile-backup` it will allow rollback to an older version, but not further than that.\r\n\r\ni'd go for 2, as kubeadm does not support incremental downgrades.\r\n",
+        "createdAt" : "2019-07-29T15:50:50Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea288fe4-93ae-45bc-968a-bd9f385f9b3c",
+        "parentId" : "a8db798b-14e5-4e10-8307-b6521b980bff",
+        "authorId" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "body" : "Keeping only one previous config makes sense.\r\nWe moved to using multiple keys in one map instead of two maps based on feedback (feedback that perhaps we misunderstood).  I think it's just as easy to use separate maps.  I don't have a preference.",
+        "createdAt" : "2019-07-29T15:59:38Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "289e6b40-8bcd-492e-9f83-b42117aa982a",
+        "parentId" : "a8db798b-14e5-4e10-8307-b6521b980bff",
+        "authorId" : "6f944810-c490-4e34-9792-19715a133bef",
+        "body" : "> i was under the impression that we should not create backup Corefile-back Data entry, but instead backup a whole ConfigMap and point Deployment at that, but OK.\r\n\r\nI guess the point of the backup was to ensure that it is done in a way that keeps current pods functioning and rolls out the new config safely.\r\n\r\n>i guess by patching this part?\r\nhttps://github.com/kubernetes/kubernetes/blob/master/cmd/kubeadm/app/phases/addons/dns/manifests.go#L301-L302\r\n\r\nYes.\r\n",
+        "createdAt" : "2019-07-29T16:03:06Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "6f944810-c490-4e34-9792-19715a133bef",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "753c0462-f1bd-41f4-894c-292621fdd65c",
+        "parentId" : "a8db798b-14e5-4e10-8307-b6521b980bff",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "`Corefile-backup` is good, `Corefile-<version>` will bloat the CM over time.",
+        "createdAt" : "2019-07-30T08:44:24Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b6da3e41c9594c7e43e2050fc58b6317b49add24",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +345,349 @@\t}\n\n\tif _, err := client.CoreV1().ConfigMaps(cm.ObjectMeta.Namespace).Update(&v1.ConfigMap{\n\t\tObjectMeta: metav1.ObjectMeta{\n\t\t\tName:      kubeadmconstants.CoreDNSConfigMap,"
+  },
+  {
+    "id" : "1191eea1-3cab-44e6-9f42-e0e7fc3b2b1a",
+    "prId" : 78033,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/78033#pullrequestreview-274592257",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a137f50c-9078-4a56-af63-ebd4dbe1f757",
+        "parentId" : null,
+        "authorId" : "6f944810-c490-4e34-9792-19715a133bef",
+        "body" : "@neolit123 I moved the `Corefile` backup into the same ConfigMap and then patching the deployment to point to `Corefile-backup` here. \r\nWhen the CoreDNS deployment is updated to the latest during the upgrade, that step would point the key back to `Corefile`, which will again trigger a rollout. \r\nLet me know if this logic would work or I should move the \"deployment-patch\" step into a separate step.",
+        "createdAt" : "2019-08-13T22:28:56Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "6f944810-c490-4e34-9792-19715a133bef",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dffb37fb-dd18-4ffc-bca4-2f90f5783e04",
+        "parentId" : "a137f50c-9078-4a56-af63-ebd4dbe1f757",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "thanks for the update, SGTM!\r\n",
+        "createdAt" : "2019-08-13T22:37:48Z",
+        "updatedAt" : "2019-08-20T17:56:16Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b6da3e41c9594c7e43e2050fc58b6317b49add24",
+    "line" : 67,
+    "diffHunk" : "@@ -1,1 +335,339 @@\t\treturn errors.Wrap(err, \"unable to update the CoreDNS ConfigMap with backup Corefile\")\n\t}\n\tif err := patchCoreDNSDeployment(client, \"Corefile-backup\"); err != nil {\n\t\treturn err\n\t}"
+  },
+  {
+    "id" : "505509dc-da1b-42e3-9544-0f166b31c2bb",
+    "prId" : 68076,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/68076#pullrequestreview-151121151",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4d11bca4-05f2-4f59-ad36-eef0e3c7b5f3",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Why no loadbalance here?",
+        "createdAt" : "2018-08-30T17:44:29Z",
+        "updatedAt" : "2018-08-30T17:44:45Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2bc1a230-640c-4d53-8072-33113f7d72e3",
+        "parentId" : "4d11bca4-05f2-4f59-ad36-eef0e3c7b5f3",
+        "authorId" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "body" : "That bit is for creating stub domain stanzas, so coredns is just forwarding here.  I was thinking we would not want to randomize answers from stubdomains, since those servers may already be deliberately ordering the answers.",
+        "createdAt" : "2018-08-30T18:18:20Z",
+        "updatedAt" : "2018-08-30T18:18:20Z",
+        "lastEditedBy" : "7c932efe-83b7-4b24-aab2-9db6d920473f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "989f6667d275c02e7dfebcc781f2360a07eedd15",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +311,315 @@\t\t\t\t{\"errors\"},\n\t\t\t\t{\"cache\", \"30\"},\n\t\t\t\t{\"loop\"},\n\t\t\t\tappend([]string{\"proxy\", \".\"}, proxyIP...),\n\t\t\t}"
+  },
+  {
+    "id" : "c3d19887-a055-42af-915f-eda8d900f460",
+    "prId" : 63782,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/63782#pullrequestreview-119982136",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "632a5ceb-3c03-4d6b-a5c1-73b0ae3c2847",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "I wouldn't call this clientset, b/c it's int the interface layer iirc.  clientscheme is sufficient. ",
+        "createdAt" : "2018-05-14T19:47:27Z",
+        "updatedAt" : "2018-05-14T19:51:43Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8074a1987ea82cc6cf4b3d7701dfb607397c9d21",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +32,36 @@\tkuberuntime \"k8s.io/apimachinery/pkg/runtime\"\n\tclientset \"k8s.io/client-go/kubernetes\"\n\tclientsetscheme \"k8s.io/client-go/kubernetes/scheme\"\n\tkubeadmapi \"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm\"\n\tkubeadmconstants \"k8s.io/kubernetes/cmd/kubeadm/app/constants\""
+  },
+  {
+    "id" : "9c7f5bd6-9e20-4871-b548-48c546fbea8d",
+    "prId" : 51171,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/51171#pullrequestreview-58824842",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "281bd7e4-4264-4af2-b0f1-b7cdadd06232",
+        "parentId" : null,
+        "authorId" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "body" : "I'd prefer to pass `k8sVersion` still and do the parsing client-side in `cmd/phases`\r\nLuckily, I expect to soon get rid of this in the v1.9 cycle by moving this into the internal variant of cfg or something so we can stop passing and parsing this all the time.",
+        "createdAt" : "2017-08-25T13:13:48Z",
+        "updatedAt" : "2017-09-07T02:54:26Z",
+        "lastEditedBy" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "413b3b8f-dbc0-426d-abd2-2c095fecc186",
+        "parentId" : "281bd7e4-4264-4af2-b0f1-b7cdadd06232",
+        "authorId" : "19c6d4c2-ebee-46fd-8427-5a6ae5c98a9d",
+        "body" : "The only issue I had with this was that I needed all the `EnsureXXXAddon` functions have the same signature. Look at the `EnsureAllAddons` and `runAddonsCmdFunc` functions. I'm happy to do something different if we still prefer to pass `k8sVersion ` in.",
+        "createdAt" : "2017-08-25T13:38:50Z",
+        "updatedAt" : "2017-09-07T02:54:26Z",
+        "lastEditedBy" : "19c6d4c2-ebee-46fd-8427-5a6ae5c98a9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3dbfc5b-fc9a-44fc-8897-a190f895ce9e",
+        "parentId" : "281bd7e4-4264-4af2-b0f1-b7cdadd06232",
+        "authorId" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "body" : "ok with this for now; will fix it for real later",
+        "createdAt" : "2017-08-27T15:04:37Z",
+        "updatedAt" : "2017-09-07T02:54:26Z",
+        "lastEditedBy" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d55cea629f9dc39f82de2ad05c127b10e5c02a09",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +43,47 @@// EnsureDNSAddon creates the kube-dns addon\nfunc EnsureDNSAddon(cfg *kubeadmapi.MasterConfiguration, client clientset.Interface) error {\n\tk8sVersion, err := version.ParseSemantic(cfg.KubernetesVersion)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"couldn't parse kubernetes version %q: %v\", cfg.KubernetesVersion, err)"
+  },
+  {
+    "id" : "cb8f88d4-bd93-418d-91b5-274c34bec77f",
+    "prId" : 50214,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50214#pullrequestreview-56056420",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a28216a6-4f32-41df-a6cd-cdf664cf4777",
+        "parentId" : null,
+        "authorId" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "body" : "I don't think this needs to be exposed separately.\r\nWell, if we do that it's fine by me, but at least `EnsureDNSAddon` should call it.\r\n(EnsureDNSAddon should not have dependencies)",
+        "createdAt" : "2017-08-14T11:41:37Z",
+        "updatedAt" : "2017-08-14T17:21:40Z",
+        "lastEditedBy" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "967a5bb4f164c97a226414e963e0f79df99963ac",
+    "line" : 79,
+    "diffHunk" : "@@ -1,1 +71,75 @@\n// CreateServiceAccount creates the necessary serviceaccounts that kubeadm uses/might use, if they don't already exist.\nfunc CreateServiceAccount(client clientset.Interface) error {\n\tsa := v1.ServiceAccount{\n\t\tObjectMeta: metav1.ObjectMeta{"
+  }
+]

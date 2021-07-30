@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "7eb4e7f9-406a-4f33-87a8-1ef19e2a2d17",
+    "prId" : 73358,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/73358#pullrequestreview-196938396",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dfe67f67-f9cd-4ca0-95c9-359ab31ef1e5",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "does a linter complain about these?\r\nit shouldn't.\r\n",
+        "createdAt" : "2019-01-27T17:46:06Z",
+        "updatedAt" : "2019-01-27T17:47:41Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1bae5f46-c1e2-45bf-8dd9-8ff8c252a5e8",
+        "parentId" : "dfe67f67-f9cd-4ca0-95c9-359ab31ef1e5",
+        "authorId" : "29b82984-f003-46e0-b583-e6a4392093af",
+        "body" : "Yes it does, because the error return gets implicitly ignored. With this change, it gets explicitly ignored.\r\n\r\nWhy do you think it shouldn't complain about these?",
+        "createdAt" : "2019-01-27T22:14:33Z",
+        "updatedAt" : "2019-01-27T22:15:10Z",
+        "lastEditedBy" : "29b82984-f003-46e0-b583-e6a4392093af",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56b5938a-05d0-433f-9713-ac2db65c5311",
+        "parentId" : "dfe67f67-f9cd-4ca0-95c9-359ab31ef1e5",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "what is the exact linter message?\r\n\r\njust tested with `golint` locally.\r\nsomething in the lines of this does not cause an issue:\r\n```\r\npackage main\r\n\r\nimport \"errors\"\r\n\r\nfunc test(returnError bool) (string, error) {\r\n    if returnError {\r\n        return \"\", errors.New(\"some error\")\r\n    }\r\n    return \"hello world\", nil\r\n}\r\n\r\nfunc main() {\r\n    test(true)\r\n    test(false)\r\n}\r\n```\r\n\r\n> Why do you think it shouldn't complain about these?\r\n\r\nit depends. the programmer has the freedom to execute the logic without caring about the outcome of function - i.e. in a case where the function also performs extra work unrelated to the returned result. linters in C do complain about these, then again they also complain about unused return values from `printf`.\r\n",
+        "createdAt" : "2019-01-27T22:31:03Z",
+        "updatedAt" : "2019-01-27T22:32:43Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "432141df-9ce2-4177-8526-2ce2acc27450",
+        "parentId" : "dfe67f67-f9cd-4ca0-95c9-359ab31ef1e5",
+        "authorId" : "29b82984-f003-46e0-b583-e6a4392093af",
+        "body" : "The linter I used to find these is errcheck: https://github.com/kisielk/errcheck\r\n\r\nIt basically complains every time a returned `error` is not explicitly handled, so for your example this is the result:\r\n\r\n```\r\n$ errcheck t.go \r\nt.go:13:6:\ttest(true)\r\nt.go:14:6:\ttest(false)\r\n```\r\n>  it depends. the programmer has the freedom to execute the logic without caring about the outcome of function - i.e. in a case where the function also performs extra work unrelated to the returned result\r\n\r\nYes but the returned error may also indicate that during that extra work unrelated to the other returns an error was encountered. \r\nI personally find it a sensible requirement to explicitly ignore all errors, its the only safe way to avoid doing so by accident.\r\n\r\n",
+        "createdAt" : "2019-01-27T22:44:49Z",
+        "updatedAt" : "2019-01-27T22:44:49Z",
+        "lastEditedBy" : "29b82984-f003-46e0-b583-e6a4392093af",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa4cf903-16c2-4535-a7fe-468bc58680b6",
+        "parentId" : "dfe67f67-f9cd-4ca0-95c9-359ab31ef1e5",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "since the PR is against `k/k`, to me it feels like unless `./hack/verify-golint.sh` (uses [golint](https://github.com/kubernetes/kubernetes/blob/master/hack/verify-golint.sh#L33)) complains about the `_, _ =` case i don't think we should fix these based on a third party linter.\r\n\r\nbut the decision is obviously up to the maintainers. :+1: \r\n",
+        "createdAt" : "2019-01-27T23:07:30Z",
+        "updatedAt" : "2019-01-27T23:09:37Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6156a2f7-6f0a-4684-ace0-c345dafc1820",
+        "parentId" : "dfe67f67-f9cd-4ca0-95c9-359ab31ef1e5",
+        "authorId" : "29b82984-f003-46e0-b583-e6a4392093af",
+        "body" : "golint doesn't care at all about unhandled errors, this is why the things I fixed here (which are mostly not `_ =` assignments) got merged in the first place.\r\n\r\nI asked about this in #sig-testing and it was agreed that adding linting for this would be a good thing: https://kubernetes.slack.com/archives/C09QZ4DQB/p1548535905927500",
+        "createdAt" : "2019-01-28T09:29:04Z",
+        "updatedAt" : "2019-01-28T09:29:04Z",
+        "lastEditedBy" : "29b82984-f003-46e0-b583-e6a4392093af",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "37426c511a479dafa2ca772d139251d384fc9461",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +95,99 @@\n\t// Ignoring error here, because we only care about the TLS connection\n\t_, _ = connection.NewClient(context.Background())\n\n\tverifyConnectionWasMade()"
+  },
+  {
+    "id" : "d24d889f-ae62-4854-a9f2-726cd08e641f",
+    "prId" : 64758,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64758#pullrequestreview-131006466",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fe562dee-7933-4c83-b8fe-77b40cc87633",
+        "parentId" : null,
+        "authorId" : "35af9edb-a79d-4501-a0f5-88841e1d372d",
+        "body" : "Note that you could also use govmomi/simulator for these types of tests: https://github.com/vmware/govmomi/blob/b3251638696a6f4ac905fe904091e9840982c602/simulator/simulator_test.go#L353-L370",
+        "createdAt" : "2018-06-21T21:53:15Z",
+        "updatedAt" : "2018-06-24T20:40:44Z",
+        "lastEditedBy" : "35af9edb-a79d-4501-a0f5-88841e1d372d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7b8efe39c4c2250b1069322d2d013dca856b9aca",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +57,61 @@\t}\n\n\tserver := httptest.NewUnstartedServer(http.HandlerFunc(handler))\n\tserver.TLS = &tls.Config{\n\t\tCertificates: []tls.Certificate{"
+  },
+  {
+    "id" : "e77c16a2-c4be-4092-a25f-bc6a0e138ab5",
+    "prId" : 64758,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64758#pullrequestreview-131006466",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce066f69-9b2f-4a15-a34f-e6ee6396dec2",
+        "parentId" : null,
+        "authorId" : "35af9edb-a79d-4501-a0f5-88841e1d372d",
+        "body" : "Even without simulator, you can use `HostCertificateInfo.FromCertificate` https://github.com/vmware/govmomi/blob/b3251638696a6f4ac905fe904091e9840982c602/simulator/simulator_test.go#L353-L358\r\n\r\nMaybe this also avoids the need for the normalization function?",
+        "createdAt" : "2018-06-21T21:56:35Z",
+        "updatedAt" : "2018-06-24T20:40:44Z",
+        "lastEditedBy" : "35af9edb-a79d-4501-a0f5-88841e1d372d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7b8efe39c4c2250b1069322d2d013dca856b9aca",
+    "line" : 71,
+    "diffHunk" : "@@ -1,1 +69,73 @@\t\tt.Fatal(\"Expected server.TLS.Certificates not to be empty\")\n\t}\n\tx509LeafCert := server.TLS.Certificates[0].Certificate[0]\n\tvar tpString string\n\tfor i, b := range sha1.Sum(x509LeafCert) {"
+  }
+]

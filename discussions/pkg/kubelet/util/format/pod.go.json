@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "55d2ef98-d9d0-43da-bee7-80561322cb2a",
+    "prId" : 99799,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99799#pullrequestreview-605576457",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8c18a0d1-6570-47ed-a0eb-e13c69ff5de1",
+        "parentId" : null,
+        "authorId" : "6ea93d56-a0ec-4969-ac42-11a78c2085e6",
+        "body" : "There are two questions related to changing this function:\r\n1. Is this a good place to have `Pods` formatter if `KObj` is in `klog`?\r\n2. How will this effect existing users of `format.Pods` that still use `Infof`?\r\n\r\nFor first I think it's ok for temporary solution, but we should move this function to klog as it affects any list of K8s objects. With current time before code freeze I think we will not have enough time to move it, but we should plan it for future.\r\n\r\n2. Could you either check if there are no left format.Pods uses that pass it to `klog.Infof` **or** show examples how output will look like with `Infof`.\r\n\r\nIf there are some cases with `Infof` and the result is not satisfactory (names of pods&namespaces are not easily readable), then I think we should migrate them to InfoS before merging this PR.",
+        "createdAt" : "2021-03-05T12:15:57Z",
+        "updatedAt" : "2021-03-06T16:27:00Z",
+        "lastEditedBy" : "6ea93d56-a0ec-4969-ac42-11a78c2085e6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "174af55e-5b45-496e-b4dc-e592df71330e",
+        "parentId" : "8c18a0d1-6570-47ed-a0eb-e13c69ff5de1",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "> How will this effect existing users of format.Pods that still use Infof?\r\n\r\nI think we should migrate all those as part of this PR if there are any remaining, which I think addresses your other concern. I looked at the use of this formatter and it was limited to one or two files in kubelet, I'm surprised it got factored out into util.\r\n\r\n> For first I think it's ok for temporary solution, but we should move this function to klog as it affects any list of K8s objects. With current time before code freeze I think we will not have enough time to move it, but we should plan it for future.\r\n\r\nYeah ideally I'd much rather update `klog.KObj`/have something in klog that, given a slice of objects, returns a slice of `klog.ObjectRef` but @DirectXMan12 told me this isn't currently supported, so I think we should just do this for now.\r\n\r\n@QiWang19 can you check to make sure that no instances of `format.Pods` are called with non-structured logging?",
+        "createdAt" : "2021-03-05T17:33:22Z",
+        "updatedAt" : "2021-03-06T16:27:00Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7db07776-8d40-4316-bf6c-ac2794d8213a",
+        "parentId" : "8c18a0d1-6570-47ed-a0eb-e13c69ff5de1",
+        "authorId" : "bd255bcc-ede2-4ed6-b5cb-362028217310",
+        "body" : "\r\n\r\n> @QiWang19 can you check to make sure that no instances of `format.Pods` are called with non-structured logging?\r\n\r\npkg/kubelet/kubelet.go and pkg/kubelet/eviction/eviction_manager.go are using `format.Pods`. \r\nkubelet.go is non-structured, eviction_manager.go is worked in PR https://github.com/kubernetes/kubernetes/pull/99032/",
+        "createdAt" : "2021-03-05T17:42:49Z",
+        "updatedAt" : "2021-03-06T16:27:00Z",
+        "lastEditedBy" : "bd255bcc-ede2-4ed6-b5cb-362028217310",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f58a870-4f6b-4807-803a-a2332cf9c7d9",
+        "parentId" : "8c18a0d1-6570-47ed-a0eb-e13c69ff5de1",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "@navidshaikh is working on kubelet.go, which is quite large https://github.com/kubernetes/kubernetes/issues/98976#issuecomment-791499864 Let's coordinate, @QiWang19 I suggest you migrate *only* the affected lines in this PR and Navid can take care of the rest.",
+        "createdAt" : "2021-03-05T17:52:52Z",
+        "updatedAt" : "2021-03-06T16:27:00Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0be53c5-d72c-49cb-9485-13a06891f11f",
+        "parentId" : "8c18a0d1-6570-47ed-a0eb-e13c69ff5de1",
+        "authorId" : "c4fff1f4-0021-4f1f-a538-7ada97206ed5",
+        "body" : "thanks! https://github.com/kubernetes/kubernetes/pull/99861 migrates the rest of `kubelet.go` except `format.Pods` lines. (there are some instances of `format.Pods` *with* structured logging in `pkg/kubelet/eviction/eviction_manager.go` as well)",
+        "createdAt" : "2021-03-05T20:30:18Z",
+        "updatedAt" : "2021-03-07T14:16:10Z",
+        "lastEditedBy" : "c4fff1f4-0021-4f1f-a538-7ada97206ed5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8133d295869c27b416c638175110d0f15286ebfa",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +57,61 @@\n// Pods returns a list of pods as ObjectRef\nfunc Pods(pods []*v1.Pod) []klog.ObjectRef {\n\tpodKObjs := make([]klog.ObjectRef, 0, len(pods))\n\tfor _, p := range pods {"
+  },
+  {
+    "id" : "0dede696-cce0-4feb-983d-fd128a153c1b",
+    "prId" : 17572,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d04da909-b341-46fc-9fba-45d9d5f816a0",
+        "parentId" : null,
+        "authorId" : "0adf587c-aaa2-4e47-be0f-a26d4fde14ac",
+        "body" : "(optional) I think it might be good to explicitly call out that this is a logging utility by including that in the name, such as `log` (we don't use the standard library log anywhere in kubelet, so that name won't collide).\n",
+        "createdAt" : "2015-11-20T18:33:59Z",
+        "updatedAt" : "2015-12-03T20:47:45Z",
+        "lastEditedBy" : "0adf587c-aaa2-4e47-be0f-a26d4fde14ac",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4816b3bcb56e03af2b6eb84aedac0e16bfbce30",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +15,19 @@*/\n\npackage format\n\nimport ("
+  }
+]

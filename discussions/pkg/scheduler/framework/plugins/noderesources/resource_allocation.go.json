@@ -1,0 +1,178 @@
+[
+  {
+    "id" : "66766fdc-5dfe-48f2-9a26-3fae8e48ae61",
+    "prId" : 101467,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101467#pullrequestreview-645296915",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e5844a68-580c-45af-862c-2781a3dd0ec8",
+        "parentId" : null,
+        "authorId" : "1fde46ca-8fae-4b82-9978-f266fdae6ffe",
+        "body" : "This is functional okay, only thing that might worth discussing is that  if a pod requests a scalar resource that doesn't exist  in that host, \r\n\r\noriginally, it might return \"0\" and request quota from that pod.\r\nnow, it will be handled as an unknown resource, write the log and return \"0\", \"0\".\r\n",
+        "createdAt" : "2021-04-26T06:38:41Z",
+        "updatedAt" : "2021-04-26T06:43:28Z",
+        "lastEditedBy" : "1fde46ca-8fae-4b82-9978-f266fdae6ffe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db0298eb-6828-49f8-9b64-d16820907d41",
+        "parentId" : "e5844a68-580c-45af-862c-2781a3dd0ec8",
+        "authorId" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "body" : "Thanks for bringing this up. Yes, the log message will be printed even for scalar resources. Luckily, `requested resource %v not considered for node score calculation` log message is still meaningful even for the case when the scalar source is not found on a node.",
+        "createdAt" : "2021-04-26T07:00:25Z",
+        "updatedAt" : "2021-04-26T07:00:26Z",
+        "lastEditedBy" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a6c705b-3c45-489e-a5c4-274a97ca70ea",
+        "parentId" : "e5844a68-580c-45af-862c-2781a3dd0ec8",
+        "authorId" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "body" : "Another way is to drop the condition completely since `nodeInfo.Allocatable.ScalarResources[resource]` will give `0` when `resource` key does not exist. Returning non-zero `podRequest` if there's any.",
+        "createdAt" : "2021-04-26T07:03:31Z",
+        "updatedAt" : "2021-04-26T07:03:44Z",
+        "lastEditedBy" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a54021c9-7723-4d22-b893-5d2f2b367c62",
+        "parentId" : "e5844a68-580c-45af-862c-2781a3dd0ec8",
+        "authorId" : "1fde46ca-8fae-4b82-9978-f266fdae6ffe",
+        "body" : "+1 on the drop of the condition, lets hold and see what's other reviewers thinking about this.",
+        "createdAt" : "2021-04-26T07:21:21Z",
+        "updatedAt" : "2021-04-26T07:21:38Z",
+        "lastEditedBy" : "1fde46ca-8fae-4b82-9978-f266fdae6ffe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0bfa9f18-7f59-44b1-8c0f-226ddd6a0c84",
+        "parentId" : "e5844a68-580c-45af-862c-2781a3dd0ec8",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "Lets keep the check because otherwise you will end up returning an above zero node requested resources for a node that has zero of this resource (line 103 below).",
+        "createdAt" : "2021-04-26T16:24:34Z",
+        "updatedAt" : "2021-04-26T16:24:35Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0bc1f781-5976-4e44-ad7f-139acec4e49a",
+        "parentId" : "e5844a68-580c-45af-862c-2781a3dd0ec8",
+        "authorId" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "body" : "Is not that the same in the end? `calculateResourceAllocatableRequest` returns 0,0 anyway.",
+        "createdAt" : "2021-04-26T16:29:17Z",
+        "updatedAt" : "2021-04-26T16:30:18Z",
+        "lastEditedBy" : "c63e1ceb-64bd-4726-b8ef-e647d73dae0c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07ecb4d5-1476-496c-8d7c-07ea3ac3ac84",
+        "parentId" : "e5844a68-580c-45af-862c-2781a3dd0ec8",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "right, but if you don't check, then you will be returning `(nodeInfo.Requested.ScalarResources[resource] + podRequest)`, so it will be `podRequest` not 0.",
+        "createdAt" : "2021-04-26T17:50:04Z",
+        "updatedAt" : "2021-04-26T17:50:05Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c5b23972-706f-4531-b441-b9052d0a5f0b",
+        "parentId" : "e5844a68-580c-45af-862c-2781a3dd0ec8",
+        "authorId" : "1fde46ca-8fae-4b82-9978-f266fdae6ffe",
+        "body" : "original code will return `podRequest` instead of 0 when the scalar resource doesn't available on that host.\r\neither `podRequest` or 0 is acceptable by far since it's not consumed anywhere when the allocatable resource is 0.",
+        "createdAt" : "2021-04-27T02:41:11Z",
+        "updatedAt" : "2021-04-27T02:41:11Z",
+        "lastEditedBy" : "1fde46ca-8fae-4b82-9978-f266fdae6ffe",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "11d6576f83a260e32f26a4e70602a054c00c797c",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +100,104 @@\t\treturn nodeInfo.Allocatable.EphemeralStorage, (nodeInfo.Requested.EphemeralStorage + podRequest)\n\tdefault:\n\t\tif _, exists := nodeInfo.Allocatable.ScalarResources[resource]; exists {\n\t\t\treturn nodeInfo.Allocatable.ScalarResources[resource], (nodeInfo.Requested.ScalarResources[resource] + podRequest)\n\t\t}"
+  },
+  {
+    "id" : "f76d5a86-119e-45b4-a849-017ab4a8ab20",
+    "prId" : 95146,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/95146#pullrequestreview-499053916",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "82f78489-21fb-491d-8f17-4c6bb9e40a7f",
+        "parentId" : null,
+        "authorId" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "body" : "if you're removing the volume check, should you update this comment too?",
+        "createdAt" : "2020-09-29T17:40:18Z",
+        "updatedAt" : "2020-09-30T03:06:53Z",
+        "lastEditedBy" : "0e2b7889-1224-444e-a36d-475f9edd0703",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb601515-a892-4975-aab1-8af4a10d75bd",
+        "parentId" : "82f78489-21fb-491d-8f17-4c6bb9e40a7f",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "@damemi I suppose @draveness was trying to say the logic `>= 0` makes no sense as it's always true.\r\n\r\nAs mentioned in https://github.com/kubernetes/kubernetes/pull/95146#discussion_r496908079, checking `if len(volumes) > 0` might be the original intention.",
+        "createdAt" : "2020-09-30T01:21:05Z",
+        "updatedAt" : "2020-09-30T03:06:53Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9916bee1-7f45-4dbb-86b8-d404558a34ff",
+        "parentId" : "82f78489-21fb-491d-8f17-4c6bb9e40a7f",
+        "authorId" : "9829b6c0-e54c-401b-8d97-73e5aa4e83c1",
+        "body" : "> @damemi I suppose @draveness was trying to say the logic `>= 0` makes no sense as it's always true.\r\n\r\nyes\r\n\r\n> As mentioned in [#95146 (comment)](https://github.com/kubernetes/kubernetes/pull/95146#discussion_r496908079), checking `if len(volumes) > 0` might be the original intention.\r\n\r\nThanks, I'll update the commit here.",
+        "createdAt" : "2020-09-30T03:04:27Z",
+        "updatedAt" : "2020-09-30T03:06:53Z",
+        "lastEditedBy" : "9829b6c0-e54c-401b-8d97-73e5aa4e83c1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "79f05c65a0fcbf2d0aaf65c2e44dca2197e14cdb",
+    "line" : 3,
+    "diffHunk" : "@@ -1,1 +61,65 @@\tvar score int64\n\n\t// Check if the pod has volumes and this could be added to scorer function for balanced resource allocation.\n\tif len(pod.Spec.Volumes) > 0 && utilfeature.DefaultFeatureGate.Enabled(features.BalanceAttachedNodeVolumes) && nodeInfo.TransientInfo != nil {\n\t\tscore = r.scorer(requested, allocatable, true, nodeInfo.TransientInfo.TransNodeInfo.RequestedVolumes, nodeInfo.TransientInfo.TransNodeInfo.AllocatableVolumesCount)"
+  },
+  {
+    "id" : "e4a51ec8-26da-46e0-9e31-dc227c27443d",
+    "prId" : 86725,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/86725#pullrequestreview-337145055",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "535b3304-cdc1-4428-8a31-638a18ed0075",
+        "parentId" : null,
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "let change ```ResourceAllocationPriority``` to just ```resourceAllocationScorer``` (i.e., make it local to the package as well as drop the Priority suffix)",
+        "createdAt" : "2019-12-30T15:39:37Z",
+        "updatedAt" : "2019-12-31T15:50:41Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41210868-745f-4d6a-83a6-084d885de426",
+        "parentId" : "535b3304-cdc1-4428-8a31-638a18ed0075",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "So, I would rearrange the types/variables in this files as follows (public ones first and then the package local ones):\r\n\r\n```\r\n// ResourceToWeightMap contains resource name and weight.\r\ntype ResourceToWeightMap map[v1.ResourceName]int64\r\n\r\n// DefaultRequestedRatioResources is used to set default requestToWeight map for CPU and memory\r\nvar DefaultRequestedRatioResources = ResourceToWeightMap{v1.ResourceMemory: 1, v1.ResourceCPU: 1}\r\n\r\n// resourceAllocationPriority contains information to calculate resource allocation priority.\r\ntype resourceAllocationScorer struct {\r\n\tname                string\r\n\tscorer              func(requested, allocable ResourceToValueMap, includeVolumes bool, requestedVolumes int, allocatableVolumes int) int64\r\n\tresourceToWeightMap ResourceToWeightMap\r\n}\r\n\r\n// resourceToValueMap contains resource name and score.\r\ntype resourceToValueMap map[v1.ResourceName]int64\r\n\r\n```",
+        "createdAt" : "2019-12-30T15:46:49Z",
+        "updatedAt" : "2019-12-31T15:50:41Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7f79516705f6374c28bcbddeb079787f5ca78ea5",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +15,19 @@*/\n\npackage noderesources\n\nimport ("
+  }
+]

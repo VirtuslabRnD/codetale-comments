@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "04db9a65-a164-42af-9721-8c9ad050d707",
+    "prId" : 67308,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67308#pullrequestreview-147905912",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "324155e6-556e-4529-b742-e2e9d96c3303",
+        "parentId" : null,
+        "authorId" : "5f2c1de8-4266-42c0-b343-ba247af3578f",
+        "body" : "My earlier comment was incorrect. The `schedulercache.Cache` argument is no longer needed.",
+        "createdAt" : "2018-08-21T00:48:30Z",
+        "updatedAt" : "2018-09-22T04:10:05Z",
+        "lastEditedBy" : "5f2c1de8-4266-42c0-b343-ba247af3578f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "478afee9-d6e4-49d5-9a0e-086252b92ace",
+        "parentId" : "324155e6-556e-4529-b742-e2e9d96c3303",
+        "authorId" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "body" : "Updated.",
+        "createdAt" : "2018-08-21T05:06:38Z",
+        "updatedAt" : "2018-09-22T04:10:05Z",
+        "lastEditedBy" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b3f1e1200b47b1404f64a0743ece9e1a505677d9",
+    "line" : 182,
+    "diffHunk" : "@@ -1,1 +270,274 @@//\n// NOTE: RunPredicate will not update the equivalence cache if generation does not match live version.\nfunc (n *NodeCache) RunPredicate(\n\tpred algorithm.FitPredicate,\n\tpredicateKey string,"
+  },
+  {
+    "id" : "ac504aca-2e58-4f94-af76-8c88ba1177a5",
+    "prId" : 67308,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67308#pullrequestreview-152455897",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "da8b2b85-e253-4070-bb66-bf4626c56d72",
+        "parentId" : null,
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "Since it is much more likely to find a nodeCache, I would avoid acquiring a write lock unconditionally here. This would block all readers. For this reason, I think the use of sync.Map was a better approach.",
+        "createdAt" : "2018-09-04T20:57:55Z",
+        "updatedAt" : "2018-09-22T04:10:05Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "921e417e-a381-4a1c-8288-992c236eb5bd",
+        "parentId" : "da8b2b85-e253-4070-bb66-bf4626c56d72",
+        "authorId" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "body" : "In earlier implementation, I need to create and snapshot node cache in one function, but `sync.Map` does not support more than 1 operations in one lock. I'll revert it back.",
+        "createdAt" : "2018-09-05T11:50:04Z",
+        "updatedAt" : "2018-09-22T04:10:05Z",
+        "lastEditedBy" : "e4e7c71f-23b5-4203-b65d-3f5f3c503b64",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b3f1e1200b47b1404f64a0743ece9e1a505677d9",
+    "line" : 90,
+    "diffHunk" : "@@ -1,1 +121,125 @@// The boolean flag is true if the value was loaded, false if created.\nfunc (c *Cache) GetNodeCache(name string) (nodeCache *NodeCache, exists bool) {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\tif nodeCache, exists = c.nodeToCache[name]; !exists {"
+  },
+  {
+    "id" : "e9b11896-47cc-406c-9fd1-a949824f9bf6",
+    "prId" : 66862,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/66862#pullrequestreview-148051673",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d1524884-7d99-479c-b02d-3ef23f286dbe",
+        "parentId" : null,
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "If you look at the [sync.Map documentation](https://golang.org/pkg/sync/#Map), it reads:\r\n\r\n\"The Map type is optimized for two common use cases: (1) when the entry for a given key is only ever written once but read many times, as in caches that only grow, or (2) when multiple goroutines read, write, and overwrite entries for disjoint sets of keys. In these two cases, use of a Map may significantly reduce lock contention compared to a Go map paired with a separate Mutex or RWMutex.\"\r\n\r\neCache does not follow any of these patterns. The second pattern is closer to what eCache does, but even that is not completely applicable to eCache. We have informer event handlers which may write/delete eCache entries in parallel to other go-routines that run our predicate functions. So, the sets of entries written/deleted in various goroutines are not disjoint.\r\nThe documentation also states:\r\n\"The Map type is specialized. Most code should use a plain Go map instead, with separate locking or coordination, for better type safety and to make it easier to maintain other invariants along with the map content.\"\r\n\r\nThese are the reasons that I am a bit unsure about using sync.Map here. Also, the performance improvement does not seem to be large. Those said, I don't have any serious objection against it.",
+        "createdAt" : "2018-08-21T05:31:17Z",
+        "updatedAt" : "2018-08-21T05:38:48Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bcafe19e-8c32-47c8-b060-bb07ba619c70",
+        "parentId" : "d1524884-7d99-479c-b02d-3ef23f286dbe",
+        "authorId" : "7dd504ec-7e63-45b3-98f8-6eb1c683e9c2",
+        "body" : "Thanks Bobby! Actually, that's also the reason I did not use `sync.Map` at the beginning :D \r\n\r\nWhile since lock contention is visibly reduced during benchmark CPU profiling:  \r\n\r\nhttps://github.com/resouer/temp/blob/master/torch_lock_true.5000.svg\r\nhttps://github.com/resouer/temp/blob/master/torch_lock_true.map.5000.svg\r\n\r\nand as the Cache logic is very simple, I guess we can keep the change as is.",
+        "createdAt" : "2018-08-21T13:13:48Z",
+        "updatedAt" : "2018-08-23T05:51:58Z",
+        "lastEditedBy" : "7dd504ec-7e63-45b3-98f8-6eb1c683e9c2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17d0190706407bade8f6f875844749007904ad7d",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +42,46 @@type Cache struct {\n\t// i.e. map[string]*NodeCache\n\tsync.Map\n}\n"
+  },
+  {
+    "id" : "aa1a1fea-e435-4a8f-b774-7a1afdaa4360",
+    "prId" : 65714,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/65714#pullrequestreview-136289916",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e8cecdc7-5c98-4ddd-9fb5-225d3ae34779",
+        "parentId" : null,
+        "authorId" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "body" : "You can probably combine this function and above one.",
+        "createdAt" : "2018-07-11T11:54:23Z",
+        "updatedAt" : "2018-07-18T07:12:43Z",
+        "lastEditedBy" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0035e3f2-60aa-4598-8f02-c6ebd5710065",
+        "parentId" : "e8cecdc7-5c98-4ddd-9fb5-225d3ae34779",
+        "authorId" : "7dd504ec-7e63-45b3-98f8-6eb1c683e9c2",
+        "body" : "I will choose to keep them as separate calls are needed.",
+        "createdAt" : "2018-07-11T15:16:50Z",
+        "updatedAt" : "2018-07-18T07:12:44Z",
+        "lastEditedBy" : "7dd504ec-7e63-45b3-98f8-6eb1c683e9c2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5a7a4caf71ac63651a1abfada3850fb37ea44a8",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +105,109 @@\n// InvalidatePredicatesOnNode clears cached results for the given predicates on one node.\nfunc (c *Cache) InvalidatePredicatesOnNode(nodeName string, predicateKeys sets.String) {\n\tif len(predicateKeys) == 0 {\n\t\treturn"
+  }
+]

@@ -1,0 +1,695 @@
+[
+  {
+    "id" : "edbdeba4-f236-4f59-a43f-944e822aa6fb",
+    "prId" : 97824,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97824#pullrequestreview-582377164",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "74241a99-6198-4d70-843b-c7337a065259",
+        "parentId" : null,
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "hiya @hanlins , looking at this unit test,  do we also need a `sig-network`  E2E for this?\r\n\r\nif not,  what E2Es break if the default `Drop` is setup and this rule is non existent.",
+        "createdAt" : "2021-01-29T02:49:50Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "87cc6466-9069-42b0-be45-e48e77b10d1a",
+        "parentId" : "74241a99-6198-4d70-843b-c7337a065259",
+        "authorId" : "89c2ffa8-b294-43fc-85c3-8f33b486c9b5",
+        "body" : "Oh true. I was thinking about it early today but don't know if there's a way to change the e2e VM settings? My concern is if I just modify the `INPUT` chain policy to `DROP` then we might lose ssh connection to that VM instantly and failed the test (and lose the VMs, maybe other risks). Also I would say if we change the chain policy to `DROP` then local pod to pod VM will break since there's no rule to allow traffic from/to `lo` interface. Personally that seems to be a bigger topic than just focusing on fixing the healthcheck node port issue, maybe we can create new issues to track them? Maybe one for adding a rule to enable traffic to/from `lo` interface, and the other to address the e2e test coverage, what's ur take? 😆",
+        "createdAt" : "2021-01-29T03:44:31Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "89c2ffa8-b294-43fc-85c3-8f33b486c9b5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "abab252b-4dbf-4177-9b6d-c3eb6878f922",
+        "parentId" : "74241a99-6198-4d70-843b-c7337a065259",
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "no need to make an e2e for it, i guess all that matters is... knowing which of the `sig-network` e2e's we can use to detect this regression?  \r\n\r\ni bet  theres something that requires nodeport healthchecks (i.e. maybe in test/e2e/network/services.go) which demonstrates this bug ?",
+        "createdAt" : "2021-01-31T03:15:21Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6df5a3fb-d2d0-4822-9171-ee80cb543c88",
+        "parentId" : "74241a99-6198-4d70-843b-c7337a065259",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "We have quite a few e2es already on health check node port because it's required for any Service LB w/ externalTrafficPolicy=Local. The tricky part is testing this on a node using default `INPUT` policy of `DROP`. ",
+        "createdAt" : "2021-02-01T15:29:24Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a8be8614-a615-40d6-a6a9-1b6c4701306a",
+        "parentId" : "74241a99-6198-4d70-843b-c7337a065259",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "> My concern is if I just modify the INPUT chain policy to DROP then we might lose ssh connection to that VM instantly\r\n\r\nYou don't need to change the default `INPUT` chain policy, you can just do\r\n\r\n    iptables -A INPUT -p tcp --dport <PORT> -j DROP\r\n\r\nor whatever",
+        "createdAt" : "2021-02-02T13:14:35Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a5d8db53-c6c1-4047-a85d-cd7703ccef44",
+        "parentId" : "74241a99-6198-4d70-843b-c7337a065259",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "> iptables -A INPUT -p tcp --dport <PORT> -j DROP\r\n\r\nThis rule would conflict with the rules we add from kube-proxy though.",
+        "createdAt" : "2021-02-02T14:55:46Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d4195c76-8ea9-4c36-8903-e04a6634fb7c",
+        "parentId" : "74241a99-6198-4d70-843b-c7337a065259",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "> This rule would conflict with the rules we add from kube-proxy though.\r\n\r\nThat's the goal! Add a rule (to the very end of the `INPUT` chain) that intentionally drops packets directed just at this health check port. (When you quoted my reply the \"PORT\" was missing, but the rule as I originally typed it was supposed to apply only to that particular part.) The new `-j ACCEPT` rule added by this PR should run before that rule gets hit, rendering it irrelevant.",
+        "createdAt" : "2021-02-02T15:54:21Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f0c67ff4-f657-4a5e-9f86-c36cd63152c0",
+        "parentId" : "74241a99-6198-4d70-843b-c7337a065259",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "That depends on if we prepend or append though right? Do we always prepend filter rules?",
+        "createdAt" : "2021-02-02T15:59:14Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73459807-a7c1-4440-8c6e-e6fc018c3db3",
+        "parentId" : "74241a99-6198-4d70-843b-c7337a065259",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "The actual per-service rules get added to kubernetes-specific chains, not to the top-level `INPUT`, `OUTPUT`, etc, chains. We should be able to arrange for a single rule added by a test case to be added to the right place relative to the `-j KUBE-WHATEVER` rule in `INPUT`.",
+        "createdAt" : "2021-02-03T13:46:20Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4cd1eacbc1f90e60061818d1b4713f78e78de0f9",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +922,926 @@}\n\nfunc TestHealthCheckNodePort(t *testing.T) {\n\tipt := iptablestest.NewFake()\n\tfp := NewFakeProxier(ipt, false)"
+  },
+  {
+    "id" : "e3eefd54-dfcd-444c-b8de-6b675d0f934d",
+    "prId" : 97824,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97824#pullrequestreview-579564883",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a7c0b542-44e3-4af2-847f-19f2b511a8e5",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "can we add a test like `TestEndpointSliceE2E` but with a Service with health check node ports? Will help compare the whole rule set",
+        "createdAt" : "2021-01-29T19:37:56Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3974db3f-25cb-4708-9593-c30968ecb1d4",
+        "parentId" : "a7c0b542-44e3-4af2-847f-19f2b511a8e5",
+        "authorId" : "89c2ffa8-b294-43fc-85c3-8f33b486c9b5",
+        "body" : "Good call, will do that.",
+        "createdAt" : "2021-01-29T19:40:55Z",
+        "updatedAt" : "2021-02-03T15:23:20Z",
+        "lastEditedBy" : "89c2ffa8-b294-43fc-85c3-8f33b486c9b5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4cd1eacbc1f90e60061818d1b4713f78e78de0f9",
+    "line" : 79,
+    "diffHunk" : "@@ -1,1 +2647,2651 @@:KUBE-EXTERNAL-SERVICES - [0:0]\n:KUBE-FORWARD - [0:0]\n:KUBE-NODEPORTS - [0:0]\n-A KUBE-FORWARD -m conntrack --ctstate INVALID -j DROP\n-A KUBE-FORWARD -m comment --comment \"kubernetes forwarding rules\" -m mark --mark 0x4000/0x4000 -j ACCEPT"
+  },
+  {
+    "id" : "bee961e1-2951-477e-9996-81bfb9a58357",
+    "prId" : 97238,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97238#pullrequestreview-607570235",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7a26c8d4-f6fa-4521-9b2f-f6386aaac6b1",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "This may just be my ignorance, why is this `0.5` instead of `0.33`?",
+        "createdAt" : "2021-03-09T15:23:38Z",
+        "updatedAt" : "2021-04-29T20:54:43Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0bd7af69-03cd-4d66-b9e1-dfcf70556b98",
+        "parentId" : "7a26c8d4-f6fa-4521-9b2f-f6386aaac6b1",
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "The rules are independent of each other; the first rule runs 33% of the time, then the second rule runs 50% of the time _when the first rule doesn't run_, then the final rule runs 100% of the time that neither of the first two rules runs. So each runs 33% of the time.",
+        "createdAt" : "2021-03-09T15:51:22Z",
+        "updatedAt" : "2021-04-29T20:54:43Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67bdf843-363a-464f-bddb-12b8c7f8397d",
+        "parentId" : "7a26c8d4-f6fa-4521-9b2f-f6386aaac6b1",
+        "authorId" : "5f3d0da0-11c3-49d0-9aa9-f897fad1c961",
+        "body" : "because the first third has already been taken out. Now there is a 50% chance _if you got here_",
+        "createdAt" : "2021-03-09T15:53:57Z",
+        "updatedAt" : "2021-04-29T20:54:43Z",
+        "lastEditedBy" : "5f3d0da0-11c3-49d0-9aa9-f897fad1c961",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "209ceb5f-c934-4ae8-a819-8d0f12e7d54a",
+        "parentId" : "7a26c8d4-f6fa-4521-9b2f-f6386aaac6b1",
+        "authorId" : "5f3d0da0-11c3-49d0-9aa9-f897fad1c961",
+        "body" : "In other words, because the rules are executed sequentially.",
+        "createdAt" : "2021-03-09T15:54:24Z",
+        "updatedAt" : "2021-04-29T20:54:43Z",
+        "lastEditedBy" : "5f3d0da0-11c3-49d0-9aa9-f897fad1c961",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1010e6a9d98f406a6687eb33573713893dc5431e",
+    "line" : 335,
+    "diffHunk" : "@@ -1,1 +3819,3823 @@-A KUBE-SERVICES -m comment --comment \"ns1/svc1 cluster IP\" -m tcp -p tcp -d 172.20.1.1/32 --dport 80 -j KUBE-SVC-AQI2S6QIMU7PVVRP\n-A KUBE-SVC-AQI2S6QIMU7PVVRP -m comment --comment ns1/svc1 -m statistic --mode random --probability 0.3333333333 -j KUBE-SEP-3JOIVZTXZZRGORX4\n-A KUBE-SVC-AQI2S6QIMU7PVVRP -m comment --comment ns1/svc1 -m statistic --mode random --probability 0.5000000000 -j KUBE-SEP-IO5XOSKPAXIFQXAJ\n-A KUBE-SVC-AQI2S6QIMU7PVVRP -m comment --comment ns1/svc1 -j KUBE-SEP-EQCHZ7S2PJ72OHAY\n-A KUBE-SEP-3JOIVZTXZZRGORX4 -m comment --comment ns1/svc1 -s 10.0.1.1/32 -j KUBE-MARK-MASQ"
+  },
+  {
+    "id" : "3b0cbfef-fac5-4191-942c-0b96dbd3174e",
+    "prId" : 97238,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97238#pullrequestreview-670455408",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f420242b-2b54-414e-afde-88e338cbac3f",
+        "parentId" : null,
+        "authorId" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "body" : "we have to test\r\n\r\n>  In addition, kube-proxy's node port health check should fail if there are only Terminating endpoints, regardless of their readiness in order to:\r\n\r\nit is missing a test that the nodeport health check fail if there are only terminating endpoints.",
+        "createdAt" : "2021-05-04T22:32:56Z",
+        "updatedAt" : "2021-05-05T08:55:30Z",
+        "lastEditedBy" : "203dfb85-d185-4057-88b3-a1b4f09fd1fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f4bd89f-5077-4bec-9ea8-c6cf12ee74b7",
+        "parentId" : "f420242b-2b54-414e-afde-88e338cbac3f",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Good catch, let me add one",
+        "createdAt" : "2021-05-12T16:27:44Z",
+        "updatedAt" : "2021-05-12T16:27:44Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a5cb7a66-a79e-4a56-9432-1dd88c37bdcd",
+        "parentId" : "f420242b-2b54-414e-afde-88e338cbac3f",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "Added more tests for this, see last 3 commits",
+        "createdAt" : "2021-05-27T17:29:44Z",
+        "updatedAt" : "2021-05-27T17:29:44Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1010e6a9d98f406a6687eb33573713893dc5431e",
+    "line" : 211,
+    "diffHunk" : "@@ -1,1 +3695,3699 @@\t}\n}\n\n// Test_EndpointSliceWithTerminatingEndpoints tests that when there are local ready and ready + terminating\n// endpoints, only the ready endpoints are used."
+  },
+  {
+    "id" : "fb4ee509-70ad-41f7-9cbf-2a57efe7626f",
+    "prId" : 97238,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97238#pullrequestreview-675860276",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1287c7de-b0b7-4efa-bb9c-53a887b09196",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Can you update the comment on 3035, maybe add a case of !serving to take its place?",
+        "createdAt" : "2021-05-28T23:14:31Z",
+        "updatedAt" : "2021-05-28T23:27:31Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4f638f93-c0b3-4799-9004-d27eafb4f5b7",
+        "parentId" : "1287c7de-b0b7-4efa-bb9c-53a887b09196",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "This is the example of \"extra chains\" that we didn't used to have.  ",
+        "createdAt" : "2021-05-28T23:16:34Z",
+        "updatedAt" : "2021-05-28T23:27:31Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ebc3e46-9c81-4d71-ac1e-42a0604bde0b",
+        "parentId" : "1287c7de-b0b7-4efa-bb9c-53a887b09196",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "fixed",
+        "createdAt" : "2021-06-04T01:59:53Z",
+        "updatedAt" : "2021-06-04T01:59:53Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1010e6a9d98f406a6687eb33573713893dc5431e",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +2984,2988 @@-A KUBE-SEP-XGJFVO3L2O5SRFNT -m comment --comment ns1/svc1 -s 10.0.1.3/32 -j KUBE-MARK-MASQ\n-A KUBE-SEP-XGJFVO3L2O5SRFNT -m comment --comment ns1/svc1 -m tcp -p tcp -j DNAT --to-destination 10.0.1.3:80\n-A KUBE-SEP-VLJB2F747S6W7EX4 -m comment --comment ns1/svc1 -s 10.0.1.4/32 -j KUBE-MARK-MASQ\n-A KUBE-SEP-VLJB2F747S6W7EX4 -m comment --comment ns1/svc1 -m tcp -p tcp -j DNAT --to-destination 10.0.1.4:80\n-A KUBE-SERVICES -m comment --comment \"kubernetes service nodeports; NOTE: this must be the last rule in this chain\" -m addrtype --dst-type LOCAL -j KUBE-NODEPORTS"
+  },
+  {
+    "id" : "ec9d4128-f1da-441d-98f1-d48a198c3149",
+    "prId" : 97238,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97238#pullrequestreview-675860245",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b5a492d5-95f6-4181-9fec-bf0893da452e",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Same as previous - the comment below says \"should be ignored\" but that's not true any more.",
+        "createdAt" : "2021-05-28T23:15:21Z",
+        "updatedAt" : "2021-05-28T23:27:31Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e26567b-6ec4-40e3-9ab3-8cd09eaa62d1",
+        "parentId" : "b5a492d5-95f6-4181-9fec-bf0893da452e",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "fixed",
+        "createdAt" : "2021-06-04T01:59:49Z",
+        "updatedAt" : "2021-06-04T01:59:49Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1010e6a9d98f406a6687eb33573713893dc5431e",
+    "line" : 58,
+    "diffHunk" : "@@ -1,1 +3089,3093 @@-A KUBE-SEP-XGJFVO3L2O5SRFNT -m comment --comment ns1/svc1 -s 10.0.1.3/32 -j KUBE-MARK-MASQ\n-A KUBE-SEP-XGJFVO3L2O5SRFNT -m comment --comment ns1/svc1 -m tcp -p tcp -j DNAT --to-destination 10.0.1.3:80\n-A KUBE-SEP-VLJB2F747S6W7EX4 -m comment --comment ns1/svc1 -s 10.0.1.4/32 -j KUBE-MARK-MASQ\n-A KUBE-SEP-VLJB2F747S6W7EX4 -m comment --comment ns1/svc1 -m tcp -p tcp -j DNAT --to-destination 10.0.1.4:80\n-A KUBE-XLB-AQI2S6QIMU7PVVRP -m comment --comment \"Redirect pods trying to reach external loadbalancer VIP to clusterIP\" -s 10.0.0.0/24 -j KUBE-SVC-AQI2S6QIMU7PVVRP"
+  },
+  {
+    "id" : "b536445d-2592-488d-9b14-9cb827938d8f",
+    "prId" : 97238,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97238#pullrequestreview-694474183",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bbf69475-658b-45bc-9ea6-a381bae43908",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I'd LOVE to see all these boilerplate setups reduced to helper functions that hide all the noise and leave only the interesting bits in each case (sometimes called \"tweaks\" in some tests).  There's just a lot of noise in each case.\r\n\r\ne.g.\r\n\r\n```\r\nendpointslice: makeEPSlice(\"svc1\",\r\n\t\t\tmakeEPSPorts(makeEPSPort(\"\", 80)),\r\n\t\t\tmakeEPSAddrs(\r\n\t\t\t\tmakeEPSAddr(\"10.0.1.1\", true, true, false, testHostname),\r\n\t\t\t\tmakeEPSAddr(\"10.0.1.2\", true, true, false, testHostname),\r\n\t\t\t\tmakeEPSAddr(\"10.0.1.3\", false, true, true, testHostname),\r\n\t\t\t\tmakeEPSAddr(\"10.0.1.4\", false, false, true, testHostname),\r\n\t\t\t\tmakeEPSAddr(\"10.0.1.5\", true, true, false, otherHostname))),\r\n```\r\n",
+        "createdAt" : "2021-06-25T22:09:07Z",
+        "updatedAt" : "2021-06-25T22:28:27Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ef61c98-bd69-4150-8d82-7b6cb12d4a44",
+        "parentId" : "bbf69475-658b-45bc-9ea6-a381bae43908",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "I actually like having the test table entries show the full objects being tested and not hiding it in helper functions. It does add some noise, but all the needed details of the test is visible by just looking at the test table. \r\n\r\nI find that too often test helper functions end up with an explosion of addtional parameters for every new test case that requires a new field to be tweaked and quickly becomes messy and equally difficult to read.  ",
+        "createdAt" : "2021-06-28T15:36:48Z",
+        "updatedAt" : "2021-06-28T15:36:48Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4c21d44-e3a6-4be4-a710-c819fab38c32",
+        "parentId" : "bbf69475-658b-45bc-9ea6-a381bae43908",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "We're going to have to disagree on that one.  I'm going to push for more use of helper functions - it can remove thousands of lines of boilerplate code.  Maybe not as much here but in the REST tests it's horrible.",
+        "createdAt" : "2021-06-28T22:30:50Z",
+        "updatedAt" : "2021-06-28T22:30:50Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d3fa4c8-e548-461a-892b-ffe889fb4820",
+        "parentId" : "bbf69475-658b-45bc-9ea6-a381bae43908",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "That's fair, I will add a personal TODO to revisit these to use helper functions. We can debate more in the follow-up PR on code readability :)  ",
+        "createdAt" : "2021-06-28T23:33:26Z",
+        "updatedAt" : "2021-06-28T23:33:26Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1010e6a9d98f406a6687eb33573713893dc5431e",
+    "line" : 492,
+    "diffHunk" : "@@ -1,1 +3976,3980 @@\t\t\tname:                   \"feature gate ProxyTerminatingEndpoints enabled, only terminating endpoints exist\",\n\t\t\tterminatingFeatureGate: true,\n\t\t\tservice: &v1.Service{\n\t\t\t\tObjectMeta: metav1.ObjectMeta{Name: \"svc1\", Namespace: \"ns1\"},\n\t\t\t\tSpec: v1.ServiceSpec{"
+  },
+  {
+    "id" : "ad83cc55-1eb4-41c9-ae69-61c0811e1675",
+    "prId" : 97238,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/97238#pullrequestreview-694112002",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "46356f06-a060-4416-834e-1eab91932df2",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "why does this work?  It seems to end up jumping to a non-local endpoint?  Am I misreading?",
+        "createdAt" : "2021-06-25T22:19:20Z",
+        "updatedAt" : "2021-06-25T22:28:27Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bdad596b-ce0a-4263-9ac2-cc027967a639",
+        "parentId" : "46356f06-a060-4416-834e-1eab91932df2",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "The feature gate is disabled for this test case, so clusterIP routes to the only ready non-local endpoint, and KUBE-XLB drops it later. ",
+        "createdAt" : "2021-06-28T15:41:31Z",
+        "updatedAt" : "2021-06-28T15:41:31Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1010e6a9d98f406a6687eb33573713893dc5431e",
+    "line" : 715,
+    "diffHunk" : "@@ -1,1 +4199,4203 @@-A KUBE-POSTROUTING -m comment --comment \"kubernetes service traffic requiring SNAT\" -j MASQUERADE\n-A KUBE-MARK-MASQ -j MARK --or-mark 0x4000\n-A KUBE-SVC-AQI2S6QIMU7PVVRP -m comment --comment \"ns1/svc1 cluster IP\" -m tcp -p tcp -d 172.20.1.1/32 --dport 80 ! -s 10.0.0.0/24 -j KUBE-MARK-MASQ\n-A KUBE-SERVICES -m comment --comment \"ns1/svc1 cluster IP\" -m tcp -p tcp -d 172.20.1.1/32 --dport 80 -j KUBE-SVC-AQI2S6QIMU7PVVRP\n-A KUBE-SVC-AQI2S6QIMU7PVVRP -m comment --comment ns1/svc1 -j KUBE-SEP-EQCHZ7S2PJ72OHAY"
+  },
+  {
+    "id" : "99963076-3bb5-4975-a54d-71bc800a13c6",
+    "prId" : 96959,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96959#pullrequestreview-547404939",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ea295042-878f-4a2f-a6e6-5a6ae320d8be",
+        "parentId" : null,
+        "authorId" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "body" : "hmm the test seems to rearrange the hash chains depending on when its created.\r\n\r\n```\r\n- [0:0]\\n:KUBE-SVC-XPGD46QRK7WJZT7O \r\n- [0:0]\\n:KUBE-SEP-SXIVWICOYRO3J4NJ \r\n- [0:0]\\n:KUBE-SVC-GNZBNJ2PO5MGZ6GT \r\n- [0:0]\\n:KUBE-XLB-GNZBNJ2PO5MGZ6GT \r\n- [0:0]\\n:KUBE-FW-GNZBNJ2PO5MGZ6GT \r\n- [0:0]\\n:KUBE-SEP-RS4RBKLTHTF2IUXJ \r\n- [0:0]\\n:KUBE-SVC-X27LE4BHSL4DOUIK \r\n- [0:0]\\n:KUBE-SEP-OYPFS5VJICHGATKP \r\n- [0:0]\\n:KUBE-SVC-4SW47YFZTEDKD3PK \r\n- [0:0]\\n:KUBE-SEP-UKSFD7AGPMPPLUHC \r\n- [0:0]\\n:KUBE-SEP-C6EBXVWJJZMIWKLZ \r\n```\r\nversus\r\n\r\n```\r\n- [0:0]\\n:KUBE-SVC-GNZBNJ2PO5MGZ6GT \r\n- [0:0]\\n:KUBE-XLB-GNZBNJ2PO5MGZ6GT\r\n- [0:0]\\n:KUBE-FW-GNZBNJ2PO5MGZ6GT \r\n- [0:0]\\n:KUBE-SEP-RS4RBKLTHTF2IUXJ \r\n- [0:0]\\n:KUBE-SVC-X27LE4BHSL4DOUIK \r\n- [0:0]\\n:KUBE-SEP-OYPFS5VJICHGATKP \r\n- [0:0]\\n:KUBE-SVC-4SW47YFZTEDKD3PK \r\n- [0:0]\\n:KUBE-SEP-UKSFD7AGPMPPLUHC \r\n- [0:0]\\n:KUBE-SEP-C6EBXVWJJZMIWKLZ \r\n- [0:0]\\n:KUBE-SVC-XPGD46QRK7WJZT7O \r\n- [0:0]\\n:KUBE-SEP-SXIVWICOYRO3J4NJ\r\n```\r\n\r\nI should probably sort it alphabetically to avoid this flake.",
+        "createdAt" : "2020-12-08T14:34:43Z",
+        "updatedAt" : "2021-04-21T14:41:49Z",
+        "lastEditedBy" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "47175d93-0db5-483f-a1d5-a38a29f695eb",
+        "parentId" : "ea295042-878f-4a2f-a6e6-5a6ae320d8be",
+        "authorId" : "2837787e-2261-4064-8485-794e97ed6c46",
+        "body" : "Hi Surya,\r\nYes, this is a known issue in iptables-nft. User-defined chain ordering depends on order of creation, sadly. This is on my TODO but I'm busy with other things at the moment and can't tell when it is going to be fixed.\r\nCheers, Phil",
+        "createdAt" : "2020-12-08T14:39:36Z",
+        "updatedAt" : "2021-04-21T14:41:49Z",
+        "lastEditedBy" : "2837787e-2261-4064-8485-794e97ed6c46",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3674c80b-a131-4a7a-96c6-6ea6378d7db7",
+        "parentId" : "ea295042-878f-4a2f-a6e6-5a6ae320d8be",
+        "authorId" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "body" : "> Hi Surya,\r\n> Yes, this is a known issue in iptables-nft. User-defined chain ordering depends on order of creation, sadly. This is on my TODO but I'm busy with other things at the moment and can't tell when it is going to be fixed.\r\n> Cheers, Phil\r\n\r\nHey Phil (didn't know n0-1 was you :) ). No issues I can hack this test.\r\n",
+        "createdAt" : "2020-12-08T16:27:45Z",
+        "updatedAt" : "2021-04-21T14:41:49Z",
+        "lastEditedBy" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3fe48e848f49d3c60dd16749228e6471a57458a",
+    "line" : 153,
+    "diffHunk" : "@@ -1,1 +851,855 @@:KUBE-MARK-MASQ - [0:0]\n:KUBE-SVC-XPGD46QRK7WJZT7O - [0:0]\n:KUBE-SEP-SXIVWICOYRO3J4NJ - [0:0]\n:KUBE-SVC-GNZBNJ2PO5MGZ6GT - [0:0]\n:KUBE-XLB-GNZBNJ2PO5MGZ6GT - [0:0]"
+  },
+  {
+    "id" : "4d2ccffd-f868-4641-986e-29acb79ec892",
+    "prId" : 96959,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96959#pullrequestreview-633110869",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9686f2ed-8bd7-47f0-b12e-071312d1b26d",
+        "parentId" : null,
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "Can you add a comment explaining what in particular this test checks that isn't checked by one of the other tests already?\r\n",
+        "createdAt" : "2021-04-07T19:34:42Z",
+        "updatedAt" : "2021-04-21T14:41:49Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d564f858-912c-4aa5-8702-39dfa86413bd",
+        "parentId" : "9686f2ed-8bd7-47f0-b12e-071312d1b26d",
+        "authorId" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "body" : "done. The main difference is that we don't have an overall test that tells us how the NAT rules table looks like. ",
+        "createdAt" : "2021-04-12T03:15:11Z",
+        "updatedAt" : "2021-04-21T14:41:50Z",
+        "lastEditedBy" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3fe48e848f49d3c60dd16749228e6471a57458a",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +714,718 @@// are exactly the same as what is expected. This test provides an overall view of how\n// the NAT table rules look like with the different jumps.\nfunc TestOverallIPTablesRulesWithMultipleServices(t *testing.T) {\n\tipt := iptablestest.NewFake()\n\tfp := NewFakeProxier(ipt, false)"
+  },
+  {
+    "id" : "7707ee0f-489b-482a-9f06-95bce84e8eb4",
+    "prId" : 96959,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96959#pullrequestreview-633112247",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9339c969-390c-4427-b471-b0e8f945aa61",
+        "parentId" : null,
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "This number is pretty magical and it would be good to explain what it corresponds to... (It's \"one more than the number of `-A` lines after `*nat` in `expected`\"? If so, that sound like the metric is off-by-one and we should file a bug about that...)",
+        "createdAt" : "2021-04-07T19:37:08Z",
+        "updatedAt" : "2021-04-21T14:41:49Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "013adcfd-4b21-4bc7-883e-6b8b71cf76bf",
+        "parentId" : "9339c969-390c-4427-b471-b0e8f945aa61",
+        "authorId" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "body" : "yes its N+1 AFAIK, based on https://github.com/kubernetes/kubernetes/pull/99653#discussion_r588448513. Will add a comment here and also file an issue.",
+        "createdAt" : "2021-04-12T03:20:22Z",
+        "updatedAt" : "2021-04-21T14:41:50Z",
+        "lastEditedBy" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3fe48e848f49d3c60dd16749228e6471a57458a",
+    "line" : 221,
+    "diffHunk" : "@@ -1,1 +919,923 @@\t}\n\t// 43 here is test specific and corresponds to one more than the number of -A lines after `*nat` in `expected`.\n\tif nNatRules != 43.0 {\n\t\tt.Fatalf(\"Wrong number of nat rules: expected 43 received %f\", nNatRules)\n\t}"
+  },
+  {
+    "id" : "a1abdd31-c939-4c5a-992d-b8a5b308909c",
+    "prId" : 96959,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96959#pullrequestreview-633162353",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c9044c31-d965-43dc-a431-0c187509f0b8",
+        "parentId" : null,
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "again a comment would be good",
+        "createdAt" : "2021-04-07T19:51:16Z",
+        "updatedAt" : "2021-04-21T14:41:50Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd47bde9-9f1e-46dd-a286-d4250d0b7bd2",
+        "parentId" : "c9044c31-d965-43dc-a431-0c187509f0b8",
+        "authorId" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "body" : "done.",
+        "createdAt" : "2021-04-12T03:46:59Z",
+        "updatedAt" : "2021-04-21T14:41:50Z",
+        "lastEditedBy" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7e7b0a8-db3e-4e0a-9e0c-a28109dba09b",
+        "parentId" : "c9044c31-d965-43dc-a431-0c187509f0b8",
+        "authorId" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "body" : "done.",
+        "createdAt" : "2021-04-12T06:02:23Z",
+        "updatedAt" : "2021-04-21T14:41:50Z",
+        "lastEditedBy" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3fe48e848f49d3c60dd16749228e6471a57458a",
+    "line" : 258,
+    "diffHunk" : "@@ -1,1 +1322,1326 @@// TestNonLocalExternalIPs tests if we add the masquerade rule into svcChain in order to\n// SNAT packets to external IPs if externalTrafficPolicy is cluster and the traffic is NOT Local.\nfunc TestNonLocalExternalIPs(t *testing.T) {\n\tipt := iptablestest.NewFake()\n\tfp := NewFakeProxier(ipt, false)"
+  },
+  {
+    "id" : "fe062a55-a70e-4363-b6b7-3dd520a4fe66",
+    "prId" : 96959,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96959#pullrequestreview-640805706",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f409c798-9e7b-4566-ab4f-d5e806e6dd47",
+        "parentId" : null,
+        "authorId" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "body" : "So you addressed all my comments about this test case, but you put the fixes into the \"Reduce NAT table KUBE-SERVICES/NODEPORTS chain rules\" commit rather than the \"Add TestOverallIPTablesRulesWithMultipleServices\" commit...",
+        "createdAt" : "2021-04-18T20:38:30Z",
+        "updatedAt" : "2021-04-21T14:41:50Z",
+        "lastEditedBy" : "c490e441-2b9f-41f2-8559-d47be0ea8836",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a53d2fa6-060c-4e14-aae5-01f3e784c3b3",
+        "parentId" : "f409c798-9e7b-4566-ab4f-d5e806e6dd47",
+        "authorId" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "body" : "uh-oh duh stupid me. lemme fix this.",
+        "createdAt" : "2021-04-21T09:08:35Z",
+        "updatedAt" : "2021-04-21T14:41:50Z",
+        "lastEditedBy" : "b13b2229-4196-4d84-a0fb-238fbdc5407d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3fe48e848f49d3c60dd16749228e6471a57458a",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +714,718 @@// are exactly the same as what is expected. This test provides an overall view of how\n// the NAT table rules look like with the different jumps.\nfunc TestOverallIPTablesRulesWithMultipleServices(t *testing.T) {\n\tipt := iptablestest.NewFake()\n\tfp := NewFakeProxier(ipt, false)"
+  },
+  {
+    "id" : "3452e65e-9be7-418e-bc20-0991e7dbfb43",
+    "prId" : 44494,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/44494#pullrequestreview-32866047",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f7962c50-3801-4a1c-9ecf-fd8fb7d040a4",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I think it is unfortunate to out-of-line these functions.  I don't see an obvious better answer, though",
+        "createdAt" : "2017-04-14T16:48:59Z",
+        "updatedAt" : "2017-04-20T06:37:41Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd6d9011-89e7-44af-9eb7-9bfd2b1e71bd",
+        "parentId" : "f7962c50-3801-4a1c-9ecf-fd8fb7d040a4",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I agree, but this is the best I've come up with. But if you have any better suggestion, I'm happy to help.",
+        "createdAt" : "2017-04-14T17:37:44Z",
+        "updatedAt" : "2017-04-20T06:37:41Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f250435fd34151bf4c00fab86f9ea3ff29c12d1",
+    "line" : 603,
+    "diffHunk" : "@@ -1,1 +1878,1882 @@\t\t// Case[2]: no change, named port, local\n\t\tpreviousEndpoints: []*api.Endpoints{\n\t\t\tmakeTestEndpoints(\"ns1\", \"ep1\", namedPortLocal),\n\t\t},\n\t\tcurrentEndpoints: []*api.Endpoints{"
+  },
+  {
+    "id" : "b10db5b9-0ee6-4de8-b17c-52ca4687d76a",
+    "prId" : 36055,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36055#pullrequestreview-8808350",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3b5b5ea2-262f-4f2a-961f-e8089f713b99",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Can you comment why this expects false - I don't immediately see why..\n",
+        "createdAt" : "2016-11-15T08:32:20Z",
+        "updatedAt" : "2016-11-17T02:35:30Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "515c5bfc-7b98-4eba-bfa9-72b5b63c54fe",
+        "parentId" : "3b5b5ea2-262f-4f2a-961f-e8089f713b99",
+        "authorId" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "body" : "Okay\n",
+        "createdAt" : "2016-11-16T12:53:59Z",
+        "updatedAt" : "2016-11-17T02:35:30Z",
+        "lastEditedBy" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "315c8359cf044058cdc3a75b4946e6a1c41c6815",
+    "line" : 106,
+    "diffHunk" : "@@ -1,1 +576,580 @@\t\t\tdestIP:    \"1.2.3.4\",\n\t\t\tdestPort:  \"8080\",\n\t\t\texpected:  false,\n\t\t},\n\t\t\"case 5\": {"
+  },
+  {
+    "id" : "d373314f-7e33-45cd-80ef-0e9020ef6245",
+    "prId" : 36055,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36055#pullrequestreview-8808366",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "aba55b26-e641-4f4e-9153-090b066128c2",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "same\n",
+        "createdAt" : "2016-11-15T08:32:30Z",
+        "updatedAt" : "2016-11-17T02:35:30Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f59826d5-7d6c-4dc2-b636-0b1a290bcb87",
+        "parentId" : "aba55b26-e641-4f4e-9153-090b066128c2",
+        "authorId" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "body" : "Okay\n",
+        "createdAt" : "2016-11-16T12:54:05Z",
+        "updatedAt" : "2016-11-17T02:35:30Z",
+        "lastEditedBy" : "f2d7a78e-606f-4060-903e-a21198d7084e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "315c8359cf044058cdc3a75b4946e6a1c41c6815",
+    "line" : 116,
+    "diffHunk" : "@@ -1,1 +586,590 @@\t\t\tdestIP:    \"10.20.30.40\",\n\t\t\tdestPort:  \"80\",\n\t\t\texpected:  false,\n\t\t},\n\t\t\"case 6\": {"
+  }
+]

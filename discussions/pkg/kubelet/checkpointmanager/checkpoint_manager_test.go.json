@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "3653fdac-b5f8-4252-9ee1-d776c2ee8cf2",
+    "prId" : 56040,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/56040#pullrequestreview-112291691",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "109bfd22-f6d5-436e-8e28-4f8070258d84",
+        "parentId" : null,
+        "authorId" : "611b3189-700b-4eda-8a2a-2c4280218d7c",
+        "body" : "I spent some time looking into this today. I think the reason checksum checking fails here is because the hashutil.DeepHashObject() function used in getChecksum() uses spew printer that also prints out the field type. Here are what it generates from spew printer.Fprintf:\r\n\r\nfor checkpoint1:\r\n(checkpointmanager.Data){PortMappings:([]*checkpointmanager.PortMapping)[<*>{Protocol:(*checkpointmanager.protocol)tcp ContainerPort:(*int32)80 HostPort:(*int32)80} <*>{Protocol:(*checkpointmanager.protocol)tcp ContainerPort:(*int32)443 HostPort:(*int32)443}] HostNetwork:(bool)true}\r\n\r\nfor checkpoint2:\r\n(checkpointmanager.CheckpointDataV2){PortMappings:([]*checkpointmanager.PortMapping)[<*>{Protocol:(*checkpointmanager.protocol)tcp ContainerPort:(*int32)80 HostPort:(*int32)80} <*>{Protocol:(*checkpointmanager.protocol)tcp ContainerPort:(*int32)443 HostPort:(*int32)443}] HostNetwork:(bool)true V2Field:(string)}\r\n\r\nBasically, this means that checksum checking would always fail whenever we add new fields to the checkpointed data structure, even though json Unmarshal would pass. Looking at the change, I did notice that this is also the current behavior in docker_checkpoint.go, but @yujuhong @Random-Liu and @dchen1107 can you verify that this is indeed the desired behavior for kubelet?",
+        "createdAt" : "2018-04-05T23:58:38Z",
+        "updatedAt" : "2018-04-16T05:30:54Z",
+        "lastEditedBy" : "611b3189-700b-4eda-8a2a-2c4280218d7c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4c8d9fc-0ae9-4495-af7b-57ba48210c63",
+        "parentId" : "109bfd22-f6d5-436e-8e28-4f8070258d84",
+        "authorId" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "body" : "Good point! Today we shouldn't run into any issue since we are doing a bundled upgrade on a node, hence there wouldn't have a new field be introduced to the checkpointed data structure when kubelet is restarted without tearing-down-then-recreation. But once we introduced in-place-upgrade, we might encounter the issue. @yujuhong is it possible to change such behavior in docker-shim's checkpoints? Or we want to keep that to prevent arbitrary checkpointed data structure changes? ",
+        "createdAt" : "2018-04-10T16:13:53Z",
+        "updatedAt" : "2018-04-16T05:30:54Z",
+        "lastEditedBy" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "86a67b82-f0c8-4f41-854a-e8202b09e707",
+        "parentId" : "109bfd22-f6d5-436e-8e28-4f8070258d84",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "The purpose of the checksum is to detect corruption. I *think* with dockershim's checkpoint, you're supposed to version the checkpoint struct, and adding/changing a field requires a version bump. Alternatively, you can also hash the raw content of the file, but that requires saving the checksum as a separate file. +@freehan (the author of dockershim's checkpointing) in case I'm wrong. ",
+        "createdAt" : "2018-04-10T22:17:13Z",
+        "updatedAt" : "2018-04-16T05:30:54Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a84cb933-92a3-42a8-8319-291255b6806b",
+        "parentId" : "109bfd22-f6d5-436e-8e28-4f8070258d84",
+        "authorId" : "611b3189-700b-4eda-8a2a-2c4280218d7c",
+        "body" : "Given this info, to unblock this PR, perhaps we can just document in the readme that any changes to the checkpointed data structure would be considered imcompatible, and a component should add its own handling if it needs to ensure backward compatibility of reading old-format checkpoint files.",
+        "createdAt" : "2018-04-12T23:20:49Z",
+        "updatedAt" : "2018-04-16T05:30:54Z",
+        "lastEditedBy" : "611b3189-700b-4eda-8a2a-2c4280218d7c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aeb72f69-81f0-40f6-b8a8-daf0685fbadc",
+        "parentId" : "109bfd22-f6d5-436e-8e28-4f8070258d84",
+        "authorId" : "51f59c69-efc0-451a-bd8f-d9fa2c281fd3",
+        "body" : "@jiayingz Done, PTAL!!",
+        "createdAt" : "2018-04-16T06:35:24Z",
+        "updatedAt" : "2018-04-16T06:35:24Z",
+        "lastEditedBy" : "51f59c69-efc0-451a-bd8f-d9fa2c281fd3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cedbd932550d15a3e649ddb02ac74784ade32f06",
+    "line" : 203,
+    "diffHunk" : "@@ -1,1 +201,205 @@\tcheckpointV2 := newFakeCheckpointV2(\"\", nil, false)\n\terr = manager.GetCheckpoint(\"key1\", checkpointV2)\n\tassert.EqualError(t, err, \"checkpoint is corrupted\")\n\n\t// Test it fails if tried to read V1 structure into the same structure but defined in another package"
+  }
+]

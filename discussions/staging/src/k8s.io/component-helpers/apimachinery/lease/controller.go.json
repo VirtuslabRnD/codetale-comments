@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "71fb1324-22dc-4e57-873b-764794c664c4",
+    "prId" : 101652,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101652#pullrequestreview-652134645",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eb368f5f-63c4-4d0c-89fd-a080bbd12b8d",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "The alternative would be to use:\r\n```\r\nwait.NonSlidingUntil\r\n```\r\n\r\n[so that we don't move forward requests on spikes]\r\n\r\n\r\nI don't have strong opinion either way, but we should ensure that we won't violate any assumptions:\r\n- Kubelet can definitely tolerate this\r\n- IIUC api-server should also be fine with this. @lavalamp - can you confirm?",
+        "createdAt" : "2021-04-30T08:58:43Z",
+        "updatedAt" : "2021-04-30T08:58:43Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d3f65c55-274e-4d6b-8a07-af195089eb27",
+        "parentId" : "eb368f5f-63c4-4d0c-89fd-a080bbd12b8d",
+        "authorId" : "ba5b033b-ea5c-4958-8283-9b977afa1d8a",
+        "body" : "I was considering it, but preferred  to stick to sliding. Assuming that function doesn't finish within 10s we could potentially call this function again, which might cause some race-condition. I am not the expert of this part of the code, but if non-sliding is safe here I am happy to change it. ",
+        "createdAt" : "2021-04-30T09:20:34Z",
+        "updatedAt" : "2021-04-30T09:20:34Z",
+        "lastEditedBy" : "ba5b033b-ea5c-4958-8283-9b977afa1d8a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "937c1ce4-3b80-4b65-a3b7-e60fef284e86",
+        "parentId" : "eb368f5f-63c4-4d0c-89fd-a080bbd12b8d",
+        "authorId" : "5af3a49e-2ce9-4046-8a13-ee66b8cbca2e",
+        "body" : "I don't think using NonSlidingUntil will cause any race-condition. Rather, if the function takes > 10s, the next attempt will run immediately.\r\n\r\nI think it's better to keep sliding:\r\n* if this function took long, but eventually succeeded, then it makes sense to wait the next 10s before we refresh the lease (it's fresh when the function ends)\r\n* if this function took long, but hasn't succeeded, it will technically make sense to retry, but I'm afraid that this may generate higher load on unhealthy master (instead of nodes refreshing statuses every 10s, we will have all nodes that are continuously inside of c.sync; the number of requests will depend on the actual backoff strategy there, but it will be still > 1qps/10s as we have with sliding). ",
+        "createdAt" : "2021-04-30T09:57:39Z",
+        "updatedAt" : "2021-04-30T09:57:39Z",
+        "lastEditedBy" : "5af3a49e-2ce9-4046-8a13-ee66b8cbca2e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef4e3a42-d225-48bb-a90b-c21e80e57442",
+        "parentId" : "eb368f5f-63c4-4d0c-89fd-a080bbd12b8d",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I took a deeper look into kube-apiserver case and it is fine - even much larger jittering would work there.\r\n\r\nThe argument about retries for non-sliding case makes sense to me. So let's keep what we have now.",
+        "createdAt" : "2021-05-05T10:09:45Z",
+        "updatedAt" : "2021-05-05T10:09:45Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "898cf6eb489f1b599b1c31a3ffe2266caa79ef4f",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +96,100 @@\t\treturn\n\t}\n\twait.JitterUntil(c.sync, c.renewInterval, 0.04, true, stopCh)\n}\n"
+  }
+]

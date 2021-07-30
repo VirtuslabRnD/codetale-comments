@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "e64fb047-309f-4643-86fa-7e9fe210f852",
+    "prId" : 36087,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36087#pullrequestreview-7500888",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "766337ea-4031-4aae-926a-bf2b664bd007",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "I prefer this, but if @erictune  and @liggitt support having yet another OIDC flag for `allow-missing-email-verification`, I'm ok with that instead.  Unverified emails could do naughty things.\n",
+        "createdAt" : "2016-11-07T20:45:08Z",
+        "updatedAt" : "2016-12-09T22:22:33Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "778812f63bd9138298649902e031f61494095f52",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +241,245 @@\t\tverified, ok := claims[\"email_verified\"]\n\t\tif !ok {\n\t\t\treturn nil, false, errors.New(\"'email_verified' claim not present\")\n\t\t}\n"
+  },
+  {
+    "id" : "a084d211-a971-47d3-9392-f7c181b73555",
+    "prId" : 28036,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f299da01-8a96-450c-9557-df40d7490826",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "since oidcClient is going to be written exactly once (usually on one of the first calls to `client()`), then read forever, it's probably worth using an `atomic.Value` and doing a `Load()` check to see if it has a non-nil value before making all incoming requests contend for a lock forever for a value that will never be updated. a quick [benchmark](https://gist.github.com/liggitt/455adb9f7627ec4fe0439f8e14ea456b) shows that to be about 100x faster:\n\n```\n  oidcClient atomic.Value // Contains a *oidc.Client. Do not access directly. Use client() method.\n}\n...\nfunc (a *OIDCAuthenticator) client() (*oidc.Client, error) {\n  // Fast check to see if it's already initialized\n  if client := a.oidcClient.Load(); client != nil {\n    return client.(*oidc.Client), nil\n  }\n\n  // Acquire lock, then recheck if it's initialized\n  a.mu.Lock()\n  defer a.mu.Unlock()\n  if client := a.oidcClient.Load(); client != nil {\n    return client.(*oidc.Client), nil\n  }\n\n  // Initialize\n  client := ... init client ...\n  a.oidcClient.Store(client)\n  return client, nil\n}\n```\n",
+        "createdAt" : "2016-06-30T05:07:30Z",
+        "updatedAt" : "2016-06-30T06:21:34Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d0d94889-dfc6-44e3-8012-e0a59231a98c",
+        "parentId" : "f299da01-8a96-450c-9557-df40d7490826",
+        "authorId" : "0af48e59-4be9-46ce-9275-aa218813b6fd",
+        "body" : "This makes checking the `closed` flag harder because `atomic.Value` can never store a nil value. Once the authenticator is initialized, it'll never reach the check\n\n```\nif a.closed {\n    return nil, errors.New(\"authenticator closed\")\n}\n```\n\nThere are workarounds, such as shoving more values into the `atomic.Value` field.\n\nJust going to nuke the `closed` field on the authorizer. The `Close()` method is mostly about stopping associated goroutines and is only ever called in tests. Don't think we actually need to enforce always returning an error after calling `Close()`.\n",
+        "createdAt" : "2016-06-30T05:46:56Z",
+        "updatedAt" : "2016-06-30T06:21:34Z",
+        "lastEditedBy" : "0af48e59-4be9-46ce-9275-aa218813b6fd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e426769-ce1a-4723-a357-5258c16a02ac",
+        "parentId" : "f299da01-8a96-450c-9557-df40d7490826",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "agree... I don't think I care if client() returns an initialized client after `Close()` is called... I'd mostly care about stopping the background sync goroutine\n",
+        "createdAt" : "2016-06-30T05:53:35Z",
+        "updatedAt" : "2016-06-30T06:21:34Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f6db37ff5fb297574b1915ecfadf8d370fafa07",
+    "line" : 191,
+    "diffHunk" : "@@ -1,1 +161,165 @@}\n\nfunc (a *OIDCAuthenticator) client() (*oidc.Client, error) {\n\t// Fast check to see if client has already been initialized.\n\tif client := a.oidcClient.Load(); client != nil {"
+  }
+]

@@ -1,0 +1,486 @@
+[
+  {
+    "id" : "3b31d919-33ab-4f92-8fdd-ac31e5f806af",
+    "prId" : 84483,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84483#pullrequestreview-308894218",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dc0760ae-47c2-4121-a811-174b2ade0f0c",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "See https://github.com/kubernetes/kubernetes/pull/70021#discussion_r232407338 for history. Leaving the mutex locked was intentional.\r\n\r\nThis should definitely have a comment explaining it though.",
+        "createdAt" : "2019-10-29T21:00:58Z",
+        "updatedAt" : "2019-10-30T21:33:52Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8579e44c-bac6-471f-b81d-2284b84fb966",
+        "parentId" : "dc0760ae-47c2-4121-a811-174b2ade0f0c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "my vague memory was correct, though the function comment should have accompanied the move, and leaving a hung lock is a minefield of a way to prevent additional delegate additions. A change to make delegate addition attempts no-op (and potentially log a warning) once stopCh/stopAllDelegates has been triggered would be much better",
+        "createdAt" : "2019-10-29T21:09:51Z",
+        "updatedAt" : "2019-10-30T21:33:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "997974e0-065b-496e-923c-83a35bcb2a04",
+        "parentId" : "dc0760ae-47c2-4121-a811-174b2ade0f0c",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "> Leaving the mutex locked was intentional\r\n\r\nThis is not a good way of preventing additional changes (I assume that's what it's for?) because it results in hung goroutines. It needs to e.g. take the lock, set a \"shutdown\" flag, and release the lock, so that future lock-takers can read the shutdown flag and return an error rather than hanging.",
+        "createdAt" : "2019-10-29T21:14:40Z",
+        "updatedAt" : "2019-10-30T21:33:52Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef0b9de7-3b95-4a07-82a9-29ceba2a579d",
+        "parentId" : "dc0760ae-47c2-4121-a811-174b2ade0f0c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> This is not a good way of preventing additional changes (I assume that's what it's for?) because it results in hung goroutines.\r\n\r\nExactly",
+        "createdAt" : "2019-10-29T21:20:25Z",
+        "updatedAt" : "2019-10-30T21:33:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "066bcc5d-aafd-48bd-98dd-b0c7623dbfc1",
+        "parentId" : "dc0760ae-47c2-4121-a811-174b2ade0f0c",
+        "authorId" : "ea7ac994-ee65-487f-abc1-83a0862d9062",
+        "body" : "Hi all, thanks a lot for catching my mistake! Otherwise I would submit a wrong PR.\r\nI assume we need to let update functions return before acquiring the Mutex. My plan is to add a new field in `backend`: `b.delegateDisableCh`, an unbuffered channel of type `struct{}`. \r\nI will close this channel in `stopAllDelegates()`, and put a select in update functions before they try to acquire the Mutex. \r\nThe select will do nothing if the channel is not closed, but will call `blog.Errorf(\"blabla...delegate update is disabled...\")` if this channel is closed.\r\nDo you think this patch is OK?",
+        "createdAt" : "2019-10-29T21:53:28Z",
+        "updatedAt" : "2019-10-30T21:33:52Z",
+        "lastEditedBy" : "ea7ac994-ee65-487f-abc1-83a0862d9062",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e277efc8-9f18-45cb-837d-e2d9c6df0426",
+        "parentId" : "dc0760ae-47c2-4121-a811-174b2ade0f0c",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "I don't think you need a channel, just a bool. Basically, everywhere the mutex is locked, add this check after:\r\n\r\n```\r\nif b.stopped {\r\n  return\r\n}\r\n```\r\n\r\nAnd in `stopAllDelegates`:\r\n```\r\nb.delegateUpdateMutex.Lock()\r\ndefer b.delegateUpdateMutex.Unlock()\r\nif b.stopped {\r\n  return\r\n}\r\nb.stopped = true\r\n```\r\n\r\nI can't quite remember the reason that stopAllDelagates is separate from shutdown. I think it's captured in the comments on the original PR.",
+        "createdAt" : "2019-10-29T21:58:49Z",
+        "updatedAt" : "2019-10-30T21:33:52Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2c29517f-e870-4532-a956-5f12a0682805",
+        "parentId" : "dc0760ae-47c2-4121-a811-174b2ade0f0c",
+        "authorId" : "ea7ac994-ee65-487f-abc1-83a0862d9062",
+        "body" : "Sure, this is less expensive than select, I suppose. I will call `klog.Error()` to record these returns.\r\nI updated my commit. Please tell me if you have more suggestions.",
+        "createdAt" : "2019-10-29T23:32:20Z",
+        "updatedAt" : "2019-10-30T21:33:52Z",
+        "lastEditedBy" : "ea7ac994-ee65-487f-abc1-83a0862d9062",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1c9ae5499b49b5630768050d92bc8ac3553d830",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +204,208 @@func (b *backend) stopAllDelegates() {\n\tb.delegateUpdateMutex.Lock()\n\tdefer b.delegateUpdateMutex.Unlock()\n\tif b.stopped {\n\t\treturn"
+  },
+  {
+    "id" : "2e8e20d9-5766-4f78-ba25-b01312c13065",
+    "prId" : 84483,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84483#pullrequestreview-310701509",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "663235d4-56ce-438c-b62d-14a86c0a7a62",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Is removing a sink really an error at this point? It wasn't going to get anymore updates anyway? Maybe just return without logging anything?",
+        "createdAt" : "2019-10-30T17:15:44Z",
+        "updatedAt" : "2019-10-30T21:33:52Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "98ba2938-d522-4f81-b723-76559bf44e8d",
+        "parentId" : "663235d4-56ce-438c-b62d-14a86c0a7a62",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Yeah, the purpose of this is just to catch some racy edge conditions while the API server is shutting down. I think we can safely ignore the errors here. Although I suppose we'd want to know if the backend was stopped erroneously... maybe just log it at warning level?",
+        "createdAt" : "2019-10-30T17:33:09Z",
+        "updatedAt" : "2019-10-30T21:33:53Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a9695c0-686c-427b-9e9a-450aba74a752",
+        "parentId" : "663235d4-56ce-438c-b62d-14a86c0a7a62",
+        "authorId" : "ea7ac994-ee65-487f-abc1-83a0862d9062",
+        "body" : "I am so sorry guys. I thought I replied two days ago, but I just found that I didn't click commit...\r\nAbout updateSink(), addSink() and deleteSink(), I really appreciate your discussion, because I am not familiar with how they will be used.\r\nHere is what I did: For updateSink() and addSink(), I kept klog.Error(). For deleteSink(), I used klog.Warning() instead.",
+        "createdAt" : "2019-11-01T21:19:40Z",
+        "updatedAt" : "2019-11-01T21:19:40Z",
+        "lastEditedBy" : "ea7ac994-ee65-487f-abc1-83a0862d9062",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1c9ae5499b49b5630768050d92bc8ac3553d830",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +319,323 @@\tdefer b.delegateUpdateMutex.Unlock()\n\tif b.stopped {\n\t\tmsg := fmt.Sprintf(\"Could not delete audit sink %q uid: %s. Update to all delegates is stopped.\", sink.Name, sink.UID)\n\t\tklog.Warning(msg)\n\t\treturn"
+  },
+  {
+    "id" : "5f15116d-7899-4476-9937-99f7d5d8ee04",
+    "prId" : 84483,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84483#pullrequestreview-309392788",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a33daf7a-f975-4002-8342-13b915c3fdee",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Since these are private functions, can we make them return an error instead?",
+        "createdAt" : "2019-10-30T17:16:24Z",
+        "updatedAt" : "2019-10-30T21:33:53Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7c145628-02f7-408c-b255-dc12b347e6c5",
+        "parentId" : "a33daf7a-f975-4002-8342-13b915c3fdee",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "These are just called from the informer event handlers (1 call for each). I think handling the error here makes sense.",
+        "createdAt" : "2019-10-30T17:36:23Z",
+        "updatedAt" : "2019-10-30T21:33:53Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1c9ae5499b49b5630768050d92bc8ac3553d830",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +277,281 @@\tif b.stopped {\n\t\tmsg := fmt.Sprintf(\"Could not update old audit sink %q to new audit sink %q. Update to all delegates is stopped.\", oldSink.Name, newSink.Name)\n\t\tklog.Error(msg)\n\t\treturn\n\t}"
+  },
+  {
+    "id" : "98a1df03-7757-4500-8c25-a8e84c1aa3b8",
+    "prId" : 84483,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84483#pullrequestreview-309524719",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6f9c244b-9159-40f1-9a2a-96a8fa90d350",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "I don't think this should ever be called twice, but to be safe better check if it's already stopped first.",
+        "createdAt" : "2019-10-30T17:33:50Z",
+        "updatedAt" : "2019-10-30T21:33:53Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "035ee12f-94b6-4afb-920e-77507fd84245",
+        "parentId" : "6f9c244b-9159-40f1-9a2a-96a8fa90d350",
+        "authorId" : "ea7ac994-ee65-487f-abc1-83a0862d9062",
+        "body" : "Yeah, I will add it just in case.",
+        "createdAt" : "2019-10-30T21:12:07Z",
+        "updatedAt" : "2019-10-30T21:33:53Z",
+        "lastEditedBy" : "ea7ac994-ee65-487f-abc1-83a0862d9062",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1c9ae5499b49b5630768050d92bc8ac3553d830",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +204,208 @@func (b *backend) stopAllDelegates() {\n\tb.delegateUpdateMutex.Lock()\n\tdefer b.delegateUpdateMutex.Unlock()\n\tif b.stopped {\n\t\treturn"
+  },
+  {
+    "id" : "7fc43079-b7de-4751-9261-4232868449f5",
+    "prId" : 70021,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70021#pullrequestreview-167615633",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1a7f2de0-71c8-48d6-854c-eee1a5a5062e",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "I think it's worth producing an event here, same for update.",
+        "createdAt" : "2018-10-24T20:41:15Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54fd930d0e74635fc2a8318cc79d1b055d252d44",
+    "line" : 246,
+    "diffHunk" : "@@ -1,1 +244,248 @@\t\tglog.Error(msg)\n\t\tb.recorder.Event(sink, corev1.EventTypeWarning, \"CreateFailed\", msg)\n\t\treturn\n\t}\n\tdelegates[sink.UID] = d"
+  },
+  {
+    "id" : "e4919993-b614-4e04-aae1-45ead415d9ae",
+    "prId" : 70021,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70021#pullrequestreview-168861443",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a03a7eea-8662-4e77-9b27-ccd86e3079fb",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "does doing this first make it possible for stopAllBackends to be called before b.delegate.Run is called?",
+        "createdAt" : "2018-10-26T15:05:24Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54fd930d0e74635fc2a8318cc79d1b055d252d44",
+    "line" : 188,
+    "diffHunk" : "@@ -1,1 +186,190 @@// individual delegates are ran as they are created.\nfunc (b *backend) Run(stopCh <-chan struct{}) error {\n\tgo func() {\n\t\t<-stopCh\n\t\tb.stopAllDelegates()"
+  },
+  {
+    "id" : "1026d40d-bc82-450e-9bdd-807b3b2d318d",
+    "prId" : 70021,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70021#pullrequestreview-170011147",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2db9f2e4-0e52-4667-b64f-b35e6d6805c1",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "I think there should be a scheme that you can reuse here.... @liggitt do you know what the best way of doing this is?",
+        "createdAt" : "2018-10-26T23:18:53Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b88737ab-a981-48d4-9cb5-1768b5ae64d2",
+        "parentId" : "2db9f2e4-0e52-4667-b64f-b35e6d6805c1",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I actually don't see one. constructing this one here like this is fine.",
+        "createdAt" : "2018-10-30T21:35:05Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54fd930d0e74635fc2a8318cc79d1b055d252d44",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +93,97 @@\n\tscheme := runtime.NewScheme()\n\terr := auditregv1alpha1.AddToScheme(scheme)\n\tif err != nil {\n\t\treturn nil, err"
+  },
+  {
+    "id" : "5f167537-32e3-4520-ac22-7c4d9ed20da7",
+    "prId" : 70021,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70021#pullrequestreview-169027158",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5cad00c3-3fe6-46bc-ae85-c074417b8416",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "nit: add a line break below (imports in three groups: stdlib, non-k8s, k8s)",
+        "createdAt" : "2018-10-26T23:20:03Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54fd930d0e74635fc2a8318cc79d1b055d252d44",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +24,28 @@\t\"sync/atomic\"\n\n\t\"github.com/golang/glog\"\n\n\tauditregv1alpha1 \"k8s.io/api/auditregistration/v1alpha1\""
+  },
+  {
+    "id" : "21857060-5411-4695-b671-d8a085ba6210",
+    "prId" : 70021,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70021#pullrequestreview-169027158",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "08d4a330-1b47-464a-96f3-4afcc5db3bf5",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "The naming here is very confusing. `NewBackend` doesn't actually produce a `Backend`, which is defined right above this. Instead it produces a `dynamic`. But the `Backend` defined above represents a \"dynamic backend\".\r\n\r\nI suggest the following:\r\ndynamic --> backend (dynamic is redundant)\r\nBackend --> delegate (and embed the delegate field to remove the redundant field name)",
+        "createdAt" : "2018-10-26T23:38:31Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54fd930d0e74635fc2a8318cc79d1b055d252d44",
+    "line" : 89,
+    "diffHunk" : "@@ -1,1 +87,91 @@// NewBackend returns a backend that dynamically updates its configuration\n// based on a shared informer.\nfunc NewBackend(c *Config) (audit.Backend, error) {\n\teventBroadcaster := record.NewBroadcaster()\n\teventBroadcaster.StartLogging(glog.Infof)"
+  },
+  {
+    "id" : "2f75f21b-3142-4ca2-a9dc-b8f76b6d57cd",
+    "prId" : 70021,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70021#pullrequestreview-173171500",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fec66489-6605-46fb-ab3e-9fa66e712546",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this means the audit sink has no way to authenticate the apiservers sending it audit events, right? that's problematic, and needs to go on a list of requirements before graduating alpha",
+        "createdAt" : "2018-11-08T07:34:58Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95901ace-6f91-4881-8d52-89ae01c1dc99",
+        "parentId" : "fec66489-6605-46fb-ab3e-9fa66e712546",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "yea I'm tracking this, we need some way of injecting authentication, talked with @mattmoyer a bit on this one. I'll add a note about it",
+        "createdAt" : "2018-11-08T13:32:31Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08ad3afd-427d-47fc-8863-8b1621f964cc",
+        "parentId" : "fec66489-6605-46fb-ab3e-9fa66e712546",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "this is now tracked here https://github.com/kubernetes/kubernetes/issues/70816",
+        "createdAt" : "2018-11-08T21:05:25Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54fd930d0e74635fc2a8318cc79d1b055d252d44",
+    "line" : 113,
+    "diffHunk" : "@@ -1,1 +111,115 @@\n\t// TODO: need a way of injecting authentication before beta\n\tauthInfoResolver, err := webhook.NewDefaultAuthenticationInfoResolver(\"\")\n\tif err != nil {\n\t\treturn nil, err"
+  },
+  {
+    "id" : "daf6a677-e160-49ed-bf54-5886f9169ce0",
+    "prId" : 70021,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70021#pullrequestreview-172953508",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b17bb20d-c36d-4c87-8273-1d8bc575c5fe",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "updateSink can be called for changes on the object that do not affect how it processes events (annotation and label changes, or even occasional informer resyncs can trigger update events). given how expensive stopping an old delegate and starting a new one is, should we make sure the oldSink and newSink differ in ways that affect the delegate we would build before doing all this work?",
+        "createdAt" : "2018-11-08T08:04:57Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7132d15e-cbd7-4baa-8821-c2a37ea79aee",
+        "parentId" : "b17bb20d-c36d-4c87-8273-1d8bc575c5fe",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "yea I was trying to keep it simple to start, but I can refine the logic here",
+        "createdAt" : "2018-11-08T13:45:05Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54fd930d0e74635fc2a8318cc79d1b055d252d44",
+    "line" : 258,
+    "diffHunk" : "@@ -1,1 +256,260 @@// the same uid as the previous. The new sink will be started before the old\n// one is shutdown so no events will be lost\nfunc (b *backend) updateSink(oldSink, newSink *auditregv1alpha1.AuditSink) {\n\tb.delegateUpdateMutex.Lock()\n\tdefer b.delegateUpdateMutex.Unlock()"
+  },
+  {
+    "id" : "1a3a0316-f89e-4b20-8b37-8a372ec224e4",
+    "prId" : 70021,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70021#pullrequestreview-172975041",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0c2a7ce4-44a4-4001-b94d-6489e3373b80",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "isn't iteration over the map vulnerable to data race with modification of the map? all the modifying methods acquire a lock so they don't race each other, but the places where we iterate over the map (ProcessEvents, stopAllDelegates, ShutDown, String, etc) are not acquiring a read lock",
+        "createdAt" : "2018-11-08T08:09:09Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "daa22507-6394-40b6-a759-e3aa1bae92bf",
+        "parentId" : "0c2a7ce4-44a4-4001-b94d-6489e3373b80",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "Its an atomic transaction though, the lock is more used to prevent updates from occurring.",
+        "createdAt" : "2018-11-08T13:33:57Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "593cb612-86f4-4c63-938e-1a5cb9e357d7",
+        "parentId" : "0c2a7ce4-44a4-4001-b94d-6489e3373b80",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "once you get the map back from GetDelegates, it is no longer atomic. addSink/updateSink/deleteSink modify the delegates map in place, which will race with read accesses into that same object. if you want to follow this pattern, all modifications of the delegates map must be copy on write.",
+        "createdAt" : "2018-11-08T14:15:32Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54fd930d0e74635fc2a8318cc79d1b055d252d44",
+    "line" : 180,
+    "diffHunk" : "@@ -1,1 +178,182 @@// ProcessEvents proccesses the given events per current delegate map\nfunc (b *backend) ProcessEvents(events ...*auditinternal.Event) {\n\tfor _, d := range b.GetDelegates() {\n\t\td.ProcessEvents(events...)\n\t}"
+  },
+  {
+    "id" : "c7215986-7c7b-44c0-9973-e49d62f56499",
+    "prId" : 70021,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/70021#pullrequestreview-172975860",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "145e9eec-67da-443b-b26a-5f8699e68734",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "what is the difference between calling Shutdown() on the backend and closing the `stopCh` passed into Run()? I would only have expected one of those mechanisms to exist",
+        "createdAt" : "2018-11-08T08:14:42Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fd3cd785-adb9-41a3-a386-7d99f7e6a26f",
+        "parentId" : "145e9eec-67da-443b-b26a-5f8699e68734",
+        "authorId" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "body" : "so `stopAllDelegates` will cause the buffers to purge out their remaining events, and shutdown will finish shutting things down. It needs to be handled slightly differently then the other plugins because backends can be removed arbitrarily. `stopAllDelegates` is merely propagating out the stop signal to individual backends.",
+        "createdAt" : "2018-11-08T13:27:33Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "5191e81d-8ec6-4a27-a48d-aba90da9ff08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "52b3080c-c934-44c5-8493-7a762f5cb67e",
+        "parentId" : "145e9eec-67da-443b-b26a-5f8699e68734",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> `stopAllDelegates` will cause the buffers to purge out their remaining events, and shutdown will finish shutting things down\r\n\r\nI'm still having trouble understanding when I would call one verses the other (or if both are required to be called in a particular sequence).",
+        "createdAt" : "2018-11-08T14:17:06Z",
+        "updatedAt" : "2018-11-09T22:38:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "54fd930d0e74635fc2a8318cc79d1b055d252d44",
+    "line" : 207,
+    "diffHunk" : "@@ -1,1 +205,209 @@// Shutdown calls the shutdown method on all delegates. The stopChan should\n// be closed before this is called.\nfunc (b *backend) Shutdown() {\n\tfor _, d := range b.GetDelegates() {\n\t\td.Shutdown()"
+  }
+]

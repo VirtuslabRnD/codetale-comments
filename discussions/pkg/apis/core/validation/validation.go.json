@@ -1,0 +1,3093 @@
+[
+  {
+    "id" : "54cedb86-a44d-47b5-b53a-f3b67fb846ea",
+    "prId" : 103245,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103245#pullrequestreview-694354742",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "44735d26-a0d8-41a0-acf1-36c8a115acb6",
+        "parentId" : null,
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "The other fields of the prober seem to be the minimum value of 1, but use `ValidateNonnegativeField` for verification. After this PR is merged, I will send a new patch to fix other fields.",
+        "createdAt" : "2021-06-28T03:58:36Z",
+        "updatedAt" : "2021-06-28T03:58:37Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70633fa0-7560-469b-bde5-40343a947d73",
+        "parentId" : "44735d26-a0d8-41a0-acf1-36c8a115acb6",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "Tightening validation on other non-alpha fields will be significantly harder to do compatibly... I'm not sure that's worth the effort. It would be good to make sure the consuming component behaves sensibly on 0 values for those fields.",
+        "createdAt" : "2021-06-28T20:14:13Z",
+        "updatedAt" : "2021-06-29T04:20:42Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "513bd93f76ddd4b35b305ee1bf40302c3f0a531c",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +2640,2644 @@\tif probe.TerminationGracePeriodSeconds != nil && *probe.TerminationGracePeriodSeconds <= 0 {\n\t\tallErrs = append(allErrs, field.Invalid(fldPath.Child(\"terminationGracePeriodSeconds\"), *probe.TerminationGracePeriodSeconds, \"must be greater than 0\"))\n\t}\n\treturn allErrs\n}"
+  },
+  {
+    "id" : "91ab7476-8b50-4c3e-bb62-dd5e2b95d98f",
+    "prId" : 103245,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103245#pullrequestreview-700395915",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "233521ee-f1ba-4b7b-a61d-359f37cdab2f",
+        "parentId" : null,
+        "authorId" : "c5cbab8f-2eaf-48d9-a433-0b0fd4a2806d",
+        "body" : "1.  According to https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/, “The value zero indicates stop immediately via the kill signal\" , in other word, terminationGracePeriodSeconds \r\ncan be set to zero. \r\n2. should we limit probe.TerminationGracePeriodSeconds to a max value?",
+        "createdAt" : "2021-06-28T08:42:04Z",
+        "updatedAt" : "2021-06-28T08:42:47Z",
+        "lastEditedBy" : "c5cbab8f-2eaf-48d9-a433-0b0fd4a2806d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "19ce8650-1362-42f5-8df8-31d26db7d558",
+        "parentId" : "233521ee-f1ba-4b7b-a61d-359f37cdab2f",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "> “The value zero indicates stop immediately via the kill signal\" , in other word, terminationGracePeriodSeconds\r\ncan be set to zero.\r\n\r\nI don't think this was intended, which is why we are fixing this. As the feature author, I think this should always be set to a strictly positive (> 0) value, but I had written it to be consistent with the existing pod-level terminationGracePeriodSeconds.\r\n\r\nSee discussion around https://github.com/kubernetes/kubernetes/pull/98866#issuecomment-849259855 for more detail.",
+        "createdAt" : "2021-06-28T22:46:52Z",
+        "updatedAt" : "2021-07-06T21:24:40Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa4db191-cbc6-4ebe-bda1-7341801d7c63",
+        "parentId" : "233521ee-f1ba-4b7b-a61d-359f37cdab2f",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> I think this should never be set to non-negative\r\n\r\nthat just did not never not break my brain :)\r\n\r\nin the abstract, a probe asking to be killed at its timeout immediately by setting probe terminationGracePeriodSeconds=0 doesn't seem terrible to me... is there a problem with that I'm not seeing?",
+        "createdAt" : "2021-06-29T04:22:22Z",
+        "updatedAt" : "2021-06-29T04:22:26Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b7c79659-7409-435c-ba8b-e7d531594870",
+        "parentId" : "233521ee-f1ba-4b7b-a61d-359f37cdab2f",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "Updated comment for clarity.\r\n\r\nWe don't want container specs setting terminationGracePeriodSeconds to 0 because that would cause a force deletion of the pod and unintentionally bypasses normal pod shutdown. Failed probes should not be able to do force deletions. The goal of this feature is to decouple the grace period on probe terminations from e.g. a user-initiated graceful termination, not add new unexpected behaviour :)",
+        "createdAt" : "2021-07-06T21:27:13Z",
+        "updatedAt" : "2021-07-06T21:27:13Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "513bd93f76ddd4b35b305ee1bf40302c3f0a531c",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +2640,2644 @@\tif probe.TerminationGracePeriodSeconds != nil && *probe.TerminationGracePeriodSeconds <= 0 {\n\t\tallErrs = append(allErrs, field.Invalid(fldPath.Child(\"terminationGracePeriodSeconds\"), *probe.TerminationGracePeriodSeconds, \"must be greater than 0\"))\n\t}\n\treturn allErrs\n}"
+  },
+  {
+    "id" : "a3fdc190-704b-4930-9fa8-5ab7e8ef7e3b",
+    "prId" : 103245,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103245#pullrequestreview-694452646",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "628cd97e-b1a7-43f4-ae90-fce365ddab76",
+        "parentId" : null,
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "Do we need to add a unit test for this?",
+        "createdAt" : "2021-06-28T22:49:15Z",
+        "updatedAt" : "2021-06-28T22:49:21Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "513bd93f76ddd4b35b305ee1bf40302c3f0a531c",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +2639,2643 @@\tallErrs = append(allErrs, ValidateNonnegativeField(int64(probe.FailureThreshold), fldPath.Child(\"failureThreshold\"))...)\n\tif probe.TerminationGracePeriodSeconds != nil && *probe.TerminationGracePeriodSeconds <= 0 {\n\t\tallErrs = append(allErrs, field.Invalid(fldPath.Child(\"terminationGracePeriodSeconds\"), *probe.TerminationGracePeriodSeconds, \"must be greater than 0\"))\n\t}\n\treturn allErrs"
+  },
+  {
+    "id" : "b7c5d202-27f9-4751-94c2-83e6f517016d",
+    "prId" : 103245,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103245#pullrequestreview-701267636",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "11e73a11-f71c-44e0-a583-137d2bf566fb",
+        "parentId" : null,
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "Note to self: we are not using `ValidateNonnegativeField` because we don't want to permit values of 0 either. https://github.com/kubernetes/kubernetes/blob/31030820be979ea0b2c39e08eb18fddd71f353ed/staging/src/k8s.io/apimachinery/pkg/api/validation/generic.go#L84",
+        "createdAt" : "2021-07-07T17:26:29Z",
+        "updatedAt" : "2021-07-07T17:27:41Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "513bd93f76ddd4b35b305ee1bf40302c3f0a531c",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +2639,2643 @@\tallErrs = append(allErrs, ValidateNonnegativeField(int64(probe.FailureThreshold), fldPath.Child(\"failureThreshold\"))...)\n\tif probe.TerminationGracePeriodSeconds != nil && *probe.TerminationGracePeriodSeconds <= 0 {\n\t\tallErrs = append(allErrs, field.Invalid(fldPath.Child(\"terminationGracePeriodSeconds\"), *probe.TerminationGracePeriodSeconds, \"must be greater than 0\"))\n\t}\n\treturn allErrs"
+  },
+  {
+    "id" : "5a0169be-ad5d-415a-9517-79f4b701a9f7",
+    "prId" : 99576,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99576#pullrequestreview-606829818",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3266ea8a-6237-4a7c-836b-d747c0e4a16a",
+        "parentId" : null,
+        "authorId" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "body" : "so if `podHostProcess = true`, but all containers declared them as non-host, than neither of below validations will execute?",
+        "createdAt" : "2021-03-05T17:24:31Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "85d51570-e06e-4b3f-a869-f5f820e49119",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f1ab21df-9fc0-4dae-b0aa-55b188a8e879",
+        "parentId" : "3266ea8a-6237-4a7c-836b-d747c0e4a16a",
+        "authorId" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "body" : "Hmm... I think it would be OK to schedule the Pod here. With other fields in WindowsOptions, if all containers set them to a different value that what was set in the Pod settings then what is specified in the Pod's WindowsOptions would be ignored.\r\n\r\nFor example if the Pod sets `PodSecurityContext.WindowsOptions.RunAsUsername=User1` but then all the containers set `SecurityContext.WindowsOptions.RunAsUsername=User2` then all of the Pods would run as 'User2`. \r\n\r\nThoughts?",
+        "createdAt" : "2021-03-08T05:36:23Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa5343bd-664e-47f7-99df-3d290ae78d2e",
+        "parentId" : "3266ea8a-6237-4a7c-836b-d747c0e4a16a",
+        "authorId" : "df90aa6f-4328-4d27-92eb-8f98c90bd8b0",
+        "body" : "This does seem confusing to me.  If I set a pod as `podHostProcess=true` I would expect all the containers to be `hostProcess` containers since we have the constraint that it is all or nothing.  Is this for the usecase at somepoint when we may allow some containers to be hostprocess and others not?",
+        "createdAt" : "2021-03-08T17:36:01Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "df90aa6f-4328-4d27-92eb-8f98c90bd8b0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a8eb64a-0375-445f-b1cd-babe4730757d",
+        "parentId" : "3266ea8a-6237-4a7c-836b-d747c0e4a16a",
+        "authorId" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "body" : "I updated the validation logic to fail in this case and added a test case to the unit tests.",
+        "createdAt" : "2021-03-09T00:13:12Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ba69e4e-70b5-443f-b166-da977863bdba",
+        "parentId" : "3266ea8a-6237-4a7c-836b-d747c0e4a16a",
+        "authorId" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "body" : "The behavior where if `podHostProcess = true` then we should fail pod validation if any container sets `hostProcess = false` is described in the KEP under https://github.com/kubernetes/enhancements/tree/master/keps/sig-windows/1981-windows-privileged-container-support#windowssecuritycontextoptionshostprocess-flag \r\n\r\nIf PodSecurityContext.WindowsSecurityContextOptions.HostProcess = false no containers may set Container.SecurityContext.WindowsSecurityContextOptions.HostProcess = true\r\n\r\n(Sorry i missed this before)",
+        "createdAt" : "2021-03-09T00:28:26Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ae424160bde1a2db4be91c002944d8a3e2165a0e",
+    "line" : 76,
+    "diffHunk" : "@@ -1,1 +6033,6037 @@\t})\n\n\tif hostProcessContainerCount > 0 {\n\t\t// Fail Pod validation if feature is not enabled (unless podspec already exists and contains HostProcess fields) instead of dropping fields based on PRR reivew.\n\t\tif !opts.AllowWindowsHostProcessField {"
+  },
+  {
+    "id" : "d72174b1-c161-4a5a-ae38-dd240d045c8e",
+    "prId" : 99576,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99576#pullrequestreview-606828897",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8759bd5b-19df-4a04-8b2c-16e0b85ee414",
+        "parentId" : null,
+        "authorId" : "df90aa6f-4328-4d27-92eb-8f98c90bd8b0",
+        "body" : "nit: \r\n```suggestion\r\n\tvar podIsHostProcess *bool\r\n```",
+        "createdAt" : "2021-03-08T17:23:31Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "df90aa6f-4328-4d27-92eb-8f98c90bd8b0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88e9d319-e8d6-4b6b-825a-c353cfc1e89e",
+        "parentId" : "8759bd5b-19df-4a04-8b2c-16e0b85ee414",
+        "authorId" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "body" : "This variable holds the value of the Pod's HostProcess value and doesn't indicate if the whole Pos Is HostProcess so I think it makes more sense to leave the `Is` out. Thoughts?",
+        "createdAt" : "2021-03-09T00:26:19Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ae424160bde1a2db4be91c002944d8a3e2165a0e",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +5985,5989 @@\thostProcessContainerCount := 0\n\n\tvar podHostProcess *bool\n\tif podSpec.SecurityContext != nil && podSpec.SecurityContext.WindowsOptions != nil {\n\t\tpodHostProcess = podSpec.SecurityContext.WindowsOptions.HostProcess"
+  },
+  {
+    "id" : "3ad866d9-d6a6-40fa-b2e3-4a80a3f46af6",
+    "prId" : 99576,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99576#pullrequestreview-608122766",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "37ad21f6-4acf-4e2f-a6d0-6bcd1a76cbaf",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "separating the checks for \"do container-level and pod-level hostProcess agree?\" and \"is this a hostProcess container?\" would eliminate a lot of branching and make this shallower/easier-to-follow:\r\n\r\n```go\r\nif podHostProcess != nil && containerHostProcess != nil && *podHostProcess != *containerHostProcess {\r\n\terrMsg := fmt.Sprintf(\"pod and container windowsOptions.hostProcess must match if specified, pod was %v, container was %v\", *podHostProcess, *containerHostProcess)\r\n\tallErrs = append(allErrs, field.Forbidden(cFieldPath.Child(\"securityContext\",\"windowsOptions\",\"hostProcess\"), errMsg))\r\n}\r\n\r\nswitch {\r\ncase containerHostProcess != nil && *containerHostProcess:\r\n  // explicit container-level hostProcess=true\r\n  hostProcessContainerCount++\r\ncase containerHostProcess == nil && podHostProcess != nil && *podHostProcess:\r\n  // no container-level setting, explicit pod-level hostProcess=true\r\n  hostProcessContainerCount++\r\n}\r\n```\r\n",
+        "createdAt" : "2021-03-09T22:17:32Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ae424160bde1a2db4be91c002944d8a3e2165a0e",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +6003,6007 @@\n\tpodshelper.VisitContainersWithPath(podSpec, fieldPath, func(c *core.Container, cFieldPath *field.Path) bool {\n\t\tcontainerCount++\n\n\t\tvar containerHostProcess *bool = nil"
+  },
+  {
+    "id" : "ee2dbcd8-c6db-41b1-93ad-e3c8d524d207",
+    "prId" : 99576,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99576#pullrequestreview-608204859",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "898c618a-c010-4441-95dc-4f459288d1a0",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "if we get here, should we return at this point? further errors about the details of hostProcess field requirements aren't useful if we're just going to reject the pod until they drop hostProcess:true",
+        "createdAt" : "2021-03-09T22:21:42Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f50adbe-37c2-4f40-a24d-345a8bddbe43",
+        "parentId" : "898c618a-c010-4441-95dc-4f459288d1a0",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "also, this is only guarding against pods that set `hostProcess: true` when AllowWindowsHostProcessField is false. We don't want to allow any data at all (true or false) to be persisted into this field when AllowWindowsHostProcessField is false.",
+        "createdAt" : "2021-03-09T22:23:15Z",
+        "updatedAt" : "2021-05-04T23:16:43Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ece155a-243a-4ae8-a5c7-39ffd6a08847",
+        "parentId" : "898c618a-c010-4441-95dc-4f459288d1a0",
+        "authorId" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "body" : "Whoops, missed this. \r\nUpdated the logic and unit tests to fail if opts.AllowWindowsHostProcessField is not set and pod/containers set hostProcess (true or false)",
+        "createdAt" : "2021-03-09T23:33:33Z",
+        "updatedAt" : "2021-05-04T23:16:44Z",
+        "lastEditedBy" : "3966b9fe-a8de-4641-9e7e-947bf0585613",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ae424160bde1a2db4be91c002944d8a3e2165a0e",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +6037,6041 @@\t\tif !opts.AllowWindowsHostProcessField {\n\t\t\terrMsg := \"pod must not contain Windows hostProcess containers when feature gate 'WindowsHostProcessContainers' is not enabled\"\n\t\t\tallErrs = append(allErrs, field.Forbidden(fieldPath, errMsg))\n\t\t\treturn allErrs\n\t\t}"
+  },
+  {
+    "id" : "6192a908-7258-41e3-9d8a-6a1245d7b8e0",
+    "prId" : 99576,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99576#pullrequestreview-660250801",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fa0dfe2f-812a-461b-b1e4-eff3b52a790f",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I don't think addition of ephemeral containers to a pod go through this validation path. Before this or ephemeral containers graduates from alpha, we need to ensure ephemeralcontainers are also checked for enablement of hostProcess and consistency of effective hostProcess.\r\n\r\ncc @verb\r\n\r\ncan both of you add a tracking item to your alpha graduation criteria so this doesn't get dropped?",
+        "createdAt" : "2021-05-14T14:42:45Z",
+        "updatedAt" : "2021-05-14T14:42:55Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c053b5b-eede-4e57-9736-4b2d41287c57",
+        "parentId" : "fa0dfe2f-812a-461b-b1e4-eff3b52a790f",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "Interesting. Agreed, it would be safer to validate the entire PodSpec after updating the ephemeral containers.",
+        "createdAt" : "2021-05-14T18:21:41Z",
+        "updatedAt" : "2021-05-14T18:21:41Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4724e54-e7bc-4389-95c7-e4cf12a76976",
+        "parentId" : "fa0dfe2f-812a-461b-b1e4-eff3b52a790f",
+        "authorId" : "df90aa6f-4328-4d27-92eb-8f98c90bd8b0",
+        "body" : "https://github.com/kubernetes/enhancements/pull/2748",
+        "createdAt" : "2021-05-14T22:05:35Z",
+        "updatedAt" : "2021-05-14T22:05:35Z",
+        "lastEditedBy" : "df90aa6f-4328-4d27-92eb-8f98c90bd8b0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ae424160bde1a2db4be91c002944d8a3e2165a0e",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +5978,5982 @@}\n\nfunc validateWindowsHostProcessPod(podSpec *core.PodSpec, fieldPath *field.Path, opts PodValidationOptions) field.ErrorList {\n\tallErrs := field.ErrorList{}\n"
+  },
+  {
+    "id" : "d8ab634b-00ad-467c-9690-59af8ebfe788",
+    "prId" : 99375,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99375#pullrequestreview-608256845",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "933ce4e3-627e-48d0-b95b-ea49099d0ee9",
+        "parentId" : null,
+        "authorId" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "body" : "should this validation depend on the feature gate? (being on or off)",
+        "createdAt" : "2021-03-09T20:47:07Z",
+        "updatedAt" : "2021-03-12T00:41:17Z",
+        "lastEditedBy" : "bd04f755-e62f-45fb-8771-4cc2b5db49d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e78f6589-e84a-4671-b265-1822feed3736",
+        "parentId" : "933ce4e3-627e-48d0-b95b-ea49099d0ee9",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "Hmm, it's possible for the feature flag to be off but for this to still be defined in the DB, and in any case it's disallowed, so I don't think we should gate it. WDYT?",
+        "createdAt" : "2021-03-09T21:15:43Z",
+        "updatedAt" : "2021-03-12T00:41:17Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed4af738-15cc-42db-9226-808803504cd5",
+        "parentId" : "933ce4e3-627e-48d0-b95b-ea49099d0ee9",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "The gate would only be needed if we allowed this to be set at any point, but since we're starting without it, I think we're ok.  As long as there is no scenario with the gate on where someone could get a readinessprobe with this set, we don't have to worry about it.",
+        "createdAt" : "2021-03-09T22:15:17Z",
+        "updatedAt" : "2021-03-12T00:41:17Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c161b968-7779-427b-bf4c-0b0c52711256",
+        "parentId" : "933ce4e3-627e-48d0-b95b-ea49099d0ee9",
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "I expected to see a change in validateProbe that ensures the TerminationGracePeriodSeconds if set is non-negative.",
+        "createdAt" : "2021-03-10T00:36:25Z",
+        "updatedAt" : "2021-03-12T00:41:17Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a3797ff0-1f47-4c1d-98b0-f9dc645c4c0f",
+        "parentId" : "933ce4e3-627e-48d0-b95b-ea49099d0ee9",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "We are currently missing validation for the pod-level TerminationGracePeriodSeconds, so this is at least consistent...\r\n\r\nSee: https://github.com/kubernetes/kubernetes/pull/98866\r\n\r\nThat PR is going to miss code freeze, do we want to improve test coverage and fix it during test freeze?",
+        "createdAt" : "2021-03-10T00:51:44Z",
+        "updatedAt" : "2021-03-12T00:41:17Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80d28843-e972-415e-b1af-a648f3e79de6",
+        "parentId" : "933ce4e3-627e-48d0-b95b-ea49099d0ee9",
+        "authorId" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "body" : "+1 on @derekwaynecarr \r\n\r\nBut ok to address it after the code freeze. ",
+        "createdAt" : "2021-03-10T01:31:46Z",
+        "updatedAt" : "2021-03-12T00:41:17Z",
+        "lastEditedBy" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7df1259d091322f2817b2db243f76470f61a3a7e",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +2861,2865 @@\t\tallErrs = append(allErrs, validateProbe(ctr.LivenessProbe, idxPath.Child(\"livenessProbe\"))...)\n\t\t// Readiness-specific validation\n\t\tif ctr.ReadinessProbe != nil && ctr.ReadinessProbe.TerminationGracePeriodSeconds != nil {\n\t\t\tallErrs = append(allErrs, field.Invalid(idxPath.Child(\"readinessProbe\", \"terminationGracePeriodSeconds\"), ctr.ReadinessProbe.TerminationGracePeriodSeconds, \"must not be set for readinessProbes\"))\n\t\t}"
+  },
+  {
+    "id" : "6f68eb2e-c204-4267-ab62-15411729858d",
+    "prId" : 99163,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99163#pullrequestreview-594801959",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "395ec8ab-749c-444a-9026-8bdf05787c31",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "is ValidatePodSpecificAnnotations used to validate update requests of pods and objects containing podspecs? If so, changing validation to add new restrictions can prevent update of existing objects and keep them from being deleted successfully.",
+        "createdAt" : "2021-02-17T23:06:38Z",
+        "updatedAt" : "2021-03-01T18:46:11Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "24a0f7f1-ab39-4b51-8f12-9f94baef170b",
+        "parentId" : "395ec8ab-749c-444a-9026-8bdf05787c31",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "yes",
+        "createdAt" : "2021-02-18T14:12:56Z",
+        "updatedAt" : "2021-03-01T18:46:11Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5eb6016-5746-43eb-a7e3-d5664b2df122",
+        "parentId" : "395ec8ab-749c-444a-9026-8bdf05787c31",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "Sorry, hit the comment button too soon :)\r\n\r\nwhat do you suggest? should we drop validation completely? I am not sure about validating on create only since this annotation is supposed to be updated after creation.",
+        "createdAt" : "2021-02-18T14:18:26Z",
+        "updatedAt" : "2021-03-01T18:46:11Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf9cf79e-3acb-47b7-8847-6d262530a315",
+        "parentId" : "395ec8ab-749c-444a-9026-8bdf05787c31",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "cc @wojtek-t since he suggested we validate.",
+        "createdAt" : "2021-02-18T14:19:05Z",
+        "updatedAt" : "2021-03-01T18:46:11Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5cc44f36-9408-420d-bd01-1329f87eaa42",
+        "parentId" : "395ec8ab-749c-444a-9026-8bdf05787c31",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "@liggitt - would the following work:\r\n- add validation on Create()\r\n- on Update, validate if it was previously a valid one?\r\n\r\nOr is it still backward-incompatible?",
+        "createdAt" : "2021-02-18T16:14:55Z",
+        "updatedAt" : "2021-03-01T18:46:11Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61f31754-8291-45ad-8966-460b0cb30b01",
+        "parentId" : "395ec8ab-749c-444a-9026-8bdf05787c31",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> would the following work:\r\n> \r\n> * add validation on Create()\r\n> * on Update, validate if it was previously a valid one?\r\n\r\nThat is reasonable. it requires plumbing info about whether the existing one was valid here. An existing approach is to plumb PodValidationOptions here (described in https://github.com/kubernetes/kubernetes/pull/98515#discussion_r576984804)",
+        "createdAt" : "2021-02-18T21:09:05Z",
+        "updatedAt" : "2021-03-01T18:46:11Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bf5a8caf-8395-41e5-b3dc-b85b77875f1e",
+        "parentId" : "395ec8ab-749c-444a-9026-8bdf05787c31",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "done.",
+        "createdAt" : "2021-02-21T02:55:38Z",
+        "updatedAt" : "2021-03-01T18:46:11Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d7e80ab0388c0e9c7e2945c9ed4d7a27e328a6d4",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +146,150 @@\n\tif !opts.AllowInvalidPodDeletionCost {\n\t\tif _, err := helper.GetDeletionCostFromPodAnnotations(annotations); err != nil {\n\t\t\tallErrs = append(allErrs, field.Invalid(fldPath.Key(core.PodDeletionCost), annotations[core.PodDeletionCost], \"must be a 32bit integer\"))\n\t\t}"
+  },
+  {
+    "id" : "7895fdc4-ec0a-4bea-8e8c-9403143a70e5",
+    "prId" : 99023,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99023#pullrequestreview-702560929",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "70bbc678-4b64-42f2-ab75-63d7dd13ee3b",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "is there any coverage of this field for PodSecurity and PodSecurityPolicy?",
+        "createdAt" : "2021-07-07T18:50:20Z",
+        "updatedAt" : "2021-07-07T18:50:21Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62339f86-b1eb-4236-bd93-d0a5a6302926",
+        "parentId" : "70bbc678-4b64-42f2-ab75-63d7dd13ee3b",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "For PodSecurityPolicy I added tests to [podsecuritypolicy/provider_test.go](https://github.com/kubernetes/kubernetes/pull/99023/files#diff-8a6845b20e9578568a9c8018a7999c46a283ea6c370d436740ee7699a92e4a9d) to run the Container tests on EphemeralContainer as well.\r\n\r\nI wasn't following the PSP replacement and didn't know about PodSecurity until you mentioned it. I'm happy to add test coverage there as well once I bring myself up to speed. If the PSP coverage looks sufficient, how do you feel about addressing PodSecurity in a follow-up PR since it's still in alpha?",
+        "createdAt" : "2021-07-07T20:12:38Z",
+        "updatedAt" : "2021-07-07T20:12:38Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b4598d53-417e-456f-893b-32a34e721316",
+        "parentId" : "70bbc678-4b64-42f2-ab75-63d7dd13ee3b",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "as long as there's double opt-in and we have test coverage for the interaction before either this feature or PodSecurity graduates from alpha, that's ok",
+        "createdAt" : "2021-07-08T16:07:36Z",
+        "updatedAt" : "2021-07-08T16:07:37Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce8670e0-d870-447e-9d19-0c95679275f7",
+        "parentId" : "70bbc678-4b64-42f2-ab75-63d7dd13ee3b",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "including test coverage for ephemeral containers is in the PodSecurity KEP for alpha → beta graduation\r\n\r\nfwiw, running with PodSecurity enabled, I just verified the PodSecurity enforce level already applies to ephemeral containers as well:\r\n\r\n```\r\nFEATURE_GATES=PodSecurity=true,EphemeralContainers=true hack/local-up-cluster.sh \r\n\r\nkubectl label ns default pod-security.kubernetes.io/enforce=restricted\r\n\r\nkubectl apply -f ~/snippets/pods/restricted_pod.json \r\n\r\nkubectl debug restricted -it --image=busybox\r\n\r\nDefaulting debug container name to debugger-86nkb.\r\nError from server (Forbidden): allowPrivilegeEscalation != false (container \"debugger-86nkb\" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container \"debugger-86nkb\" must set securityContext.capabilities.drop=[\"ALL\"]), runAsNonRoot != true (pod or container \"debugger-86nkb\" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container \"debugger-86nkb\" must set securityContext.seccompProfile.type to \"RuntimeDefault\" or \"Localhost\")\r\n```",
+        "createdAt" : "2021-07-08T22:56:57Z",
+        "updatedAt" : "2021-07-08T22:56:57Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "babebf76d39508104d4a3a43fb0bb3399245495c",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +86,90 @@\t\"TerminationMessagePolicy\": true,\n\t\"ImagePullPolicy\":          true,\n\t\"SecurityContext\":          true,\n\t\"Stdin\":                    true,\n\t\"StdinOnce\":                true,"
+  },
+  {
+    "id" : "cfb3f233-b42f-4535-8f32-5346fdc4f728",
+    "prId" : 98866,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98866#pullrequestreview-682319837",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6da5f0cd-dcda-4d85-a538-3cd4f3760877",
+        "parentId" : null,
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "We should ensure we're validating this for the liveness/startup probe TerminationGracePeriodSeconds too",
+        "createdAt" : "2021-06-11T20:32:14Z",
+        "updatedAt" : "2021-06-11T20:38:25Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "99e6ffd3-6537-435c-a918-ddb60d86194b",
+        "parentId" : "6da5f0cd-dcda-4d85-a538-3cd4f3760877",
+        "authorId" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "body" : "Thanks, updated",
+        "createdAt" : "2021-06-12T11:47:49Z",
+        "updatedAt" : "2021-06-12T11:47:49Z",
+        "lastEditedBy" : "32b8d25c-f21a-4ff1-a275-7dbf7672c31a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a8d4cfac933485b9b4e5e802e267723ce9d2b90f",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +4042,4046 @@\n\t// Relax validation of immutable fields to allow it to be set to 1 if it was previously negative.\n\tif oldPod.Spec.TerminationGracePeriodSeconds != nil && *oldPod.Spec.TerminationGracePeriodSeconds < 0 &&\n\t\tmungedPodSpec.TerminationGracePeriodSeconds != nil && *mungedPodSpec.TerminationGracePeriodSeconds == 1 {\n\t\tmungedPodSpec.TerminationGracePeriodSeconds = oldPod.Spec.TerminationGracePeriodSeconds // +k8s:verify-mutation:reason=clone"
+  },
+  {
+    "id" : "e8d96abb-7108-42f6-ba37-fb45de2bbaf6",
+    "prId" : 98866,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98866#pullrequestreview-685355906",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cb2f6bf1-4ea1-49bc-b853-e61bc5173ae4",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "don't we need the same change for podSpec.TerminationGracePeriodSeconds (tolerate update from negative to 1)?",
+        "createdAt" : "2021-06-16T16:05:09Z",
+        "updatedAt" : "2021-06-16T16:05:21Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a8d4cfac933485b9b4e5e802e267723ce9d2b90f",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +3975,3979 @@\t// 3.  spec.activeDeadlineSeconds\n\t// 4.  spec.terminationGracePeriodSeconds\n\n\tcontainerErrs, stop := ValidateContainerUpdates(newPod.Spec.Containers, oldPod.Spec.Containers, specPath.Child(\"containers\"))\n\tallErrs = append(allErrs, containerErrs...)"
+  },
+  {
+    "id" : "495315b4-6d4e-48c9-9508-a4efeef9d8db",
+    "prId" : 98866,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98866#pullrequestreview-693357961",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c4110918-3f0e-4d42-8cd0-c17bb2465ddc",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this lgtm",
+        "createdAt" : "2021-06-26T21:43:23Z",
+        "updatedAt" : "2021-06-26T21:43:29Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a8d4cfac933485b9b4e5e802e267723ce9d2b90f",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +4041,4045 @@\tmungedPodSpec.Tolerations = oldPod.Spec.Tolerations // +k8s:verify-mutation:reason=clone\n\n\t// Relax validation of immutable fields to allow it to be set to 1 if it was previously negative.\n\tif oldPod.Spec.TerminationGracePeriodSeconds != nil && *oldPod.Spec.TerminationGracePeriodSeconds < 0 &&\n\t\tmungedPodSpec.TerminationGracePeriodSeconds != nil && *mungedPodSpec.TerminationGracePeriodSeconds == 1 {"
+  },
+  {
+    "id" : "3c8b0424-1207-463c-8256-e16c880c472f",
+    "prId" : 98582,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98582#pullrequestreview-591481046",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1172211b-ba46-44ce-9012-2da565bada0b",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this new value should only be allowed if 1) the feature is enabled, or 2) this is validating an update of an existing object that already used this value. Otherwise, a 1.21 API server will (by default) allow persisting a ResourceQuota object a 1.20 server considers invalid, breaking quota updates via the 1.20 server",
+        "createdAt" : "2021-02-16T15:41:32Z",
+        "updatedAt" : "2021-03-04T03:53:09Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ec73dd3f-eec3-4d5e-9f99-1bf472520902",
+        "parentId" : "1172211b-ba46-44ce-9012-2da565bada0b",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I also think `validateResourceQuotaScopes` and `standardResourceQuotaScopes` is where that needs to be done, not here. If `spec.scopeSelector` is null, this method will never be called.\r\n\r\nAdd unit tests exercising the following:\r\n* create validation of object with ResourceQuotaScopeCrossNamespacePodAffinity\r\n  * with feature off → rejected\r\n  * with feature on → allow\r\n* update validation of existing object without ResourceQuotaScopeCrossNamespacePodAffinity to object with ResourceQuotaScopeCrossNamespacePodAffinity\r\n  * with feature off → rejected\r\n  * with feature on → allowed\r\n* update validation of existing object with ResourceQuotaScopeCrossNamespacePodAffinity to object with ResourceQuotaScopeCrossNamespacePodAffinity\r\n  * with feature off → allowed\r\n  * with feature on → allowed\r\n",
+        "createdAt" : "2021-02-16T15:49:07Z",
+        "updatedAt" : "2021-03-04T03:53:09Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b25dae90-8391-4d76-b9d5-67e921a64e0e",
+        "parentId" : "1172211b-ba46-44ce-9012-2da565bada0b",
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "done.",
+        "createdAt" : "2021-02-16T23:21:39Z",
+        "updatedAt" : "2021-03-04T03:53:09Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3c5f018f8e73bd6b1d84529cda06f6c3c204d274",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +5436,5440 @@\t\t}\n\t\tswitch req.ScopeName {\n\t\tcase core.ResourceQuotaScopeBestEffort, core.ResourceQuotaScopeNotBestEffort, core.ResourceQuotaScopeTerminating, core.ResourceQuotaScopeNotTerminating, core.ResourceQuotaScopeCrossNamespacePodAffinity:\n\t\t\tif req.Operator != core.ScopeSelectorOpExists {\n\t\t\t\tallErrs = append(allErrs, field.Invalid(fldPath.Child(\"operator\"), req.Operator,"
+  },
+  {
+    "id" : "545da18e-3937-4f76-aa24-29bc8cb9991b",
+    "prId" : 98277,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/98277#pullrequestreview-604894903",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9fa833be-6885-4d25-9b20-daaae89fe2b1",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Thanks for this!  We should file a \"Good first Issue\" issue to change most of the users of `IsQualifiedName` to this simpler form",
+        "createdAt" : "2021-03-04T18:43:06Z",
+        "updatedAt" : "2021-03-05T01:12:13Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e7bcc18-475a-4598-909a-87e6b108e810",
+        "parentId" : "9fa833be-6885-4d25-9b20-daaae89fe2b1",
+        "authorId" : "b68c44be-fd44-41e0-a41f-0053e764cbf7",
+        "body" : "Sure, will submit the issue once get this PR merged, thanks @thockin.",
+        "createdAt" : "2021-03-04T22:43:50Z",
+        "updatedAt" : "2021-03-05T01:12:13Z",
+        "lastEditedBy" : "b68c44be-fd44-41e0-a41f-0053e764cbf7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dcd658f5-5d56-452d-a9cc-4d9eacd69e45",
+        "parentId" : "9fa833be-6885-4d25-9b20-daaae89fe2b1",
+        "authorId" : "b68c44be-fd44-41e0-a41f-0053e764cbf7",
+        "body" : "Submit issue here: https://github.com/kubernetes/kubernetes/issues/99828 ",
+        "createdAt" : "2021-03-05T08:14:41Z",
+        "updatedAt" : "2021-03-05T08:14:41Z",
+        "lastEditedBy" : "b68c44be-fd44-41e0-a41f-0053e764cbf7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "72da0b1bb06607f3f3e067f1bb5ce329ec861e1b",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +124,128 @@\n// ValidateQualifiedName validates if name is what Kubernetes calls a \"qualified name\".\nfunc ValidateQualifiedName(value string, fldPath *field.Path) field.ErrorList {\n\tallErrs := field.ErrorList{}\n\tfor _, msg := range validation.IsQualifiedName(value) {"
+  },
+  {
+    "id" : "1981271c-f6c3-4678-8f0d-7639c3b06e50",
+    "prId" : 96600,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96600#pullrequestreview-605668286",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cfb23629-0161-4d1a-8580-2dd7940fc063",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "We should test here that if the gate is enabled, the field must have a value.",
+        "createdAt" : "2021-03-05T05:49:35Z",
+        "updatedAt" : "2021-03-08T16:43:23Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df1fa063-e5c1-40aa-90d8-ccacefa41c88",
+        "parentId" : "cfb23629-0161-4d1a-8580-2dd7940fc063",
+        "authorId" : "a2e00680-b383-4471-a78c-45fa5811f18b",
+        "body" : "added the check on feature gate. Also added a testcase for this scenario.",
+        "createdAt" : "2021-03-05T22:47:48Z",
+        "updatedAt" : "2021-03-08T16:43:23Z",
+        "lastEditedBy" : "a2e00680-b383-4471-a78c-45fa5811f18b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "62804c1ae8762938e4f708f3d6e0408aa47d7020",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +4457,4461 @@func validateServiceInternalTrafficFieldsValue(service *core.Service) field.ErrorList {\n\tallErrs := field.ErrorList{}\n\n\tif utilfeature.DefaultFeatureGate.Enabled(features.ServiceInternalTrafficPolicy) {\n\t\tif service.Spec.InternalTrafficPolicy == nil {"
+  },
+  {
+    "id" : "434f7d4e-4e02-45fb-a54b-011d0bcbef45",
+    "prId" : 92784,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92784#pullrequestreview-443919372",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "71e7e64b-fc3b-4f2d-b10e-4d7b2b99c445",
+        "parentId" : null,
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "Ephemeral Container -> Ephemeral Volume",
+        "createdAt" : "2020-07-07T13:26:30Z",
+        "updatedAt" : "2020-07-09T21:29:56Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2859bc1c-5fc6-4be8-960a-e2e7d84569b9",
+        "parentId" : "71e7e64b-fc3b-4f2d-b10e-4d7b2b99c445",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "No here. This really is the code for `ec.EphemeralContainerCommon`, I just touched it and moved code into  `validateFieldAllowList` because I wanted to use the same code also for validating allowed fields in `validatePersistentVolumeClaimTemplateObjectMeta`\r\n\r\n",
+        "createdAt" : "2020-07-07T13:50:07Z",
+        "updatedAt" : "2020-07-09T21:29:56Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2c315a47-178d-4f18-ae89-5d16e42782f0",
+        "parentId" : "71e7e64b-fc3b-4f2d-b10e-4d7b2b99c445",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "Oh, sorry about the noise",
+        "createdAt" : "2020-07-07T14:00:07Z",
+        "updatedAt" : "2020-07-09T21:29:56Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c1178bd925b54898e66cace37d35bf551380a75b",
+    "line" : 142,
+    "diffHunk" : "@@ -1,1 +2720,2724 @@\t\t// Lifecycle, probes, resources and ports should be disallowed. This is implemented as a list\n\t\t// of allowed fields so that new fields will be given consideration prior to inclusion in Ephemeral Containers.\n\t\tallErrs = append(allErrs, validateFieldAllowList(ec.EphemeralContainerCommon, allowedEphemeralContainerFields, \"cannot be set for an Ephemeral Container\", idxPath)...)\n\t}\n"
+  },
+  {
+    "id" : "5db5199f-7fb0-4704-92d4-50775d3b0f01",
+    "prId" : 92744,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92744#pullrequestreview-523587762",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bf08d6ed-c695-4026-ac8b-e2595c121e49",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "We don't usually do gates in validation, but I think it's appropriate to add a gated check here that if the gate is enabled a value is required.  We only allow nil if the gate is disabled (see other comments on using defaults.go)",
+        "createdAt" : "2020-10-29T19:08:13Z",
+        "updatedAt" : "2020-11-13T06:50:03Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d96a1e3d-7507-450c-a6b5-4ed65d156114",
+        "parentId" : "bf08d6ed-c695-4026-ac8b-e2595c121e49",
+        "authorId" : "277fa141-7693-4721-a67d-27e1a0f085a0",
+        "body" : "I would like to keep `nil` as default. Main reasons;\r\n\r\n* On beta when default is true for the feature-gw no new attribute will pop up on a `kubectl get svc`. I guess like 95% of users will not set this attribute and don't want to see it.\r\n* A web-hook was proposed as the solution for automatic setting of this parameter. If the default is `true` the hook can't tell if this is a default (should be set to false) or explicitly set to `true` by the used (should be left as-is).\r\n\r\nOr will the web-hook be called before \"default.go\"? And will values with default values also be invisible on a `kubectl get svc`?\r\n\r\nIf so, default=true is fine. But then, is there a reson for the attribute to be a pointer? I have read that this is recommended for API attributes someplace.",
+        "createdAt" : "2020-10-31T12:06:47Z",
+        "updatedAt" : "2020-11-13T06:50:03Z",
+        "lastEditedBy" : "277fa141-7693-4721-a67d-27e1a0f085a0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa54317b-fee0-4c4d-b485-23ce9d7bef0f",
+        "parentId" : "bf08d6ed-c695-4026-ac8b-e2595c121e49",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "> no new attribute will pop up on a kubectl get svc. I guess like 95% of users will not set this attribute and don't want to see it.\r\n\r\nWe don't want to hide fields that are actually set.  Whether the user knows it or not, we are setting a value.  Most of the time, when we have done this we have regretted it.\r\n\r\n> A web-hook was proposed as the solution for automatic setting of this parameter. If the default is true the hook can't tell if this is a default (should be set to false) or explicitly set to true by the used (should be left as-is).\r\n\r\nThis is a general problem and this is the 3rd or 4th time it has come up this month.  https://github.com/kubernetes/kubernetes/pull/95269 for another.  @apelisse @liggitt we need to either solve this generically or we decide that we are not handling it at all.\r\n\r\n@uablrek the problem with leaving it nil is that we lose information.  At defaults.go time we know which API version was used to create the resource and we can apply version-specific default values.  In v1 we default to `true` but maybe in v2 we don't.  If we leave it nil we have no idea.  We can set this much later in REST, but before we really open that can of worms, let's discuss more.\r\n\r\nI think it's best to do it the \"normal\" way (defaults.go) and let the defaulting vs webhooks debate be had in parallel. :)\r\n\r\nMaking it a pointer makes it possible to know AT ALL (defaults.go or later) whether the user specified `false` or didn't specify anything at all (Go's zero value).  `bool` fields that default to `true` (generally: any scalar type whose default != Go's zero value AND whose zero-value is in-bounds) are the one case where apointer is absolutely required.",
+        "createdAt" : "2020-11-02T23:04:43Z",
+        "updatedAt" : "2020-11-13T06:50:03Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1c912a1f-9af3-4ea8-a28b-8755ba7002c2",
+        "parentId" : "bf08d6ed-c695-4026-ac8b-e2595c121e49",
+        "authorId" : "277fa141-7693-4721-a67d-27e1a0f085a0",
+        "body" : "Ok, I'll update (and re-base). Should the value remain `nil` if the feature-gate is not set?",
+        "createdAt" : "2020-11-03T06:31:45Z",
+        "updatedAt" : "2020-11-13T06:50:03Z",
+        "lastEditedBy" : "277fa141-7693-4721-a67d-27e1a0f085a0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6655bf87-33e6-46e2-978a-56d7371af2d2",
+        "parentId" : "bf08d6ed-c695-4026-ac8b-e2595c121e49",
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "> Should the value remain nil if the feature-gate is not set?\r\n\r\nYes, it should be `nil` when the feature gate is disabled. And even when the feature gate is enabled, I think `allocateLoadBalancerNodePorts` should be nil when the type is **not** LoadBalancer.",
+        "createdAt" : "2020-11-03T15:25:39Z",
+        "updatedAt" : "2020-11-13T06:50:03Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df7cb064-3195-4c60-bcde-3d5dab5003b3",
+        "parentId" : "bf08d6ed-c695-4026-ac8b-e2595c121e49",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Good point Andrew.",
+        "createdAt" : "2020-11-03T20:43:13Z",
+        "updatedAt" : "2020-11-13T06:50:03Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22512406-26d4-4a93-a9ed-822b0ad0e655",
+        "parentId" : "bf08d6ed-c695-4026-ac8b-e2595c121e49",
+        "authorId" : "277fa141-7693-4721-a67d-27e1a0f085a0",
+        "body" : "> it's appropriate to add a gated check here that if the gate is enabled a value is required. We only allow nil if the gate is disabled (see other comments on using defaults.go)\r\n\r\nA non-nil is ensured in (the updated) defaults.go if the gate is enabled. I did not alter the check.\r\n\r\nI can add a check that the value is _not_ set unless the gate is enabled, but it seems unnecessary.",
+        "createdAt" : "2020-11-04T08:25:59Z",
+        "updatedAt" : "2020-11-13T06:50:03Z",
+        "lastEditedBy" : "277fa141-7693-4721-a67d-27e1a0f085a0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2896cb3d-c0ae-4596-a138-ca4209461582",
+        "parentId" : "bf08d6ed-c695-4026-ac8b-e2595c121e49",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I think we do want to validate it both ways:\r\n\r\n```\r\nif not nil &&  not loadbalancer {\r\n  error: may only be set for type loadbalancer\r\n}\r\nif gate-enabled && type loadbalancer and nil {\r\n  error: required field\r\n}\r\n```\r\n\r\nWe do this in several places and it has caught test problems that would otherwise have been hard-to-trace nil-pointer exceptions.",
+        "createdAt" : "2020-11-04T17:45:05Z",
+        "updatedAt" : "2020-11-13T06:50:03Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8fca0f995596754ba2f53dab03cafda83632905c",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +4358,4362 @@\t}\n\n\tif service.Spec.AllocateLoadBalancerNodePorts != nil && service.Spec.Type != core.ServiceTypeLoadBalancer {\n\t\tallErrs = append(allErrs, field.Forbidden(specPath.Child(\"allocateLoadBalancerNodePorts\"), \"may only be used when `type` is 'LoadBalancer'\"))\n\t}"
+  },
+  {
+    "id" : "04f24bad-e959-453e-b09a-4200c14eacfe",
+    "prId" : 92312,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92312#pullrequestreview-523675592",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "038c66fe-db34-4199-9543-de2d541faae9",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "The typical pattern is:\r\n\r\n```\r\nif gate-enabled {\r\n  if not-specified {\r\n    error: required field\r\n  }\r\n}\r\nif not nil { // remove when gate is removed\r\n  validate value\r\n}\r\n```",
+        "createdAt" : "2020-11-04T19:48:18Z",
+        "updatedAt" : "2020-11-07T10:46:52Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90d5f0b1-d070-41e5-81ac-a57779babf8c",
+        "parentId" : "038c66fe-db34-4199-9543-de2d541faae9",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Also - test?",
+        "createdAt" : "2020-11-04T19:48:54Z",
+        "updatedAt" : "2020-11-07T10:46:52Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dd5646d56da62a0b930abefd86d142a2ca9404e8",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +5989,5993 @@\t\t}\n\n\t\tif utilfeature.DefaultFeatureGate.Enabled(features.LoadBalancerIPMode) {\n\t\t\tif len(ingress.IP) > 0 && ingress.IPMode == nil {\n\t\t\t\tallErrs = append(allErrs, field.Required(idxPath.Child(\"ipMode\"), \"must be specified when `ip` is set\"))"
+  },
+  {
+    "id" : "290e0657-323a-481e-91f6-baa8ab8f3d66",
+    "prId" : 92312,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92312#pullrequestreview-528015331",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0f4d2509-afa0-481f-b897-56aa72d309e1",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this is what is failing in the alpha e2e job, so apparently this field is not consistently defaulted. if so, we cannot make it required.",
+        "createdAt" : "2020-11-11T03:06:41Z",
+        "updatedAt" : "2020-11-11T03:06:41Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e53ed2dd-0fb3-4d94-9bf0-e5190f03b135",
+        "parentId" : "0f4d2509-afa0-481f-b897-56aa72d309e1",
+        "authorId" : "2c727fdb-29e7-42eb-9c57-a26df4cf39d5",
+        "body" : "True, it was only defaulted on `Service`, completly missed the `Ingress`. Reverted in #96454 and I'll make sure to include ingress in the new one!",
+        "createdAt" : "2020-11-11T09:45:39Z",
+        "updatedAt" : "2020-11-11T09:45:39Z",
+        "lastEditedBy" : "2c727fdb-29e7-42eb-9c57-a26df4cf39d5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dd5646d56da62a0b930abefd86d142a2ca9404e8",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +5991,5995 @@\t\tif utilfeature.DefaultFeatureGate.Enabled(features.LoadBalancerIPMode) {\n\t\t\tif len(ingress.IP) > 0 && ingress.IPMode == nil {\n\t\t\t\tallErrs = append(allErrs, field.Required(idxPath.Child(\"ipMode\"), \"must be specified when `ip` is set\"))\n\t\t\t}\n\t\t}"
+  },
+  {
+    "id" : "5252ac07-9475-4893-80b0-24bfa0a7816c",
+    "prId" : 91381,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91381#pullrequestreview-419113855",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bfa0e018-6393-4877-8f71-bd2be4b6aa06",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "restructure to avoid repeated checks of the same conditions:\r\n\r\n```go\r\nif sp.Type == core.SeccompProfileLocalhost {\r\n  if sp.LocalhostProfile == nil {\r\n    allErrs = append(allErrs, field.Required(fldPath.Child(\"localhostProfile\"), ...\r\n  } else {\r\n    allErrs = append(allErrs, validateLocalDescendingPath(...\r\n  }\r\n} else {\r\n  if sp.LocalhostProfile != nil {\r\n    allErrs = append(allErrs, field.Invalid(fldPath.Child(\"localhostProfile\"), ...\r\n  }\r\n}\r\n```",
+        "createdAt" : "2020-05-26T17:27:29Z",
+        "updatedAt" : "2020-07-06T08:14:05Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90590703-2676-499c-9b2f-bddaf4f012c0",
+        "parentId" : "bfa0e018-6393-4877-8f71-bd2be4b6aa06",
+        "authorId" : "7f996100-1a0c-46d0-9245-23461072b50e",
+        "body" : "Amended the code with your suggestion.",
+        "createdAt" : "2020-05-27T11:50:13Z",
+        "updatedAt" : "2020-07-06T08:14:05Z",
+        "lastEditedBy" : "7f996100-1a0c-46d0-9245-23461072b50e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8976e3620f8963e72084971d9d4decbd026bf49f",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +3560,3564 @@\t\tallErrs = append(allErrs, err)\n\t}\n\n\tif sp.Type == core.SeccompProfileTypeLocalhost {\n\t\tif sp.LocalhostProfile == nil {"
+  },
+  {
+    "id" : "07ad9736-7daa-4ce4-9d0e-577bfa2ccd06",
+    "prId" : 90628,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/90628#pullrequestreview-403951406",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9f8e9e21-b4bc-4e29-af47-7ef362f7f2fc",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Add a TODO stating when this toleration can be removed?",
+        "createdAt" : "2020-04-30T16:07:25Z",
+        "updatedAt" : "2020-04-30T23:50:00Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a40b9b5c-5605-4f50-9753-f24a9b03cb30",
+        "parentId" : "9f8e9e21-b4bc-4e29-af47-7ef362f7f2fc",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "hmm, it'll read like \"TODO: stop tolerating this once we can guarantee the existing pod was not created prior to 1.19\"... I'm not aware of a plan to accomplish that",
+        "createdAt" : "2020-04-30T17:51:38Z",
+        "updatedAt" : "2020-04-30T23:50:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76a315bb-8158-4bcc-91ff-de7fd5cba9a6",
+        "parentId" : "9f8e9e21-b4bc-4e29-af47-7ef362f7f2fc",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Kubelet maintains these, I think? Invalid pods shouldn't persist more than a few seconds. I think you just need to tolerate for one release?",
+        "createdAt" : "2020-04-30T18:02:08Z",
+        "updatedAt" : "2020-04-30T23:50:00Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a289510-0f6a-41a3-bf75-c29690f759b1",
+        "parentId" : "9f8e9e21-b4bc-4e29-af47-7ef362f7f2fc",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "added a TODO for 1.20",
+        "createdAt" : "2020-04-30T23:49:55Z",
+        "updatedAt" : "2020-04-30T23:50:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "23e9fb1bb552bd0098770ad26bb3d5f60f8f2c06",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +3861,3865 @@\n\tif newIPErrs := validatePodIPs(newPod); len(newIPErrs) > 0 {\n\t\t// Tolerate IP errors if IP errors already existed in the old pod. See http://issue.k8s.io/90625\n\t\t// TODO(liggitt): Drop the check of oldPod in 1.20\n\t\tif oldIPErrs := validatePodIPs(oldPod); len(oldIPErrs) == 0 {"
+  },
+  {
+    "id" : "08758643-a99a-4df1-9703-8d9c25b21a7e",
+    "prId" : 88636,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88636#pullrequestreview-369058342",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5450bb83-61a4-4ad7-a155-7eeaf2618cce",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Hm should still validate that the group is required for any kind that is not PersistentVolumeClaim?",
+        "createdAt" : "2020-03-04T18:51:24Z",
+        "updatedAt" : "2020-03-04T23:56:06Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e0407bb-7b31-4393-8733-024934676ba6",
+        "parentId" : "5450bb83-61a4-4ad7-a155-7eeaf2618cce",
+        "authorId" : "61f426fc-ef91-47d4-9d27-f5a1dd2b265b",
+        "body" : "Yes that would be a worthwhile additional check.",
+        "createdAt" : "2020-03-04T19:27:04Z",
+        "updatedAt" : "2020-03-04T23:56:06Z",
+        "lastEditedBy" : "61f426fc-ef91-47d4-9d27-f5a1dd2b265b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e8b09d36440b81fe913aa66f1709269858764349",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +1925,1929 @@\t\t}\n\t\tif len(spec.DataSource.Kind) == 0 {\n\t\t\tallErrs = append(allErrs, field.Required(fldPath.Child(\"dataSource\", \"kind\"), \"\"))\n\t\t}\n\t\tapiGroup := \"\""
+  },
+  {
+    "id" : "a67f1099-6063-4866-8947-aebf99403775",
+    "prId" : 88488,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88488#pullrequestreview-367645308",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "should we check only if feature is enabled, we allow to set the policy?",
+        "createdAt" : "2020-02-27T23:44:37Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c473616-49d3-48be-8629-3f6828fae18f",
+        "parentId" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "We depend on the logic [here](https://github.com/kubernetes/kubernetes/pull/88488/commits/de97ba6b06f925b3d34d5ad28fe51c5ae9e024e3#diff-3e0068b76443e20a2e4bcc68b91a9f45R500) to drop the field if the feature is disabled. The reason for this is to be able to support rollback or disabling the feature. In that case, the field exists on the object because it was created when the feature was turned on. We don't want to fail updates or deletion to the object if the feature got disabled.",
+        "createdAt" : "2020-02-28T00:13:32Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7dccd5d0-1448-4331-a647-8ef6d031a79b",
+        "parentId" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "So during pod creation, if the FSGroupChangePolicy is disabled, we allow user to set FSGroupChangePolicy, but drop it silently without any warning or error msg? Will this cause some confusion to user if they did not know this field is dropped?\r\nHow about the following?\r\n1. During pod creation, if FSGroupChangePolicy is disabled, if user set FSGroupChangePolicy, validation will fail.\r\n2. During pod update,  if FSGroupChangePolicy is disabled, if FSGroupChangePolicy is disabled, drop this field (but it would be better to give some warning information about it?)\r\n\r\nAlso notice another PR that might has the similar issue? https://github.com/kubernetes/kubernetes/pull/84051#pullrequestreview-366588225",
+        "createdAt" : "2020-02-28T18:20:09Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "15058ff7-4e55-4ded-8dfd-e56042c2b394",
+        "parentId" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "I agree it's not a great user experience to just silently drop the field, but dropping the field is the current process for [adding new fields](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api_changes.md#alpha-field-in-existing-api-version)",
+        "createdAt" : "2020-02-28T19:00:44Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ce07c85-1c2e-4311-bf32-2647e30d124f",
+        "parentId" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "The semantic is \"as if the field did not exist\".  We drop non-existent fields silently, rather than error, so when the gate is disabled, we must do the same.",
+        "createdAt" : "2020-03-02T17:14:57Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dcec4121-b560-47cb-a6bc-20241c89be51",
+        "parentId" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I am wondering why this behavior is desirable? From customer point of view, they set the the policy. But cluster admin set the feature gate and end users might not aware it. It is might not easy for customer to discover this hidden behavior. ",
+        "createdAt" : "2020-03-02T18:52:34Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01919605-ebcc-468d-8914-82def01e51a7",
+        "parentId" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "If they set the policy but cluster admin has not upgraded the cluster, the field will get dropped, silently.\r\n\r\nIf they set the policy but cluster admin has not enabled the feature, the field will get dropped, silently.",
+        "createdAt" : "2020-03-02T19:42:29Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca5e828b-56af-40e3-87fc-d58bf09ec39b",
+        "parentId" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "Right, but is there any benefit of dropping the fields silently instead of failing on errors during podCreate validation when adding new fields for a feature? \r\n\r\nAs @msau42 pointed out, in case of roll back, if the field is set and cluster is downgraded or feature is disabled, it needs to allow dropping this field during podUpdate to avoid failures. \r\n\r\nI am trying to compare between the current process and the one I mentioned https://github.com/kubernetes/kubernetes/pull/88488/files#r385848872. I feel failing on errors seems better than dropping it silently for costumers to catch the problem. But there might be concerns about inconsistency for validation between podCreate and podUpdate?",
+        "createdAt" : "2020-03-02T21:12:00Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e49a86f-3946-4ae2-b8e4-6d361f34d077",
+        "parentId" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "I think concern is - difference in behaviour that clients have to deal with. For example:\r\n\r\n1. Client talking to 1.17 api-server sets a invalid field. The field gets silently dropped because api-server does not know about it.\r\n2. Client talking to 1.18 api-server sets a invalid field (but now behind a alpha-feature gate) will suddenly start getting errors even though feature-gate is disabled.\r\n\r\nWe want to preserve client's expectation between 1.17 and 1.18 field behind an alpha feature-gate.\r\n",
+        "createdAt" : "2020-03-02T21:49:42Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "771c7ea3-5fc3-4d0d-b537-a8f32ed32c98",
+        "parentId" : "77ef829b-8493-47ee-9150-cb44d54d3e84",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "> I think concern is - difference in behaviour that clients have to deal with. For example:\r\n> \r\n> 1. Client talking to 1.17 api-server sets a invalid field. The field gets silently dropped because api-server does not know about it.\r\n\r\nAn invalid fields will be dropped silently? I thought validation will fail on it?\r\n\r\n> 2. Client talking to 1.18 api-server sets a invalid field (but now behind a alpha-feature gate) will suddenly start getting errors even though feature-gate is disabled.\r\n> \r\n> We want to preserve client's expectation between 1.17 and 1.18 field behind an alpha feature-gate.\r\n\r\n",
+        "createdAt" : "2020-03-03T01:22:31Z",
+        "updatedAt" : "2020-03-05T13:01:00Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b13295968757aad1d6908d38907e7ec4ebca6a21",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +3678,3682 @@\t\t}\n\n\t\tif securityContext.FSGroupChangePolicy != nil {\n\t\t\tallErrs = append(allErrs, validateFSGroupChangePolicy(securityContext.FSGroupChangePolicy, fldPath.Child(\"fsGroupChangePolicy\"))...)\n\t\t}"
+  },
+  {
+    "id" : "6951565c-c260-4681-930c-a555e473143c",
+    "prId" : 86377,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/86377#pullrequestreview-339601433",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "38730580-9a6d-4573-9fc7-d9b7afba7a4e",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Does this check also need to be behind feature gate?",
+        "createdAt" : "2020-01-04T02:25:16Z",
+        "updatedAt" : "2020-01-13T09:00:18Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eaf89cee-1c22-449f-805f-064b18688788",
+        "parentId" : "38730580-9a6d-4573-9fc7-d9b7afba7a4e",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "My understanding is it doesn't have to.\r\nThe rationale is:\r\n- if the feature gate is off, then the \"dropDisabledFields\" logic from PrepareForUpdate is firing\r\n- this is happening before validation, so the Immutable field will be clear in this case",
+        "createdAt" : "2020-01-07T10:30:59Z",
+        "updatedAt" : "2020-01-13T09:00:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f386628-d50e-4088-b4d3-635ac5c0dbc1",
+        "parentId" : "38730580-9a6d-4573-9fc7-d9b7afba7a4e",
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "SGTM",
+        "createdAt" : "2020-01-08T01:14:14Z",
+        "updatedAt" : "2020-01-13T09:00:18Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7cc3971ee0a8971268e16c3a9dbbda02199c7e27",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +5063,5067 @@\tallErrs = append(allErrs, ValidateObjectMetaUpdate(&newCfg.ObjectMeta, &oldCfg.ObjectMeta, field.NewPath(\"metadata\"))...)\n\n\tif oldCfg.Immutable != nil && *oldCfg.Immutable {\n\t\tif !reflect.DeepEqual(newCfg.Immutable, oldCfg.Immutable) {\n\t\t\tallErrs = append(allErrs, field.Forbidden(field.NewPath(\"immutable\"), \"field is immutable when `immutable` is set\"))"
+  },
+  {
+    "id" : "b931db49-8348-4338-be61-761bb7ec8452",
+    "prId" : 86377,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/86377#pullrequestreview-339151045",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "600a9eab-d631-4e46-979b-2aad90ba2810",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Please add unit tests for new behavior.",
+        "createdAt" : "2020-01-04T02:31:33Z",
+        "updatedAt" : "2020-01-13T09:00:18Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2ada5ba-3766-4fb0-a6a6-3176b135cb21",
+        "parentId" : "600a9eab-d631-4e46-979b-2aad90ba2810",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Done (both here and for config map)",
+        "createdAt" : "2020-01-07T10:27:04Z",
+        "updatedAt" : "2020-01-13T09:00:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7cc3971ee0a8971268e16c3a9dbbda02199c7e27",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +5006,5010 @@\n\tallErrs = append(allErrs, ValidateImmutableField(newSecret.Type, oldSecret.Type, field.NewPath(\"type\"))...)\n\tif oldSecret.Immutable != nil && *oldSecret.Immutable {\n\t\tif !reflect.DeepEqual(newSecret.Immutable, oldSecret.Immutable) {\n\t\t\tallErrs = append(allErrs, field.Forbidden(field.NewPath(\"immutable\"), \"field is immutable when `immutable` is set\"))"
+  },
+  {
+    "id" : "e21b3833-15d5-41eb-80de-84ad0f380628",
+    "prId" : 86377,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/86377#pullrequestreview-349192058",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7eca02de-77c2-4191-9858-09d4259e45a1",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Don't use reflect for this - it's just a bool right?  Whan I see reflect, I assume something tricky and subtle is happening...is it?",
+        "createdAt" : "2020-01-10T18:24:03Z",
+        "updatedAt" : "2020-01-13T09:00:18Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f687ae0-55fb-4192-a0dc-bc4372758d4f",
+        "parentId" : "7eca02de-77c2-4191-9858-09d4259e45a1",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Pointer to bool.\r\nI can probably change to:\r\n```\r\na == b || (a != nil && b != nil && *a == *b)\r\n```\r\nBut is that really more clear?",
+        "createdAt" : "2020-01-12T19:37:39Z",
+        "updatedAt" : "2020-01-13T09:00:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "69420377-9db1-445d-9f8a-d73e5d31e726",
+        "parentId" : "7eca02de-77c2-4191-9858-09d4259e45a1",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "yes, IMO",
+        "createdAt" : "2020-01-18T00:46:24Z",
+        "updatedAt" : "2020-01-18T00:46:24Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "050c61f7-a91c-4789-b69c-00671cbfc38a",
+        "parentId" : "7eca02de-77c2-4191-9858-09d4259e45a1",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Opened https://github.com/kubernetes/kubernetes/pull/87602 for the cleanup",
+        "createdAt" : "2020-01-28T08:23:07Z",
+        "updatedAt" : "2020-01-28T08:23:08Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7cc3971ee0a8971268e16c3a9dbbda02199c7e27",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +5007,5011 @@\tallErrs = append(allErrs, ValidateImmutableField(newSecret.Type, oldSecret.Type, field.NewPath(\"type\"))...)\n\tif oldSecret.Immutable != nil && *oldSecret.Immutable {\n\t\tif !reflect.DeepEqual(newSecret.Immutable, oldSecret.Immutable) {\n\t\t\tallErrs = append(allErrs, field.Forbidden(field.NewPath(\"immutable\"), \"field is immutable when `immutable` is set\"))\n\t\t}"
+  },
+  {
+    "id" : "1bbbccbc-b274-4f53-934c-0fa7c6498ccc",
+    "prId" : 84051,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84051#pullrequestreview-366812696",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6b13137a-78ef-4bdc-933b-1cf1ac38203d",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "if HugePageStorageMediumSize is enabled, should we validate the name and format etc. too? What if user gives an arbitrary string in this field? ",
+        "createdAt" : "2020-02-28T18:12:04Z",
+        "updatedAt" : "2020-02-28T18:12:11Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4d9a8712-0941-4a98-b512-db376f02cac2",
+        "parentId" : "6b13137a-78ef-4bdc-933b-1cf1ac38203d",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "if I understand correctly, the user could already give an arbitrary string in that field. if that's the case, we cannot easily tighten validation on an existing field",
+        "createdAt" : "2020-02-28T18:17:19Z",
+        "updatedAt" : "2020-02-28T18:17:19Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5b83a144-c020-4d8d-8e0b-12e078651feb",
+        "parentId" : "6b13137a-78ef-4bdc-933b-1cf1ac38203d",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "oh, this ValidatePodSingleHugePageResources is for validating whether there are multiple huge page size is specified in the resources. So it makes sense to only validate if feature is disabled. \r\n\r\nSo one scenario is rollback, if MutipleHuagePageResource is enabled during pod creation, so it sets multiple sizes. If during pod rollback,  MutipleHuagePageResource is disabled, it might fail to update pod?\r\n\r\nI also checked a few cases, the following can pass validation which seems not right\r\n\r\n    resources:\r\n      limits:\r\n        hugepages-xGi: 100Mi\r\n\r\n  volumes:\r\n  - name: hugepage\r\n    emptyDir:\r\n      medium: abc ",
+        "createdAt" : "2020-02-28T19:01:50Z",
+        "updatedAt" : "2020-02-28T19:06:49Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67b88fe7-ab71-4169-a960-90636a504ca5",
+        "parentId" : "6b13137a-78ef-4bdc-933b-1cf1ac38203d",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : ">  If during pod rollback, MutipleHuagePageResource is disabled, it might fail to update pod?\r\n\r\nthat is addressed here:\r\nhttps://github.com/kubernetes/kubernetes/blob/56987164f8aa20d136b934ee394e2349cc32979d/pkg/registry/core/pod/strategy.go#L110-L115\r\n\r\n> the following can pass validation which seems not right\r\n\r\nsee discussion in https://github.com/kubernetes/kubernetes/pull/52936#issuecomment-341697962",
+        "createdAt" : "2020-02-29T18:33:09Z",
+        "updatedAt" : "2020-02-29T18:33:10Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "03ecc20b19972ecb4825ecf4ce6868bc2a45f3c0",
+    "line" : 51,
+    "diffHunk" : "@@ -1,1 +3138,3142 @@\n\tif !opts.AllowMultipleHugePageResources {\n\t\tallErrs = append(allErrs, ValidatePodSingleHugePageResources(pod, specPath)...)\n\t}\n"
+  },
+  {
+    "id" : "1fd6edd0-666d-444e-ba42-67fde06ad536",
+    "prId" : 80395,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80395#pullrequestreview-265726792",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "63d57c13-585f-4106-b0a6-de7dcd0fa44b",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Why pass fldPath instead of putting it statically in this function.",
+        "createdAt" : "2019-07-22T12:39:20Z",
+        "updatedAt" : "2019-07-23T23:27:54Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b7f02075-6049-4cc6-bc5c-e981b274ba5f",
+        "parentId" : "63d57c13-585f-4106-b0a6-de7dcd0fa44b",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "I'd say that's a convention to encapsulate an error in a stateless manner.",
+        "createdAt" : "2019-07-23T23:24:21Z",
+        "updatedAt" : "2019-07-23T23:27:54Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cfd97ba070a4927309c18f03e5a7ad5a8d846827",
+    "line" : 45,
+    "diffHunk" : "@@ -1,1 +5754,5758 @@// ValidateSpreadConstraintNotRepeat tests that if `constraint` duplicates with `existingConstraintPairs`\n// on TopologyKey and WhenUnsatisfiable fields.\nfunc ValidateSpreadConstraintNotRepeat(fldPath *field.Path, constraint core.TopologySpreadConstraint, restingConstraints []core.TopologySpreadConstraint) *field.Error {\n\tfor _, restingConstraint := range restingConstraints {\n\t\tif constraint.TopologyKey == restingConstraint.TopologyKey &&"
+  },
+  {
+    "id" : "1e2d851f-9211-40ec-9ae9-1e65b7d98273",
+    "prId" : 79489,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79489#pullrequestreview-257635076",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f3a31fc1-c5bd-4c68-9eb7-df784ab9f292",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "are there any dangerous characters or sequences we need to be concerned about (backslashes, escapes, `..`, etc)?",
+        "createdAt" : "2019-07-02T03:58:38Z",
+        "updatedAt" : "2019-07-17T15:03:43Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a47eceb-7b2b-436f-8a2d-762099ad16c0",
+        "parentId" : "f3a31fc1-c5bd-4c68-9eb7-df784ab9f292",
+        "authorId" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "body" : "I finally found a relevant up-to-date [reference](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.localaccounts/new-localuser?view=powershell-5.1) that specifies the following:\r\n\r\n```\r\nIf you create a local user account for the local system, the user name can contain up to 20 uppercase characters or lowercase characters. A user name cannot contain the following characters:\r\n\r\n\" / \\ [ ] : ; | = , + * ? < > @\r\n\r\nA user name cannot consist only of periods (.) or spaces.\r\n```\r\n\r\nIt seems in Server 2019, `New-LocalUser` did not complain when passed `u..r`. So I think `..` is allowed in accordance with the above. `New-LocalUser`  did complain when passed both `u/r` and `u\\r` as usernames as well as other special characters from the documented list.\r\n\r\nIt appears the above list also appears in docs from Windows 2000 Active Directory [restrictions](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-2000-server/bb726984(v=technet.10)) with the exception of `@`. \r\n\r\nSo it may be safe to reject characters: `\" / \\ [ ] : ; | = , + * ? < >` without being too restrictive from a future compatibility perspective given that list has not changed between 2000 and 2019? /cc @PatrickLang \r\n\r\n",
+        "createdAt" : "2019-07-02T06:06:31Z",
+        "updatedAt" : "2019-07-17T15:03:43Z",
+        "lastEditedBy" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5196525d-4d4f-4d8a-be67-16386fc3904d",
+        "parentId" : "f3a31fc1-c5bd-4c68-9eb7-df784ab9f292",
+        "authorId" : "8b178e45-b16b-405a-a22d-44899bf0bd64",
+        "body" : "I'll update this PR to include those limitations as well.\r\n\r\nRegarding ``/`` and ``\\``, are typically used when referring to domains / workgroups, and using DOMAIN/Username or WORKGROUP/Username is generally acceptable. I think we could allow them.",
+        "createdAt" : "2019-07-02T09:16:42Z",
+        "updatedAt" : "2019-07-17T15:03:43Z",
+        "lastEditedBy" : "8b178e45-b16b-405a-a22d-44899bf0bd64",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a033c26-f21f-4789-8dfb-eec1b7ec051c",
+        "parentId" : "f3a31fc1-c5bd-4c68-9eb7-df784ab9f292",
+        "authorId" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "body" : "Good point. We do need to allow domain prefixed names like `NT AUTHORITY\\NETWORK SERVICE` through. So at least `\\` needs to be allowed.",
+        "createdAt" : "2019-07-02T16:12:50Z",
+        "updatedAt" : "2019-07-17T15:03:43Z",
+        "lastEditedBy" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c95fafcb-98cf-4b62-8550-69081e153c96",
+        "parentId" : "f3a31fc1-c5bd-4c68-9eb7-df784ab9f292",
+        "authorId" : "8b178e45-b16b-405a-a22d-44899bf0bd64",
+        "body" : "Done",
+        "createdAt" : "2019-07-03T17:26:19Z",
+        "updatedAt" : "2019-07-17T15:03:43Z",
+        "lastEditedBy" : "8b178e45-b16b-405a-a22d-44899bf0bd64",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a8c78d13596e4152d54420705b7fa4ee393d0cbe",
+    "line" : 93,
+    "diffHunk" : "@@ -1,1 +5468,5472 @@\t\t\t}\n\t\t}\n\t}\n\n\treturn allErrs"
+  },
+  {
+    "id" : "163773f8-963f-4180-9236-3fbefdea32a0",
+    "prId" : 79387,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79387#pullrequestreview-254279912",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "58c26d0c-3f8c-40ec-8fc8-c2dec1d7424e",
+        "parentId" : null,
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "podSpecHasContainer doesn't actually need path so it could use `VisitContainers` from `pkg/api/pod/util.go` which already has early return. I don't see an import restriction, but I didn't try it.",
+        "createdAt" : "2019-06-25T21:12:34Z",
+        "updatedAt" : "2019-06-26T06:17:49Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f04d698b-5806-49bb-a4c2-6f6fa8af272a",
+        "parentId" : "58c26d0c-3f8c-40ec-8fc8-c2dec1d7424e",
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "VisitContainers is used now",
+        "createdAt" : "2019-06-25T21:27:29Z",
+        "updatedAt" : "2019-06-26T06:17:49Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cf7c164ae32698c040bfd3fb2261df5b4fd56fa9",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +3436,3440 @@func podSpecHasContainer(spec *core.PodSpec, containerName string) bool {\n\tvar hasContainer bool\n\tpodshelper.VisitContainersWithPath(spec, func(c *core.Container, _ *field.Path) bool {\n\t\tif c.Name == containerName {\n\t\t\thasContainer = true"
+  },
+  {
+    "id" : "5d6a6460-58cb-4743-92ff-c5eeecb531b7",
+    "prId" : 79386,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79386#pullrequestreview-278549507",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9b14e6c9-9610-400a-b149-1118f62a5b11",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Do we need to accept nil here?  Validation should be called AFTER the default value is set.  If dual-stack is gated off, it will be nil here, but we should not be validating it at all then.",
+        "createdAt" : "2019-08-22T16:05:46Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "31e2d2f9-e38b-4415-92d2-fa78cffb0244",
+        "parentId" : "9b14e6c9-9610-400a-b149-1118f62a5b11",
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "the validation accepts nil, specifically for the reasons you outlined. We also validate if there is a value then it needs to match what is allowed.",
+        "createdAt" : "2019-08-22T16:41:40Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c27e0b029d328552cc3ef0661f16a5ad3c422fb8",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +4077,4081 @@\t}\n\n\tif service.Spec.IPFamily != nil && !supportedServiceIPFamily.Has(string(*service.Spec.IPFamily)) {\n\t\tallErrs = append(allErrs, field.NotSupported(specPath.Child(\"ipFamily\"), service.Spec.IPFamily, supportedServiceIPFamily.List()))\n\t}"
+  },
+  {
+    "id" : "241cd9a1-351e-47d1-b300-d7d73503a28a",
+    "prId" : 79386,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79386#pullrequestreview-278696575",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c86d5e49-9e39-4a8d-a1c8-1318e2f93a59",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "This is thought-provoking.\r\n\r\nWhen the gate is off, we will drop the field, so it will be stored as nil.\r\n\r\nOnce the gate is turned on, we have a bunch of Services that have nil values.\r\n\r\nWe only set the default on creation.  We've got no real mechanism to back-populate existing services.\r\n\r\nErgo - we HAVE TO allow nil, which means any consumer of this field needs to know how to interpret nil.  Probably \"parse the cluster IP\" is the best they can do.\r\n\r\nGiven that, should we even bother with a default?  Maybe the `ipFamily` field is only used for user-defined preference and nil means \"whatever the cluster uses\" ?",
+        "createdAt" : "2019-08-22T16:18:28Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f119ac29-faf0-486a-b9a7-bcc48d7ec1a7",
+        "parentId" : "c86d5e49-9e39-4a8d-a1c8-1318e2f93a59",
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "to close this line of thought and for future prosperity. \r\nTypical situation (adding new field to stable api):\r\n1. we nil/blank/remove value on the field (create/update) if the gate is off.\r\n2. apply a static default if the gate is on. \r\n\r\nfor IPFamily, because it is not a `static default` we:\r\n1. keep on nil/blanking/removing as usual.\r\n2. set a dynamic default if the gate is on, because of that the default is dependent on other field value in case of `Service.Spec.IPFamily` it is dependent on `Service.Spec.ClusterIP`.",
+        "createdAt" : "2019-08-22T21:27:25Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c27e0b029d328552cc3ef0661f16a5ad3c422fb8",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +4177,4181 @@\t\t}\n\t\t// notes:\n\t\t// we drop the IPFamily field when the Dualstack gate is off.\n\t\t// once the gate is on, we start assigning default ipfamily according to cluster settings. in other words\n\t\t// though the field is immutable, we allow (onetime) change from nil==> to value"
+  },
+  {
+    "id" : "75ff5f1f-30eb-4fa0-a063-a849648827a8",
+    "prId" : 79386,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79386#pullrequestreview-279218288",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "05b6f6ae-75b5-4d75-994f-f735d89eb4b1",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I think the pattern here should be:\r\n\r\n```\r\nif gate-enabled {\r\n    assert ipFamily is not nil (field.Required())\r\n}\r\nif ipFamily != nil && !supported {\r\n    field.NotSupported()\r\n}\r\n```\r\n\r\nThat way, when teh gate is removed, it becomes:\r\n\r\n```\r\nif ipFamily ==- nil {\r\n    field.Required()\r\n} else if !supported {\r\n    field.NotSupported\r\n}\r\n```",
+        "createdAt" : "2019-08-23T15:57:58Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f1fe630-1296-4ae2-810f-dd0b57c0f013",
+        "parentId" : "05b6f6ae-75b5-4d75-994f-f735d89eb4b1",
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "we have been very specific on doing gate specific checks on validation. We have been explicitly saying no, we should not do that. Also the field itself is not required even when the gate is removed, the cluster will assign default. Did i misunderstand something?",
+        "createdAt" : "2019-08-23T16:25:02Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a36792d9-94a7-4ab0-a996-b79c767be44f",
+        "parentId" : "05b6f6ae-75b5-4d75-994f-f735d89eb4b1",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Jordan agreed that the valid use of gates in validation was this pattern (in the side thread :)\r\n\r\nSince validation runs AFTER defaulting, the only way `nil` would be seen in validation is either a) the gate is off or b) a bug.  This is what I mean about required vs optional.  It is actually required on read, optional on write.  BTW, I have a consult with apimachinery folks in 30 minutes :)\r\n\r\nLong-term leaving a nil-check bypass here means we won't find that bug (as easily).",
+        "createdAt" : "2019-08-23T20:54:01Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c27e0b029d328552cc3ef0661f16a5ad3c422fb8",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +4077,4081 @@\t}\n\n\tif service.Spec.IPFamily != nil && !supportedServiceIPFamily.Has(string(*service.Spec.IPFamily)) {\n\t\tallErrs = append(allErrs, field.NotSupported(specPath.Child(\"ipFamily\"), service.Spec.IPFamily, supportedServiceIPFamily.List()))\n\t}"
+  },
+  {
+    "id" : "335281fd-c319-437d-8e31-2b4bf44e7081",
+    "prId" : 79386,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79386#pullrequestreview-339983934",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "71f0ab11-4ec2-47f3-b562-429ea33b008a",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "If we have the defaulting in place, we should not ever observe this as nil when the gate is enabled.\r\n\r\nWhen the gate is disabled and oldObj.ipFamily was nil, we should have blanked newObj in REST already, so no need to nil check.\r\n\r\nWhen the gate is disabled and oldObj.ipFamily was non-nil, no need to nil-check.\r\n\r\n\r\nSo...no need to nil-check?",
+        "createdAt" : "2019-08-23T16:06:59Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fd8840bc-5ac5-4463-8a0a-bb02c5e28a0b",
+        "parentId" : "71f0ab11-4ec2-47f3-b562-429ea33b008a",
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "as an existing cluster moves from single stack to dualstack, the field will be set by ipallocator on new service, but it will not be set on old service (this is ok and expected). What is not ok is setting the field to a value different to `old service non nil IPFamily` (irrespective of dual stack or not). Because the field is immutable.",
+        "createdAt" : "2019-08-23T16:43:57Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1de814d-0d28-4cab-80cd-9b72548bb8b2",
+        "parentId" : "71f0ab11-4ec2-47f3-b562-429ea33b008a",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "The read operation will default the value from clusterIP, so we can check immutable without testing for nil.\r\n\r\nIf the old value was non-nil, we will not clear it (dropDisabled is explicit about that) in strategy, so we can check immutability without testing nil.\r\n\r\nIf the old value was nil, the new value must also be nil, which would be enforced by strategy, but checking it here is fine.\r\n",
+        "createdAt" : "2019-08-23T22:51:25Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bf0729ca-103f-4d0a-89ef-8c2cbd87bd96",
+        "parentId" : "71f0ab11-4ec2-47f3-b562-429ea33b008a",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "So after actually trying this, this broke old clients (they will send nil family on an update). #86895 has a new test which shows this behavior.  Basically, we need to default ipfamily on every create and update, and allow nil ipfamily on update.",
+        "createdAt" : "2020-01-08T16:25:57Z",
+        "updatedAt" : "2020-01-08T16:25:58Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c27e0b029d328552cc3ef0661f16a5ad3c422fb8",
+    "line" : 47,
+    "diffHunk" : "@@ -1,1 +4180,4184 @@\t\t// once the gate is on, we start assigning default ipfamily according to cluster settings. in other words\n\t\t// though the field is immutable, we allow (onetime) change from nil==> to value\n\t\tif oldService.Spec.IPFamily != nil {\n\t\t\tallErrs = append(allErrs, ValidateImmutableField(service.Spec.IPFamily, oldService.Spec.IPFamily, field.NewPath(\"spec\", \"ipFamily\"))...)\n\t\t}"
+  },
+  {
+    "id" : "a0ce6414-655e-46c6-b7d3-86d25a34062f",
+    "prId" : 79176,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79176#pullrequestreview-254043850",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "21fd83c4-7cf2-4985-a5dc-9abfe63b8aa0",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Unfortunate here that we miss early exit",
+        "createdAt" : "2019-06-25T14:27:09Z",
+        "updatedAt" : "2019-06-25T14:27:09Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a0b57ad3db7d20319e3eaa84ec461aea2047d9cf",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +3438,3442 @@\tpodshelper.VisitContainersWithPath(spec, func(c *core.Container, _ *field.Path) {\n\t\tif c.Name == containerName {\n\t\t\thasContainer = true\n\t\t}\n\t})"
+  },
+  {
+    "id" : "ddfcc57d-10a2-428d-9d9b-35ab89619f50",
+    "prId" : 77703,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/77703#pullrequestreview-242994591",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1841110d-3449-43d9-9c47-8fcc5542509d",
+        "parentId" : null,
+        "authorId" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "body" : "same here I think.\r\n\r\nAbove we have\r\n```\r\nif validateInlinePersistentVolume:\r\n  validate field A\r\n  validate field B\r\nif !validateInlinePersistentVolume:\r\n  validate field A\r\n```\r\n\r\nthen down here it looks like we've changed to\r\n```\r\nvalidate field A:\r\n  if validateInlinePersistentVolume:\r\n    validate this way\r\n  if !validateInlinePersistentVolume\r\n    validate that way\r\n```\r\n\r\ncould we just refactor this all into the above way? Maybe I'm just confused. If it makes more sense to do it this way then please keep it",
+        "createdAt" : "2019-05-28T22:16:00Z",
+        "updatedAt" : "2019-05-30T09:35:54Z",
+        "lastEditedBy" : "542e5d2f-2ff9-4674-ab44-78f31768e7a1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a5cf299b-8e6d-4ced-b7ea-7716061aa49b",
+        "parentId" : "1841110d-3449-43d9-9c47-8fcc5542509d",
+        "authorId" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "body" : "I agree that mixing the two is not ideal. I wanted to keep the validations for existing fields in the same order as it is today by inlining the checks for validateInlinePersistentVolume but could not fit the new non-null/empty checks for validateInlinePersistentVolume in the same pattern. Will try to refactor this a bit.",
+        "createdAt" : "2019-05-29T00:49:46Z",
+        "updatedAt" : "2019-05-30T09:35:54Z",
+        "lastEditedBy" : "98986d5f-c846-4478-8363-8a016e3d6b89",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "de7be9d6133bb985d9f1d0fa029e03166f6cd0f4",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +1597,1601 @@\tvar nodeAffinitySpecified bool\n\tvar errs field.ErrorList\n\tif pvSpec.NodeAffinity != nil {\n\t\tif validateInlinePersistentVolumeSpec {\n\t\t\tallErrs = append(allErrs, field.Forbidden(fldPath.Child(\"nodeAffinity\"), \"may not be specified in the context of inline volumes\"))"
+  },
+  {
+    "id" : "b27ca119-0fd3-43ca-a756-7f590ce84af8",
+    "prId" : 77327,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/77327#pullrequestreview-257050674",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a9c6e9a9-4929-42ed-9f39-0da697fc2598",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "Should we check length of constraints matches that of fldPath.Index ?",
+        "createdAt" : "2019-06-16T15:00:51Z",
+        "updatedAt" : "2019-07-19T00:34:43Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71dcd8b1-2383-4451-b623-b49f974333c1",
+        "parentId" : "a9c6e9a9-4929-42ed-9f39-0da697fc2598",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "We don't need to.",
+        "createdAt" : "2019-07-02T17:46:49Z",
+        "updatedAt" : "2019-07-19T00:34:43Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f9d49a6309127d79c6c8ccb044c7c7d81c65adb2",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +5578,5582 @@\n\tvar existingConstraintPairs []spreadConstraintPair\n\tfor i, constraint := range constraints {\n\t\tsubFldPath := fldPath.Index(i)\n\t\tif err := ValidateMaxSkew(subFldPath.Child(\"maxSkew\"), constraint.MaxSkew); err != nil {"
+  },
+  {
+    "id" : "a31a7f83-9c17-47d9-b549-706dfed46feb",
+    "prId" : 77327,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/77327#pullrequestreview-257051229",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f7c12fd7-bfd2-4748-ae38-be849a439ebf",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "It seems if existing constraints are represented with a map, the check would become O(1)",
+        "createdAt" : "2019-06-16T15:02:21Z",
+        "updatedAt" : "2019-07-19T00:34:43Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f78b03fe-31d2-4604-aaef-1c16b3cb59c8",
+        "parentId" : "f7c12fd7-bfd2-4748-ae38-be849a439ebf",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "In theory yes, but in practice we usually have a couple of constraints, so the complexity would outweigh the benefits. ",
+        "createdAt" : "2019-07-02T17:47:51Z",
+        "updatedAt" : "2019-07-19T00:34:43Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f9d49a6309127d79c6c8ccb044c7c7d81c65adb2",
+    "line" : 79,
+    "diffHunk" : "@@ -1,1 +5630,5634 @@// ValidateSpreadConstraintPair tests that if `pair` exists in `existingConstraintPairs`.\nfunc ValidateSpreadConstraintPair(fldPath *field.Path, pair spreadConstraintPair, existingConstraintPairs []spreadConstraintPair) *field.Error {\n\tfor _, existingPair := range existingConstraintPairs {\n\t\tif pair.topologyKey == existingPair.topologyKey &&\n\t\t\tpair.whenUnsatisfiable == existingPair.whenUnsatisfiable {"
+  },
+  {
+    "id" : "86514b2f-6f59-4076-b496-b52ae22b0281",
+    "prId" : 77327,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/77327#pullrequestreview-264331866",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7abf9152-ce0a-4e16-b43e-7c200e050275",
+        "parentId" : null,
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Both the comment and the method name should describe what's being validated. Update once the discussion below resolves. Something like: `ValidateSpreadConstraintDoesNotRepeat`. And the comment would explain explicitly which keys are used to determine a repetition. And you should be able to iterate through the original constraints slice instead of creating a new array of pairs (up to the current index).",
+        "createdAt" : "2019-07-18T15:35:48Z",
+        "updatedAt" : "2019-07-19T00:34:43Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8795a704-2b54-43b5-ac85-a5dcf5578ad5",
+        "parentId" : "7abf9152-ce0a-4e16-b43e-7c200e050275",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "> And you should be able to iterate through the original constraints slice instead of creating a new array of pairs (up to the current index).\r\n\r\nNot really. We shouldn't re-iterate the visited constraints.",
+        "createdAt" : "2019-07-19T00:42:21Z",
+        "updatedAt" : "2019-07-19T00:42:21Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4794a906-7913-4625-91ad-fe2936ba55c3",
+        "parentId" : "7abf9152-ce0a-4e16-b43e-7c200e050275",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "Why not? It would be just to check for repetitions. The complexity is the same. Unless you plan to replace []spreadConstraintPair by a map in the future. But we don't expect to have a big amount of constraints.",
+        "createdAt" : "2019-07-19T13:38:16Z",
+        "updatedAt" : "2019-07-19T13:42:53Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67928397-fb9e-4a96-94e3-3670f0c4210a",
+        "parentId" : "7abf9152-ce0a-4e16-b43e-7c200e050275",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "> Complexity is basically the same\r\n\r\nNot for the worst/average case.\r\n\r\nIf we check repeatedly, for the ith constraint, each time it's compared with **_all_** constraints. So in total it's `n^2` times, and notice that we need additional logic to exclude the case it compares with itself.\r\nIf we only check **_visited_** constraints, in total it's `1+2+...+n` = `n^2 / 2`. And we don't need to consider the case it compares with itself.",
+        "createdAt" : "2019-07-19T16:37:32Z",
+        "updatedAt" : "2019-07-19T16:37:33Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4cfd30d9-7941-4fa6-bdf6-3e07ab4df900",
+        "parentId" : "7abf9152-ce0a-4e16-b43e-7c200e050275",
+        "authorId" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "body" : "You just need to pass a subslice: `constraints[:i]`",
+        "createdAt" : "2019-07-19T17:14:01Z",
+        "updatedAt" : "2019-07-19T17:20:20Z",
+        "lastEditedBy" : "31fbce73-ef64-43f8-9faa-047479d8fc32",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f9d49a6309127d79c6c8ccb044c7c7d81c65adb2",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +5629,5633 @@\n// ValidateSpreadConstraintPair tests that if `pair` exists in `existingConstraintPairs`.\nfunc ValidateSpreadConstraintPair(fldPath *field.Path, pair spreadConstraintPair, existingConstraintPairs []spreadConstraintPair) *field.Error {\n\tfor _, existingPair := range existingConstraintPairs {\n\t\tif pair.topologyKey == existingPair.topologyKey &&"
+  },
+  {
+    "id" : "35c7295f-f658-4f98-98e1-2b74d49bb3b5",
+    "prId" : 76968,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76968#pullrequestreview-231345685",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "50a77750-b35f-4ab4-9273-727fa3f4df28",
+        "parentId" : null,
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "Hmm, I'm not sure whether validation runs before or after admission... my guess would be after since we would want to validate admission mutations...\r\n\r\nAlso, this should be ignored if the PodOverhead feature is disabled.\r\n\r\nI think it might make more sense to just enforce this in the admission controller. That way we can also ignore the error if it is set to the same value as the RuntimeClass.",
+        "createdAt" : "2019-04-25T17:24:07Z",
+        "updatedAt" : "2019-06-18T14:58:28Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "afbdf2cb-7725-4161-bb4c-3e54aad586d0",
+        "parentId" : "50a77750-b35f-4ab4-9273-727fa3f4df28",
+        "authorId" : "1ccd067e-9fba-4e11-a385-9b3c638dbd8a",
+        "body" : "Makes sense.  Addressed.",
+        "createdAt" : "2019-04-26T20:26:12Z",
+        "updatedAt" : "2019-06-18T14:58:28Z",
+        "lastEditedBy" : "1ccd067e-9fba-4e11-a385-9b3c638dbd8a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5e09568c8ead90caa3613c77745808cb6283f9f7",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +3104,3108 @@\tif spec.Overhead != nil && utilfeature.DefaultFeatureGate.Enabled(features.PodOverhead) {\n\t\tallErrs = append(allErrs, validateOverhead(spec.Overhead, fldPath.Child(\"overhead\"))...)\n\t}\n\n\treturn allErrs"
+  },
+  {
+    "id" : "c564e4ff-e3f7-4b2a-9119-a8adf69dd80a",
+    "prId" : 76968,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76968#pullrequestreview-251425058",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2593fc07-783b-49ad-b1b6-8c364d1557bc",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "If you have the strategy blanking out the fields, you should not even need to check the gate here - it will be nil, right?",
+        "createdAt" : "2019-06-19T00:32:13Z",
+        "updatedAt" : "2019-06-19T00:32:33Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5e09568c8ead90caa3613c77745808cb6283f9f7",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +3102,3106 @@\t}\n\n\tif spec.Overhead != nil && utilfeature.DefaultFeatureGate.Enabled(features.PodOverhead) {\n\t\tallErrs = append(allErrs, validateOverhead(spec.Overhead, fldPath.Child(\"overhead\"))...)\n\t}"
+  },
+  {
+    "id" : "ab98aea5-5ff2-4657-a728-d0f3370afe83",
+    "prId" : 73977,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/73977#pullrequestreview-244433970",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b943a52a-f12a-440b-8d7a-28041f5309b4",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "So this was okay previously where we assume only 1 CIDR. If we keep this validation logic, it means that we can't add CIDRs in multiple patches/updates. Is that expected?",
+        "createdAt" : "2019-05-30T00:49:09Z",
+        "updatedAt" : "2019-07-02T22:28:09Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7af0349b-2e24-4767-a5fb-a61028dea52e",
+        "parentId" : "b943a52a-f12a-440b-8d7a-28041f5309b4",
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "Yes. cidr allocation (even in multi cidr case) is always done in a patch. CNI like kubenet does not really know how to work with multi `event` triggering `cidr change`.. they pick the first and ignore the rest..",
+        "createdAt" : "2019-05-30T17:42:30Z",
+        "updatedAt" : "2019-07-02T22:28:09Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db700850-1967-462b-ab9b-3168bcf68343",
+        "parentId" : "b943a52a-f12a-440b-8d7a-28041f5309b4",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I think for now it is OK.  We can loosen this if we need to",
+        "createdAt" : "2019-05-31T18:29:43Z",
+        "updatedAt" : "2019-07-02T22:28:09Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "af552ab4699fbdd70622ade95a2accbab904c5b5",
+    "line" : 112,
+    "diffHunk" : "@@ -1,1 +4343,4347 @@\t} else {\n\t\t// compare the entire slice\n\t\tif len(oldNode.Spec.PodCIDRs) != len(node.Spec.PodCIDRs) {\n\t\t\tallErrs = append(allErrs, field.Forbidden(field.NewPath(\"spec\", \"podCIDRs\"), \"node updates may not change podCIDR except from \\\"\\\" to valid\"))\n\t\t} else {"
+  },
+  {
+    "id" : "7e463809-a2c5-437a-952f-74637770dff0",
+    "prId" : 72251,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72251#pullrequestreview-187527297",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c9c1690e-8c64-478c-9bb3-f09698da4b3d",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this is dealing with PVC objects... revert this until the corresponding change is made for PVCs",
+        "createdAt" : "2018-12-21T18:48:43Z",
+        "updatedAt" : "2018-12-26T19:29:19Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7604988-bf7a-4917-b57f-5a68766cb009",
+        "parentId" : "c9c1690e-8c64-478c-9bb3-f09698da4b3d",
+        "authorId" : "6c37c694-3f72-4ff3-ac3a-5fbddf4d5796",
+        "body" : "add pvc handling to this pr ",
+        "createdAt" : "2018-12-21T20:20:26Z",
+        "updatedAt" : "2018-12-26T19:29:19Z",
+        "lastEditedBy" : "6c37c694-3f72-4ff3-ac3a-5fbddf4d5796",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a5d5a174af0316cac55d0da116157c9c3d9ef2c4",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +1839,1843 @@\t\t}\n\t}\n\tif spec.VolumeMode != nil && !supportedVolumeModes.Has(string(*spec.VolumeMode)) {\n\t\tallErrs = append(allErrs, field.NotSupported(fldPath.Child(\"volumeMode\"), *spec.VolumeMode, supportedVolumeModes.List()))\n\t}"
+  },
+  {
+    "id" : "9ffa716c-5d9a-4c04-acff-d62b846510c6",
+    "prId" : 72251,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72251#pullrequestreview-187551791",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "483f3e15-abb6-4559-8611-c8172c6b56ff",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "~~This introduces a failure mode when reading an existing object with a nil volumeMode field from a server with the gate disabled, then writing to a server with the gate enabled.~~\r\n\r\nedit: initial analysis was not correct. when written to the server with the gate enabled, defaulting will populate the incoming field with \"filesystem\", matching the defaulting applied to the existing object, and passing the immutable field check\r\n\r\nHere are all the scenarios:\r\n\r\n* existing object has nil volumeMode field, read from server with gate enabled, written to server with gate enabled\r\n  * field defaulted to \"filesystem\" on read (because gate is enabled on read server)\r\n  * client round-trips, submits object with \"filesystem\"\r\n  * field is left as-is on write (because gate is enabled on write server)\r\n  * oldPv field is defaulted to \"filesystem\" in write server (because gate is enabled on write server)\r\n  * immutable check PASSES, oldPv and newPV both have \"filesystem\"\r\n* existing object has nil volumeMode field, read from server with gate enabled, written to server with gate disabled\r\n  * field defaulted to \"filesystem\" on read (because gate is enabled on read server)\r\n  * client round-trips, submits object with \"filesystem\"\r\n  * field is set to nil on write (because gate is disabled on write server and existing object has a nil field)\r\n  * oldPv field is nil in write server (because gate is disabled on write server)\r\n  * immutable check PASSES, oldPv and newPv both have nil\r\n* existing object has nil volumeMode field, read from server with gate disabled, written to server with gate enabled\r\n  * field is returned as nil on read (because gate is disabled on read server)\r\n  * client round-trips, submits object with nil (which gets defaulted to \"filesystem\" when decoded\r\n  * field is defaulted to \"filesystem\" and left as-is on write (because feature gate is enabled on write server)\r\n  * oldPv field is defaulted to \"filesystem\" in write server (because gate is enabled on write server)\r\n  * ~~immutable check FAILS, oldPv has \"filesystem\", newPV has nil~~\r\n  * immutable check PASSES, oldPv has \"filesystem\", newPV has \"filesystem\"\r\n* existing object has nil volumeMode field, read from server with gate disabled, written to server with gate disabled\r\n  * field is returned as nil on read (because gate is disabled on read server)\r\n  * client round-trips, submits object with nil\r\n  * field is set to nil on write (because feature gate is disabled on write server and existing object has a nil field)\r\n  * oldPv field is nil in write server (because gate is disabled on write server)\r\n  * immutable check PASSES, oldPv and newPv both have nil\r\n* existing object has non-nil volumeMode field, read and then written to server with gate enabled\r\n  * existing field is returned on read\r\n  * client round-trips, submits object with same field value\r\n  * field is left as-is on write (because feature gate is enabled on write server)\r\n  * oldPv field is non-nil in write server\r\n  * immutable check PASSES, oldPv and newPv both have identical non-nil values\r\n* existing object with non-nil volumeMode field, read and then written to server with gate disabled\r\n  * existing field is returned on read\r\n  * client round-trips, submits object with same field value\r\n  * field is left as-is on write (because existing object has a non-nil value)\r\n  * oldPv field is non-nil in write server\r\n  * immutable check PASSES, oldPv and newPv both have identical non-nil values\r\n",
+        "createdAt" : "2018-12-21T22:55:15Z",
+        "updatedAt" : "2018-12-26T19:29:19Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a5d5a174af0316cac55d0da116157c9c3d9ef2c4",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +1782,1786 @@\tnewPv.Status = oldPv.Status\n\n\tallErrs = append(allErrs, ValidateImmutableField(newPv.Spec.VolumeMode, oldPv.Spec.VolumeMode, field.NewPath(\"volumeMode\"))...)\n\n\tif utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {"
+  },
+  {
+    "id" : "575356b4-3638-492d-8646-c85d832bfeef",
+    "prId" : 72046,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72046#pullrequestreview-279261425",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "297185ae-93ac-48e6-a8a9-5dd04516cdc4",
+        "parentId" : null,
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "Can we add validation tests for that?",
+        "createdAt" : "2019-08-23T19:55:52Z",
+        "updatedAt" : "2019-11-15T06:38:02Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8b26cc0c-7997-4ec8-89d8-4d37e08bb641",
+        "parentId" : "297185ae-93ac-48e6-a8a9-5dd04516cdc4",
+        "authorId" : "e379cdad-051b-485d-824f-1b14a8cc7dd0",
+        "body" : "done",
+        "createdAt" : "2019-08-23T23:54:01Z",
+        "updatedAt" : "2019-11-15T06:38:02Z",
+        "lastEditedBy" : "e379cdad-051b-485d-824f-1b14a8cc7dd0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31d623b4d74ceadfad101d36a4710d4406fcf144",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +4055,4059 @@\n\t// Validate TopologyKeys\n\tif len(service.Spec.TopologyKeys) > 0 {\n\t\ttopoPath := specPath.Child(\"topologyKeys\")\n\t\t// topologyKeys is mutually exclusive with 'externalTrafficPolicy=Local'"
+  },
+  {
+    "id" : "ef72b027-7fc7-4ba9-a11e-e84c928817ad",
+    "prId" : 69929,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/69929#pullrequestreview-174965841",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d7aa55ac-60a8-466f-bd67-df8db8c80e2f",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "keep in mind that we cannot change the v1beta1 API. additional validation like this we want to do needs to be done only on creation, and only when the API request is not via the v1beta1 API.\r\n\r\nThat info is available in the context passed to volumeAttachmentStrategy#Validate, the same way this PR is doing different behavior in PrepareForCreate for v1beta1",
+        "createdAt" : "2018-11-14T14:50:42Z",
+        "updatedAt" : "2018-11-14T22:58:11Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd3879f2-05df-4f21-9f10-3272e4af3744",
+        "parentId" : "d7aa55ac-60a8-466f-bd67-df8db8c80e2f",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "@liggitt, fixed. I squashed two validation commits into one and introduced `ValidateVolumeAttachmentV1` that's called only when v1 instance is created. I hope I got it right.",
+        "createdAt" : "2018-11-14T16:42:34Z",
+        "updatedAt" : "2018-11-14T22:58:11Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9e97700-dbd8-47b9-b559-13421c428eda",
+        "parentId" : "d7aa55ac-60a8-466f-bd67-df8db8c80e2f",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "If I understand it correctly, this is just a temporary measure, right? VolumeAttachments are re-created during each Kubernetes update (nodes get drained -> all volumes are detached -> all VolumeAttachments are deleted). At some point Kubernetes will create v1 objects only, so we can merge the validation functions.\r\n\r\nOr shall we support 3rd party external attachers that are going to use v1beta1 API forever?",
+        "createdAt" : "2018-11-14T16:45:08Z",
+        "updatedAt" : "2018-11-14T22:58:11Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e8433b3-ebb9-4786-b20c-d58ccc90259c",
+        "parentId" : "d7aa55ac-60a8-466f-bd67-df8db8c80e2f",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "once we have v1, we can deprecate v1beta1 and stop serving it after the deprecation period. until we have the ability to sweep and remove existing invalid objects, we will have to tolerate data that could have been persisted via v1beta1",
+        "createdAt" : "2018-11-14T16:50:11Z",
+        "updatedAt" : "2018-11-14T22:58:11Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eaff4fd4d227321b69616f264d86dcf785d1b5ae",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +1455,1459 @@\t}\n\n\tif !csiDriverNameRexp.MatchString(driverName) {\n\t\tallErrs = append(allErrs, field.Invalid(fldPath, driverName, validation.RegexError(csiDriverNameRexpErrMsg, csiDriverNameRexpFmt, \"csi-hostpath\")))\n\t}"
+  },
+  {
+    "id" : "2db2c556-2d1d-409d-922b-9486e282c9d1",
+    "prId" : 67301,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67301#pullrequestreview-145899916",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ee41472e-ffb4-4ac8-8f25-0b44e33ea113",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "if we're changing this, should we remove the function in this package?",
+        "createdAt" : "2018-08-13T14:26:06Z",
+        "updatedAt" : "2018-08-14T02:38:56Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e10a457e-3176-4883-b54b-6a8e1a6e33f0",
+        "parentId" : "ee41472e-ffb4-4ac8-8f25-0b44e33ea113",
+        "authorId" : "3c1422a0-6358-4857-8f56-961979171514",
+        "body" : "Yeah. Right.",
+        "createdAt" : "2018-08-14T02:37:39Z",
+        "updatedAt" : "2018-08-14T02:38:56Z",
+        "lastEditedBy" : "3c1422a0-6358-4857-8f56-961979171514",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3157ff0230c990ac3e3c647a8abea360149aae32",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +207,211 @@// Prefix indicates this name will be used as part of generation, in which case\n// trailing dashes are allowed.\nvar ValidateServiceName = apimachineryvalidation.NameIsDNS1035Label\n\n// ValidateNodeName can be used to check whether the given node name is valid."
+  },
+  {
+    "id" : "1e7275ce-731b-46c0-b1ce-0ff43a14b3b5",
+    "prId" : 67087,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67087#pullrequestreview-149957049",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "869e035a-25d3-44ea-a8c9-8df0d81cc1ea",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "When you add a second kind or group, you probably want to test them as tuples :)",
+        "createdAt" : "2018-08-28T02:09:12Z",
+        "updatedAt" : "2018-08-28T20:57:12Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2137084e-03cd-41d2-8a59-6908243500cb",
+        "parentId" : "869e035a-25d3-44ea-a8c9-8df0d81cc1ea",
+        "authorId" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "body" : "Sure.  supportedDataSourceKinds is defined as sets.NewString(string(\"VolumeSnapshot”)).  If we added support for a new kind, we can add it to the sets.\r\n\r\n\r\n",
+        "createdAt" : "2018-08-28T03:45:20Z",
+        "updatedAt" : "2018-08-28T20:57:12Z",
+        "lastEditedBy" : "275dd783-53c3-4fed-8434-96ed6a2e0331",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "88d3d964e277205bb3f1183e8deafd2cd4f9ebeb",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +1834,1838 @@\t\tif len(spec.DataSource.Name) == 0 {\n\t\t\tallErrs = append(allErrs, field.Required(fldPath.Child(\"dataSource\", \"name\"), \"\"))\n\t\t} else if !supportedDataSourceKinds.Has(string(spec.DataSource.Kind)) {\n\t\t\tallErrs = append(allErrs, field.NotSupported(fldPath.Child(\"dataSource\"), spec.DataSource.Kind, supportedDataSourceKinds.List()))\n\t\t} else if !supportedDataSourceAPIGroups.Has(string(spec.DataSource.APIGroup)) {"
+  },
+  {
+    "id" : "86319372-8bb8-4838-9787-943f982bf0a4",
+    "prId" : 64057,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/64057#pullrequestreview-124215323",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "174273a6-e012-46d7-83ef-ae023d487b0a",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "This doesn't actually check for a fully-qualified name - `foobar` is allowed as is `example.com/foobar`.   You maybe want  something different?",
+        "createdAt" : "2018-05-29T22:02:27Z",
+        "updatedAt" : "2018-06-01T23:21:00Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "373e8355-9ce5-4894-8567-75764d4063d0",
+        "parentId" : "174273a6-e012-46d7-83ef-ae023d487b0a",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "also want a testcase, I think",
+        "createdAt" : "2018-05-29T22:02:54Z",
+        "updatedAt" : "2018-06-01T23:21:00Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a80f9afd-4dc6-4f95-9d5b-802435bd2be5",
+        "parentId" : "174273a6-e012-46d7-83ef-ae023d487b0a",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "I think `foobar` is okay. Added a testcase. ",
+        "createdAt" : "2018-05-30T00:16:31Z",
+        "updatedAt" : "2018-06-01T23:21:00Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "792f03b1d248eab2b7b5f90c13b4554f7b2ed7a8",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +3532,3536 @@\t\t\tcontinue\n\t\t}\n\t\tfor _, msg := range validation.IsQualifiedName(string(condition.Type)) {\n\t\t\tallErrs = append(allErrs, field.Invalid(fldPath.Index(i).Child(\"Type\"), string(condition.Type), msg))\n\t\t}"
+  },
+  {
+    "id" : "bfb1a741-9cb5-4b28-b673-85cf31189186",
+    "prId" : 63819,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/63819#pullrequestreview-122756969",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5a48f4c0-3ad3-44b3-85d9-228e9fd9ee7e",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "should limit maximum to integer values that round-trip reliably in json (e.g. 2^53 or less)",
+        "createdAt" : "2018-05-16T21:05:13Z",
+        "updatedAt" : "2018-05-30T18:41:12Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed699065-46bc-4412-8c72-efbd3e3d97f2",
+        "parentId" : "5a48f4c0-3ad3-44b3-85d9-228e9fd9ee7e",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "I limited it to 2^32, which is about 2000 years.",
+        "createdAt" : "2018-05-16T22:56:28Z",
+        "updatedAt" : "2018-05-30T18:41:12Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "adcd58fc-657e-4cc0-8755-316c3979ee6f",
+        "parentId" : "5a48f4c0-3ad3-44b3-85d9-228e9fd9ee7e",
+        "authorId" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "body" : "> In the year 4027, humanity is on the brink of extinction. The last remaining humans have been forced into hiding under the onslaught of _kubeflow_. Then one day the attacks stop, the machines go quiet. **overlord-service** didn't properly handle cache invalidation of its service account token nor did it implement smart health checks.\r\n\r\n```\r\nexpirationSeconds: 4294967296  # This should never expire\r\n```\r\n\r\n(the rest of their infrastructure is _very_ reliable)",
+        "createdAt" : "2018-05-23T20:45:57Z",
+        "updatedAt" : "2018-05-30T18:41:12Z",
+        "lastEditedBy" : "9f030d50-62db-4b00-a28c-847709b74d97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "514d280e2f64631b8e583c082a2f5463c664fcb7",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +1045,1049 @@\t\t\t\tallErrs = append(allErrs, field.Forbidden(projPath, \"TokenRequestProjection feature is not enabled\"))\n\t\t\t}\n\t\t\tif source.ServiceAccountToken.ExpirationSeconds < 10*60 {\n\t\t\t\tallErrs = append(allErrs, field.Invalid(projPath.Child(\"expirationSeconds\"), source.ServiceAccountToken.ExpirationSeconds, \"may not specify a duration less than 10 minutes\"))\n\t\t\t}"
+  },
+  {
+    "id" : "68f50a98-6b08-486b-8cb8-395dfb5fef4a",
+    "prId" : 63314,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/63314#pullrequestreview-119221096",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a09f0a9e-a6de-44b5-b7d7-b868ae7a0a62",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "even if we don't track mutations, we should still have the actual configmap in hand when we report status, right? why can't we report the resourceVersion we're using?",
+        "createdAt" : "2018-05-10T18:46:29Z",
+        "updatedAt" : "2018-05-15T18:25:25Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2735d778-4da2-40ba-a159-cf4036d521df",
+        "parentId" : "a09f0a9e-a6de-44b5-b7d7-b868ae7a0a62",
+        "authorId" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "body" : "We set status when we bootstrap the controller, when an active config becomes the new last-known-good, and when we ack the assigned config. The last of those three doesn't need UID/ResourceVersion because it's a reflection of spec; but during the former two we only have metadata from SerializedNodeConfigSources. Until I made the changes in #63221 to respect ConfigMap updates, we weren't setting ResourceVersion in the SerializedNodeConfigSources (UID was the only identifier that mattered for resolving a checkpoint), so we didn't know it at bootstrap/lkg-update time. \r\n\r\nIt wouldn't be too hard to port that fix back to this PR, though.",
+        "createdAt" : "2018-05-10T19:46:20Z",
+        "updatedAt" : "2018-05-15T18:25:25Z",
+        "lastEditedBy" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fcc1f8e7b6f457940f75943638a83a1a26405358",
+    "line" : 96,
+    "diffHunk" : "@@ -1,1 +4212,4216 @@\t}\n\t// TODO(#63221): require ResourceVersion in status when we start respecting ConfigMap mutations (the Kubelet isn't tracking it internally until\n\t// that PR, which makes it difficult to report for now).\n\treturn append(allErrs, validateConfigMapNodeConfigSource(source, fldPath)...)\n}"
+  },
+  {
+    "id" : "4046b9e5-9fd2-4504-a921-398122683280",
+    "prId" : 63233,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/63233#pullrequestreview-125648852",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "45056e80-ae9c-4aae-9874-0accec16da38",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Let's also add a feature gate check here while it's alpha.",
+        "createdAt" : "2018-06-01T18:57:16Z",
+        "updatedAt" : "2018-06-05T01:47:07Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aca947fe-0697-4342-b4fd-1a54563d3b30",
+        "parentId" : "45056e80-ae9c-4aae-9874-0accec16da38",
+        "authorId" : "1a75d411-1ce5-48f2-9967-25f88794c451",
+        "body" : "You mean check whether feature DynamicProvisioningScheduling is enabled here?\r\nBut as @saad-ali suggested, the struct might not only be used by this feature, and I think we should have already validate related feature in higher level who make use of the struct (AllowedTopologies for DynamicProvisioningScheduling).",
+        "createdAt" : "2018-06-04T01:27:58Z",
+        "updatedAt" : "2018-06-05T01:47:07Z",
+        "lastEditedBy" : "1a75d411-1ce5-48f2-9967-25f88794c451",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bf8ea977-34ba-457f-b1be-045ca839278c",
+        "parentId" : "45056e80-ae9c-4aae-9874-0accec16da38",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Yes, I think in the future, other components can use it, but while we are still developing it as an alpha feature, let's feature gate it.",
+        "createdAt" : "2018-06-04T15:51:11Z",
+        "updatedAt" : "2018-06-05T01:47:07Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70f5d634-a2f6-4b68-bebe-6822afee6ba9",
+        "parentId" : "45056e80-ae9c-4aae-9874-0accec16da38",
+        "authorId" : "1a75d411-1ce5-48f2-9967-25f88794c451",
+        "body" : "added",
+        "createdAt" : "2018-06-04T16:26:39Z",
+        "updatedAt" : "2018-06-05T01:47:07Z",
+        "lastEditedBy" : "1a75d411-1ce5-48f2-9967-25f88794c451",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "20654393ee4c710cc426bdf5ca02f869394b4802",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +3119,3123 @@func ValidateTopologySelectorTerm(term core.TopologySelectorTerm, fldPath *field.Path) field.ErrorList {\n\tallErrs := field.ErrorList{}\n\n\tif utilfeature.DefaultFeatureGate.Enabled(features.DynamicProvisioningScheduling) {\n\t\tfor i, req := range term.MatchLabelExpressions {"
+  },
+  {
+    "id" : "26cc30a9-0bb6-4214-bac3-10cfe01ccd17",
+    "prId" : 62002,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/62002#pullrequestreview-199338567",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "63f27218-bfb1-4698-bfd1-579f6d513601",
+        "parentId" : null,
+        "authorId" : "a6af948b-1558-4f87-99c3-a0d64d21be2a",
+        "body" : "would change to 'not a valid node field selector operator' to make clear which kind of selector is meant.",
+        "createdAt" : "2019-02-02T07:16:42Z",
+        "updatedAt" : "2019-02-02T07:16:42Z",
+        "lastEditedBy" : "a6af948b-1558-4f87-99c3-a0d64d21be2a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b80a01b210c4f12db7937a3887016c056ab7985d",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +3019,3023 @@\t\t}\n\tdefault:\n\t\tallErrs = append(allErrs, field.Invalid(fldPath.Child(\"operator\"), req.Operator, \"not a valid selector operator\"))\n\t}\n"
+  },
+  {
+    "id" : "32fade91-a143-4524-a212-7e27badb6459",
+    "prId" : 62002,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/62002#pullrequestreview-199338594",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ad80c92c-6679-4cf4-8de9-9e019977ee79",
+        "parentId" : null,
+        "authorId" : "a6af948b-1558-4f87-99c3-a0d64d21be2a",
+        "body" : "\"node field selector\" to harmonize with the other error messages.",
+        "createdAt" : "2019-02-02T07:17:38Z",
+        "updatedAt" : "2019-02-02T07:17:38Z",
+        "lastEditedBy" : "a6af948b-1558-4f87-99c3-a0d64d21be2a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b80a01b210c4f12db7937a3887016c056ab7985d",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +3023,3027 @@\n\tif vf, found := nodeFieldSelectorValidators[req.Key]; !found {\n\t\tallErrs = append(allErrs, field.Invalid(fldPath.Child(\"key\"), req.Key, \"not a valid field selector key\"))\n\t} else {\n\t\tfor i, v := range req.Values {"
+  },
+  {
+    "id" : "b4736a13-8008-4e7c-acbf-7306cdb63f60",
+    "prId" : 61984,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/61984#pullrequestreview-120029292",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "61c08452-c6c1-4792-99ff-4ece5cefce4f",
+        "parentId" : null,
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "however, if I were to make a breaking change, i would change this to ==",
+        "createdAt" : "2018-04-01T19:12:55Z",
+        "updatedAt" : "2018-05-11T22:57:54Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5c3b88d1-ac3c-4193-940e-5c2f9df062fd",
+        "parentId" : "61c08452-c6c1-4792-99ff-4ece5cefce4f",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "What happens if I specify 0 sources?  If it doesn't actually DO anything, we could maybe argue that it's better to fix this bug than to leave it alone",
+        "createdAt" : "2018-05-14T22:14:05Z",
+        "updatedAt" : "2018-05-14T22:14:05Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a5d2ca8c5510911040f30d1ed6411086fbfaddae",
+    "line" : 114,
+    "diffHunk" : "@@ -1,1 +1040,1044 @@\t\t\t}\n\t\t}\n\t\tif numSources > 1 {\n\t\t\tallErrs = append(allErrs, field.Forbidden(srcPath, \"may not specify more than 1 volume type\"))\n\t\t}"
+  },
+  {
+    "id" : "93448e33-4e8f-4709-a18e-6351c61746cb",
+    "prId" : 60195,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/60195#pullrequestreview-129380711",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a1c38bbe-56fe-46ce-9f7f-86d683944a50",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "if EndpointsNamespace is non-nil, require it to be non-empty and a valid namespace name",
+        "createdAt" : "2018-06-05T19:25:16Z",
+        "updatedAt" : "2018-11-06T10:23:29Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5199c76-a576-4407-9ce2-d3b32c267abe",
+        "parentId" : "a1c38bbe-56fe-46ce-9f7f-86d683944a50",
+        "authorId" : "3eb39df2-c27a-40ed-9fab-cabae1c6353d",
+        "body" : "Done.",
+        "createdAt" : "2018-06-17T06:57:24Z",
+        "updatedAt" : "2018-11-06T10:23:29Z",
+        "lastEditedBy" : "3eb39df2-c27a-40ed-9fab-cabae1c6353d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bdb051c72d836af2ab477dd23c4ff3fa06bbc1f4",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +908,912 @@\tif len(glusterfs.EndpointsName) == 0 {\n\t\tallErrs = append(allErrs, field.Required(fldPath.Child(\"endpoints\"), \"\"))\n\t}\n\tif len(glusterfs.Path) == 0 {\n\t\tallErrs = append(allErrs, field.Required(fldPath.Child(\"path\"), \"\"))"
+  },
+  {
+    "id" : "b0d4c9fe-5c6a-4bab-8710-17b32b00094f",
+    "prId" : 60118,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/60118#pullrequestreview-99005212",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2657ff99-4689-475e-b467-9f4d56ec300f",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "for all of these, ensure name is a valid secret name and namespace is a valid namespace name",
+        "createdAt" : "2018-02-23T17:23:29Z",
+        "updatedAt" : "2018-02-23T21:51:08Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "266809a7-47b3-469a-b2d2-92ce066d43fb",
+        "parentId" : "2657ff99-4689-475e-b467-9f4d56ec300f",
+        "authorId" : "6c37c694-3f72-4ff3-ac3a-5fbddf4d5796",
+        "body" : "done",
+        "createdAt" : "2018-02-23T18:24:03Z",
+        "updatedAt" : "2018-02-23T21:51:08Z",
+        "lastEditedBy" : "6c37c694-3f72-4ff3-ac3a-5fbddf4d5796",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3aa462eab49387fe5151ac78cbd44ae25965b876",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +1453,1457 @@\t}\n\n\tif csi.ControllerPublishSecretRef != nil {\n\t\tif len(csi.ControllerPublishSecretRef.Name) == 0 {\n\t\t\tallErrs = append(allErrs, field.Required(fldPath.Child(\"controllerPublishSecretRef\", \"name\"), \"\"))"
+  },
+  {
+    "id" : "62565c12-fbb9-4b49-84b2-fb3fe0473c32",
+    "prId" : 60100,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/60100#pullrequestreview-107349994",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "69e9efa6-0237-4147-9d84-ad8ca7b91b9d",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "why uid?",
+        "createdAt" : "2018-03-22T16:22:34Z",
+        "updatedAt" : "2018-03-27T15:49:56Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "03a46e58-2cea-4f0c-a268-703c3a3be031",
+        "parentId" : "69e9efa6-0237-4147-9d84-ad8ca7b91b9d",
+        "authorId" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "body" : "This has been a requirement of dynamic Kubelet config since the original proposal, to require users to be completely explicit (time and space) about which ConfigMap to use. If the UID in the config source doesn't match the UID of the ConfigMap, the Kubelet currently rejects it. \r\n\r\nIIRC there were concerns along the lines of ConfigMaps being deleted and recreated with the same name but different content... though this is less of an issue today now that we have the `--append-hash` option in kubectl (obviously the potential for in-place ConfigMap mutation still exists, but if users are using `--append-hash` I wouldn't expect them to mutate the ConfigMap after creation).\r\n\r\nThe Kubelet also checkpoints by UID, so it was convenient to already have this specified in the object ref, though I guess if we relaxed this requirement it could just resolve the UID and stick it in the local copy of the config source when it first downloads the ConfigMap.\r\n\r\nI can't remember other reasons to require UID, if any.\r\n\r\nWe should probably discuss this in parallel to this PR; if we relax the UID requirement there is other code that needs to change too, and I'd like to make all those changes in a single, isolated PR. I'm glad you brought this up; having this discussion prior to DKC beta was on my todo list.",
+        "createdAt" : "2018-03-22T23:38:34Z",
+        "updatedAt" : "2018-03-27T15:49:56Z",
+        "lastEditedBy" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c931597e-7e0f-4745-bb9e-b2da11a08d34",
+        "parentId" : "69e9efa6-0237-4147-9d84-ad8ca7b91b9d",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "fine to leave it, I just missed any other use of it in this PR and wondered",
+        "createdAt" : "2018-03-23T04:20:36Z",
+        "updatedAt" : "2018-03-27T15:49:56Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71504268-f74a-4b50-be51-42d07bbf8da2",
+        "parentId" : "69e9efa6-0237-4147-9d84-ad8ca7b91b9d",
+        "authorId" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "body" : "https://github.com/kubernetes/kubernetes/issues/61643",
+        "createdAt" : "2018-03-27T15:42:51Z",
+        "updatedAt" : "2018-03-27T15:49:56Z",
+        "lastEditedBy" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ab8dc12333c10978f8d1ce3d36db90ff2756153e",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +4121,4125 @@\t\tcount++\n\t\t// name, namespace, and UID must all be non-empty for ConfigMapRef\n\t\tif ref.Name == \"\" || ref.Namespace == \"\" || string(ref.UID) == \"\" {\n\t\t\tallErrs = append(allErrs, field.Invalid(fldPath.Child(\"configMapRef\"), ref, \"name, namespace, and UID must all be non-empty\"))\n\t\t}"
+  },
+  {
+    "id" : "ba8deaa4-df54-4aa7-a411-08652ca4936d",
+    "prId" : 59847,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59847#pullrequestreview-119145192",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bb0a16f6-537d-4dc8-9df2-30d221756852",
+        "parentId" : null,
+        "authorId" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "body" : "Is there any reason separating this validation of a single object into two separate methods here since both are same spec related?",
+        "createdAt" : "2018-05-08T18:08:01Z",
+        "updatedAt" : "2018-05-08T22:37:39Z",
+        "lastEditedBy" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0f8ec20-078c-42b5-bd4f-99ce76a0a534",
+        "parentId" : "bb0a16f6-537d-4dc8-9df2-30d221756852",
+        "authorId" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "body" : "1) You're right, it would be cleaner to remove the `Spec` suffix here, but it'll just get added back in #63314, when NodeConfigSource starts being used as part of the structured status.\r\n2) The split between `validateNodeConfigSourceSpec` and `validateConfigMapNodeConfigSourceSpec` recognizes that the former's target (NodeConfigSource) acts as a disjoint union type, and the latter's target (ConfigMapNodeConfigSource) is one of the possible subtypes (there is only one subtype today - a ConfigMap source, but it's open to extension in the future).",
+        "createdAt" : "2018-05-08T22:27:20Z",
+        "updatedAt" : "2018-05-08T22:37:39Z",
+        "lastEditedBy" : "881df817-68e6-43dd-b4ea-f0b973f7dc41",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ffba21dc-fd42-48e7-91c0-c4b2549cae67",
+        "parentId" : "bb0a16f6-537d-4dc8-9df2-30d221756852",
+        "authorId" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "body" : "Ok. I can live with it. :-)",
+        "createdAt" : "2018-05-10T16:02:47Z",
+        "updatedAt" : "2018-05-10T16:02:48Z",
+        "lastEditedBy" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c41cf55a2cdcb0e678be719c8909ea193b72ca84",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +4154,4158 @@\n// validation specific to Node.Spec.ConfigSource.ConfigMap\nfunc validateConfigMapNodeConfigSourceSpec(source *core.ConfigMapNodeConfigSource, fldPath *field.Path) field.ErrorList {\n\tallErrs := field.ErrorList{}\n\t// TODO(#61643): Prevent ref.UID from being set here when we switch from requiring UID to respecting all ConfigMap updates"
+  },
+  {
+    "id" : "e47bc634-bf8e-46f8-b1d8-b61abce24a2b",
+    "prId" : 59416,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59416#pullrequestreview-121551810",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "37303000-b19e-45b2-a509-19b9d929b409",
+        "parentId" : null,
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "@verb are you going to work on the TODOs in this PR?",
+        "createdAt" : "2018-05-18T17:33:03Z",
+        "updatedAt" : "2019-07-22T11:21:01Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b0172e3-aa2c-44ce-b017-110413eb4e20",
+        "parentId" : "37303000-b19e-45b2-a509-19b9d929b409",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "Yes, I plan on doing this work, but I didn't want to prematurely refactor code unrelated to Ephemeral Containers. I thought we could start with this minimal change and I could follow up with a PR to fix the error message with a small refactor.",
+        "createdAt" : "2018-05-18T19:51:04Z",
+        "updatedAt" : "2019-07-22T11:21:01Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a753c7a44b5f92e52d4119530ac76e38b837336",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +2643,2647 @@\t\t// doesn't really exist for EphemeralContainers (i.e. ephemeralContainers[0].spec[0].name instead\n\t\t// of ephemeralContainers[0].spec.name)\n\t\t// TODO(verb): factor a validateContainer() out of validateContainers() to be used here\n\t\tc := core.Container(ec.EphemeralContainerCommon)\n\t\tallErrs = append(allErrs, validateContainers([]core.Container{c}, false, volumes, idxPath)...)"
+  },
+  {
+    "id" : "ca3cd635-259d-4561-9cb2-8160d82c795c",
+    "prId" : 59416,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59416#pullrequestreview-150746309",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f84d2910-c448-4b95-a60f-d1be02e54050",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I'm assuming the existing spec change detection in ValidatePodUpdate will keep these from changing on normal pod put/patch calls... probably worth adding an explicit test in TestValidatePodUpdate for to ensure a normal put can't do anything to ephemeral containers",
+        "createdAt" : "2018-08-29T02:03:26Z",
+        "updatedAt" : "2019-07-22T11:21:01Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4762f29-2fa6-435c-ba88-0290f02bb35f",
+        "parentId" : "f84d2910-c448-4b95-a60f-d1be02e54050",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "That's correct. I had already added a test in TestValidatePodUpdate, but the description wasn't very clear so I reworded it a bit. The github UI doesn't load the diff for validation_test.go by default.",
+        "createdAt" : "2018-08-29T20:42:52Z",
+        "updatedAt" : "2019-07-22T11:21:01Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a753c7a44b5f92e52d4119530ac76e38b837336",
+    "line" : 143,
+    "diffHunk" : "@@ -1,1 +3840,3844 @@// ValidatePodEphemeralContainersUpdate tests that a user update to EphemeralContainers is valid.\n// newPod and oldPod must only differ in their EphemeralContainers.\nfunc ValidatePodEphemeralContainersUpdate(newPod, oldPod *core.Pod) field.ErrorList {\n\tspec := newPod.Spec\n\tspecPath := field.NewPath(\"spec\").Child(\"ephemeralContainers\")"
+  },
+  {
+    "id" : "a241826e-42f1-405a-913d-b55b06c358e7",
+    "prId" : 59416,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59416#pullrequestreview-239460106",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c34b9404-0e8e-489f-b88a-81d66c315230",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "You need to validate that pods can't have ephemeral containers with duplicate names to init containers or containers in validatePod",
+        "createdAt" : "2019-05-16T18:26:25Z",
+        "updatedAt" : "2019-07-22T11:21:01Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e319823-7446-4492-a4db-0301c4e0ab84",
+        "parentId" : "c34b9404-0e8e-489f-b88a-81d66c315230",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "I do test for name collisions here in `validateEphemeralContainers()`, which is called from `ValidatePod()`. Is it that I missed an edge case or that you'd like validation moved?\r\n\r\nSince containers and init containers cannot be added after creation I didn't expect we'd need to check the container/initcontainer names against the ephemeral containers.",
+        "createdAt" : "2019-05-17T15:05:26Z",
+        "updatedAt" : "2019-07-22T11:21:01Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "190e0b74-32de-4927-8e09-cd511f402770",
+        "parentId" : "c34b9404-0e8e-489f-b88a-81d66c315230",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "ValidatePodTemplateSpec can be called from DaemonSets, deployments, etc which are mutable.\r\n\r\nHowever, as long as this method is always called in those paths, that's ok.",
+        "createdAt" : "2019-05-19T03:00:16Z",
+        "updatedAt" : "2019-07-22T11:21:01Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "18cb54f4-572a-4fa4-9e91-da3d6795f06a",
+        "parentId" : "c34b9404-0e8e-489f-b88a-81d66c315230",
+        "authorId" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "body" : "Ah, ok. Ephemeral Containers aren't allowed in Pod Templates at all since they shouldn't be a building block of services. I added some unit tests to TestValidateDaemonSet, TestValidateDeployment and TestValidateReplicationController to convince myself that ValidatePodTemplateSpec is being called from these.\r\n\r\nI've aded them to this PR since they seem useful to prevent regressions, but I'll leave these in a separate commit to be squashed later in case you tell me to drop them.",
+        "createdAt" : "2019-05-20T12:17:27Z",
+        "updatedAt" : "2019-07-22T11:21:01Z",
+        "lastEditedBy" : "a82a6b5c-7a5e-4ea3-bc82-c4f922ea88b1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a753c7a44b5f92e52d4119530ac76e38b837336",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +2608,2612 @@}\n\nfunc validateEphemeralContainers(ephemeralContainers []core.EphemeralContainer, containers, initContainers []core.Container, volumes map[string]core.VolumeSource, fldPath *field.Path) field.ErrorList {\n\tallErrs := field.ErrorList{}\n"
+  },
+  {
+    "id" : "00f9c0fa-0719-4edd-85ff-ddb2affa831d",
+    "prId" : 59391,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59391#pullrequestreview-96715627",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c25d0b5c-eaeb-4f7a-a066-8b92aba31c2c",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "I'm in the middle of designing dynamic provisioning with topology and looking at how that's going to work with CSI.  The way that topology is specified in the CSI spec is not going to be able to support the full functionality of a NodeSelector.  The CSI spec represents topology as a map<string>[]string, where the key is the label key, and the value is an array of label values.  This is sufficient to support topologies of all the storage systems I can think of.\r\n\r\nBut I think from a Kubernetes standpoint, there is value in adopting consistent structs to describe topology across the system, even if it can't be fully supported.  So I still prefer representing volume topology with NodeAffinity in the Kubernetes API, and I could add validation here to only allow for the \"In\" operator.\r\n\r\n@thockin @saad-ali @jsafrane and anyone else, would appreciate your thoughts\r\n",
+        "createdAt" : "2018-02-14T01:09:53Z",
+        "updatedAt" : "2018-02-20T19:43:49Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "907fda09-72f1-4b38-b8ff-a356a74d0bed",
+        "parentId" : "c25d0b5c-eaeb-4f7a-a066-8b92aba31c2c",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Which semantics are not expressible?  Is CSI just \"equals\" or is it \"in set\".  What are the gaps?  \"not in\"?  What else?\r\n\r\nWhat facet of CSI is this touching?  It's been a while since I looked at CSI in depth, but this starts to feel like it might be scope creep.",
+        "createdAt" : "2018-02-14T19:43:51Z",
+        "updatedAt" : "2018-02-20T19:43:49Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e6f7ec7c-4725-4537-82e4-ceb9956483f4",
+        "parentId" : "c25d0b5c-eaeb-4f7a-a066-8b92aba31c2c",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Basically all the other node selector operators don't really make sense to describe volume accessibility: \"NotIn\", \"Exists\", \"DoesNotExist\", \"Gt\", \"Lt\".\r\n\r\nFor just the specification of volume topology + scheduling of those volumes (which is this PR), CSI can support this (the csi-kubernetes adapter can translate from csi topology -> k8s volume topology).  But once we consider dynamic provisioning, we need to do the translation the other way (k8s topology -> csi topology for the csi volume create call).  Agree that the CSI problem doesn't directly impact this PR, however, any new topology APIs we may have to add for dynamic provisioning could be inconsistent with how topology is specified here.",
+        "createdAt" : "2018-02-14T20:58:15Z",
+        "updatedAt" : "2018-02-20T19:43:49Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af505f6d-702d-4605-b6ac-68b00c43b8f4",
+        "parentId" : "c25d0b5c-eaeb-4f7a-a066-8b92aba31c2c",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I can make up use-cases for \"not-in\", but they can probably be solved by reciprocal \"in\".\r\n\r\nCan you walk me through a hypothetical where we might use parts of NodeAffinity that CSI can't halndle?",
+        "createdAt" : "2018-02-14T22:34:40Z",
+        "updatedAt" : "2018-02-20T19:43:49Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8dc7ee47-d78f-47f4-a48c-e52b80319776",
+        "parentId" : "c25d0b5c-eaeb-4f7a-a066-8b92aba31c2c",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "We discussed the use case of restricting topology in the StorageClass, moving it out from a plugin-specific parameter to a first class field, and then having to pass it to the provisioners.  In that use case, a NodeSelector doesn't make sense, and it's ok for the topology specification to be different as long as the underlying foundation of specifying topology keys and using node labels is similar.\r\n\r\nSo conclusion is: PV.NodeAffinity is fine the way it is.  Topology for dynamic provisioning may be more limited and can be specified using different APIs (and will be initially alpha).  ",
+        "createdAt" : "2018-02-14T23:43:54Z",
+        "updatedAt" : "2018-02-20T19:43:49Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57f333d9-c95e-4bbf-b6e2-9fb99a676f62",
+        "parentId" : "c25d0b5c-eaeb-4f7a-a066-8b92aba31c2c",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "If no one else has concerns, then this PR is ready to go.",
+        "createdAt" : "2018-02-15T01:24:18Z",
+        "updatedAt" : "2018-02-20T19:43:49Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a6a225623b0e359b32dec34cb83ad4ad6d5c4f49",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +4988,4992 @@\n\tif nodeAffinity.Required != nil {\n\t\tallErrs = append(allErrs, ValidateNodeSelector(nodeAffinity.Required, fldPath.Child(\"required\"))...)\n\t} else {\n\t\tallErrs = append(allErrs, field.Required(fldPath.Child(\"required\"), \"must specify required node constraints\"))"
+  },
+  {
+    "id" : "806437a4-45f3-49fd-ae45-e5a3f52e1322",
+    "prId" : 59391,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59391#pullrequestreview-97952300",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0f7b4f7c-f523-4e9d-a39d-6e99a6219b39",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "What if both this field and the older annotation are set?  ",
+        "createdAt" : "2018-02-20T18:52:32Z",
+        "updatedAt" : "2018-02-20T19:43:49Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a532d4d3-d460-462d-966e-0e49b35aeb16",
+        "parentId" : "0f7b4f7c-f523-4e9d-a39d-6e99a6219b39",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "The current code will evaluate both if both are set, but it can be changed to have beta be ignored if alpha is set.\r\n\r\n",
+        "createdAt" : "2018-02-20T19:17:27Z",
+        "updatedAt" : "2018-02-20T19:43:49Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a6a225623b0e359b32dec34cb83ad4ad6d5c4f49",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +1501,1505 @@\tallErrs = append(allErrs, errs...)\n\n\tvolumeNodeAffinitySpecified, errs := validateVolumeNodeAffinity(pv.Spec.NodeAffinity, specPath.Child(\"nodeAffinity\"))\n\tallErrs = append(allErrs, errs...)\n"
+  },
+  {
+    "id" : "7bad426d-fd38-429d-9c6d-2da72c1d1422",
+    "prId" : 59391,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59391#pullrequestreview-97944563",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eb2551c4-2c2c-4f3d-8ead-3534fe406a82",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "document the bool return",
+        "createdAt" : "2018-02-20T18:54:27Z",
+        "updatedAt" : "2018-02-20T19:43:49Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a6a225623b0e359b32dec34cb83ad4ad6d5c4f49",
+    "line" : 53,
+    "diffHunk" : "@@ -1,1 +4972,4976 @@}\n\n// validateVolumeNodeAffinity tests that the PersistentVolume.NodeAffinity has valid data\n// returns:\n// - true if volumeNodeAffinity is set"
+  },
+  {
+    "id" : "e9a0b750-6f2b-4897-be31-69d8beea2f1b",
+    "prId" : 59249,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/59249#pullrequestreview-94976984",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cd57e74d-bb9e-4b4b-ad91-25fe57e04393",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "PLEASE add comments for public functions",
+        "createdAt" : "2018-02-08T06:12:15Z",
+        "updatedAt" : "2018-02-08T06:12:15Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e5afe14-afae-49d4-bcfe-9c7c6f1385e6",
+        "parentId" : "cd57e74d-bb9e-4b4b-ad91-25fe57e04393",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "agree. thought this was a straight move and didn't notice it was not exported previously.",
+        "createdAt" : "2018-02-08T06:16:47Z",
+        "updatedAt" : "2018-02-08T06:16:47Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ce0d2e3-8727-4756-b929-6972f20eb740",
+        "parentId" : "cd57e74d-bb9e-4b4b-ad91-25fe57e04393",
+        "authorId" : "11eef42b-8a79-461d-b901-6022644869b3",
+        "body" : "OK,I have add comments  in new pr",
+        "createdAt" : "2018-02-08T07:35:05Z",
+        "updatedAt" : "2018-02-08T07:35:05Z",
+        "lastEditedBy" : "11eef42b-8a79-461d-b901-6022644869b3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e7076025e21198ecf2713a760f07d323b7aac45a",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +4941,4945 @@}\n\nfunc IsDecremented(update, old *int32) bool {\n\tif update == nil && old != nil {\n\t\treturn true"
+  },
+  {
+    "id" : "baa372e0-3ae5-46b8-97da-15f38d3079cc",
+    "prId" : 57214,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/57214#pullrequestreview-83694712",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5ab1a2ed-b45c-401a-900f-a53f4c1a873d",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "Mutation here isn't needed at all. If old is non-empty, disallow changing at all",
+        "createdAt" : "2017-12-14T22:02:59Z",
+        "updatedAt" : "2017-12-14T22:03:47Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf89dfbf-03fc-435f-9467-3723a50f0576",
+        "parentId" : "5ab1a2ed-b45c-401a-900f-a53f4c1a873d",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "e.g. ValidateImmutableField",
+        "createdAt" : "2017-12-15T00:36:23Z",
+        "updatedAt" : "2017-12-15T00:36:23Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "428f0315-9dad-4f91-abfe-7f75310becf1",
+        "parentId" : "5ab1a2ed-b45c-401a-900f-a53f4c1a873d",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "Ah, I see. Because of the deepequal spec comparison later. Weird, but ok. ",
+        "createdAt" : "2017-12-15T00:37:39Z",
+        "updatedAt" : "2017-12-15T00:37:39Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c43a5aa-f41a-43bb-8dfc-08e2e75205c0",
+        "parentId" : "5ab1a2ed-b45c-401a-900f-a53f4c1a873d",
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "yeah it seems like cheapest way to get where I want to get to. ",
+        "createdAt" : "2017-12-15T01:17:00Z",
+        "updatedAt" : "2017-12-15T01:17:01Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b33aaa0df4b33d6b849cb93299d281d03eef71f3",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +1779,1783 @@\t// PVController needs to update PVC.Spec w/ VolumeName.\n\t// Claims are immutable in order to enforce quota, range limits, etc. without gaming the system.\n\tif len(oldPvc.Spec.VolumeName) == 0 {\n\t\t// volumeName changes are allowed once.\n\t\toldPvcClone.Spec.VolumeName = newPvcClone.Spec.VolumeName"
+  },
+  {
+    "id" : "31dc16e6-498d-49f6-906e-88e4feae33f5",
+    "prId" : 55848,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55848#pullrequestreview-77966347",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4771ef67-d9f7-496d-b424-b1c73c72bd3d",
+        "parentId" : null,
+        "authorId" : "26bd3fa6-ac8d-4cb0-b746-a30dc1dc2931",
+        "body" : "@bowei Added validation codes to check for at least one nameserver.",
+        "createdAt" : "2017-11-21T00:21:05Z",
+        "updatedAt" : "2017-11-21T00:21:05Z",
+        "lastEditedBy" : "26bd3fa6-ac8d-4cb0-b746-a30dc1dc2931",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9f9c721b20a42ade847ab9ef7e6015e83df14ec5",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +2538,2542 @@\tallErrs := field.ErrorList{}\n\n\t// Validate DNSNone case. Must provide at least one DNS name server.\n\tif utilfeature.DefaultFeatureGate.Enabled(features.CustomPodDNS) && dnsPolicy != nil && *dnsPolicy == core.DNSNone {\n\t\tif dnsConfig == nil {"
+  },
+  {
+    "id" : "8f6dffcc-62a2-4e56-beb5-7fc74d03f2e2",
+    "prId" : 55204,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55204#pullrequestreview-77530992",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5c051f25-aabd-44b2-b233-04bffabafba2",
+        "parentId" : null,
+        "authorId" : "8e448017-7838-493d-a424-33cada0da657",
+        "body" : "Please add a feature gate check:\r\n```GO\r\nif !utilfeature.DefaultFeatureGate.Enabled(features.CSIPersistentVolume) {\r\n  allErrs = append(allErrs, field.Forbidden(fldPath, \"field is disabled by feature-gate CSIPersistentVolume\"))\r\n}\r\n```",
+        "createdAt" : "2017-11-17T19:03:21Z",
+        "updatedAt" : "2017-11-18T00:18:58Z",
+        "lastEditedBy" : "8e448017-7838-493d-a424-33cada0da657",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c4a17304d5da9b87bd06aa085afd539ecfe52511",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +1320,1324 @@\nfunc validateCSIPersistentVolumeSource(csi *core.CSIPersistentVolumeSource, fldPath *field.Path) field.ErrorList {\n\tallErrs := field.ErrorList{}\n\n\tif !utilfeature.DefaultFeatureGate.Enabled(features.CSIPersistentVolume) {"
+  },
+  {
+    "id" : "c402e5e0-d931-4cd8-8c5c-f960cbec9ff4",
+    "prId" : 55164,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/55164#pullrequestreview-75989747",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c84cff7a-55ea-4431-be6c-8a499e474a40",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "will this break any reasonable users?  It's technically a breaking change.",
+        "createdAt" : "2017-11-13T02:45:39Z",
+        "updatedAt" : "2017-11-13T03:38:14Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d634565-06ce-4a06-86e3-9daf2fee69e6",
+        "parentId" : "c84cff7a-55ea-4431-be6c-8a499e474a40",
+        "authorId" : "cf088828-7f69-4b6e-8956-1842c94daa02",
+        "body" : "Sorry i can not think of use cases. I think it does not make sense to request 0 storage in PVC",
+        "createdAt" : "2017-11-13T02:57:54Z",
+        "updatedAt" : "2017-11-13T03:38:14Z",
+        "lastEditedBy" : "cf088828-7f69-4b6e-8956-1842c94daa02",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af0ac4d8-5d84-4d52-ae6d-f9f9e19581b6",
+        "parentId" : "c84cff7a-55ea-4431-be6c-8a499e474a40",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I know you think it doesn't make sense :).  The question was whether this will impact users.  If a user specified 0 today, what happens?  Does it do something reasonable or does it fail at some later point?",
+        "createdAt" : "2017-11-13T03:03:53Z",
+        "updatedAt" : "2017-11-13T03:38:14Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c1d80b5-08ac-473a-b360-ff8ff2fb843b",
+        "parentId" : "c84cff7a-55ea-4431-be6c-8a499e474a40",
+        "authorId" : "cf088828-7f69-4b6e-8956-1842c94daa02",
+        "body" : "In external repo, we do pvc request value `not zero check` in external storage repo,  https://github.com/kubernetes-incubator/external-storage/blob/master/ceph/rbd/pkg/provision/rbd_util.go#L47,  if a user requests 0, it will fail, but in kubernetes repo, we do not check this. will try to provision 0 capacity volume",
+        "createdAt" : "2017-11-13T03:14:10Z",
+        "updatedAt" : "2017-11-13T03:38:14Z",
+        "lastEditedBy" : "cf088828-7f69-4b6e-8956-1842c94daa02",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3a22b5f5e090f90cbc8a5d2bab79af2e7de97f6e",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +1603,1607 @@\t} else {\n\t\tallErrs = append(allErrs, ValidateResourceQuantityValue(string(core.ResourceStorage), storageValue, fldPath.Child(\"resources\").Key(string(core.ResourceStorage)))...)\n\t\tif storageValue.Value() == int64(0) {\n\t\t\tallErrs = append(allErrs, field.Invalid(fldPath, storageValue, isZeroErrorMsg))\n\t\t}"
+  },
+  {
+    "id" : "ab61fcee-19a2-4cd0-8960-0821a5cc3b95",
+    "prId" : 52077,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/52077#pullrequestreview-99869068",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4b1ac627-fba2-4bb0-a643-883e0b254603",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "if RunAsGroup is non-nil, do we require RunAsUser to be non-nil?",
+        "createdAt" : "2018-02-27T21:44:08Z",
+        "updatedAt" : "2018-03-01T06:18:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd76e7be-d164-4b46-a3d1-42441837eae1",
+        "parentId" : "4b1ac627-fba2-4bb0-a643-883e0b254603",
+        "authorId" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "body" : "no we dont ",
+        "createdAt" : "2018-02-27T21:50:37Z",
+        "updatedAt" : "2018-03-01T06:18:32Z",
+        "lastEditedBy" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b888415ebf0eb97b68c47222f5bca1ed79567bf7",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +3299,3303 @@\t\t\t}\n\t\t}\n\t\tif securityContext.RunAsGroup != nil {\n\t\t\tfor _, msg := range validation.IsValidGroupID(*securityContext.RunAsGroup) {\n\t\t\t\tallErrs = append(allErrs, field.Invalid(fldPath.Child(\"runAsGroup\"), *(securityContext.RunAsGroup), msg))"
+  }
+]

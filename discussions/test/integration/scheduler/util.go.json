@@ -1,0 +1,332 @@
+[
+  {
+    "id" : "0b4a5440-82b4-48bb-933b-7cb75678a464",
+    "prId" : 100101,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/100101#pullrequestreview-609972480",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "91344ed8-5015-4276-bbaf-5c905405ec91",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "this helper only has one callsite and it was already relying on termination with no grace.",
+        "createdAt" : "2021-03-11T16:39:50Z",
+        "updatedAt" : "2021-03-11T16:39:50Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "649b87aaf85dbb6e8190bf7d16c5dc903b5ecedc",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +476,480 @@// cleanupPodsInNamespace deletes the pods in the given namespace and waits for them to\n// be actually deleted.  They are removed with no grace.\nfunc cleanupPodsInNamespace(cs clientset.Interface, t *testing.T, ns string) {\n\tt.Helper()\n"
+  },
+  {
+    "id" : "d59bc27f-38fc-4584-bc80-680a981bbba3",
+    "prId" : 91750,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91750#pullrequestreview-425710313",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5ad4f209-d38e-425e-92e2-1339d91f5e5b",
+        "parentId" : null,
+        "authorId" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "body" : "what does this change mean?",
+        "createdAt" : "2020-06-05T19:18:17Z",
+        "updatedAt" : "2020-06-05T19:26:02Z",
+        "lastEditedBy" : "570b631b-84a0-4888-a815-ca0e7934e412",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c16ece69-c1af-4adc-9126-990bd9c529b9",
+        "parentId" : "5ad4f209-d38e-425e-92e2-1339d91f5e5b",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "Without this, this test would fail at the cleanup step: `defer cleanupPodsInNamespace(cs, t, testCtx.NS.Name)`.\r\n\r\nThis puzzled me as well, and here is my investigation. In the new test, it deleted a node, and then cleaned up all the Pods using `DeleteCollection`. However, one of the pods was placed on the deleted node. I think the **immediate** Pods deletion action resulted in the failure.\r\n\r\nI tried to use curl to simulate this case. You can notice that pod2 keeps in terminating state instead of being deleted: \r\n\r\n```\r\nroot@wei-dev:~/manifests/certs# k get po -o wide\r\nNAME   READY   STATUS    RESTARTS   AGE   IP                NODE    NOMINATED NODE   READINESS GATES\r\npod1   1/1     Running   0          46s   192.168.192.168   node1   <none>           <none>\r\npod2   1/1     Running   0          3s    192.168.192.168   node2   <none>           <none>\r\n\r\nroot@wei-dev:~/manifests# k delete no node2\r\nnode \"node2\" deleted\r\n\r\nroot@wei-dev:~/manifests/certs# curl --key key --cert cert --cacert cacert -X DELETE https://localhost:6443/api/v1/namespaces/default/pods\r\n\r\nroot@wei-dev:~/manifests/certs# k get pod -o wide\r\nNAME   READY   STATUS        RESTARTS   AGE   IP                NODE    NOMINATED NODE   READINESS GATES\r\npod2   1/1     Terminating   0          56s   192.168.192.168   node2   <none>           <none>\r\n\r\n# After 30 seconds\r\nroot@wei-dev:~/manifests/certs# k get pod -o wide\r\nNo resources found in default namespace.\r\n# But in an integration test, I guess the Pod will be kept there, that's why the test would fail without enforcing a 0 termination grace period\r\n```\r\n\r\n---\r\n\r\nI'm not sure it's a bug in `DeleteCollection` or as expected, but as setting it to an explicit 0 grace period won't result in any side effect, I think we can just merge it as is, WDYT?",
+        "createdAt" : "2020-06-06T03:42:24Z",
+        "updatedAt" : "2020-06-06T03:42:25Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "369a9001c6f7192eaef6cc4460aeb4b4373f25e5",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +484,488 @@// be actually deleted.\nfunc cleanupPodsInNamespace(cs clientset.Interface, t *testing.T, ns string) {\n\tif err := cs.CoreV1().Pods(ns).DeleteCollection(context.TODO(), *metav1.NewDeleteOptions(0), metav1.ListOptions{}); err != nil {\n\t\tt.Errorf(\"error while listing pod in namespace %v: %v\", ns, err)\n\t\treturn"
+  },
+  {
+    "id" : "b5b3fd9b-737d-425d-8df1-664cec20044d",
+    "prId" : 80011,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80011#pullrequestreview-269417908",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d692072-2efe-4a93-a70e-1d69e9593f0e",
+        "parentId" : null,
+        "authorId" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "body" : "Why checking `errors.IsNotFound(err)` and `err != nil` separately? The return values are identical.",
+        "createdAt" : "2019-07-29T21:21:06Z",
+        "updatedAt" : "2019-08-01T17:42:45Z",
+        "lastEditedBy" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3131784-d81a-4d02-8f22-08921fe43563",
+        "parentId" : "7d692072-2efe-4a93-a70e-1d69e9593f0e",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "Good catch. Only `if err != nil` should be kept. I updated all the occurrences.",
+        "createdAt" : "2019-08-01T06:29:03Z",
+        "updatedAt" : "2019-08-01T17:42:45Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "caab8b74ba4bfd065248592ebb4174bb20a70be2",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +628,632 @@\t\tif err != nil {\n\t\t\t// This could be a connection error so we want to retry.\n\t\t\treturn false, nil\n\t\t}\n\t\tif pod.Spec.NodeName == \"\" {"
+  },
+  {
+    "id" : "6c506bac-92df-45a4-867b-014913cf9708",
+    "prId" : 80011,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80011#pullrequestreview-269418512",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "03525b5f-5491-484f-ab4e-bf40bdc15ea0",
+        "parentId" : null,
+        "authorId" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "body" : "This seems unnecessary if the passed in nodeNames are not empty. But feel free to disregard if the purpose is to short-circuit.",
+        "createdAt" : "2019-07-29T21:23:51Z",
+        "updatedAt" : "2019-08-01T17:42:45Z",
+        "lastEditedBy" : "a650878f-0c10-41c7-b0fc-033031305d77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d998201e-ee08-4029-8f60-6e474a98de51",
+        "parentId" : "03525b5f-5491-484f-ab4e-bf40bdc15ea0",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "Yes, sort of short-circuit.",
+        "createdAt" : "2019-08-01T06:31:09Z",
+        "updatedAt" : "2019-08-01T17:42:45Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "caab8b74ba4bfd065248592ebb4174bb20a70be2",
+    "line" : 61,
+    "diffHunk" : "@@ -1,1 +630,634 @@\t\t\treturn false, nil\n\t\t}\n\t\tif pod.Spec.NodeName == \"\" {\n\t\t\treturn false, nil\n\t\t}"
+  },
+  {
+    "id" : "7615e8e4-ae8e-4b43-a731-63f44623b35d",
+    "prId" : 48847,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/48847#pullrequestreview-51003545",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cc036979-215d-4e24-a0bd-2b1cc930b64e",
+        "parentId" : null,
+        "authorId" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "body" : "Is it worth  to delete the pod that we created in test?",
+        "createdAt" : "2017-07-19T18:22:29Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af051dee-a71e-426c-9ed5-2bdf27e56ee8",
+        "parentId" : "cc036979-215d-4e24-a0bd-2b1cc930b64e",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "We delete the namespace that we create for the test. When a namespace is deleted, everything under the NS is deleted, including pods. If a test creates a new namespace, the test must ensure that it cleans up the namespace at the end of the test.",
+        "createdAt" : "2017-07-19T18:28:54Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a48d7803-7b88-41b2-a4f6-8ab3f7a113d7",
+        "parentId" : "cc036979-215d-4e24-a0bd-2b1cc930b64e",
+        "authorId" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "body" : "Got you, so we are still going ahead with deletion of namespace, thanks :)",
+        "createdAt" : "2017-07-19T18:39:02Z",
+        "updatedAt" : "2017-08-05T01:08:56Z",
+        "lastEditedBy" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3fc7c096-2da6-494c-bb71-38b490aa4b2c",
+        "parentId" : "cc036979-215d-4e24-a0bd-2b1cc930b64e",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "Yes, the namespace has to be deleted, otherwise it may interfere with the next tests.",
+        "createdAt" : "2017-07-19T18:44:38Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2612422a7ff00633877e5f1ec89290a887d0cc3f",
+    "line" : 104,
+    "diffHunk" : "@@ -1,1 +102,106 @@func cleanupTest(t *testing.T, context *TestContext) {\n\t// Kill the scheduler.\n\tclose(context.schedulerConfig.StopEverything)\n\t// Cleanup nodes.\n\tcontext.clientSet.CoreV1().Nodes().DeleteCollection(nil, metav1.ListOptions{})"
+  },
+  {
+    "id" : "6bf712c8-10e8-4378-b264-3631dc967539",
+    "prId" : 48847,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/48847#pullrequestreview-51028803",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a1ce770d-dc6e-4a42-a7e1-5d8fae328f9c",
+        "parentId" : null,
+        "authorId" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "body" : "Looking at https://github.com/kubernetes/kubernetes/blob/master/test/integration/framework/master_utils.go#L409, it seems we are not doing anything there? Hope this is the fn we are using. Is this intentional?",
+        "createdAt" : "2017-07-19T19:08:37Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6227fa17-95cd-433e-8998-76314a42682d",
+        "parentId" : "a1ce770d-dc6e-4a42-a7e1-5d8fae328f9c",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "That's interesting. Apparently a namespace is not really created or deleted which is surprising, but according to the comment in the master_util.go, we should be fine as we are creating a new namespace per test.",
+        "createdAt" : "2017-07-19T20:20:52Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2612422a7ff00633877e5f1ec89290a887d0cc3f",
+    "line" : 107,
+    "diffHunk" : "@@ -1,1 +105,109 @@\t// Cleanup nodes.\n\tcontext.clientSet.CoreV1().Nodes().DeleteCollection(nil, metav1.ListOptions{})\n\tframework.DeleteTestingNamespace(context.ns, context.httpServer, t)\n\tcontext.closeFn()\n}"
+  },
+  {
+    "id" : "4897d9a6-5760-4308-86af-74c72508c1d9",
+    "prId" : 48847,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/48847#pullrequestreview-51029300",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "897e5993-20ed-4e0b-8697-4eaae60235a5",
+        "parentId" : null,
+        "authorId" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "body" : "nit: err:=waitForPodToSchedule because if we don't have err in above line 276, this would have failed.",
+        "createdAt" : "2017-07-19T20:03:48Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5c0babc2-f54e-4446-a20f-0f52eb6b1b99",
+        "parentId" : "897e5993-20ed-4e0b-8697-4eaae60235a5",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "It wouldn't be more or less the same. err is already defined in the code. So, I wouldn't worry about it.",
+        "createdAt" : "2017-07-19T20:22:36Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2612422a7ff00633877e5f1ec89290a887d0cc3f",
+    "line" : 277,
+    "diffHunk" : "@@ -1,1 +275,279 @@\t\treturn nil, fmt.Errorf(\"Error creating pause pod: %v\", err)\n\t}\n\tif err = waitForPodToSchedule(cs, pod); err != nil {\n\t\treturn pod, fmt.Errorf(\"Pod %v didn't schedule successfully. Error: %v\", pod.Name, err)\n\t}"
+  },
+  {
+    "id" : "841213a6-be8a-4756-b367-d2d40f12aa3c",
+    "prId" : 48847,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/48847#pullrequestreview-51024458",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9743c8c6-bd4b-45ec-b4a3-f5f3756b6071",
+        "parentId" : null,
+        "authorId" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "body" : "Ditto.",
+        "createdAt" : "2017-07-19T20:04:00Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "38ca4f80-c365-4775-8981-1e56b713b07b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2612422a7ff00633877e5f1ec89290a887d0cc3f",
+    "line" : 280,
+    "diffHunk" : "@@ -1,1 +278,282 @@\t\treturn pod, fmt.Errorf(\"Pod %v didn't schedule successfully. Error: %v\", pod.Name, err)\n\t}\n\tif pod, err = cs.CoreV1().Pods(conf.Namespace).Get(conf.Name, metav1.GetOptions{}); err != nil {\n\t\treturn pod, fmt.Errorf(\"Error getting pod %v info: %v\", conf.Name, err)\n\t}"
+  },
+  {
+    "id" : "3dccc740-dbf6-4d64-9903-2656883dc2eb",
+    "prId" : 48847,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/48847#pullrequestreview-51101023",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "47b87a1d-c942-40c0-a0a8-460694604dbd",
+        "parentId" : null,
+        "authorId" : "8f672b1e-0513-4363-b383-ad8d8de0cdb9",
+        "body" : "This name isn't super descriptive, we are actually waiting for the Node with specific key pass the specific check.",
+        "createdAt" : "2017-07-20T03:07:25Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "8f672b1e-0513-4363-b383-ad8d8de0cdb9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e751b1f-8405-4647-ba2c-7e4e755ed574",
+        "parentId" : "47b87a1d-c942-40c0-a0a8-460694604dbd",
+        "authorId" : "8f672b1e-0513-4363-b383-ad8d8de0cdb9",
+        "body" : "Also I didn't see anywhere we use this util func in this pr.",
+        "createdAt" : "2017-07-20T03:08:04Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "8f672b1e-0513-4363-b383-ad8d8de0cdb9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "086a3a73-3d24-4640-a981-556785ee4c1c",
+        "parentId" : "47b87a1d-c942-40c0-a0a8-460694604dbd",
+        "authorId" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "body" : "This function is used in scheduler_test.go. I didn't write this function. I only moved it from that file to util.go.",
+        "createdAt" : "2017-07-20T04:49:22Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "15fb535e-c5be-47ce-a304-1cb5da5aca90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2612422a7ff00633877e5f1ec89290a887d0cc3f",
+    "line" : 113,
+    "diffHunk" : "@@ -1,1 +111,115 @@// waitForReflection waits till the passFunc confirms that the object it expects\n// to see is in the store. Used to observe reflected events.\nfunc waitForReflection(t *testing.T, nodeLister corelisters.NodeLister, key string, passFunc func(n interface{}) bool) error {\n\tnodes := []*v1.Node{}\n\terr := wait.Poll(time.Millisecond*100, wait.ForeverTestTimeout, func() (bool, error) {"
+  },
+  {
+    "id" : "c0ab6c40-2c8b-48b7-bdb2-31a01bc79c47",
+    "prId" : 48847,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/48847#pullrequestreview-51337254",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "98f20ba0-70bd-4cc7-9136-ed1436d462c7",
+        "parentId" : null,
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "gr8 thx. ",
+        "createdAt" : "2017-07-20T21:36:29Z",
+        "updatedAt" : "2017-07-20T21:59:33Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2612422a7ff00633877e5f1ec89290a887d0cc3f",
+    "line" : 64,
+    "diffHunk" : "@@ -1,1 +62,66 @@\t_, context.httpServer, context.closeFn = framework.RunAMaster(nil)\n\n\tcontext.ns = framework.CreateTestingNamespace(nsPrefix+string(uuid.NewUUID()), context.httpServer, t)\n\n\tcontext.clientSet = clientset.NewForConfigOrDie(&restclient.Config{Host: context.httpServer.URL, ContentConfig: restclient.ContentConfig{GroupVersion: testapi.Groups[v1.GroupName].GroupVersion()}})"
+  }
+]

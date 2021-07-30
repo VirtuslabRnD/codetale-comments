@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "7b113e79-1d32-414f-9f77-4808dcd5eea2",
+    "prId" : 22985,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "900f0e07-7365-4d4a-a0c6-803d622023d8",
+        "parentId" : null,
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Sorry, the design doc under-specified what was intended for empty topologyKey. The use case was specifically for soft anti-affinity, so a user could say \"spread across all topologies\" without having to know the names of the topologies, and to make it easy for the administrator to change the set of topologies without users having to change their configs. \"All topologies\" doesn't really make sense for affinity, or for hard anti-affinity, which is why I suggested in my comment on TopologyKey in types.go that you should have validation reject empty TopologyKey when it's used with PodAffinity and when it's used with hard PodAntiAffinity.\n\nSo you want something like\n\n```\nfunc NodesHaveSameTopologyKeyInternal(nodeA, nodeB, topologyKey) bool {\n    return nodeA.Labels != nil && nodeB.Labels != nil && len(nodeA.Labels[topologyKey]) > 0 && nodeA.Labels[topologyKey] == nodeB.Labels[topologyKey]\n}\n\nfunc NodesHaveSameTopologyKey(nodeA, nodeB, topologyKey) bool {\n   if len(topologyKey == 0) {\n     // assumes this is allowed only for PodAntiAffinity\n     return NodesHaveSameTopologyKeyInternal(nodeA, nodeB, unversioned.LabelHostname) ||\nNodesHaveSameTopologyKeyInternal(nodeA, nodeB, unversioned.LabelZoneFailureDomain) ||\nNodesHaveSameTopologyKeyInternal(nodeA, nodeB, unversioned.LabelZoneRegion)\n   } else {\n        return NodesHaveSameTopologyKeyInternal(nodeA, nodeB, topologyKey)\n   }\n}\n```\n\nBut I would actually suggest a slight variation on that: instead of hard-coding the label keys like I did above (unversioned.LabelHostname, etc.), you should take the set of label keys as a scheduler command-line argument (an array of strings), for example\n\n```\n--failure-domains=kubernetes.io/hostname,failure-domain.beta.kubernetes.io/zone\n```\n\nIf the flag is not set, then it should default to the three constant values that I listed above (unversioned.LabelHostname, etc). You should also add a comment to pkg/api/unversioned/well_known_labels.go that says something like \"if you add a new topology domain here, also consider adding it to the set of default values for the scheduler's --failure-domain command-line argument.\"\n\n(BTW the reason the values are ORed is because if for some reason a node is missing a label for one topology, you still want the anti-affinity to be true as long as at least one of the labels matches. If we were also going to handle regular affinity, then we would AND for regular affinity and OR for anti-affinity.)\n",
+        "createdAt" : "2016-04-17T05:43:08Z",
+        "updatedAt" : "2016-05-06T07:34:41Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "367860a8-8952-4e74-8782-2fa23e139d81",
+        "parentId" : "900f0e07-7365-4d4a-a0c6-803d622023d8",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "(Note that I updated the above comment after I wrote it, so please read it from the web site, not email.)\n\nAlso, one other thing I just realized. I don't think we should fix it in this PR, but we should add a TODO to fix it later. \n\nSay you are using soft anti-affinity with empty topologyKey (this is the only case where empty topologyKey is allowed). Say you have two pods that are different for all topology keys. We will count that once (with whatever Weight is specified in the corresponding WeightedPodAffinityTerm). But say instead of using empty topologyKey, you create N separate soft anti-affinity rules, one for each of the keys that empty topologyKey maps to. Then that will count N times, i.e. one Weight for each of the N rules. Probably we want these to give the same overall weight.\n\nSo, I would suggest adding this TODO:\n\n```\n// TODO: One WeightedPodAfinityTerm with empty topologyKey adds Weight once to the priority,\n// while N WeightedPodAffinityTerm, one for each of the N topologyKey that empty topologyKey\n// maps to, adds N Weights to the priority. Ideally, these two scenarios should be weighted the same.\n```\n",
+        "createdAt" : "2016-04-17T06:15:26Z",
+        "updatedAt" : "2016-05-06T07:34:41Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3efef8f2-df3f-409a-af4d-1ee9b3086675",
+        "parentId" : "900f0e07-7365-4d4a-a0c6-803d622023d8",
+        "authorId" : "70ba63ce-18c5-43f6-a9fb-1acd33329390",
+        "body" : "> Sorry, the design doc under-specified what was intended for empty topologyKey. The use case was specifically for soft anti-affinity, so a user could say \"spread across all topologies\" without having to know the names of the topologies, and to make it easy for the administrator to change the set of topologies without users having to change their configs. \"All topologies\" doesn't really make sense for affinity, or for hard anti-affinity, which is why I suggested in my comment on TopologyKey in types.go that you should have validation reject empty TopologyKey when it's used with PodAffinity and when it's used with hard PodAntiAffinity.\n\nTo be clear, the semantic \"all topologies\", do you mean:\n- When topology-key is empty, it actually means to match all the label keys from `--failure-domains`(no matter they are default values or user inputs), but not to match all the label keys exist on the node.\n\nCorrect me if I missed anything.\n",
+        "createdAt" : "2016-04-19T11:13:20Z",
+        "updatedAt" : "2016-05-06T07:34:41Z",
+        "lastEditedBy" : "70ba63ce-18c5-43f6-a9fb-1acd33329390",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "55c9a825-7981-4af6-8c18-69e106a50fb9",
+        "parentId" : "900f0e07-7365-4d4a-a0c6-803d622023d8",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Yes.\n",
+        "createdAt" : "2016-04-19T18:10:57Z",
+        "updatedAt" : "2016-05-06T07:34:41Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2747b975-5a73-4c2f-b8d8-3b2d5435b09f",
+        "parentId" : "900f0e07-7365-4d4a-a0c6-803d622023d8",
+        "authorId" : "70ba63ce-18c5-43f6-a9fb-1acd33329390",
+        "body" : "Thanks. I'm adding some more descriptions about \"all topologies\" and `--failure-domains` flag, to help users understand the usage, so they would be like below\n\n**topologyKey:**\n\n``` go\n    // This pod should be co-located (affinity) or not co-located (anti-affinity) with the pods matching\n    // the labelSelector in the specified namespaces, where co-located is defined as running on a node\n    // whose value of the label with key topologyKey matches that of any node on which any of the\n    // selected pods is running.\n    // For soft anti-affinity, empty topologyKey is interpreted as \"all topologies\"\n    // (\"all topologies\" here means all the topologyKeys indicated by scheduler command-line argument --failure-domains,\n    // by default they are unversioned.LabelHostname, unversioned.LabelZoneFailureDomain and unversioned.LabelZoneRegion);\n    // for affinity and for hard anti-affinity, empty topologyKey is not allowed.\n    TopologyKey string `json:\"topologyKey,omitempty\"`\n```\n\n**failure-domains flag:**\n\n```\n--failure-domains=\"kubernetes.io/hostname,failure-domain.beta.kubernetes.io/zone,failure-domain.beta.kubernetes.io/region\": Indicate the \"all topologies\" range for empty topologyKey when it's used for soft pod anti-affinity.\n```\n",
+        "createdAt" : "2016-04-20T02:40:36Z",
+        "updatedAt" : "2016-05-06T07:34:41Z",
+        "lastEditedBy" : "70ba63ce-18c5-43f6-a9fb-1acd33329390",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a7d35b0e-b464-4fb0-9023-f6acbbe6b69e",
+        "parentId" : "900f0e07-7365-4d4a-a0c6-803d622023d8",
+        "authorId" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "body" : "Thanks. I would suggest to remove the part that says \"by default they are unversioned.LabelHostname, unversioned.LabelZoneFailureDomain and unversioned.LabelZoneRegion)\" because we may forget to update the comment if this set changes in the future; also, if someone looks for the --failure-domains command-line argument in the code, they should be able to find where the default value is set, so I think that part of the comment is not necessary.\n\nBTW I would suggest adding a comment where those constants are defined (unversioned.LabelHostname etc.) saying to be sure to update the default for the --failure-domains flag in the scheduler if you change them. (I think one comment for the whole section is sufficient.)\n",
+        "createdAt" : "2016-04-20T06:24:10Z",
+        "updatedAt" : "2016-05-06T07:34:41Z",
+        "lastEditedBy" : "82da2b23-9f40-4abd-8af5-56ba07c1fc0a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb11e816-893b-4896-9b78-0ff3b163dee5",
+        "parentId" : "900f0e07-7365-4d4a-a0c6-803d622023d8",
+        "authorId" : "70ba63ce-18c5-43f6-a9fb-1acd33329390",
+        "body" : "Yes, this way looks better.\n",
+        "createdAt" : "2016-04-20T07:18:43Z",
+        "updatedAt" : "2016-05-06T07:34:41Z",
+        "lastEditedBy" : "70ba63ce-18c5-43f6-a9fb-1acd33329390",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "82ba4f077e01bf5be20cfd9cbe74949f8eea611d",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +96,100 @@// If the topologyKey is nil/empty, check if the two nodes have any of the default topologyKeys, and have same corresponding label value.\nfunc (tps *Topologies) NodesHaveSameTopologyKey(nodeA *api.Node, nodeB *api.Node, topologyKey string) bool {\n\tif len(topologyKey) == 0 {\n\t\t// assumes this is allowed only for PreferredDuringScheduling pod anti-affinity (ensured by api/validation)\n\t\tfor _, defaultKey := range tps.DefaultKeys {"
+  },
+  {
+    "id" : "0217f29c-2295-4af5-a1f3-b0c975bbcdc7",
+    "prId" : 20977,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "498b4324-48bc-4ea6-8359-719d2477da52",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Can't we just move it to:\nplugin/pkg/scheduler/algorithm/priorities/util.go\n?\nDo you need to create a package for it?\n",
+        "createdAt" : "2016-02-10T15:45:53Z",
+        "updatedAt" : "2016-02-10T16:35:09Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "46443e9a-c41c-4a40-b6de-e0d4c2898d2e",
+        "parentId" : "498b4324-48bc-4ea6-8359-719d2477da52",
+        "authorId" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "body" : "Yes. It's necessary. Because of the import cycle.\n",
+        "createdAt" : "2016-02-10T15:48:33Z",
+        "updatedAt" : "2016-02-10T16:35:09Z",
+        "lastEditedBy" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a827b765-0a12-490e-9a03-ee5f97b675a6",
+        "parentId" : "498b4324-48bc-4ea6-8359-719d2477da52",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Really?\nIs pkg/api or pkg/api/resource somehow transitively importing anything from scheduler?\nCan you paste this cycle? [It definitely shouldn't be the case]\n",
+        "createdAt" : "2016-02-10T15:51:00Z",
+        "updatedAt" : "2016-02-10T16:35:09Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd619c1c-713a-4db3-9bd1-b96a7f4072c8",
+        "parentId" : "498b4324-48bc-4ea6-8359-719d2477da52",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "In fact it's impossible that there is a cycle - this was already there, so it can be left in that package.\n",
+        "createdAt" : "2016-02-10T15:51:38Z",
+        "updatedAt" : "2016-02-10T16:35:09Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "952de88d-1ae2-4115-9e62-e23622ac6534",
+        "parentId" : "498b4324-48bc-4ea6-8359-719d2477da52",
+        "authorId" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "body" : "I didn't catch what you meant.\n\nLet me clarify the cycle:\n- priorities import schedulercache\n- if this part isn't separated out, schedulercache will import priorities.\n",
+        "createdAt" : "2016-02-10T15:54:27Z",
+        "updatedAt" : "2016-02-10T16:35:09Z",
+        "lastEditedBy" : "bb4cf218-381a-40ad-ac0c-0c2c66685cd4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09f033f1-55fd-4574-a9f1-88314f2703da",
+        "parentId" : "498b4324-48bc-4ea6-8359-719d2477da52",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "OK, got it - it's refactored for the future :)\n",
+        "createdAt" : "2016-02-10T15:57:28Z",
+        "updatedAt" : "2016-02-10T16:35:09Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1cf4540b5d5641befb9f87d7fcaa720620931080",
+    "line" : 1,
+    "diffHunk" : "@@ -1,1 +-1,3 @@/*\nCopyright 2016 The Kubernetes Authors All rights reserved.\n"
+  }
+]

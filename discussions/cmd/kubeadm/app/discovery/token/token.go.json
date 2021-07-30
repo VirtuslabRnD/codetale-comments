@@ -1,0 +1,200 @@
+[
+  {
+    "id" : "5618a845-b43e-4434-8bb7-9d921d225b8b",
+    "prId" : 85468,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85468#pullrequestreview-324792546",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "15130644-3bd4-44e8-91e6-ca3ab8d47f54",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "The context here gives me an idea. What about creating a root context (at the beginning of `retrieveValidatedConfigInfo`), that contains all the timeout? Then we can pass it down to this func. This local context can then be created like so:\r\n```golang\r\nctx, cancel := context.WithCancel(parentCtx)\r\n```\r\n\r\nThis has the added benefit of not having to deal with timeout calculation between all leaf `JitterUntil` calls. The local context is still needed to stop `JitterUntil` from spinning.",
+        "createdAt" : "2019-11-27T16:50:38Z",
+        "updatedAt" : "2019-11-27T16:54:09Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b04233d-7ade-40f8-abfd-b8ac9558d549",
+        "parentId" : "15130644-3bd4-44e8-91e6-ca3ab8d47f54",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "my initial impression is that this is not needed, but i will double check it.",
+        "createdAt" : "2019-11-27T16:56:53Z",
+        "updatedAt" : "2019-11-27T16:56:53Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "89b0d14c-678b-45cd-8aba-b0d6e3d1b80a",
+        "parentId" : "15130644-3bd4-44e8-91e6-ca3ab8d47f54",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "> This has the added benefit of not having to deal with timeout calculation between all leaf JitterUntil calls. The local context is still needed to stop JitterUntil from spinning.\r\n\r\nunless i'm wrong this is problematic. we want a new context with timeout calculated each time getClusterInfo() is called.\r\n\r\nhttps://golang.org/src/context/context.go?s=14448:14525#L453\r\n```\r\nfunc WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {\r\n\treturn WithDeadline(parent, time.Now().Add(timeout))\r\n```\r\n\r\ni'd prefer we keep the code the way it is.\r\n\r\nalso, for the current use of JitterUntil we technically don't need the function to accept a channel, but a \"duration\" argument like Poll* would have been fine too.\r\n\r\n",
+        "createdAt" : "2019-11-27T21:19:02Z",
+        "updatedAt" : "2019-11-27T21:19:16Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bed14f5e-0b1b-46be-8be3-0a57f73e2d90",
+        "parentId" : "15130644-3bd4-44e8-91e6-ca3ab8d47f54",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "Ok, let's keep things like this.\r\n/lgtm",
+        "createdAt" : "2019-11-29T16:15:33Z",
+        "updatedAt" : "2019-11-29T16:15:33Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ce68a89d26af52aa359ac86f4d6832f44beb1ea7",
+    "line" : 297,
+    "diffHunk" : "@@ -1,1 +207,211 @@\t}\n\n\tctx, cancel := context.WithTimeout(context.TODO(), duration)\n\tdefer cancel()\n"
+  },
+  {
+    "id" : "cad4f120-0f83-4c0d-a041-d307ef4df9cb",
+    "prId" : 85156,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/85156#pullrequestreview-316323163",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "803e800e-65cc-4b18-bfe3-b002b5b1cfde",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "~like i've mentioned in the issue i think we should still PollImmediate with a sensible timeout:~\r\n\r\npossibly also change the other infinite poll to the same to be consistent:\r\n```\r\nklog.V(1).Infof(\"[discovery] Requesting info from %q again to validate TLS against the pinned public key\\n\", \r\n...\r\nwait.PollImmediateInfinite(constants.DiscoveryRetryInterval, func() (bool, error) {\r\n```\r\n\r\n@chuckha \r\nLMK if you are out of time for today and i can send the change?",
+        "createdAt" : "2019-11-12T22:53:30Z",
+        "updatedAt" : "2019-11-13T15:10:51Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "96f4dccd-e926-4a32-bbfb-ed48f178aef9",
+        "parentId" : "803e800e-65cc-4b18-bfe3-b002b5b1cfde",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "actually. i think i might be misunderstanding what is going here... :thinking: ",
+        "createdAt" : "2019-11-12T22:55:25Z",
+        "updatedAt" : "2019-11-13T15:10:51Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "855e98ed-e085-46b0-afe6-f706c1ee693c",
+        "parentId" : "803e800e-65cc-4b18-bfe3-b002b5b1cfde",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "ok, so we need to change the second `PollImmediateInfinite` to a `CoreV1().ConfigMaps(metav1.NamespacePublic).Get` too.",
+        "createdAt" : "2019-11-12T22:58:32Z",
+        "updatedAt" : "2019-11-13T15:10:51Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ecd068e7-9a05-446c-9f92-c634c9fb6c95",
+        "parentId" : "803e800e-65cc-4b18-bfe3-b002b5b1cfde",
+        "authorId" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "body" : "Ah yes, there is another poll infinite in this function, that needs to be removed as well.\r\n\r\nThe reason I believe these should be removed is that the `wait.Until` that calls this function is being run every 5 seconds (by default). That makes me think this function should not have any polling/retry logic as the retry logic is scoped to the parent function.",
+        "createdAt" : "2019-11-13T14:49:38Z",
+        "updatedAt" : "2019-11-13T15:10:51Z",
+        "lastEditedBy" : "bfaab188-fe7f-45cd-8e91-eeb4626a5f04",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "beed5209-d1d1-4829-8e5b-7d8d7c7efaa5",
+        "parentId" : "803e800e-65cc-4b18-bfe3-b002b5b1cfde",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "I would have taken the reverse approach - narrow down the retries to the actual connecting funcs. But I think, that this is good enough for the time being.",
+        "createdAt" : "2019-11-13T15:19:21Z",
+        "updatedAt" : "2019-11-13T15:23:05Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8fcf8924983a123383a52ecb8cb0af20ccb55fcb",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +74,78 @@\n\t\t// Make an initial insecure connection to get the cluster-info ConfigMap\n\t\tinsecureClusterInfo, err := insecureClient.CoreV1().ConfigMaps(metav1.NamespacePublic).Get(bootstrapapi.ConfigMapClusterInfo, metav1.GetOptions{})\n\t\tif err != nil {\n\t\t\tklog.V(1).Infof(\"[discovery] Failed to request cluster info: [%s]\\n\", err)"
+  },
+  {
+    "id" : "38937b42-a054-4d24-86d2-acd42a20e9a7",
+    "prId" : 76500,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76500#pullrequestreview-226125891",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0d9ce0a0-ce3a-4d6e-8fdd-f8786cb5faa2",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "please modify this function to:\r\n```\r\n// parsePEMCerts decodes PEM-formatted certificates into a slice of x509.Certificates\r\nfunc parsePEMCerts(certData []byte) ([]*x509.Certificate, error) {\r\n\tvar certificates []*x509.Certificate\r\n\tvar pemBlock *pem.Block\r\n\r\n\tfor {\r\n\t\tpemBlock, certData = pem.Decode(certData)\r\n\t\tif pemBlock == nil {\r\n\t\t\treturn nil, errors.New(\"invalid PEM data\")\r\n\t\t}\r\n\r\n\t\tcert, err := x509.ParseCertificate(pemBlock.Bytes)\r\n\t\tif err != nil {\r\n\t\t\treturn nil, errors.Wrap(err, \"unable to parse certificate\")\r\n\t\t}\r\n\t\tcertificates = append(certificates, cert)\r\n\r\n\t\tif len(certData) == 0 {\r\n\t\t\tbreak\r\n\t\t}\r\n\t}\r\n\treturn certificates, nil\r\n}\r\n```\r\n\r\nnote the `a PEM-` -> `PEM` change in the function comment.\r\n",
+        "createdAt" : "2019-04-12T13:03:12Z",
+        "updatedAt" : "2019-04-15T12:08:16Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da4d4641-1455-4eb2-b774-b5e3c305ed8d",
+        "parentId" : "0d9ce0a0-ce3a-4d6e-8fdd-f8786cb5faa2",
+        "authorId" : "1f3d109e-1a23-4a7a-b130-47d557e30286",
+        "body" : "Thanks! Fixed",
+        "createdAt" : "2019-04-12T14:50:15Z",
+        "updatedAt" : "2019-04-15T12:08:16Z",
+        "lastEditedBy" : "1f3d109e-1a23-4a7a-b130-47d557e30286",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7f8fc5d18931e36cb1d3dbaf479bb1d02bb01d0b",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +228,232 @@\n// parsePEMCerts decodes PEM-formatted certificates into a slice of x509.Certificates\nfunc parsePEMCerts(certData []byte) ([]*x509.Certificate, error) {\n\tvar certificates []*x509.Certificate\n\tvar pemBlock *pem.Block"
+  },
+  {
+    "id" : "cb4f0687-60ef-4bc3-9673-0ed6c3366380",
+    "prId" : 49520,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/49520#pullrequestreview-53246940",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "80eaa4a4-c2fd-4a89-83ff-25e61c028c87",
+        "parentId" : null,
+        "authorId" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "body" : "My only high-level comment here is that this function becomes a little bit too long in my opinion, but that's nothing we should hold up this PR for",
+        "createdAt" : "2017-07-31T14:47:11Z",
+        "updatedAt" : "2017-08-10T16:43:32Z",
+        "lastEditedBy" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0d23ba64-aee8-4050-9010-c07168b929b8",
+        "parentId" : "80eaa4a4-c2fd-4a89-83ff-25e61c028c87",
+        "authorId" : "6682fc41-9e62-4c69-b891-a0be20e50c30",
+        "body" : "Agreed. It's also lacking test coverage.",
+        "createdAt" : "2017-07-31T14:57:22Z",
+        "updatedAt" : "2017-08-10T16:43:32Z",
+        "lastEditedBy" : "6682fc41-9e62-4c69-b891-a0be20e50c30",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a449313e-ff86-4ebe-baa0-43c9ac6ae360",
+        "parentId" : "80eaa4a4-c2fd-4a89-83ff-25e61c028c87",
+        "authorId" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "body" : "Exactly, can't be unit tested currently.\r\nHowever, I'm fine with deferring that to a follow-up, this PR is already quite big",
+        "createdAt" : "2017-07-31T15:04:49Z",
+        "updatedAt" : "2017-08-10T16:43:32Z",
+        "lastEditedBy" : "bfe6ebf1-cfa7-4758-abb1-9960fa09b194",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "358806e18b91bbcb846fcd7af0f3e2a99adf4769",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +42,46 @@// It then makes sure it can trust the API Server by looking at the JWS-signed tokens and (if rootCAPubKeys is not empty)\n// validating the cluster CA against a set of pinned public keys\nfunc RetrieveValidatedClusterInfo(discoveryToken string, tokenAPIServers, rootCAPubKeys []string) (*clientcmdapi.Cluster, error) {\n\ttokenId, tokenSecret, err := tokenutil.ParseToken(discoveryToken)\n\tif err != nil {"
+  }
+]

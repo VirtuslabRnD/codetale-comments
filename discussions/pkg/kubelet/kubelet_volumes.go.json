@@ -1,0 +1,420 @@
+[
+  {
+    "id" : "d48a9280-04ac-424e-8664-0d5ef32da356",
+    "prId" : 102576,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102576#pullrequestreview-694471903",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e0ea062c-92ab-460b-82d3-70280f100101",
+        "parentId" : null,
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "basically if this happens - it is almost guaranteed that pod cleanup will fail because `syscall.Rmdir(podDir)` below will fail. In that case - shouldn't we log this as error? ",
+        "createdAt" : "2021-06-07T20:02:23Z",
+        "updatedAt" : "2021-06-07T20:02:23Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3b3c6bf-8600-48bd-b51e-77a956efa4cb",
+        "parentId" : "e0ea062c-92ab-460b-82d3-70280f100101",
+        "authorId" : "9d24241f-6d25-4b9f-9d9c-8e5aed00c39d",
+        "body" : "Yes, good point, I changed this to an error log message. This condition \"shouldn't\" happen, at least in the absence of any race conditions. If we hit an error in `removeOrphanedPodVolumeDirs` then we'll stop before entering this podSubdir loop. But if the volumes directory got removed successfully and then re-created by another process, we could hit this line, and it would be fair to treat that as an error since the final rmdir call will fail.",
+        "createdAt" : "2021-06-07T20:51:18Z",
+        "updatedAt" : "2021-06-07T20:51:19Z",
+        "lastEditedBy" : "9d24241f-6d25-4b9f-9d9c-8e5aed00c39d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d7ad550-1aac-48fd-abb1-47acaa915094",
+        "parentId" : "e0ea062c-92ab-460b-82d3-70280f100101",
+        "authorId" : "9d24241f-6d25-4b9f-9d9c-8e5aed00c39d",
+        "body" : "Well, after I pushed that change, `pull-kubernetes-verify` failed with:\r\n```\r\nkubelet_volumes.go:230:5: unstructured logging function \"Error\" should not be used\r\n```\r\nThe only reason I tried to use `Error` instead of `ErrorS` is because we do not have a specific `err` to pass along to the log in this case. `ErrorS` requires an error as the first argument, while `InfoS` does not. I'm going to revert this back to an `InfoS` call for now, but let me know if you have a better idea. The goal of this log statement is just to leave behind a breadcrumb in case the `volumes` directory somehow gets recreated after `removeOrphanedPodVolumeDirs` returns success.",
+        "createdAt" : "2021-06-07T21:42:09Z",
+        "updatedAt" : "2021-06-07T21:42:09Z",
+        "lastEditedBy" : "9d24241f-6d25-4b9f-9d9c-8e5aed00c39d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "77cfc82d-bd0c-4290-9e65-e351805d93c7",
+        "parentId" : "e0ea062c-92ab-460b-82d3-70280f100101",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "You could use `Error(errors.New(\"error message\"), \"more message text\")`. It is a bit awkward, though.\r\n",
+        "createdAt" : "2021-06-08T06:00:22Z",
+        "updatedAt" : "2021-06-08T06:00:22Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a6363cad-090f-4e24-b638-0620efa864fe",
+        "parentId" : "e0ea062c-92ab-460b-82d3-70280f100101",
+        "authorId" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "body" : "I have not looked into structured logging proposal too deeply but traditionally monitoring systems parse error level logs differently than info logs (I don't know why we don't have `WarningS`) and hence I would prefer to log it as error even if we have to instantiate an error type via `errors.New()`. ",
+        "createdAt" : "2021-06-08T14:59:59Z",
+        "updatedAt" : "2021-06-08T14:59:59Z",
+        "lastEditedBy" : "d3e684d7-edd2-4290-a8bf-e8b698c97338",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "976690ed-b0e7-4f7d-8044-d9014bf56adc",
+        "parentId" : "e0ea062c-92ab-460b-82d3-70280f100101",
+        "authorId" : "9d24241f-6d25-4b9f-9d9c-8e5aed00c39d",
+        "body" : "Thanks, I think `Errorf` is what I was looking for, and I see some other components using it so hopefully the verify check will pass this time. If not, I'll follow pohly's suggestion.",
+        "createdAt" : "2021-06-08T15:37:44Z",
+        "updatedAt" : "2021-06-08T15:38:00Z",
+        "lastEditedBy" : "9d24241f-6d25-4b9f-9d9c-8e5aed00c39d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f133f460-898c-4316-a967-5b34ac1685d7",
+        "parentId" : "e0ea062c-92ab-460b-82d3-70280f100101",
+        "authorId" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "body" : "> I don't know why we don't have WarningS\r\n\r\nhttps://github.com/go-logr/logr#why-not-named-levels-like-infowarningerror",
+        "createdAt" : "2021-06-08T16:58:12Z",
+        "updatedAt" : "2021-06-08T16:58:13Z",
+        "lastEditedBy" : "ba0b9c6e-ec4c-4d1b-832e-751e6109bf38",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ba2f168-ac76-4944-b295-f32ae8824f37",
+        "parentId" : "e0ea062c-92ab-460b-82d3-70280f100101",
+        "authorId" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "body" : "Error condition looks good. See also https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/migration-to-structured-logging.md#change-log-functions-to-structured-equivalent for there not being \"WarningS\" equivalents.",
+        "createdAt" : "2021-06-28T23:27:46Z",
+        "updatedAt" : "2021-06-28T23:28:38Z",
+        "lastEditedBy" : "31a2ac00-6c67-4307-a4bc-bfd13f41ef27",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "01bb0f86b02b6bb4461be861a87012a9f82de2ee",
+    "line" : 124,
+    "diffHunk" : "@@ -1,1 +227,231 @@\t\t\t// as this could lead to data loss in some situations. The volumes\n\t\t\t// directory should have been removed by removeOrphanedPodVolumeDirs.\n\t\t\tif podSubdirName == \"volumes\" {\n\t\t\t\terr := fmt.Errorf(\"volumes subdir was found after it was removed\")\n\t\t\t\tklog.ErrorS(err, \"Orphaned pod found, but failed to remove volumes subdir\", \"podUID\", uid, \"path\", podSubdirPath)"
+  },
+  {
+    "id" : "dbd75416-9f9b-4eb3-b7f7-baf856e13d46",
+    "prId" : 102576,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102576#pullrequestreview-679927077",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "98b85d67-38f5-4d73-8ed1-e1e4223b4bf0",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "just want to double check how often these errors will be print out?",
+        "createdAt" : "2021-06-09T16:45:31Z",
+        "updatedAt" : "2021-06-09T16:45:31Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4fed573-f4af-42ba-9f1e-7f359a1960a1",
+        "parentId" : "98b85d67-38f5-4d73-8ed1-e1e4223b4bf0",
+        "authorId" : "9d24241f-6d25-4b9f-9d9c-8e5aed00c39d",
+        "body" : "The errors that are appended to `orphanVolumeErrors` or `orphanRemovalErrors` are printed once by `logSpew` each time the kubelet attempts orphan cleanup.\r\nhttps://github.com/kubernetes/kubernetes/blob/484eb01822244904e902d2cb77ef08112e806377/pkg/kubelet/kubelet_volumes.go#L248-L257\r\nBy default you'll just see a summary log message in kubelet.log like this:\r\n```\r\nE0603 20:13:19.089595 3182368 kubelet_volumes.go:249] \"There were many similar errors. Turn up verbosity to see them.\" err=\"orphaned pod \\\"80ddb1a3-fb23-4470-9ac5-9eabedd22cd6\\\" found, but error not a directory occurred when trying to remove the volumes dir\" numErrs=3\r\n```\r\nThen if you want to see each individual message, the verbosity level needs to be >= 5",
+        "createdAt" : "2021-06-09T17:08:53Z",
+        "updatedAt" : "2021-06-09T17:10:40Z",
+        "lastEditedBy" : "9d24241f-6d25-4b9f-9d9c-8e5aed00c39d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "01bb0f86b02b6bb4461be861a87012a9f82de2ee",
+    "line" : 45,
+    "diffHunk" : "@@ -1,1 +145,149 @@\t\tfor _, subpathVolumePath := range subpathVolumePaths {\n\t\t\tif err := syscall.Rmdir(subpathVolumePath); err != nil {\n\t\t\t\torphanVolumeErrors = append(orphanVolumeErrors, fmt.Errorf(\"orphaned pod %q found, but failed to rmdir() subpath at path %v: %v\", uid, subpathVolumePath, err))\n\t\t\t} else {\n\t\t\t\tklog.InfoS(\"Cleaned up orphaned volume subpath from pod\", \"podUID\", uid, \"path\", subpathVolumePath)"
+  },
+  {
+    "id" : "a11f4d86-7c76-40a9-a2d4-25f654c9bac2",
+    "prId" : 101524,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/101524#pullrequestreview-646040656",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27404518-de30-4980-921b-a2ca99a0746f",
+        "parentId" : null,
+        "authorId" : "4da24861-03eb-421f-b365-cf63f3c423b3",
+        "body" : "Will this print so often that it would require some throttling?",
+        "createdAt" : "2021-04-27T15:40:42Z",
+        "updatedAt" : "2021-04-29T16:50:26Z",
+        "lastEditedBy" : "4da24861-03eb-421f-b365-cf63f3c423b3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "585a6dd7-c57f-4002-80b2-b6ab8e394be7",
+        "parentId" : "27404518-de30-4980-921b-a2ca99a0746f",
+        "authorId" : "3eccedfc-5c53-4555-94cb-69f2b56e485c",
+        "body" : "Not at all... Default log level is 2, and even when log level is set to 3 this function is only called every 10 seconds and not for all pods; just terminating ones.",
+        "createdAt" : "2021-04-27T15:44:04Z",
+        "updatedAt" : "2021-04-29T16:50:26Z",
+        "lastEditedBy" : "3eccedfc-5c53-4555-94cb-69f2b56e485c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "224a4db26928c4a40255b1de7ee6e3ce01126cd8",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +136,140 @@\t\t// if the pod is within termination grace period, we shouldn't cleanup the underlying volumes\n\t\tif kl.podKiller.IsPodPendingTerminationByUID(uid) {\n\t\t\tklog.V(3).InfoS(\"Pod is pending termination\", \"podUID\", uid)\n\t\t\tcontinue\n\t\t}"
+  },
+  {
+    "id" : "83c71dbe-8f7e-4f95-8a77-ab8edfbd5e31",
+    "prId" : 100183,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/100183#pullrequestreview-685411147",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4eafbfe1-dd46-49a3-8fb6-13b8a7985ce0",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "maybe also update the comments mentioning about uncertain volumes?",
+        "createdAt" : "2021-06-09T16:20:56Z",
+        "updatedAt" : "2021-06-09T16:20:56Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7543f6ec-cb89-4f3d-936c-70af9cb0402e",
+        "parentId" : "4eafbfe1-dd46-49a3-8fb6-13b8a7985ce0",
+        "authorId" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "body" : "Fixed",
+        "createdAt" : "2021-06-16T16:42:21Z",
+        "updatedAt" : "2021-06-16T16:42:22Z",
+        "lastEditedBy" : "8b64e744-955d-4523-a3b7-60fae9df0857",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d5da73032f7882afe180af77a5fcc8f441d36807",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +73,77 @@// podVolumesExist checks with the volume manager and returns true any of the\n// pods for the specified volume are mounted or are uncertain.\nfunc (kl *Kubelet) podVolumesExist(podUID types.UID) bool {\n\tif mountedVolumes :=\n\t\tkl.volumeManager.GetPossiblyMountedVolumesForPod("
+  },
+  {
+    "id" : "5eb2e03a-1b89-4012-ba02-c6792e7f5a86",
+    "prId" : 84206,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/84206#pullrequestreview-492175885",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1f0eb5ab-4422-48ff-a932-fb5f3cfc4d6c",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "this is also checked in podVolumesExist() function above?",
+        "createdAt" : "2020-09-11T00:34:32Z",
+        "updatedAt" : "2020-11-10T14:35:12Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b9f0305-89c3-4658-b6d7-41efdd385482",
+        "parentId" : "1f0eb5ab-4422-48ff-a932-fb5f3cfc4d6c",
+        "authorId" : "2b5e7cd9-1cd6-4552-b858-212c3c30dc28",
+        "body" : "Yes, I didn't want to create a coupling between these two methods `podVolumesExist` and `podVolumePathsExist` even though all current use cases of `podVolumePathsExist` also use the `podVolumesExist`.\r\n\r\nShould I remove this check from `podVolumePathsExist`?",
+        "createdAt" : "2020-09-20T06:31:52Z",
+        "updatedAt" : "2020-11-10T14:35:12Z",
+        "lastEditedBy" : "2b5e7cd9-1cd6-4552-b858-212c3c30dc28",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6748570724495bd6220a21632f67ba1f75634660",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +78,82 @@func (kl *Kubelet) podVolumePathsExistInCacheOrDisk(podUID types.UID) bool {\n\tif mountedVolumes :=\n\t\tkl.volumeManager.GetMountedVolumesForPod(\n\t\t\tvolumetypes.UniquePodName(podUID)); len(mountedVolumes) > 0 {\n\t\treturn true"
+  },
+  {
+    "id" : "30f0bc80-6c48-4872-abaf-c413e6971c45",
+    "prId" : 72291,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72291#pullrequestreview-187942877",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b6002f4b-bd36-4a03-abaa-63191a89391e",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "In the above podVolumesExist() checking, it calls getMountedVolumePathListFromDisk() to check whether there are mounted volumes exist. And then it calls getPodVolumePathListFromDisk to check whether there are still volume paths exist. I think there are some redundancy here.",
+        "createdAt" : "2018-12-24T19:58:20Z",
+        "updatedAt" : "2018-12-26T18:50:31Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff028db9-37ae-4010-b68d-0fbf4b043426",
+        "parentId" : "b6002f4b-bd36-4a03-abaa-63191a89391e",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "it might be redundant, but I don't want to remove it as part of this bug fix, as this code is not very well tested.",
+        "createdAt" : "2018-12-26T18:01:32Z",
+        "updatedAt" : "2018-12-26T18:50:31Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3868dea8-8edd-43f5-85f3-cfa8034af099",
+        "parentId" : "b6002f4b-bd36-4a03-abaa-63191a89391e",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "I'll leave it comment that this may be able to be cleaned up",
+        "createdAt" : "2018-12-26T18:01:58Z",
+        "updatedAt" : "2018-12-26T18:50:31Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b9f63483-de1f-41b2-809e-0c775be0cede",
+        "parentId" : "b6002f4b-bd36-4a03-abaa-63191a89391e",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Opened up https://github.com/kubernetes/kubernetes/issues/72346",
+        "createdAt" : "2018-12-26T18:45:14Z",
+        "updatedAt" : "2018-12-26T18:50:31Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3ebbbbd5d8670868bd7d4744803241b0fec07836",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +131,135 @@\t\t\tcontinue\n\t\t}\n\n\t\t// If there are any volume-subpaths, do not cleanup directories\n\t\tvolumeSubpathExists, err := kl.podVolumeSubpathsDirExists(uid)"
+  },
+  {
+    "id" : "507257db-23c1-4f5d-a5e9-190586a9b93f",
+    "prId" : 72291,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72291#pullrequestreview-188156791",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "184d2f18-b37f-4ace-b1f7-408d8d18eb43",
+        "parentId" : null,
+        "authorId" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "body" : "i do not fully follow why we should not cleanup directories if volume-subpaths exists ? May be add some additional comments to explain that ",
+        "createdAt" : "2018-12-27T03:43:58Z",
+        "updatedAt" : "2018-12-27T03:43:58Z",
+        "lastEditedBy" : "224e1088-78fe-4bdd-99d1-31be3e464996",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "02611333-5c17-4655-bff6-0b9733e2a67a",
+        "parentId" : "184d2f18-b37f-4ace-b1f7-408d8d18eb43",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "It means that all the volumes have not been cleanly unmounted yet",
+        "createdAt" : "2018-12-27T19:05:24Z",
+        "updatedAt" : "2018-12-27T19:05:25Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3ebbbbd5d8670868bd7d4744803241b0fec07836",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +132,136 @@\t\t}\n\n\t\t// If there are any volume-subpaths, do not cleanup directories\n\t\tvolumeSubpathExists, err := kl.podVolumeSubpathsDirExists(uid)\n\t\tif err != nil {"
+  },
+  {
+    "id" : "37a06082-b645-4bf2-b29c-94f9d3ec98f9",
+    "prId" : 44938,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/44938#pullrequestreview-35420914",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ea874198-f3a3-416e-aada-29792f1d5915",
+        "parentId" : null,
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "@jayunit100 do you have any insight re: https://bugzilla.redhat.com/show_bug.cgi?id=1445410 -- i find it strange we hit times where err printed nil here ;-)",
+        "createdAt" : "2017-04-28T16:46:02Z",
+        "updatedAt" : "2017-04-28T16:46:02Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bc23f6de-a50d-44d3-8edd-e28ce904e5a2",
+        "parentId" : "ea874198-f3a3-416e-aada-29792f1d5915",
+        "authorId" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "body" : "i think a while back it also used to spam this if  there were any volume paths floating around  https://github.com/kubernetes/kubernetes/commit/041fa6477b629de331f19ea886fde1bc4151063c#diff-79d1ea3801b52a2add9229183049f4c2 \r\n\r\nthis is fixed now, so it might be lagging in some older forks/distros ., i doubt you will ever see `<nil>` err running off of the current or any recent (4 months) master fork",
+        "createdAt" : "2017-04-28T17:47:21Z",
+        "updatedAt" : "2017-04-28T17:54:15Z",
+        "lastEditedBy" : "a5be0b3b-3db2-4c99-a598-55f8708db5df",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b3c45247bc0562cb3bbba0791e58f0b5b3bfad9e",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +111,115 @@\t\tvolumePaths, err := kl.getPodVolumePathListFromDisk(uid)\n\t\tif err != nil {\n\t\t\torphanVolumeErrors = append(orphanVolumeErrors, fmt.Errorf(\"Orphaned pod %q found, but error %v occurred during reading volume dir from disk\", uid, err))\n\t\t\tcontinue\n\t\t}"
+  },
+  {
+    "id" : "e0ae46bd-f5e0-49b8-9618-f5d54f02291c",
+    "prId" : 37698,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/37698#pullrequestreview-23355255",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d52a0141-f871-4eb7-89f3-36d4cab1ba05",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I think the we should remove the check len(volumePaths) > 0. If we have this check, any directories exist under /volumes will skip the clean up and  RemoveAllOneFilesystem will not be called. The purpose of checking len(volumePaths) > 0 was to prevent any data loss in case the directories under /volumes are not cleaned up properly. Currently, it is possible that the directories under /volumes are unmounted, but fail to delete. If this happens, cleanupOrphanedPod will fail to delete the pod directory. ",
+        "createdAt" : "2017-02-21T21:13:53Z",
+        "updatedAt" : "2017-02-28T14:33:29Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b382410f-4b79-43b8-9e2c-2601586c52a4",
+        "parentId" : "d52a0141-f871-4eb7-89f3-36d4cab1ba05",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "Talk with @jsafrane offline, will address this issue in a separate PR. Opened up an issue to track this #41930",
+        "createdAt" : "2017-02-22T22:45:45Z",
+        "updatedAt" : "2017-02-28T14:33:29Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d7d039dba2773cee68e2676f13ba86b13fffe963",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +114,118 @@\t\t\tglog.Errorf(\"Orphaned pod %q found, but volume paths are still present on disk.\", uid)\n\t\t\tcontinue\n\t\t}\n\t\tglog.V(3).Infof(\"Orphaned pod %q found, removing\", uid)\n\t\tif err := removeall.RemoveAllOneFilesystem(kl.mounter, kl.getPodDir(uid)); err != nil {"
+  },
+  {
+    "id" : "456dd150-ba4e-411a-9034-dfa037a6b624",
+    "prId" : 34251,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/34251#pullrequestreview-3171687",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ba5c276c-d238-4054-8018-e46271aaeb61",
+        "parentId" : null,
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "nit: Add a brief comment/TODO explaining why mounter could be nil \n",
+        "createdAt" : "2016-10-06T17:50:00Z",
+        "updatedAt" : "2016-10-06T18:11:10Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a7c063b-ed13-46cd-8fc2-e550b481b6cc",
+        "parentId" : "ba5c276c-d238-4054-8018-e46271aaeb61",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "done.\n",
+        "createdAt" : "2016-10-06T18:16:49Z",
+        "updatedAt" : "2016-10-06T18:16:49Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b2b04090da74a4a5f67c223ae01417f50304b282",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +44,48 @@\t\t// from reconciler's sync state process. PR 33616 will fix this problem\n\t\t// to create Mounter object when recovering volume state.\n\t\tif volume.Mounter == nil {\n\t\t\tcontinue\n\t\t}"
+  }
+]

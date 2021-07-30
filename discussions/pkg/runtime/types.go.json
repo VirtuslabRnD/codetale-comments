@@ -1,0 +1,189 @@
+[
+  {
+    "id" : "339c9247-4a96-42f5-9099-8fee17ba179e",
+    "prId" : 24751,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c438cdc9-a175-4c80-9eb0-6fb8a663fc31",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "This is more of a follow up, but I'm pretty sure we have a library somewhere in our godeps that does this.  Just not coming to mind off the top of my head.  No change necessary here, but if we extend this we should switch.\n",
+        "createdAt" : "2016-05-03T21:35:05Z",
+        "updatedAt" : "2016-05-03T21:35:05Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "28132be07edd2041a9de70e780a1ac239c839226",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +131,135 @@}\n\nfunc getNestedField(obj map[string]interface{}, fields ...string) interface{} {\n\tvar val interface{} = obj\n\tfor _, field := range fields {"
+  },
+  {
+    "id" : "da342da4-3ff8-4934-af8b-1935a3237793",
+    "prId" : 24509,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "698e2b1f-9c12-4adc-b43e-cbc9f6893d90",
+        "parentId" : null,
+        "authorId" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "body" : "Using composite literal syntax would probably look nicer.\n\n``` go\nreturn metatypes.OwnerReference{\n    Kind: getNestedString(src, \"kind\"),\n...\n}, nil\n```\n",
+        "createdAt" : "2016-05-04T23:39:43Z",
+        "updatedAt" : "2016-05-17T20:49:00Z",
+        "lastEditedBy" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0cda99b8d7942c20e0242d6e5cf7564c30984615",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +210,214 @@\t\tUID:        (types.UID)(getNestedString(v, \"uid\")),\n\t}\n}\n\nfunc setOwnerReference(src metatypes.OwnerReference) map[string]interface{} {"
+  },
+  {
+    "id" : "649de27c-abb9-48ee-81cb-cd7dbe114b49",
+    "prId" : 23112,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ecad697d-7968-454a-bbd7-222b8cc90b45",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "So adding ContentEncoding / Type is interesting - when this object is included in an external type for JSON, it's assumed to be JSON (and there is no way to set encoding or content type).  For Protobuf, it will be slightly different (the nested object would be a runtime.Unknown, but ContentEncoding and ContentType would be inside that object, not this one).  For serializing nested objects (like List) we've said that that has to be something that serializer knows how to do, so the serializer is responsible for transforming Object -> Raw and vice versa.  \n\nDo we _need_ to add them here?  Maybe I didn't catch why they were required.\n",
+        "createdAt" : "2016-03-17T17:44:20Z",
+        "updatedAt" : "2016-03-18T11:35:37Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "02ae0bf0-88a3-4018-ae94-333ecd1499b7",
+        "parentId" : "ecad697d-7968-454a-bbd7-222b8cc90b45",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "So maybe I don't fully understand it.\nMy rationale for having it is that it seemed to be that in some cases there wasn't any way to infer that information if we don't have them in RawExtension - as examples see above:\n- pkg/api/meta/help.go \n- pkg/runtime/embedded.go (conversions between RawExtension and Object)\n\nBut maybe I'm missing how RawExtensions generally works...\n",
+        "createdAt" : "2016-03-17T18:03:26Z",
+        "updatedAt" : "2016-03-18T11:35:37Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4dc970f4-4f08-4e26-99d2-366afd7f7c3d",
+        "parentId" : "ecad697d-7968-454a-bbd7-222b8cc90b45",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "We're trying to remove the conversion logic in pkg/runtime/embedded.go (conversions doesn't know enough about the context that a serialization is happening in to properly convert arbitrary objects to bytes).  In OpenShift we have more cases where we use embedded RawExtensions, so we hit the use cases more.  @deads2k and I ended up having an extension to the serializer that gave objects the chance to encode their nested objects with a copy of the serializer, prior to actually writing out the actual object.  In that case, the encoding and type would be handled by the serializer code.  \n\nExample - we have a `List` object that has runtime.Objects.  Those objects don't have to be in the same API group, or be targeted to the same API version.  When we read the List, we don't decode them immediately (we just move them to unknown).  The serializer that reads those knows what content type is the default - conversion does not.  Likewise, when we write those to protobuf, the protobuf serializer knows that the destination content type is protobuf, not conversion.  So the hooks in the serializer have to go and give each object a chance to serialize using protobuf.\n\nIf we get rid of internal versions, we'd need a way to pass around objects that have been decoded (that's what Object is for).  I'm not sure that we'd need content encoding or type.\n\nI think line 102 of embedded up above is technically wrong (where we convert unknown to raw extension), because we don't want conversion doing encoding.  The problem is we need to formalize how we do encoding of nested objects, probably as part of this chain of work.  Since Unknown is a wrapper, rather than an object on its own, we should probably do nothing.\n",
+        "createdAt" : "2016-03-17T19:50:25Z",
+        "updatedAt" : "2016-03-18T11:35:37Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "06a498d1-34e4-49e6-baa0-bdb901e62ded",
+        "parentId" : "ecad697d-7968-454a-bbd7-222b8cc90b45",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Thanks for detailed explanation - that helps a lot!\n\nSo I guess, we should remove ContentEncoding and ContentType from here, right?\nWill do that tomorrow.\n",
+        "createdAt" : "2016-03-17T20:43:04Z",
+        "updatedAt" : "2016-03-18T11:35:37Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bddae4db-aa84-4940-b275-156e4fb838ed",
+        "parentId" : "ecad697d-7968-454a-bbd7-222b8cc90b45",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Yeah, let's remove and add a TODO: here and a follow up issue to determine\nwhat the solution is.  I'll open a PR on the \"let callers encode themselves\nfrom serializers\" side.\n\nOn Thu, Mar 17, 2016 at 4:43 PM, Wojciech Tyczynski <\nnotifications@github.com> wrote:\n\n> In pkg/runtime/types.go\n> https://github.com/kubernetes/kubernetes/pull/23112#discussion_r56574323\n> :\n> \n> > @@ -80,17 +86,19 @@ type TypeMeta struct {\n> >  //\n> >  // +protobuf=true\n> >  type RawExtension struct {\n> > -   // RawJSON is the underlying serialization of this object.\n> > -   RawJSON []byte\n> > -   // Raw is the underlying serialization of this object.\n> \n> Thanks for detailed explanation - that helps a lot!\n> \n> So I guess, we should remove ContentEncoding and ContentType from here,\n> right?\n> Will do that tomorrow.\n> \n> —\n> You are receiving this because you were assigned.\n> Reply to this email directly or view it on GitHub\n> https://github.com/kubernetes/kubernetes/pull/23112/files/edfb4acc188fbb26529993e02d82fd72faa247d7#r56574323\n",
+        "createdAt" : "2016-03-17T21:22:30Z",
+        "updatedAt" : "2016-03-18T11:35:37Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "89585237cdb9fe79ae3d7e8028562d0a3cafa52a",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +87,91 @@// +protobuf=true\ntype RawExtension struct {\n\t// Raw is the underlying serialization of this object.\n\t//\n\t// TODO: Determine how to detect ContentType and ContentEncoding of 'Raw' data."
+  },
+  {
+    "id" : "f6f2da06-2384-469d-9202-88e98ab3199f",
+    "prId" : 23038,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "adbdf725-acd8-414a-9137-376dd99212db",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "@smarterclayton - I guess we should also change RawExtension. Can I do it in a separate PR?\n",
+        "createdAt" : "2016-03-16T09:17:05Z",
+        "updatedAt" : "2016-03-16T15:44:24Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da17e9df-ac2a-448e-9db9-88057d3fc06e",
+        "parentId" : "adbdf725-acd8-414a-9137-376dd99212db",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Yes\n",
+        "createdAt" : "2016-03-16T15:35:14Z",
+        "updatedAt" : "2016-03-16T15:44:24Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "218d3e5923d0b1e35dd275321342ad24242d41dd",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +104,108 @@\t// with a registered type. Most likely, nothing should be done with this\n\t// except for passing it through the system.\n\tRaw []byte\n\t// ContentEncoding is encoding used to encode 'Raw' data.\n\t// Unspecified mean no encoding."
+  },
+  {
+    "id" : "2ccd4f82-6efb-4867-830d-8a4f110fe068",
+    "prId" : 1239,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1d987bc9-eecf-4d81-860d-27f7ec111748",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Can you demonstrate the JSON code here?\n",
+        "createdAt" : "2014-09-11T03:58:26Z",
+        "updatedAt" : "2014-09-15T20:15:57Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "607d8bbc-f970-40d8-9d53-ca5d5e76fbf8",
+        "parentId" : "1d987bc9-eecf-4d81-860d-27f7ec111748",
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Done.\n",
+        "createdAt" : "2014-09-11T04:10:40Z",
+        "updatedAt" : "2014-09-15T20:15:57Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "851a1387-c42b-4da9-80f6-92765707b623",
+        "parentId" : "1d987bc9-eecf-4d81-860d-27f7ec111748",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "So the net JSON comes out largely the same as  http://play.golang.org/p/YOOumEKG5t with one notable difference: the redundant \"apiVersion\" field.  The difference is that http://play.golang.org/p/YOOumEKG5t seems VASTLY simpler.  Convince me I am wrong?\n\nBoth of these suffer from a major problem: kubelet (the primary consumer of many of the plugins) does not keep in-memory state at all, which means we will have to decode and re-decode these all every time.  Not a killer, I guess, but sort of obnoxious... \n",
+        "createdAt" : "2014-09-11T04:42:25Z",
+        "updatedAt" : "2014-09-15T20:15:57Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "44f340f127800e2814c1a4fb8c078babc9c03d50",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +88,92 @@// \truntime.PluginBase `yaml:\",inline\" json:\",inline\"`\n//\tAOption string `yaml:\"aOption\" json:\"aOption\"`\n// }\n//\n// // On the wire, the JSON will look something like this:"
+  }
+]

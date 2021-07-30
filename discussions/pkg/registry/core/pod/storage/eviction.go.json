@@ -1,0 +1,530 @@
+[
+  {
+    "id" : "9e15d98b-470b-4672-9ba0-485651a93e96",
+    "prId" : 94381,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94381#pullrequestreview-486905558",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a23aefd7-c501-47ab-bd72-e245ae696a14",
+        "parentId" : null,
+        "authorId" : "0b742a96-8e89-46df-9d41-4a7b235b8658",
+        "body" : "i'm not following this update, if we are about to return do we need to set this variable? (i didn't see a defer'd function)",
+        "createdAt" : "2020-09-10T20:00:35Z",
+        "updatedAt" : "2020-10-20T16:59:30Z",
+        "lastEditedBy" : "0b742a96-8e89-46df-9d41-4a7b235b8658",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c333b9cd-1758-43d8-9753-21ab3eee73ca",
+        "parentId" : "a23aefd7-c501-47ab-bd72-e245ae696a14",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "This code is inside an anonymous function: https://github.com/kubernetes/kubernetes/pull/94381/files#diff-9644c646d1076728c605baed12a5813aR189\r\n\r\nSo, that's the code we're returning from.  ",
+        "createdAt" : "2020-09-11T15:19:25Z",
+        "updatedAt" : "2020-10-20T16:59:30Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "704c6d19-1ed0-4bdc-a3e4-5b37b742bb00",
+        "parentId" : "a23aefd7-c501-47ab-bd72-e245ae696a14",
+        "authorId" : "0b742a96-8e89-46df-9d41-4a7b235b8658",
+        "body" : "ahh, thanks! i knew i was missing something",
+        "createdAt" : "2020-09-11T15:25:14Z",
+        "updatedAt" : "2020-10-20T16:59:30Z",
+        "lastEditedBy" : "0b742a96-8e89-46df-9d41-4a7b235b8658",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "717be0cd44e18e49796f559546da8bb8bfd04ed2",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +207,211 @@\t\t// If the pod is not ready, it doesn't count towards healthy and we should not decrement\n\t\tif !podutil.IsPodReady(pod) && pdb.Status.CurrentHealthy >= pdb.Status.DesiredHealthy && pdb.Status.DesiredHealthy > 0 {\n\t\t\tupdateDeletionOptions = true\n\t\t\treturn nil\n\t\t}"
+  },
+  {
+    "id" : "5a91c3b4-4795-45d4-adf6-8ba64bcb97f9",
+    "prId" : 94381,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94381#pullrequestreview-512858633",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "198600be-40f6-4f80-ac0d-63340995a4c0",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Can you explain from history *why* we were returning TooManyRequests in this code base?  Was it a quick workaround to trigger retry?  Or was there a longer discussion about the appropriate response code.  I don't have confidence from the comments here that it's the right error code, and I'd want to be confident before we spread it to a second spot (and update the comments such that it's explicitly clear that no other status code is appropriate, if so)",
+        "createdAt" : "2020-10-19T18:43:56Z",
+        "updatedAt" : "2020-10-20T16:59:30Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "47e7c899-110b-4060-91e9-ae4e688ec3ea",
+        "parentId" : "198600be-40f6-4f80-ac0d-63340995a4c0",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "Here's the original implementing PR, this comment makes me believe that we chose an error number out of a hat: https://github.com/kubernetes/kubernetes/pull/31033#discussion_r75573684\r\n\r\nCurrent state of the world as far as kubectl/drain is that while trying to evict a pod, if I get a 429, that indicates the PDB did not allow eviction at this time, retry.\r\n\r\nWe are sending 429 here to emulate a blocking PDB (eg, PDB with 0 disruptions available) as we do above.  This is because if we fail the ResourceVersion constraint here, we are no longer in position to evaluate the PDBs.\r\n\r\nI think signaling the client to optionally retry is the most sensible option here, and fits the current behavior: If I had 0 disruptions left (because the pod I'm trying to evict is already disrupted) we send back a 429.",
+        "createdAt" : "2020-10-19T19:38:42Z",
+        "updatedAt" : "2020-10-20T16:59:30Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3c1b09a-b9dc-4e68-8838-63ec3663d134",
+        "parentId" : "198600be-40f6-4f80-ac0d-63340995a4c0",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Thinking about the status codes we've assigned in the past (as the rough originator of most of the error stanzas I probably should create on separately for this if we will use it in the future), there's a couple that are close but not equivalent:\r\n\r\nIf you specify `generateName` and we keep getting collisions - the server generates a random name and then attempts to create the object in etcd, which could fail because someone else could choose that name - after 10 we return ServerTimeout\r\n\r\n```\r\n// NewServerTimeout returns an error indicating the requested action could not be completed due to a\r\n// transient error, and the client should try again.\r\n```\r\n\r\nPatch retries forever, as does a guaranteed update.\r\n\r\n\r\n\r\n\r\n",
+        "createdAt" : "2020-10-20T15:24:32Z",
+        "updatedAt" : "2020-10-20T16:59:30Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "153774ac-3507-4a0b-9b94-110a49fbb714",
+        "parentId" : "198600be-40f6-4f80-ac0d-63340995a4c0",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I guess 429 is fine for now, I can't really think of a better one and I'd rather not couple this change to to a more dramatic client behavior change.",
+        "createdAt" : "2020-10-20T15:25:04Z",
+        "updatedAt" : "2020-10-20T16:59:30Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "717be0cd44e18e49796f559546da8bb8bfd04ed2",
+    "line" : 84,
+    "diffHunk" : "@@ -1,1 +263,267 @@\t\t\t// and the original deletion options did not specify ResourceVersion, we send back\n\t\t\t// TooManyRequests so clients will retry.\n\t\t\treturn nil, createTooManyRequestsError(pdbName)\n\t\t}\n\t\treturn nil, err"
+  },
+  {
+    "id" : "0bf6b2bc-5e5e-450e-9e88-8da632cfe0ca",
+    "prId" : 94381,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/94381#pullrequestreview-512873867",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0e459d7a-49c2-46bd-82ae-969ad7f2011e",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Is this if block tested via a unit test already?  If not it would be good to add one now.",
+        "createdAt" : "2020-10-20T15:29:08Z",
+        "updatedAt" : "2020-10-20T16:59:30Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "93082fba-19a3-4467-a343-6b44bc77926d",
+        "parentId" : "0e459d7a-49c2-46bd-82ae-969ad7f2011e",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "All new logic in this PR is covered by unit testing.  Here's the coverage HTML output if you don't want to run coverage locally: https://gist.github.com/michaelgugino/9d20be02b1f0c4810893c6e81963eaf8",
+        "createdAt" : "2020-10-20T15:39:34Z",
+        "updatedAt" : "2020-10-20T16:59:30Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "717be0cd44e18e49796f559546da8bb8bfd04ed2",
+    "line" : 79,
+    "diffHunk" : "@@ -1,1 +258,262 @@\t_, _, err = r.store.Delete(ctx, eviction.Name, rest.ValidateAllObjectFunc, deleteOptions)\n\tif err != nil {\n\t\tif errors.IsConflict(err) && updateDeletionOptions &&\n\t\t\t(originalDeleteOptions.Preconditions == nil || originalDeleteOptions.Preconditions.ResourceVersion == nil) {\n\t\t\t// If we encounter a resource conflict error, we updated the deletion options to include them,"
+  },
+  {
+    "id" : "0e7afec8-052d-4082-8bc2-f48bf81bfca7",
+    "prId" : 83906,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83906#pullrequestreview-308004203",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "182199a5-6147-4624-a4b8-baf7ee32419c",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "@kubernetes/sig-node-pr-reviews is `PodPending` the right check here, or do we need to drill down into more detailed aspects (e.g. a `Ready` condition other than `True` should allow unconditional eviction because the pod is not currently considered \"available\" - \"Ready: the Pod is able to serve requests and should be added to the load balancing pools of all matching Services;\")\r\n\r\nIf we allow unconditional eviction based on conditions that could change at any moment, we also likely need to ensure we only evict that specific resourceVersion of the pod (otherwise we could race evicting with the kubelet marking the pod as ready)",
+        "createdAt" : "2019-10-28T16:17:35Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c6e7ba02-67cb-414d-a179-1ecb77a29faf",
+        "parentId" : "182199a5-6147-4624-a4b8-baf7ee32419c",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "@liggitt I have another patch that is a bit more defensive:\r\n\r\nhttps://github.com/kubernetes/kubernetes/pull/81175\r\n\r\n> otherwise we could race evicting with the kubelet marking the pod as ready\r\n\r\nWithout some kind of distributed locking mechanism, I think we're already exposed to a race here.  We discussed this a bit more in my other PR.\r\n\r\nSynopsis of other PR:  Only removing pending pods if we have enough healthy nodes (PDB's consider disrupted nodes, rather than healthy nodes, so we have to perform that calculation ourselves).  This should provide enough buffer against multiple transactions happening at once.",
+        "createdAt" : "2019-10-28T16:41:49Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d64e9a56-0a47-423b-9a03-a967829e6e3c",
+        "parentId" : "182199a5-6147-4624-a4b8-baf7ee32419c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "the pod object we get on line 119 has a resourceVersion we can use as a precondition in the delete call on line 134 that would ensure we only delete the pod if no other changes were made to it in the meantime. that wasn't important before this PR because succeeded and failed are terminal states.",
+        "createdAt" : "2019-10-28T16:46:37Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d1cb178-acd7-408d-b058-7eccd00bfaa3",
+        "parentId" : "182199a5-6147-4624-a4b8-baf7ee32419c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "if a change *was* made to the pod in the meantime, the delete call would get a conflict error, and this code could refetch the pod and retry the logic. The RetryOnConflict helper method is used for this in many places.",
+        "createdAt" : "2019-10-28T16:47:35Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0466e40d-999b-4686-9b5b-d2c8c63c6ef1",
+        "parentId" : "182199a5-6147-4624-a4b8-baf7ee32419c",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "@liggitt if we get a conflict error, perhaps we should leave retry up to the client?  Send back the 529 (or whatever code it is), and then the PDB logic will run anew.\r\n\r\nHow do we ensure the delete call gets this conflict?  I thought that was already built in already?",
+        "createdAt" : "2019-10-28T16:53:44Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff49a4f0-6fa2-4210-852a-409541cddfa6",
+        "parentId" : "182199a5-6147-4624-a4b8-baf7ee32419c",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> How do we ensure the delete call gets this conflict? I thought that was already built in already?\r\n\r\nset the resourceVersion precondition in deletionOptions if we are making a decision based on the information in a particular revision of the pod (as this PR is introducing)",
+        "createdAt" : "2019-10-28T17:01:51Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "047b0cee719465de05fd0563f5236bd94c002788",
+    "line" : 138,
+    "diffHunk" : "@@ -1,1 +248,252 @@// without checking PDBs.\nfunc canIgnorePDB(pod *api.Pod) bool {\n\tif pod.Status.Phase == api.PodSucceeded || pod.Status.Phase == api.PodFailed || pod.Status.Phase == api.PodPending {\n\t\treturn true\n\t}"
+  },
+  {
+    "id" : "ccaa2f8f-f8e7-43cd-9906-bbccd1dcb465",
+    "prId" : 83906,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83906#pullrequestreview-325375882",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5ee64d7f-5e14-4a9b-9ada-db78778ee48a",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "by adding this precondition, you are indicating you want to get a conflict error if anything else has modified the pod since it was fetched on line 119. you would need to handle that conflict error when submitting the Delete request",
+        "createdAt" : "2019-11-20T21:42:07Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d368060c-8755-4415-838c-c29a37aec06f",
+        "parentId" : "5ee64d7f-5e14-4a9b-9ada-db78778ee48a",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "@liggitt what is your preferred way of handling this?  We could return 429 so clients will retry.",
+        "createdAt" : "2019-11-21T22:47:46Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29c17aa6-b7e1-4ee8-972d-3c68976b94da",
+        "parentId" : "5ee64d7f-5e14-4a9b-9ada-db78778ee48a",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "@liggitt Do you want to return the 429 or leave as-is here?  If we do 429, drain client (and probably other clients) will retry here, which is probably what we want.",
+        "createdAt" : "2019-11-27T01:42:38Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "218ab391-2a4e-42a6-8f43-71c068e73de5",
+        "parentId" : "5ee64d7f-5e14-4a9b-9ada-db78778ee48a",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "I think we can just retry immediately, similar to what we do here https://github.com/kubernetes/kubernetes/blob/b94dca92a83447ad0384471c8a9ce017420714c1/pkg/registry/core/pod/storage/eviction.go#L164\r\nWe just need to make sure that we verify all the conditions again after getting the latest version of the pod from the api server.",
+        "createdAt" : "2019-11-27T02:39:06Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a09ab48f-240f-4e61-83d7-2bc42f936cab",
+        "parentId" : "5ee64d7f-5e14-4a9b-9ada-db78778ee48a",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "It's not entirely clear what that code is doing, the comments look stale.  I'll dig in and see what it's actually doing, hopefully there are tests.",
+        "createdAt" : "2019-12-02T01:51:43Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "254b7b91-cb0b-4458-9d2b-f40b3a4972b7",
+        "parentId" : "5ee64d7f-5e14-4a9b-9ada-db78778ee48a",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "Okay, I sorted out what that code is doing, it does indeed return a 429 at appropriate times, but it doesn't have good test coverage.\r\n\r\nI went ahead and did something similar for the ignorePDB delete call.",
+        "createdAt" : "2019-12-02T16:42:12Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "047b0cee719465de05fd0563f5236bd94c002788",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +156,160 @@\t\t\t\tdeletionOptions.Preconditions = &metav1.Preconditions{}\n\t\t\t}\n\t\t\tdeletionOptions.Preconditions.ResourceVersion = &pod.ResourceVersion\n\t\t}\n\t\t_, _, err = r.store.Delete(ctx, eviction.Name, rest.ValidateAllObjectFunc, deletionOptions)"
+  },
+  {
+    "id" : "794277cf-a14d-4329-947b-f1b3690b8de4",
+    "prId" : 83906,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83906#pullrequestreview-326487385",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "119c124f-de78-4806-b6b5-f30bb4da93e0",
+        "parentId" : null,
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "I grepped through the codebase, I don't see this being used in any other packages and I don't know why it  would be.  This change is needed to support mocking storage.",
+        "createdAt" : "2019-12-03T01:44:46Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8d9dba4b-7c02-4b42-b20d-637bb7eed7ab",
+        "parentId" : "119c124f-de78-4806-b6b5-f30bb4da93e0",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "I'm not sure about what consequences this change might have. I'll defer to @liggitt on this.",
+        "createdAt" : "2019-12-03T18:59:49Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4b4a1647-3689-468b-b449-ab8647313589",
+        "parentId" : "119c124f-de78-4806-b6b5-f30bb4da93e0",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "I didn't see EvictionREST being used outside of this package, and the newEvictionStorage constructor is private.  As you can see in the constructor method, there is not any change required when instantiating EvictionStorage, so it should be entirely transparent if someone is importing this package elsewhere.",
+        "createdAt" : "2019-12-03T22:18:29Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "047b0cee719465de05fd0563f5236bd94c002788",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +62,66 @@\n// EvictionREST implements the REST endpoint for evicting pods from nodes\ntype EvictionREST struct {\n\tstore                     rest.StandardStorage\n\tpodDisruptionBudgetClient policyclient.PodDisruptionBudgetsGetter"
+  },
+  {
+    "id" : "fbd167fc-f3ef-4fee-8450-c516864ed4f1",
+    "prId" : 83906,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83906#pullrequestreview-354129401",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5e9ea0d8-f06d-449f-b2c4-0282cdf056db",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "You're modifying `deletionOptions.Preconditions.ResourceVersion` here in a way that is correct for the canIgnorePDB case, but is not correct if we end up in the continueToPDBs case. In that scenario, we want the original deletionOptions to be used. Need a test case to cover this scenario:\r\n1. eviction request is received with no resourceVersion precondition\r\n2. pod at rv=1 is pending, so canIgnorePDBs is true\r\n3. deletionOptions gets a rv=1 precondition added\r\n4. initial eviction attempt gets a conflict error\r\n5. next pod get returns non-pending pod at rv=2, so canIgnorePDBs is false, so we continue to PDBs\r\n6. PDB allows eviction\r\n7. Pod is deleted successfully\r\n\r\nCurrently, that scenario would fail in step 7 with a conflict error because of the leftover rv=1 precondition",
+        "createdAt" : "2020-01-15T16:46:36Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0886f50d-f23b-4c9d-ad88-8db3de6816c8",
+        "parentId" : "5e9ea0d8-f06d-449f-b2c4-0282cdf056db",
+        "authorId" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "body" : "@liggitt  The scenario you have outlined is now covered here:\r\nhttps://github.com/kubernetes/kubernetes/pull/83906/files#diff-b4b02bbbe7272d0de9dc91996e22f56aR295",
+        "createdAt" : "2020-02-06T00:14:13Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "c924ff9d-2ff6-4d00-98bc-1de4b935110f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "047b0cee719465de05fd0563f5236bd94c002788",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +156,160 @@\t\t\t\tdeletionOptions.Preconditions = &metav1.Preconditions{}\n\t\t\t}\n\t\t\tdeletionOptions.Preconditions.ResourceVersion = &pod.ResourceVersion\n\t\t}\n\t\t_, _, err = r.store.Delete(ctx, eviction.Name, rest.ValidateAllObjectFunc, deletionOptions)"
+  },
+  {
+    "id" : "c41df2ac-8b65-4618-9905-c7f1dd846c27",
+    "prId" : 83906,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/83906#pullrequestreview-420251134",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "685ff5d4-35bf-4624-a8af-c6ff0b58eb12",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "if we get a conflict error and originalDeleteOptions had a resourceVersion specified, we should bail... retrying won't do anything good for us.",
+        "createdAt" : "2020-05-28T17:11:04Z",
+        "updatedAt" : "2020-05-28T20:15:00Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "047b0cee719465de05fd0563f5236bd94c002788",
+    "line" : 88,
+    "diffHunk" : "@@ -1,1 +160,164 @@\t\t_, _, err = r.store.Delete(ctx, eviction.Name, rest.ValidateAllObjectFunc, deletionOptions)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tdeletedPod = true"
+  },
+  {
+    "id" : "982d5e6e-1898-4334-8db0-499ef2722deb",
+    "prId" : 79736,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79736#pullrequestreview-257611589",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "423b052a-bbae-4604-a79a-7397d239912c",
+        "parentId" : null,
+        "authorId" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "body" : "~hitting status gone due to too-old-rv?~\r\n\r\nnvmd. misread.",
+        "createdAt" : "2019-07-03T16:39:26Z",
+        "updatedAt" : "2019-07-04T08:20:08Z",
+        "lastEditedBy" : "bc182326-9017-48d6-8ee0-4609046c1366",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "874b3249e50601d6bbf35e2997a3e608b15028ba",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +159,163 @@\t\t\t\tpdb, err = r.podDisruptionBudgetClient.PodDisruptionBudgets(pod.Namespace).Get(pdbName, metav1.GetOptions{})\n\t\t\t\tif err != nil {\n\t\t\t\t\treturn err\n\t\t\t\t}\n\t\t\t}"
+  },
+  {
+    "id" : "c2a1e757-f0ed-4895-a23a-1ba731699244",
+    "prId" : 76969,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76969#pullrequestreview-229852592",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f8ba505d-208d-4b06-8934-fe2ac997a296",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "eviction.DeleteOptions can be nil, and this would npe. This assignment should move below where the defaulting is done, just before the call to store.Delete",
+        "createdAt" : "2019-04-24T00:16:24Z",
+        "updatedAt" : "2019-04-24T16:51:56Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "37f266349c3297cf24f16e031ca8d73c473d8b25",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +104,108 @@func (r *EvictionREST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {\n\teviction := obj.(*policy.Eviction)\n\n\tdeletionOptions, err := propagateDryRun(eviction, options)\n\tif err != nil {"
+  },
+  {
+    "id" : "05adbb26-e7a9-4eed-8a77-027ba55e057b",
+    "prId" : 72730,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/72730#pullrequestreview-196226708",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a4766bd4-9e08-4e55-a301-06b277d62491",
+        "parentId" : null,
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "if deletionOpt is nil, we're going to use default grace period?",
+        "createdAt" : "2019-01-15T01:50:14Z",
+        "updatedAt" : "2019-01-26T04:36:06Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d46d4457-c169-4b22-827e-b14be033f2f5",
+        "parentId" : "a4766bd4-9e08-4e55-a301-06b277d62491",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "eviction without delete options would behave like delete without delete options\r\n\r\nThis is a behavior change. We need to decide if eviction (which is intended to allow safe deletion of pods according to pod disruption budget) essentially force deleting pods by default is a problem worth fixing. \r\n\r\nNotably, kubectl drain never passes nil delete options, which is good. https://github.com/kubernetes/kubernetes/blob/master/pkg/kubectl/cmd/drain/drain.go#L526)",
+        "createdAt" : "2019-01-15T02:07:22Z",
+        "updatedAt" : "2019-01-26T04:36:06Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "149ed0d3-7c7b-45e3-a09d-a6bad9751e73",
+        "parentId" : "a4766bd4-9e08-4e55-a301-06b277d62491",
+        "authorId" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "body" : "> This is a behavior change.\r\n\r\nYes; but it seems a \"correction\" instead of \"change\" considering \"delete without options\" :)",
+        "createdAt" : "2019-01-17T06:11:26Z",
+        "updatedAt" : "2019-01-26T04:36:06Z",
+        "lastEditedBy" : "72156db3-c40b-4455-9838-c12c0c606019",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "93ed959f-e60a-4c62-96a4-816ab5b9b728",
+        "parentId" : "a4766bd4-9e08-4e55-a301-06b277d62491",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> Yes; but it seems a \"correction\" instead of \"change\" considering \"delete without options\" :)\r\n\r\nI don't disagree, but would like an ack from @kubernetes/api-approvers ",
+        "createdAt" : "2019-01-24T05:16:54Z",
+        "updatedAt" : "2019-01-26T04:36:06Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d94a7c8-2d53-42f2-b5df-4f39d1099f1a",
+        "parentId" : "a4766bd4-9e08-4e55-a301-06b277d62491",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I agree.",
+        "createdAt" : "2019-01-24T20:08:38Z",
+        "updatedAt" : "2019-01-26T04:36:06Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cdfb5d31704018ab2d851a0dc9a6cd0f49a3aa7f",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +142,146 @@\tif deletionOptions == nil {\n\t\t// default to non-nil to trigger graceful deletion\n\t\tdeletionOptions = &metav1.DeleteOptions{}\n\t}\n\t_, _, err = r.store.Delete(ctx, eviction.Name, deletionOptions)"
+  },
+  {
+    "id" : "fe3d4934-348b-416c-947b-a3e69fb0cfc5",
+    "prId" : 53185,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/53185#pullrequestreview-272334639",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3d4ae25-3e5d-45fb-ac11-328b097fc304",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "`name` should be used elsewhere in this method instead of `eviction.Name`",
+        "createdAt" : "2019-08-08T04:02:29Z",
+        "updatedAt" : "2019-08-22T03:47:10Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "caff61f1-bec3-40dc-b55c-454a9b04abe3",
+        "parentId" : "b3d4ae25-3e5d-45fb-ac11-328b097fc304",
+        "authorId" : "3c1422a0-6358-4857-8f56-961979171514",
+        "body" : "Here we are comparing whether `name ` equals that in the eviction object.",
+        "createdAt" : "2019-08-08T04:10:22Z",
+        "updatedAt" : "2019-08-22T03:47:10Z",
+        "lastEditedBy" : "3c1422a0-6358-4857-8f56-961979171514",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "277150362661cb4363404787352065df371c55dd",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +108,112 @@\t}\n\n\tif name != eviction.Name {\n\t\treturn nil, errors.NewBadRequest(\"name in URL does not match name in Eviction object\")\n\t}"
+  }
+]

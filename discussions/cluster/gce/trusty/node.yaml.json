@@ -1,0 +1,508 @@
+[
+  {
+    "id" : "34dfda1f-0995-4ffe-905b-0cd966232289",
+    "prId" : 19148,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "47589f0b-8c3e-442f-a5d5-9fcca8ca39a8",
+        "parentId" : null,
+        "authorId" : "227eb550-8b08-4420-9a78-279f840bd8de",
+        "body" : "@andyzheng0831 TBH, I don't think this is very maintainable. It requires us to maintain this code when there is a related change in salt. Otherwise the manifest will just be broken. It's true we still need to maintain the manifests to make them up-to-date if we put them in cluster/gce/kube-manifests, but it's less likely to be broken than this approach.\n",
+        "createdAt" : "2015-12-28T23:51:54Z",
+        "updatedAt" : "2016-01-06T00:12:42Z",
+        "lastEditedBy" : "227eb550-8b08-4420-9a78-279f840bd8de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "81adb81b-8067-48fd-af95-f2e4f4ee5ad4",
+        "parentId" : "47589f0b-8c3e-442f-a5d5-9fcca8ca39a8",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "@yifan-gu I had thought about which way to go, but I got an opposite conclusion to yours. I think making a copy in cluster/gce/kube-manifests will make it more difficult to maintain. First of all, either way has maintenance problems, as long as salt is still widely used. In the way of this PR, it is broken when the salt file has variable related changes, e.g., adding a new variable, removing an old one, or renaming a variable, because the shell code is for replacing variables with values. But it is not affected by many other changes, including any fixed-text changes to the config, spec, metadata, or command line. On the other hand, if making a copy in cluster/gce/kube-manifests, it will be affected by any change in the salt file. Whenever there is a change to the salt file, we have to update the copy in cluster/gce/kube-manifests accordingly to have a consistent version. So, I try to avoid making a copy.\n",
+        "createdAt" : "2015-12-29T00:32:41Z",
+        "updatedAt" : "2016-01-06T00:12:42Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "141da176-b5bd-4329-9a20-f0736c190f7c",
+        "parentId" : "47589f0b-8c3e-442f-a5d5-9fcca8ca39a8",
+        "authorId" : "227eb550-8b08-4420-9a78-279f840bd8de",
+        "body" : "@andyzheng0831 My point is we are unlikely to do this for each file (otherwise, why not just run salt?), thus we already have the problem for maintaining the manifests up-to-date. I don't think it's worth the effort to create special cases for such a small number of files, then, we not only need to maintain the static manifests, we also need to maintain these shell codes. \nHappy to be proved wrong.\n",
+        "createdAt" : "2015-12-29T01:07:35Z",
+        "updatedAt" : "2016-01-06T00:12:42Z",
+        "lastEditedBy" : "227eb550-8b08-4420-9a78-279f840bd8de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2434b4b2-ed72-4e3b-9807-b1a1f585a9f4",
+        "parentId" : "47589f0b-8c3e-442f-a5d5-9fcca8ca39a8",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "Frankly speaking, I am not convinced. As I said, making copies will make you monitor every change in salt files and make changes in your copies. If you do this for every manifest with salt content, it will be a big amount of effort to maintain the copies, especially considering that merging PRs is slow in many cases. It is not a clear logic to say why not just use salt. We do not use it because we don't want to have such a complex thing in our trusty stuff. I am not sure what you meant \"special cases\". The shell code is super simple, just several lines of \"sed\" commands. I don't think it is a burden to maintain it, comparing with monitoring every change in salt and then making corresponding changes in manifests copies. Two options: (1) maintaining N manifests + 1 shell file once per week; (2) maintaining N manifests 3 times per week. I would like to go with the option (1), unless there is a strong reason for (2).\n\nAnother reason I try to avoid static copies: We have already set up Jenkins auto tests running against Trusty. Using static copies is not helpful for catching problems. You can imagine, someone updates the salt file but I do not update the copy, the tests will still pass probably. But if using the file from salt, a breakage will make kube-proxy fail to start or behave abnormally, then auto tests can catch it.\n",
+        "createdAt" : "2015-12-29T01:29:59Z",
+        "updatedAt" : "2016-01-06T00:12:42Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aab52463-4c72-40cf-abb9-af6d69503d7e",
+        "parentId" : "47589f0b-8c3e-442f-a5d5-9fcca8ca39a8",
+        "authorId" : "227eb550-8b08-4420-9a78-279f840bd8de",
+        "body" : "> Two options: (1) maintaining N manifests + 1 shell file once per week; (2) maintaining N manifests 3 times per week. I would like to go with the option (1), unless there is a strong reason for (2).\n\n@andyzheng0831 I didn't follow how this can reduce the maintain work from **3 times per week** to **once per week**. Do you have any data points? FYI I calculated the number of changes made to all the master components manifests and add-on manifests since 1.1.0 release (That's Sept. 25), including typos fixing:\n\n| Name | # of Changes Made Since Sept. 25 (about 13 weeks ) |\n| --- | --- |\n| etcd | 7 |\n| fluentd-es | 3 |\n| fluentd-gcp | 2 |\n| kubeproxy | 5 |\n| kube scheduler | 3 |\n| cluster-loadbalacing | 2 |\n| cluster-monitorning(google) | 3 |\n| cluster-monitorning(googleinfluxdb) | 3 |\n| cluster-monitorning(influxdb) | 6 |\n| cluster-monitorning(standalone) | 3 |\n| fluentd-elasticsearch | 2 |\n| kube-ui | 3 |\n| registry | 1 |\n| dns | 6 |\n\nMaybe I am still missing one or two manifests here, but I don't think they are changed very frequently, neither the total number of manifests is very big (~15, not including service files, service files haven't been touched for months). \n\n> Using static copies is not helpful for catching problems. You can imagine, someone updates the salt file but I do not update the copy, the tests will still pass probably. \n\nI agree this is not optimal. I don't know if it's worth writing a tool to convert/copy manifests from the salt. Any ideas @dchen1107 ?\n",
+        "createdAt" : "2015-12-30T00:12:16Z",
+        "updatedAt" : "2016-01-06T00:12:42Z",
+        "lastEditedBy" : "227eb550-8b08-4420-9a78-279f840bd8de",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8adfac1-91ec-4521-a491-62468af012e3",
+        "parentId" : "47589f0b-8c3e-442f-a5d5-9fcca8ca39a8",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "perhaps we could run jinja2cli inside a docker container to format the configs.\n",
+        "createdAt" : "2016-01-05T22:26:18Z",
+        "updatedAt" : "2016-01-06T00:12:42Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d27e3ae8a1001dc48f31e926e8d0266ce23a90a2",
+    "line" : 128,
+    "diffHunk" : "@@ -1,1 +220,224 @@\tsed -i -e \"s/{{log_level}}/${log_level}/g\" ${tmp_file}\n\tsed -i -e \"s/{{api_servers_with_port}}/${api_servers}/g\" ${tmp_file}\n\n\tmv -f ${tmp_file} /etc/kubernetes/manifests/\nend script"
+  },
+  {
+    "id" : "0d1a1308-08cb-4ef0-8023-a2052054a0a1",
+    "prId" : 13936,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8a4a8eee-81ca-4d83-b25f-26d368324c97",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "I'm planning to switch the kubelet healthchecking to use the secure port (see https://github.com/kubernetes/kubernetes/pull/13044) rather than 10255. Remind me to change this file as well once that PR is merged. \n",
+        "createdAt" : "2015-09-14T21:45:43Z",
+        "updatedAt" : "2015-09-15T22:10:05Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "788df37b-ce7b-4b55-88bb-149a584f6774",
+        "parentId" : "8a4a8eee-81ca-4d83-b25f-26d368324c97",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "If people have no more concern on your PR, I may change the port number here to 10250 now.\n",
+        "createdAt" : "2015-09-14T21:56:20Z",
+        "updatedAt" : "2015-09-15T22:10:05Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "288b7fec-9541-4085-b283-ab09a7ea3675",
+        "parentId" : "8a4a8eee-81ca-4d83-b25f-26d368324c97",
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "Still waiting to hear back from @karlkfi \n",
+        "createdAt" : "2015-09-14T22:09:33Z",
+        "updatedAt" : "2015-09-15T22:10:05Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "45820565-1788-4f8b-b0bf-82ebdd16062d",
+        "parentId" : "8a4a8eee-81ca-4d83-b25f-26d368324c97",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "I see. So how about leaving this change still using 10255. After your PR is merged, we change this node.yaml accordingly. Mismatching for a short period should be OK, I guess.\n",
+        "createdAt" : "2015-09-14T23:01:59Z",
+        "updatedAt" : "2015-09-15T22:10:05Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e5027b6-e405-41a8-ab28-e6e9eb1471db",
+        "parentId" : "8a4a8eee-81ca-4d83-b25f-26d368324c97",
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "SGTM. \n",
+        "createdAt" : "2015-09-15T23:55:40Z",
+        "updatedAt" : "2015-09-15T23:55:40Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7427387938f3cd8acfc241f46493747fd7b57f31",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +401,405 @@\t\t\tpkill docker\n\t\tfi\n\t\tif ! curl -m ${max_seconds} -f -s http://127.0.0.1:10255/healthz > /dev/null; then\n\t\t\techo \"Kubelet is unhealthy!\"\n\t\t\tpkill kubelet"
+  },
+  {
+    "id" : "90199714-3874-4fd7-b9c9-71fa6a45bd51",
+    "prId" : 13008,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9fc916c3-d2a5-49eb-ba2e-95648731ad94",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "Is this a bash script? sh script? For our bash scripts, we tend to set\n\n```\nset -o errexit\nset -o nounset\nset -o pipefail\n```\n\nat the top as it helps catch a bunch of programming errors (admittedly, it only catches them at runtime, but still). \n",
+        "createdAt" : "2015-08-21T05:52:40Z",
+        "updatedAt" : "2015-08-21T21:40:17Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cfd1f7d0-885b-4fd3-afc5-cf11a1b35fe6",
+        "parentId" : "9fc916c3-d2a5-49eb-ba2e-95648731ad94",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "This file contains a bunch of upstart jobs, each of which is in shell-like syntax. But it does not support all bash functionality. I can verify if these \"set -o\" commands work in upstart, and add them if they do.\n",
+        "createdAt" : "2015-08-21T06:08:57Z",
+        "updatedAt" : "2015-08-21T21:40:17Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a3b12b9-b04a-4cb0-8bfa-10ffba7de086",
+        "parentId" : "9fc916c3-d2a5-49eb-ba2e-95648731ad94",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "I just verified using ubuntu trusty: \"set -o pipefail\" does not work but the other two work. I will add these two commands in node.yaml\n",
+        "createdAt" : "2015-08-21T17:06:55Z",
+        "updatedAt" : "2015-08-21T21:40:17Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f302130ad948ccac3b99f639bdcc080b06854e95",
+    "line" : 58,
+    "diffHunk" : "@@ -1,1 +140,144 @@start on stopped kube-install-packages\n\nscript\n\tset -o errexit\n\tset -o nounset"
+  },
+  {
+    "id" : "5fa007cf-095d-4ce9-93b9-22deaf94e307",
+    "prId" : 12543,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d28fe3b7-2b8f-43c2-bd4f-7993a9f1c8b5",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "If you aren't going to do it in this PR, please file an issue to make this secure (and cc @stephenR). \n",
+        "createdAt" : "2015-08-14T03:17:36Z",
+        "updatedAt" : "2015-08-14T03:17:36Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d1e1a04f-657a-452f-a0bf-e2006c7c72bf",
+        "parentId" : "d28fe3b7-2b8f-43c2-bd4f-7993a9f1c8b5",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "Thanks for the comments. This PR is not a complete solution. It provides a version with major functionality and pass e2e tests. This will be quite helpful for unblocking our other work. So, I will make several followup PRs to fix various problems and enrich the functionality. Can we still make change to this PR after lgtm label was added? If prefer to leave fixes in the next PR. Is that OK?\n",
+        "createdAt" : "2015-08-14T04:03:48Z",
+        "updatedAt" : "2015-08-14T04:03:48Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b8bc08f-caa1-4395-91f6-68be5313089f",
+        "parentId" : "d28fe3b7-2b8f-43c2-bd4f-7993a9f1c8b5",
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "Fixing it in follow-up PRs is fine with me; just wanted to make sure it was going to get fixed. \n",
+        "createdAt" : "2015-08-14T05:22:54Z",
+        "updatedAt" : "2015-08-14T05:22:54Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f03ac03d-e487-4818-94dc-81f02f551d2e",
+        "parentId" : "d28fe3b7-2b8f-43c2-bd4f-7993a9f1c8b5",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "As per request from oncall, I fix these problems in this PR to get merged. I change it to the same as configure-vm.sh\n",
+        "createdAt" : "2015-08-15T01:03:38Z",
+        "updatedAt" : "2015-08-15T01:03:38Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fef1ede240a77656a7116a7cd8ad4c1221a255c8",
+    "line" : 56,
+    "diffHunk" : "@@ -1,1 +54,58 @@- name: local\n  cluster:\n    insecure-skip-tls-verify: true\ncontexts:\n- context:"
+  },
+  {
+    "id" : "365e8f64-234b-4a1a-bb43-e76c6e15bf07",
+    "prId" : 12543,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3f940c3e-d22e-4d68-85c5-07927912a2a5",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "On debian, we've switched to using client certs for kubelets instead of tokens (kube-proxy still uses tokens though). \n",
+        "createdAt" : "2015-08-14T03:18:13Z",
+        "updatedAt" : "2015-08-14T03:18:13Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34e2fc69-44f3-4b43-81b1-b6eef89d8f08",
+        "parentId" : "3f940c3e-d22e-4d68-85c5-07927912a2a5",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "Fixed, will upload the new version soon.\n",
+        "createdAt" : "2015-08-15T01:04:07Z",
+        "updatedAt" : "2015-08-15T01:04:07Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fef1ede240a77656a7116a7cd8ad4c1221a255c8",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +50,54 @@- name: kubelet\n  user:\n    token: ${KUBELET_TOKEN}\nclusters:\n- name: local"
+  },
+  {
+    "id" : "5f641364-8e97-4eb4-9caf-fa78506191da",
+    "prId" : 12543,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "51f610c2-f332-4ad2-b6dc-c33439ebe300",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "nit: s/stalled/installed\n",
+        "createdAt" : "2015-08-14T03:19:07Z",
+        "updatedAt" : "2015-08-14T03:19:07Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a98ae1d-9bed-4aea-882a-767029b02045",
+        "parentId" : "51f610c2-f332-4ad2-b6dc-c33439ebe300",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "Fixed, will upload the new version soon.\n",
+        "createdAt" : "2015-08-15T01:04:13Z",
+        "updatedAt" : "2015-08-15T01:04:13Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fef1ede240a77656a7116a7cd8ad4c1221a255c8",
+    "line" : 130,
+    "diffHunk" : "@@ -1,1 +128,132 @@script\n\t. /etc/kube-env\n\t# If kubelet or kube-proxy is not stalled in the image, pull release binaries and put them in /usr/bin.\n\tif ! which kubelet > /dev/null || ! which kube-proxy > /dev/null; then\n\t\tcd /tmp"
+  },
+  {
+    "id" : "183b1672-0b53-40bc-bd84-14e8daf50632",
+    "prId" : 12543,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6d64ad11-58ca-43d6-9767-c50b26bec50f",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "It's unfortunate that we need to download all of the saltbase files on a non-salt system configuration. You should file an issue (cc @fgrzadkowski and @davidopp) to figure out how to break this out. \n",
+        "createdAt" : "2015-08-14T03:20:43Z",
+        "updatedAt" : "2015-08-14T03:20:43Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e57df3a-05ae-49ad-9d26-89f5a0c32c32",
+        "parentId" : "6d64ad11-58ca-43d6-9767-c50b26bec50f",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "Kubelet currently has just one add-on yaml file, so another lightweight way is just upload that particular file to GCE metadata server. This at least satisfies the current usage. If people wish to figure out another way, I think we should also consider the master. Master uses much more add-on yaml files. Uploading each of them to GCE metadata looks not a wise approach. Either just pack the needed files for speed, or use whatever we currently have (i.e., saltbase tarball) for simplicity.\n",
+        "createdAt" : "2015-08-14T04:09:41Z",
+        "updatedAt" : "2015-08-14T04:09:41Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fef1ede240a77656a7116a7cd8ad4c1221a255c8",
+    "line" : 154,
+    "diffHunk" : "@@ -1,1 +152,156 @@\tfi\n\n\t# Put saltbase configuration files in /etc/saltbase. We will use the add-on yaml files.\n\tmkdir -p /etc/saltbase\n\tcd /etc/saltbase"
+  },
+  {
+    "id" : "c5de2f0e-f602-425d-a53f-030659af203a",
+    "prId" : 12543,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9e8e0204-9d6b-4ce5-93cc-f33cf7b693e6",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "cluster dns shouldn't be hard-coded. It needs to be set from the kube env. \n",
+        "createdAt" : "2015-08-14T03:21:25Z",
+        "updatedAt" : "2015-08-14T03:21:25Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3f697141-fbfb-4912-bcf2-c4540c96390b",
+        "parentId" : "9e8e0204-9d6b-4ce5-93cc-f33cf7b693e6",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "Fixed, will upload the new version soon.\n",
+        "createdAt" : "2015-08-15T01:04:19Z",
+        "updatedAt" : "2015-08-15T01:04:19Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fef1ede240a77656a7116a7cd8ad4c1221a255c8",
+    "line" : 199,
+    "diffHunk" : "@@ -1,1 +197,201 @@\t\t--allow_privileged=false \\\n\t\t--v=2 \\\n\t\t--cluster_dns=10.0.0.10 \\\n\t\t--cluster_domain=cluster.local \\\n\t\t--configure-cbr0=true \\"
+  },
+  {
+    "id" : "c6d0e4bc-4b55-41aa-945e-fb0b2ab10dc1",
+    "prId" : 12543,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c20b8168-7ee6-47a1-b814-978c50f2a5fe",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "same with cluster domain. \n",
+        "createdAt" : "2015-08-14T03:21:32Z",
+        "updatedAt" : "2015-08-14T03:21:32Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa3d7a38-475f-46ac-9912-a14ec03fabf0",
+        "parentId" : "c20b8168-7ee6-47a1-b814-978c50f2a5fe",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "Fixed, will upload the new version soon.\n",
+        "createdAt" : "2015-08-15T01:04:23Z",
+        "updatedAt" : "2015-08-15T01:04:23Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "86d5346e-4718-42d2-9bcf-e4379206e87c",
+        "parentId" : "c20b8168-7ee6-47a1-b814-978c50f2a5fe",
+        "authorId" : "766f642e-1622-4803-803b-05ce306fc30e",
+        "body" : "All of these flag usages with `_` broke the build....    kubelet flags should use `-`\n",
+        "createdAt" : "2015-08-17T01:27:27Z",
+        "updatedAt" : "2015-08-17T01:27:27Z",
+        "lastEditedBy" : "766f642e-1622-4803-803b-05ce306fc30e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ecc77d1-cb07-42f6-8418-d11f252c88a4",
+        "parentId" : "c20b8168-7ee6-47a1-b814-978c50f2a5fe",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "Is this applied to all kubelet flags? The salt-based configuration https://github.com/kubernetes/kubernetes/blob/master/cluster/saltbase/salt/kubelet/default still uses \"--api_servers=\".\n",
+        "createdAt" : "2015-08-17T01:39:07Z",
+        "updatedAt" : "2015-08-17T01:39:07Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bf4f26eb-1623-404f-878c-1f6c4b88abbf",
+        "parentId" : "c20b8168-7ee6-47a1-b814-978c50f2a5fe",
+        "authorId" : "a92f8f9e-31fd-4510-b4d9-3553f7025485",
+        "body" : "In one place, that looks like a bug.\n",
+        "createdAt" : "2015-08-17T15:52:23Z",
+        "updatedAt" : "2015-08-17T15:52:23Z",
+        "lastEditedBy" : "a92f8f9e-31fd-4510-b4d9-3553f7025485",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e645f5a8-3c5b-4b78-9c60-44d64aecf796",
+        "parentId" : "c20b8168-7ee6-47a1-b814-978c50f2a5fe",
+        "authorId" : "766f642e-1622-4803-803b-05ce306fc30e",
+        "body" : "I actually already merged a 'fix' and apologize if I messed something up for you.  Yes, all kubelet flags.  I'll check out your link.\n",
+        "createdAt" : "2015-08-17T15:54:51Z",
+        "updatedAt" : "2015-08-17T15:54:51Z",
+        "lastEditedBy" : "766f642e-1622-4803-803b-05ce306fc30e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "884ee9d5-181f-4990-962f-8698916b3a4c",
+        "parentId" : "c20b8168-7ee6-47a1-b814-978c50f2a5fe",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "Thanks for notifying me. I will upload a PR to fix some settings in node.yaml. I will fix this in it, and cc you.\n",
+        "createdAt" : "2015-08-17T16:23:08Z",
+        "updatedAt" : "2015-08-17T16:23:08Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85a396e5-1f98-4005-bd40-1d97e71202eb",
+        "parentId" : "c20b8168-7ee6-47a1-b814-978c50f2a5fe",
+        "authorId" : "766f642e-1622-4803-803b-05ce306fc30e",
+        "body" : "side note: I actually have another PR already open to fix the mistake you found   :)\n",
+        "createdAt" : "2015-08-17T18:45:20Z",
+        "updatedAt" : "2015-08-17T18:45:20Z",
+        "lastEditedBy" : "766f642e-1622-4803-803b-05ce306fc30e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fef1ede240a77656a7116a7cd8ad4c1221a255c8",
+    "line" : 200,
+    "diffHunk" : "@@ -1,1 +198,202 @@\t\t--v=2 \\\n\t\t--cluster_dns=10.0.0.10 \\\n\t\t--cluster_domain=cluster.local \\\n\t\t--configure-cbr0=true \\\n\t\t--cgroup_root=/ \\"
+  },
+  {
+    "id" : "ce813dad-5248-491e-9f3f-729bdd9a92df",
+    "prId" : 12543,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d49a54e8-f6ac-4c38-8f6a-57984ac93af6",
+        "parentId" : null,
+        "authorId" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "body" : "@cjcullen Any idea if the kubelet will try to configure docker on an upstart (ubuntu trusty) system? It seems silly to do it here and in the kubelet. \n",
+        "createdAt" : "2015-08-14T03:22:52Z",
+        "updatedAt" : "2015-08-14T03:22:52Z",
+        "lastEditedBy" : "c2b5c827-efcd-438f-8db5-52d917b1cde9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7dbe770-4ddc-46ed-865a-b567241c3b86",
+        "parentId" : "d49a54e8-f6ac-4c38-8f6a-57984ac93af6",
+        "authorId" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "body" : "That is true. If kubelet can do this, we don't need a system configuration job for it. It means that we can take this upstart job as a temporary solution, if there is a plan to configure docker in kubelet code. Please note that, the current kubelet code for restarting docker daemon does not work. It only considers debian init system and systemd.\n",
+        "createdAt" : "2015-08-14T04:16:25Z",
+        "updatedAt" : "2015-08-14T04:16:25Z",
+        "lastEditedBy" : "34f7b744-302a-4493-8e2d-95681077e4a8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fef1ede240a77656a7116a7cd8ad4c1221a255c8",
+    "line" : 255,
+    "diffHunk" : "@@ -1,1 +253,257 @@\t\tsleep 1\n\tdone\n\tinitctl restart docker\n\t# Remove docker0\n\tifconfig docker0 down"
+  }
+]

@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "ec665097-b8ee-4833-aa06-6c26ad7055d6",
+    "prId" : 76909,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/76909#pullrequestreview-231268385",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7bb4e1b3-416c-46f0-bac7-f33c11546f11",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Nothing in kubemark should depend on NUM_NODES (as it shouldn't matter on how many nodes it has been run).\r\n\r\nInstead, you should do the same that gce is doing:\r\nNUM_NODES=${KUBEMARK_NUM_NODES:-10}\r\nhttps://github.com/kubernetes/kubernetes/blob/master/cluster/kubemark/gce/config-default.sh#L29\r\n\r\nThen you won't need a bunch of changes below too.",
+        "createdAt" : "2019-04-23T13:52:26Z",
+        "updatedAt" : "2019-04-26T17:15:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "858ef60f-fd9f-4ce4-bd38-42a6e70209a5",
+        "parentId" : "7bb4e1b3-416c-46f0-bac7-f33c11546f11",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "Thanks for the prompt reivew! I read into the code, and noticed GCE works basically as below:\r\n\r\nFirstly `--gcp-nodes` is passed to `kubetest`, and then it's passed onto env var:\r\n\r\n```go\r\n\t\t{\r\n\t\t\tEnv:    \"NUM_NODES\",\r\n\t\t\tOption: &o.gcpNodes,\r\n\t\t\tName:   \"--gcp-nodes\",\r\n\t\t},\r\n```\r\n\r\nAnd then it uses bash (default) deployer to spin up a real cluster, which in turns calls `hack/e2e-internal/e2e-up.sh`:\r\n\r\n```go\r\nfunc (b *bashDeployer) Up() error {\r\n\tscript := \"./hack/e2e-internal/e2e-up.sh\"\r\n    ...\r\n```\r\n\r\nBy this step, env var `NUM_NODES` literally means the number of the real cluster.\r\n\r\nAfter that (the cluster is ready), `KUBEMARK_NUM_NODES` can overwrite the value of `NUM_NODES` (as the old value is not necessary any more), and we starts a hollow-node cluster as a rc.\r\n\r\n```\r\nNUM_NODES=${KUBEMARK_NUM_NODES:-10}\r\n```\r\n\r\nSo basically GCE works in 2 phases: spin up a cluster and start the hollow-node rc. And they're working in serial, so we can overwrite NUM_NODES in latter phase with KUBEMARK_NUM_NODES.\r\n\r\nFor IKS, the embarrassing thing is `kubetest` doesn't support IKS yet, so `start-kubemark.sh` for IKS combines the 2 phases together. So IMO it's good to separate the 2 variables for IKS; otherwise it'd confuse people which literally means the number of the real cluster, and which means the number of the hollow-node rc.",
+        "createdAt" : "2019-04-23T15:23:56Z",
+        "updatedAt" : "2019-04-26T17:15:44Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9502c234-47bc-49d2-b410-1fc8633e0027",
+        "parentId" : "7bb4e1b3-416c-46f0-bac7-f33c11546f11",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "OK - I didn't know you don't have support in kubetest.\r\nIn such case, it's probably the easiest thing to do to unblock you.\r\n\r\nCan you please add a TODO with a comment why you do that and to change that once kubetest supports IKS?",
+        "createdAt" : "2019-04-26T09:01:41Z",
+        "updatedAt" : "2019-04-26T17:15:44Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b086c31d-f491-453b-a958-2fc956fd8716",
+        "parentId" : "7bb4e1b3-416c-46f0-bac7-f33c11546f11",
+        "authorId" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "body" : "That makes sense.\r\n\r\nUpdated. PTAL.",
+        "createdAt" : "2019-04-26T17:16:15Z",
+        "updatedAt" : "2019-04-26T17:16:15Z",
+        "lastEditedBy" : "06cbf859-1cac-4be7-80e6-3b34dcff1812",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fbec01dc71a4d51131df9ffb2986b03c1f405541",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +26,30 @@\n# User defined\n# number of real workers in spawnTester cluster\nNUM_NODES=\"${NUM_NODES:-2}\"\n# spec of real workers in spawnTester cluster"
+  },
+  {
+    "id" : "5651d24e-b412-4aa8-8e26-eb533c8cbebc",
+    "prId" : 65242,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/65242#pullrequestreview-136772813",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2e455b5-1c47-4418-b26b-f73dd81cafa7",
+        "parentId" : null,
+        "authorId" : "57a5e7e7-e6d7-467b-96ab-41e4ca978eee",
+        "body" : "Note that hardcoding the image tag to a constant value may not be the best idea (as you may overwrite it each time you run the script).",
+        "createdAt" : "2018-07-12T15:22:09Z",
+        "updatedAt" : "2018-07-23T15:47:14Z",
+        "lastEditedBy" : "57a5e7e7-e6d7-467b-96ab-41e4ca978eee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "882fadc5-1134-455d-b140-18f10ca3c7f1",
+        "parentId" : "e2e455b5-1c47-4418-b26b-f73dd81cafa7",
+        "authorId" : "f1d8d5db-173c-49f2-825e-2ca4002acb92",
+        "body" : "The image tag is set there to be the initial value for the correct kubemark repo image, assuming the user does not want to build the image. However, I can change it if necessary.",
+        "createdAt" : "2018-07-12T18:23:23Z",
+        "updatedAt" : "2018-07-23T15:47:14Z",
+        "lastEditedBy" : "f1d8d5db-173c-49f2-825e-2ca4002acb92",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "510f6b8916c9e105474fe6b55cb645106e93ab46",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +18,22 @@RANDGEN=$(dd if=/dev/urandom bs=64 count=1 2>/dev/null | base64 | tr -d \"=+/\" | dd bs=16 count=1 2>/dev/null | sed 's/[A-Z]//g')\nKUBE_NAMESPACE=\"kubemark_${RANDGEN}\"\nKUBEMARK_IMAGE_TAG=\"${KUBEMARK_IMAGE_TAG:-2}\"\nKUBEMARK_IMAGE_LOCATION=\"${KUBEMARK_IMAGE_LOCATION:-${KUBE_ROOT}/cluster/images/kubemark}\"\nKUBEMARK_INIT_TAG=\"${KUBEMARK_INIT_TAG:-${PROJECT}:${KUBEMARK_IMAGE_TAG}}\""
+  }
+]

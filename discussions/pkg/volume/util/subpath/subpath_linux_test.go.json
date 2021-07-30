@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "e668979e-2eec-4ecc-a111-0ea24b42b572",
+    "prId" : 82698,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/82698#pullrequestreview-313743620",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "53dd457f-1f67-455f-bad7-30c341196949",
+        "parentId" : null,
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Can you explain why we need this unmount function?  The `RemoveAll` is especially scary if the test gets the path wrong.",
+        "createdAt" : "2019-11-06T02:38:57Z",
+        "updatedAt" : "2019-11-07T09:06:01Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf74d972-95be-4ece-8b53-f52ad722c9c0",
+        "parentId" : "53dd457f-1f67-455f-bad7-30c341196949",
+        "authorId" : "9c489b3e-5961-42d5-a6f5-f7e1a43b4aa7",
+        "body" : "This is set to test with the `FakeMounter`\r\n\r\nThe unmount process expects the directory to be empty after the unmount which will then [remove the directory](https://github.com/kubernetes/kubernetes/blob/master/pkg/util/mount/mount_helper_common.go#L82)\r\n\r\nUsing the `FakeMounter` I do a clean up, to avoid it to fail in the remove\r\n\r\nThe bug itself is that without the [skipDir](https://github.com/kubernetes/kubernetes/pull/82698/files#diff-837f568dfbf46bf7db2c96e58922df54R247) it would start to try to unmount all the were inside my volume, which won't exist after the root unmount",
+        "createdAt" : "2019-11-06T16:57:47Z",
+        "updatedAt" : "2019-11-07T09:06:01Z",
+        "lastEditedBy" : "9c489b3e-5961-42d5-a6f5-f7e1a43b4aa7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "02c22cbc-93ba-4fc6-840f-c0408243ebc4",
+        "parentId" : "53dd457f-1f67-455f-bad7-30c341196949",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Where I'm confused is that there's nothing under the \"0\", \"1\", etc test directories? ",
+        "createdAt" : "2019-11-07T01:54:41Z",
+        "updatedAt" : "2019-11-07T09:06:01Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2554583e-05e2-4bc9-bc81-d99d5fc8c912",
+        "parentId" : "53dd457f-1f67-455f-bad7-30c341196949",
+        "authorId" : "9c489b3e-5961-42d5-a6f5-f7e1a43b4aa7",
+        "body" : "from the latest changes this is how the files look like:\r\n\r\n```\r\njanario@ubuntu:/tmp/clean-subpaths-subpath-with-files-825360851/volume-subpaths/vol1$ tree .\r\n.\r\n└── container1\r\n    ├── 0\r\n    ├── 1\r\n    │   └── my-dir-1\r\n    ├── 2\r\n    │   └── my-dir-2\r\n    └── 3\r\n\r\n5 directories, 2 files\r\n\r\n```\r\n\r\nthen the `filepath.Walk` starts with\r\n\r\n* 0 (file): unmount function doesn't do anything because it is a file and the file gets removed [here](https://github.com/kubernetes/kubernetes/blob/master/pkg/util/mount/mount_helper_common.go#L81)\r\n* 1 (dir with sub dirs): unmount function will remove `my-dir-1` but not `1`\r\n* 2 (dir with sub dirs): same as dir `1`\r\n* 3 (file): same as file `0`",
+        "createdAt" : "2019-11-07T08:40:29Z",
+        "updatedAt" : "2019-11-07T09:06:01Z",
+        "lastEditedBy" : "9c489b3e-5961-42d5-a6f5-f7e1a43b4aa7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "301ad3c8-1580-483c-8b9b-51e2fb70ae64",
+        "parentId" : "53dd457f-1f67-455f-bad7-30c341196949",
+        "authorId" : "9c489b3e-5961-42d5-a6f5-f7e1a43b4aa7",
+        "body" : "but I think I got your point, the scenario is created from my test case, so in the unmount from my scenario should know that `my-dir-1` and `my-dir-2` will always be empty\r\n\r\nso there is no need for a recursive remove\r\n\r\nI've just changed it to not recursive remove\r\n\r\nlet me know what do you think",
+        "createdAt" : "2019-11-07T08:45:28Z",
+        "updatedAt" : "2019-11-07T09:06:01Z",
+        "lastEditedBy" : "9c489b3e-5961-42d5-a6f5-f7e1a43b4aa7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8dfd619-4fdf-45e0-a40d-20eedc439186",
+        "parentId" : "53dd457f-1f67-455f-bad7-30c341196949",
+        "authorId" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "body" : "Thanks for the explanation! I didn't realize there were directories created underneath, so this makes sense to me.\r\n\r\nI contemplated whether or not we should just add the cleanup dir logic to the FakeMounter, but then we would need the RemoveAll to be more generic, and I'm very wary of using RemoveAll anywhere.  So I think this is fine.",
+        "createdAt" : "2019-11-08T01:48:18Z",
+        "updatedAt" : "2019-11-08T01:48:19Z",
+        "lastEditedBy" : "209ee091-cf29-4efa-8a1b-a98334ea3f9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9e97151b395fa2b79c615e2a4427f2754ac8edf",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +577,581 @@\t\t\t\treturn mounts, nil\n\t\t\t},\n\t\t\tunmount: func(mountpath string) error {\n\t\t\t\terr := filepath.Walk(mountpath, func(path string, info os.FileInfo, err error) error {\n\t\t\t\t\tif path == mountpath {"
+  }
+]

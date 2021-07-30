@@ -1,0 +1,332 @@
+[
+  {
+    "id" : "00190c01-1d20-4c99-b9b1-e4230300f8f6",
+    "prId" : 38592,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/38592#pullrequestreview-13007342",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "17fa224c-e0bb-46eb-b1e0-99adaa6b74d1",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "Are you planning to use this for anything other than the cancel func?  If not, is there significant benefit to allowing control of the full context?  It seems like letting caller set a `requestTimeout` (yes, I agree its weird with that query param thing above), will be easier API-wise.",
+        "createdAt" : "2016-12-12T13:02:34Z",
+        "updatedAt" : "2016-12-14T21:15:03Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "59e6d376-aba9-481f-a36e-008368bf080d",
+        "parentId" : "17fa224c-e0bb-46eb-b1e0-99adaa6b74d1",
+        "authorId" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "body" : "Currently the plan is only timeouts for e2es. Timeouts, deadlines, and cancellation are all very powerful tools for clients, and `context.Context` is emerging as a standard Go way to support these. Also, it has been built directly into the `http` package.\r\n\r\nIn the future, if we start passing `context.Context` throughout more of our code, it could facilitate per-request local tracing, per-request credentials, and other things.",
+        "createdAt" : "2016-12-12T15:35:22Z",
+        "updatedAt" : "2016-12-14T21:15:03Z",
+        "lastEditedBy" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9276015a-0a9f-4d13-bdf8-252430f714fc",
+        "parentId" : "17fa224c-e0bb-46eb-b1e0-99adaa6b74d1",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> In the future, if we start passing context.Context throughout more of our code, it could facilitate per-request local tracing, per-request credentials, and other things.\r\n\r\nYeah, that's what worries me.  The \"magic container\" aspect of the context can make it difficult to track what's actually going to happen.  You could still construct a context to do this inside of `request.go`, but I don't think we need to expose it and have people try to figure out what to do with or start using it to stuff various values into.",
+        "createdAt" : "2016-12-12T15:45:58Z",
+        "updatedAt" : "2016-12-14T21:15:03Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7738f76b-96ec-400c-9260-3effe1e96c31",
+        "parentId" : "17fa224c-e0bb-46eb-b1e0-99adaa6b74d1",
+        "authorId" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "body" : "The API that takes a `context.Context` should be clearly document what can happen with `context.Context` as far as tracing, auth, and other \"magic.\" The short answer is if you don't want those things, don't use those things. I still think it's powerful with regards to cancellation, timeouts, and deadlines, especially since it's now part of the standard library and integrated into other standard libraries.\r\n\r\nThe main argument against re-using the timeout parameter is that it changes existing client behavior. ",
+        "createdAt" : "2016-12-12T17:10:11Z",
+        "updatedAt" : "2016-12-14T21:15:03Z",
+        "lastEditedBy" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "229b55d2-4d0e-44fe-89fa-c9bf1b7d8bfb",
+        "parentId" : "17fa224c-e0bb-46eb-b1e0-99adaa6b74d1",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> The API that takes a context.Context should be clearly document what can happen with context.Context as far as tracing, auth, and other \"magic.\" The short answer is if you don't want those things, don't use those things. I still think it's powerful with regards to cancellation, timeouts, and deadlines, especially since it's now part of the standard library and integrated into other standard libraries.\r\n\r\nI'd rather keep the API tight until we have a strong need to expand it here.  If we could find even one example where someone needed the power to cancel on something other than timeout, I'd be a lot happier about taking a context.\r\n\r\n\r\n\r\n\r\n> The main argument against re-using the timeout parameter is that it changes existing client behavior.\r\n\r\nThey do different things, I would expect a different instance variable.",
+        "createdAt" : "2016-12-13T15:42:18Z",
+        "updatedAt" : "2016-12-14T21:15:03Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38fac7ee-7023-41cf-b916-d7d04a1d1b85",
+        "parentId" : "17fa224c-e0bb-46eb-b1e0-99adaa6b74d1",
+        "authorId" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "body" : "```go\r\nfunc handleRequest(w http.ResponseWriter, req *http.Request) {\r\n\tctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)\r\n\tdefer cancel()\r\n\r\n\tif notifier, ok := w.(http.CloseNotifier); ok {\r\n\t\tgo func() {\r\n\t\t\tselect {\r\n\t\t\tcase <-ctx.Done():\r\n\t\t\tcase <-notifier.CloseNotify():\r\n\t\t\t\tcancel()\r\n\t\t\t}\r\n\t\t}()\r\n\t}\r\n\t\r\n\tpodList, err := c.Pods.List(ctx, opts)\r\n\t// do more processing\r\n}\r\n```\r\n\r\nThat's just one example I can think of for needing timeouts and cancellation.",
+        "createdAt" : "2016-12-13T19:23:25Z",
+        "updatedAt" : "2016-12-14T21:15:03Z",
+        "lastEditedBy" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bb219b1d-9e92-4bdc-a6f9-fe86dc3dcd74",
+        "parentId" : "17fa224c-e0bb-46eb-b1e0-99adaa6b74d1",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> That's just one example I can think of for needing timeouts and cancellation.\r\n\r\nOk, I'd really like to avoid using it like a magic container holding per-request things.  Can we at least doc that we don't plan to use to use to bypass a properly structured API for additional values?",
+        "createdAt" : "2016-12-13T19:50:41Z",
+        "updatedAt" : "2016-12-14T21:15:03Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "17d73206-ff0d-4e4a-b8ce-b0ad74cd735d",
+        "parentId" : "17fa224c-e0bb-46eb-b1e0-99adaa6b74d1",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Yeah that's important.  Context is not a map.",
+        "createdAt" : "2016-12-13T20:01:02Z",
+        "updatedAt" : "2016-12-14T21:15:03Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "125ea148-2377-4ec3-ba69-72951c2f435c",
+        "parentId" : "17fa224c-e0bb-46eb-b1e0-99adaa6b74d1",
+        "authorId" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "body" : "@deads2k I documented both the member and the method. PTAL.",
+        "createdAt" : "2016-12-14T21:16:01Z",
+        "updatedAt" : "2016-12-14T21:16:01Z",
+        "lastEditedBy" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "128af75b93c16ce1d15b468c9fc6a35b7521247f",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +114,118 @@\n\t// This is only used for per-request timeouts, deadlines, and cancellations.\n\tctx context.Context\n\n\tbackoffMgr BackoffManager"
+  },
+  {
+    "id" : "f47f9d9a-7d82-4e96-aba9-37ab4ac25a61",
+    "prId" : 36001,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36001#pullrequestreview-6718295",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d7869a22-fc93-4b81-82b2-58b85cc41f13",
+        "parentId" : null,
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Why `IsUnexpectedServerError`? I think we should just check if `r.err` implements APIStatus interface.\n",
+        "createdAt" : "2016-11-01T21:47:33Z",
+        "updatedAt" : "2016-11-02T02:56:22Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43ffed57-908e-4417-85ef-b0c45c4b699a",
+        "parentId" : "d7869a22-fc93-4b81-82b2-58b85cc41f13",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "No, the error in this case is set by the thing that creates Result (which calls newGeneric...Error, which is UnexpectedServerError).\n\nUnexpectedServerError literally means - we got an error from the server but we couldn't / didn't decode the body. So this code is looking for errors where before we didn't try to decode it, and try to decode it.\n",
+        "createdAt" : "2016-11-01T22:21:52Z",
+        "updatedAt" : "2016-11-02T02:56:22Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da0784d5-c24e-459e-914f-727183ae9bd8",
+        "parentId" : "d7869a22-fc93-4b81-82b2-58b85cc41f13",
+        "authorId" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "body" : "Ok, the logic is correct. The name `UnexpectedServerError` is misleading IMO, the name makes sense for the \"couldn't decode the body\" case, but doesn't make sense for the \"didn't decode the body\" case.\n",
+        "createdAt" : "2016-11-01T22:28:25Z",
+        "updatedAt" : "2016-11-02T02:56:22Z",
+        "lastEditedBy" : "ca7e5a52-cab7-4f09-8ff8-da79f43339d4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "051382687d4ddcb85ffea9c0f95d1671e6dd18c2",
+    "line" : 168,
+    "diffHunk" : "@@ -1,1 +1141,1145 @@\t// if we have received an unexpected server error, and we have a body and decoder, we can try to extract\n\t// a Status object.\n\tif r.err == nil || !errors.IsUnexpectedServerError(r.err) || len(r.body) == 0 || r.decoder == nil {\n\t\treturn r.err\n\t}"
+  },
+  {
+    "id" : "0224a11d-57b8-439e-8cfd-d2ccc53bea0e",
+    "prId" : 31016,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "98aad08d-1f02-446f-8cd4-72582b58171f",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Would recommend instead:\n\n```\nio.Copy(ioutil.Discard, ioutil.LimitedReader{R: resp.Body, N: maxBodySlurpSize})\n```\n\nDo you need to check ContentLength -1 in this case?  OR just check for body nil.\n",
+        "createdAt" : "2016-08-19T18:17:20Z",
+        "updatedAt" : "2016-08-19T18:56:23Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70f8588e-f47c-48be-abcd-90f30e72d021",
+        "parentId" : "98aad08d-1f02-446f-8cd4-72582b58171f",
+        "authorId" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "body" : "-1 is when the length is unknown. I think I'll stick with this since it's equivalent, but doesn't require another object to be created.\n",
+        "createdAt" : "2016-08-19T18:38:09Z",
+        "updatedAt" : "2016-08-19T18:56:23Z",
+        "lastEditedBy" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "887aa1d3-24e8-4f78-b0f6-aace5df06838",
+        "parentId" : "98aad08d-1f02-446f-8cd4-72582b58171f",
+        "authorId" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "body" : "You're right though... the -1 should not need to be explicitly checked since it satisfies the other condition. I just cribbed this from the standard lib.\n\nBody should never be nil. Even if it's empty. The http package explicitly guarantees this.\n",
+        "createdAt" : "2016-08-19T18:43:06Z",
+        "updatedAt" : "2016-08-19T18:56:23Z",
+        "lastEditedBy" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4dd300ae-c888-41fb-85d8-e60cd17da155",
+        "parentId" : "98aad08d-1f02-446f-8cd4-72582b58171f",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Using LimitedReader does not create an object if the compiler can determine it doesn't escape, which it should not in this case.\n",
+        "createdAt" : "2016-08-19T18:45:01Z",
+        "updatedAt" : "2016-08-19T18:56:23Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85af4b18-273f-4ee8-ae38-5549629ce9a7",
+        "parentId" : "98aad08d-1f02-446f-8cd4-72582b58171f",
+        "authorId" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "body" : "Fixed.\n",
+        "createdAt" : "2016-08-19T18:56:43Z",
+        "updatedAt" : "2016-08-19T18:56:43Z",
+        "lastEditedBy" : "ad0a3561-db60-47a9-b82f-ac613199f968",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "35c695005f57cf49ff2084e2b83a0aa010fe12da",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +826,830 @@\t\t\t// connection.\n\t\t\tdefer func() {\n\t\t\t\tconst maxBodySlurpSize = 2 << 10\n\t\t\t\tif resp.ContentLength <= maxBodySlurpSize {\n\t\t\t\t\tio.Copy(ioutil.Discard, &io.LimitedReader{R: resp.Body, N: maxBodySlurpSize})"
+  },
+  {
+    "id" : "254fc5bf-7087-481b-95ab-24166badb377",
+    "prId" : 28933,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "55e4816f-4924-4dd8-b29c-54d034248ac9",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Note that this is new - if a client calls Do(), they expect to get back a consistent error path.  Callers that don't want this should call DoRaw().\n",
+        "createdAt" : "2016-07-19T04:41:39Z",
+        "updatedAt" : "2016-07-24T16:08:50Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "203cf2be6f728378ae196dee749a3bcf6db76da7",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +917,921 @@\t\t\tcase resp.StatusCode == http.StatusSwitchingProtocols:\n\t\t\t\t// no-op, we've been upgraded\n\t\t\tcase resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusPartialContent:\n\t\t\t\treturn Result{err: r.transformUnstructuredResponseError(resp, req, body)}\n\t\t\t}"
+  },
+  {
+    "id" : "a0241fba-0638-4d86-ae3b-7b1335695b11",
+    "prId" : 25465,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ecca035e-39b2-4488-890a-0bfefd939e9f",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I'm not sure this is safe in all cases - the string content-type may only be partially equivalent.  I think we have to do a slightly more invasive check.\n\nAt a minimum, in your else block you need to call `mime.Parse(contentType)` and pass both parts to renegotiate.\n",
+        "createdAt" : "2016-05-11T18:45:35Z",
+        "updatedAt" : "2016-05-12T06:21:18Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e1e64e3-fea5-4210-a8ca-dbd660889feb",
+        "parentId" : "ecca035e-39b2-4488-890a-0bfefd939e9f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "You mean that I should have:\n\nelse {\n  mediaType, params, err := mime.Parse(contentType)\n  if err != nil {\n    return Result{err: \"error parsing content type\"}\n  }\n  decoder, err := r.serializers.RenegotiatedDecoder(mediaType, params)\n  if err != nil {\n    // return what I have\n  }\n}\n\nor sth else?\n",
+        "createdAt" : "2016-05-11T19:32:34Z",
+        "updatedAt" : "2016-05-12T06:21:18Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "21869298-f645-4cc8-a7f7-7ceb2f027bb8",
+        "parentId" : "ecca035e-39b2-4488-890a-0bfefd939e9f",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Basically yes.\n",
+        "createdAt" : "2016-05-11T20:01:26Z",
+        "updatedAt" : "2016-05-12T06:21:18Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "327fb9c0-1206-4669-82d3-fd780e869668",
+        "parentId" : "ecca035e-39b2-4488-890a-0bfefd939e9f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Done\n",
+        "createdAt" : "2016-05-12T06:21:20Z",
+        "updatedAt" : "2016-05-12T06:21:20Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5d046fed4127a4bc9a115a6bdefb4f087a4426ec",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +913,917 @@\tcontentType := resp.Header.Get(\"Content-Type\")\n\tvar decoder runtime.Decoder\n\tif contentType == r.content.ContentType {\n\t\tdecoder = r.serializers.Decoder\n\t} else {"
+  },
+  {
+    "id" : "d4a912f9-7f8c-436c-bf12-03bd3be40453",
+    "prId" : 24789,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7bb3f264-da8d-4a4a-9f52-d05b2a35cb6e",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Do you need to defer a Close() on the decoder?\n",
+        "createdAt" : "2016-05-03T21:53:06Z",
+        "updatedAt" : "2016-05-04T13:02:21Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25a5469c-6e21-4b64-a370-82e083778aaa",
+        "parentId" : "7bb3f264-da8d-4a4a-9f52-d05b2a35cb6e",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "StreamWatcher is doing that.\n",
+        "createdAt" : "2016-05-04T08:07:31Z",
+        "updatedAt" : "2016-05-04T13:02:21Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "11849e232e16858842a0a7f84ccdc61fab74f191",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +675,679 @@\t}\n\tframer := r.serializers.Framer.NewFrameReader(resp.Body)\n\tdecoder := streaming.NewDecoder(framer, r.serializers.StreamingSerializer)\n\treturn watch.NewStreamWatcher(versioned.NewDecoder(decoder, r.serializers.Decoder)), nil\n}"
+  }
+]

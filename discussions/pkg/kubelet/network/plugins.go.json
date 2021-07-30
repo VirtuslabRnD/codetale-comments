@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "e20545e3-5300-4413-83d5-1135b695dd76",
+    "prId" : 37036,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/37036#pullrequestreview-13047704",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3e08292e-6798-44f9-9f32-2d8d2a377a06",
+        "parentId" : null,
+        "authorId" : "38428f84-e217-4cb8-8916-cc4e674102d6",
+        "body" : "I think you are wrongly using locks here. Each time you hold a big lock, you won't get your parallel. I thought this for a while, maybe a file lock is suitable here. But I'm still hesitating...",
+        "createdAt" : "2016-12-14T04:01:21Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "38428f84-e217-4cb8-8916-cc4e674102d6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c9ce835f-6c2f-425c-bb77-78c71aae3a4f",
+        "parentId" : "3e08292e-6798-44f9-9f32-2d8d2a377a06",
+        "authorId" : "38428f84-e217-4cb8-8916-cc4e674102d6",
+        "body" : "I wrote a quick prototype https://github.com/chenchun/keylock, I think it maybe a good solution. There a big chance that each pod gets it's owner lock with a good `keylock.KeyGen` and you don't have to worry about when to create/delete locks. In bad situations, when the `keylock.KeyGen` generates duplicate uint32s for different podNames, network operations for these pods will be synchronised which I think is acceptable.",
+        "createdAt" : "2016-12-14T08:24:31Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "38428f84-e217-4cb8-8916-cc4e674102d6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d14afe2-4626-4939-93bb-c161c03f18d8",
+        "parentId" : "3e08292e-6798-44f9-9f32-2d8d2a377a06",
+        "authorId" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "body" : "@chenchun I could be completely off here, but I'm pretty sure we do get the parallel for different pods. Yes, there is a short period of time (for accessing the pod lock map) when we do block network operations for all pods, but that is a very short period compared to the actual network operations.  It's the setup/teardown/status that take the largest amount of time, and those should be executed in parallel between pods but synchronized for the same pod.",
+        "createdAt" : "2016-12-14T15:57:38Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0abdded2-8bb7-48bf-892c-c07c2715678c",
+        "parentId" : "3e08292e-6798-44f9-9f32-2d8d2a377a06",
+        "authorId" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "body" : "Also TestMultiPodParallelNetworkOps() ensures that pod operations can run in parallel by blocking the setup of one pod on another pod completing operations.",
+        "createdAt" : "2016-12-14T15:59:06Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a2a54e9-3293-4e61-abcf-3fb39e28b6ea",
+        "parentId" : "3e08292e-6798-44f9-9f32-2d8d2a377a06",
+        "authorId" : "38428f84-e217-4cb8-8916-cc4e674102d6",
+        "body" : "I think you are right. Sorry if I may have wasted your time here.",
+        "createdAt" : "2016-12-15T01:58:31Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "38428f84-e217-4cb8-8916-cc4e674102d6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "20e1cdb97c7399225a5a1db623c77faade73527a",
+    "line" : 96,
+    "diffHunk" : "@@ -1,1 +379,383 @@func (pm *PluginManager) GetPodNetworkStatus(podNamespace, podName string, id kubecontainer.ContainerID) (*PodNetworkStatus, error) {\n\tfullPodName := kubecontainer.BuildPodFullName(podName, podNamespace)\n\tpm.podLock(fullPodName).Lock()\n\tdefer pm.podUnlock(fullPodName)\n"
+  },
+  {
+    "id" : "40a0ff12-012d-40a6-a115-f7323e935ae1",
+    "prId" : 37036,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/37036#pullrequestreview-13069317",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a95c0231-857e-4e15-9887-77a6c9c48148",
+        "parentId" : null,
+        "authorId" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "body" : "I think this is more of a `lockPod(` than a `podLock(` :)\r\n\r\n(and `unlockPod` below)",
+        "createdAt" : "2016-12-15T06:24:48Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d9e003c-1084-4bf1-bf06-f3482339d85f",
+        "parentId" : "a95c0231-857e-4e15-9887-77a6c9c48148",
+        "authorId" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "body" : "Nevermind - this does actually return the Mutex, so `podLock` seems appropriate.",
+        "createdAt" : "2016-12-15T06:42:15Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "20e1cdb97c7399225a5a1db623c77faade73527a",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +340,344 @@// the pod map, it will be added.  The reference count for the pod will\n// be increased.\nfunc (pm *PluginManager) podLock(fullPodName string) *sync.Mutex {\n\tpm.podsLock.Lock()\n\tdefer pm.podsLock.Unlock()"
+  },
+  {
+    "id" : "8186ab31-8200-4ddf-bb5c-5942316bffd7",
+    "prId" : 18795,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "24701746-50f6-43f4-ac84-c659edcffaa6",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Do you actually have plans to extend this further?  I like this better, but it feels like YAGNI and the more specific form of it was more descriptive.  I don't feel strongly about it.  This is fine, I guess :)\n",
+        "createdAt" : "2016-01-20T07:31:14Z",
+        "updatedAt" : "2016-02-03T16:33:38Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fabb65c13f2472ae00a693db2fac10d58f689f12",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +47,51 @@\t// Called on various events like:\n\t// NET_PLUGIN_EVENT_POD_CIDR_CHANGE\n\tEvent(name string, details map[string]interface{})\n\n\t// Name returns the plugin's name. This will be used when searching"
+  }
+]

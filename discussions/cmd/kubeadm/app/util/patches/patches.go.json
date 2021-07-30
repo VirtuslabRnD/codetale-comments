@@ -1,0 +1,200 @@
+[
+  {
+    "id" : "74c43b2e-2b25-449a-817b-5e34740567cc",
+    "prId" : 92017,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92017#pullrequestreview-431399744",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "be1fd3b8-1e34-4a73-95f8-bf33d0151341",
+        "parentId" : null,
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "Out of curiosity: Is there a special need for locking or just a good programming practice?",
+        "createdAt" : "2020-06-15T08:21:23Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6f78907f-02b6-4fac-8b95-2bbf629dce19",
+        "parentId" : "be1fd3b8-1e34-4a73-95f8-bf33d0151341",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "we definitely have to lock if multiple threads are accessing a shared map.",
+        "createdAt" : "2020-06-15T12:51:27Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d71bb18d-5ab9-4853-b023-28c662e12d81",
+        "parentId" : "be1fd3b8-1e34-4a73-95f8-bf33d0151341",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "I don't think that `GetPatchManagerForPath` is ever called concurrently. Hence, I don't think we should have a `pathLock` here.\r\n\r\nEven if we had to synchronize `pathCache` I would have recommended using `sync.Map` for it.",
+        "createdAt" : "2020-06-15T13:23:25Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "40110695-c6ef-4625-84ed-438e39f83377",
+        "parentId" : "be1fd3b8-1e34-4a73-95f8-bf33d0151341",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "it is better to be managed as concurrency-aware if one day we decide to make tests parallel.\r\ni much rather have this just in case and even if that never happens.\r\n\r\nalso sync.Map is a regular mutex and not a RW mutex, and RW is more accurate here.\r\n",
+        "createdAt" : "2020-06-15T14:56:13Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33906eaa-272b-45bc-8105-5340977a3de2",
+        "parentId" : "be1fd3b8-1e34-4a73-95f8-bf33d0151341",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "Ok, that makes sense, plus this is not performance critical code. I guess that we can leave it as is.",
+        "createdAt" : "2020-06-16T11:13:58Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ceb768ccbde7a84782696bc46fa06b2a32c9fa0f",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +76,80 @@\nvar (\n\tpathLock  = &sync.RWMutex{}\n\tpathCache = map[string]*PatchManager{}\n"
+  },
+  {
+    "id" : "dc314dca-de21-4c20-ba33-d8db34e88cfc",
+    "prId" : 92017,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92017#pullrequestreview-431279058",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "95ebd35c-2da9-4eba-b288-5be1e2dc2a36",
+        "parentId" : null,
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "what about \r\n```suggestion\r\n\tpathLock.RLock()\r\n\tdefer pathLock.RUnlock()\r\n```\r\nSo we can assume we are in are in a locked context for the rest of this func?",
+        "createdAt" : "2020-06-15T08:26:11Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a4d55af-8c47-4bd1-85e4-49993f5f124d",
+        "parentId" : "95ebd35c-2da9-4eba-b288-5be1e2dc2a36",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "we have two parts of the logic here. one is lock / unlocking for read operations (near function start) and one is lock / unlocking for write operations (near function end).\r\n\r\n`defer pathLock.RUnlock()` would not work because we need to \"unlock for reading\" as soon as the reading is done, so that we can \"lock for writing\".\r\n\r\nin an ideal world, i would have made this API re-entrant leaving the management of \"patches for a path\" to the caller and not have cache at all. yet this is tricky given the kubeadm source is a bit of a mess WRT static Pod management and there is nowhere (e.g. no context) to store the underlying \"patch manager\".\r\n",
+        "createdAt" : "2020-06-15T13:01:41Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0bb5619a-70b4-4b90-8c85-6b6f5157abae",
+        "parentId" : "95ebd35c-2da9-4eba-b288-5be1e2dc2a36",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "@fabriziopandini technically `defer` is what has to be used. However, it needs to be in a nested block.",
+        "createdAt" : "2020-06-15T13:24:23Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "747c4156-4b5d-4d8f-a376-3c21b33cec73",
+        "parentId" : "95ebd35c-2da9-4eba-b288-5be1e2dc2a36",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "i'd argue the existing lock management is completely valid.",
+        "createdAt" : "2020-06-15T15:01:19Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4f041b9e-1c82-445c-b891-d8e441f33c87",
+        "parentId" : "95ebd35c-2da9-4eba-b288-5be1e2dc2a36",
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "Given that lock is ther for defensive programming but not for a concrete use case, handling read locks and write locks in separated code paths is kind of overengineering.\r\nSaid that I'm fine with current implementation; feel free to resolve the conversation",
+        "createdAt" : "2020-06-16T08:32:54Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ceb768ccbde7a84782696bc46fa06b2a32c9fa0f",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +96,100 @@// If \"output\" is non-nil, messages about actions performed by the manager would go on this io.Writer.\nfunc GetPatchManagerForPath(path string, knownTargets []string, output io.Writer) (*PatchManager, error) {\n\tpathLock.RLock()\n\tif pm, known := pathCache[path]; known {\n\t\tpathLock.RUnlock()"
+  },
+  {
+    "id" : "4e80d307-44fb-4c44-bcd5-2a65cd5f49ca",
+    "prId" : 92017,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92017#pullrequestreview-430719122",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a1d0fc0e-8eac-4e98-92a5-9fe2a44ff6aa",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "Possibly clarify that this can be `ObjectMeta.Name` for Pods.",
+        "createdAt" : "2020-06-15T13:19:54Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3008a382-93c5-471b-aeda-b3006c18bfa9",
+        "parentId" : "a1d0fc0e-8eac-4e98-92a5-9fe2a44ff6aa",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "technically it can be ObjectMeta.Name, but also it can be any generic known target.\r\ni will clarify that we are mostly using this for ObjectMeta.",
+        "createdAt" : "2020-06-15T14:50:07Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ceb768ccbde7a84782696bc46fa06b2a32c9fa0f",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +41,45 @@\t// Name must be the name of a known target. In the case of Kubernetes objects\n\t// this is likely to match the ObjectMeta.Name of a target.\n\tName string\n\n\t// StrategicMergePatchObject is only used for strategic merge patches."
+  },
+  {
+    "id" : "54179b24-5643-4310-b882-77e5daf7b2ec",
+    "prId" : 92017,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92017#pullrequestreview-431441124",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0f1f6230-f8c1-454c-98f2-9a174491c284",
+        "parentId" : null,
+        "authorId" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "body" : "I'm still a little bit confused by this field, because it is always v1.Pod...",
+        "createdAt" : "2020-06-16T08:46:29Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "8a27151d-3530-4221-90e8-48b3a85cba37",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1d7821d7-3091-4c0b-8fbd-ece80210cd4b",
+        "parentId" : "0f1f6230-f8c1-454c-98f2-9a174491c284",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "currently yes, but one day it can be appsv1.Deployment too, that is why the field is exposed.",
+        "createdAt" : "2020-06-16T12:15:23Z",
+        "updatedAt" : "2020-06-25T23:15:04Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ceb768ccbde7a84782696bc46fa06b2a32c9fa0f",
+    "line" : 47,
+    "diffHunk" : "@@ -1,1 +45,49 @@\t// StrategicMergePatchObject is only used for strategic merge patches.\n\t// It represents the underlying object type that is patched - e.g. \"v1.Pod\"\n\tStrategicMergePatchObject interface{}\n\n\t// Data must contain the bytes that will be patched."
+  }
+]

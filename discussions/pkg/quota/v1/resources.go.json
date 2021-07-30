@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "f6395625-1768-4fd1-8344-ffb321d28e0f",
+    "prId" : 74747,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/74747#pullrequestreview-217806125",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f3d94ea8-64dc-4109-848a-be58c4209a60",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "This is a fairly expensive function - three map allocations and then the resource array.  Even though it's the error case this could be cheaper.",
+        "createdAt" : "2019-03-21T03:05:23Z",
+        "updatedAt" : "2019-03-27T03:16:17Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d841ff91-5739-406f-83bd-8fd554618865",
+        "parentId" : "f3d94ea8-64dc-4109-848a-be58c4209a60",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "rewrote with a single alloc (and rewrote `Intersection` to do a single alloc, and `Contains` to do zero allocs), and added tests",
+        "createdAt" : "2019-03-22T15:02:10Z",
+        "updatedAt" : "2019-03-27T03:16:17Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bef996d0a4e7a8ca887f1a6aa8165daf200fa016",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +224,228 @@\n// Difference returns the list of resources resulting from a-b, deduped and sorted\nfunc Difference(a []corev1.ResourceName, b []corev1.ResourceName) []corev1.ResourceName {\n\tresult := make([]corev1.ResourceName, 0, len(a))\n\tfor _, item := range a {"
+  },
+  {
+    "id" : "af4d616d-5060-4ca8-b100-4f645994603e",
+    "prId" : 74747,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/74747#pullrequestreview-219927316",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "15ee3f6a-b11e-411e-879a-2b22b5e8fe40",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "Current code has complexity O(M*N)\r\n\r\nCan we do this:\r\n```\r\nsetA := ToSet(a)\r\nfor _, item := range b {\r\n  if (setA.Has(item)) {\r\n    result = append(result, item)\r\n  }\r\n}\r\n```\r\nThe complexity is O(M+N).",
+        "createdAt" : "2019-03-28T02:54:36Z",
+        "updatedAt" : "2019-03-28T02:54:36Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0db8d50-42e6-43a4-ad15-c11d5235cc1a",
+        "parentId" : "15ee3f6a-b11e-411e-879a-2b22b5e8fe40",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I'm not opposed but would like to know the size at which the difference becomes meaningful. Avoiding allocations is useful and iterating over small lists is not problematic. ",
+        "createdAt" : "2019-03-28T03:00:38Z",
+        "updatedAt" : "2019-03-28T03:01:32Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e6590b14-a709-4879-b593-eb73dae7617b",
+        "parentId" : "15ee3f6a-b11e-411e-879a-2b22b5e8fe40",
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "This is my understanding:\r\nwithout dynamic code (which switches algorithm according to input sizes), we should be prepared for large input sizes where performance becomes first concern (the additional memory is linear in input size).\r\n\r\nIf the input sizes are small, either approach is acceptable.\r\n\r\nSo I would opt for the version I proposed above.",
+        "createdAt" : "2019-03-28T03:09:59Z",
+        "updatedAt" : "2019-03-28T03:09:59Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8d767a15-1b10-47ff-836a-e3123e288f2a",
+        "parentId" : "15ee3f6a-b11e-411e-879a-2b22b5e8fe40",
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "We can change the return type of ResourceNames to map[corev1.ResourceName]struct{}.\r\nThis way, by the time Intersection is called, it has two Sets available - facilitating the above algorithms.\r\n@liggitt \r\nWhat do you think ?",
+        "createdAt" : "2019-03-28T10:08:08Z",
+        "updatedAt" : "2019-03-28T10:08:08Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bef996d0a4e7a8ca887f1a6aa8165daf200fa016",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +209,213 @@// Intersection returns the intersection of both list of resources, deduped and sorted\nfunc Intersection(a []corev1.ResourceName, b []corev1.ResourceName) []corev1.ResourceName {\n\tresult := make([]corev1.ResourceName, 0, len(a))\n\tfor _, item := range a {\n\t\tif Contains(result, item) {"
+  },
+  {
+    "id" : "8cd4b40c-391d-48e5-965e-f1c11795b42c",
+    "prId" : 74747,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/74747#pullrequestreview-219813949",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "10e98b96-6eff-4732-ac75-7875c18fd7ed",
+        "parentId" : null,
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "Can we do this:\r\n```\r\nsetA := ToSet(a)\r\nfor _, item := range b {\r\n  if (!setA.Has(item)) {\r\n    result = append(result, item)\r\n  }\r\n}\r\n```\r\nSimilar operation for finding elements from a which are not in b\r\n\r\nThe complexity is O(M+N)",
+        "createdAt" : "2019-03-28T02:57:45Z",
+        "updatedAt" : "2019-03-28T02:57:45Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bef996d0a4e7a8ca887f1a6aa8165daf200fa016",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +226,230 @@func Difference(a []corev1.ResourceName, b []corev1.ResourceName) []corev1.ResourceName {\n\tresult := make([]corev1.ResourceName, 0, len(a))\n\tfor _, item := range a {\n\t\tif Contains(b, item) || Contains(result, item) {\n\t\t\tcontinue"
+  }
+]

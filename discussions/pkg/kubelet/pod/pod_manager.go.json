@@ -1,0 +1,332 @@
+[
+  {
+    "id" : "1e0bc341-9d9d-4ef9-82b0-91ce81600cf4",
+    "prId" : 92442,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92442#pullrequestreview-439573677",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3e683cb2-0b50-4827-b8f1-b303577af59f",
+        "parentId" : null,
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "The doc for `DeletePod` should probably get an update with this approach.  The mappings related to active mirror pods are removed, but the mappings for a mirror pod for pending termination are populated.",
+        "createdAt" : "2020-06-29T18:52:38Z",
+        "updatedAt" : "2020-07-08T20:38:41Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6465e06b-4bc3-4bfa-bea9-cc8bbef800de",
+        "parentId" : "3e683cb2-0b50-4827-b8f1-b303577af59f",
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "Thanks for the reminder, I have updated the comment to reflect the current implementation.",
+        "createdAt" : "2020-06-29T23:42:22Z",
+        "updatedAt" : "2020-07-08T20:38:41Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a76a959294ba13bfe931a0c2df568450f71148e2",
+    "line" : 3,
+    "diffHunk" : "@@ -1,1 +77,81 @@\t// this means deleting the mappings related to mirror pods.  For non-\n\t// mirror pods, this means deleting from indexes for all non-mirror pods.\n\tDeletePod(pod *v1.Pod)\n\t// GetOrphanedMirrorPodNames returns names of orphaned mirror pods\n\tGetOrphanedMirrorPodNames() []string"
+  },
+  {
+    "id" : "79bd9e42-0cea-40a3-8228-85bb390488d3",
+    "prId" : 92442,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/92442#pullrequestreview-440422057",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "533f1a92-dcb6-4197-a4d5-24da3cfa5ba2",
+        "parentId" : null,
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "Can we update the interface text to make it clearer what an orphaned mirror pod is in this context?\r\n\r\nFor example, is it more accurate to say the following:\r\n\r\n\"GetOrphanedMirrorPodNames returns names of orphaned mirror pods.  An orphaned mirror pod is a pod that is present in the API server and not undergoing graceful termination, but is no longer present in kubelet static pod manifest source.\"\r\n\r\nThis leads me to a subsequent question:\r\n\r\nShould we only remove mirror pods from `podByUid` and `podByFullName` when we invoke `MarkMirrorPodTerminated`?  In that manner, we could update the godoc to read the following:\r\n\r\n\"GetOrphanedMirrorPodNames returns names of orphaned mirror pods.  An orphaned mirror pod is a pod that is present in the API server, but is no longer present in kubelet static pod manifest source.\"\r\n\r\nAnd for `DeletePod` interface, we would want to record that we only remove a mirror pod when we mark a mirror pod as terminated?\r\n\r\n\"DeletePod deletes the given pod from the manager.  For non-mirror pods, this means deleting from indexes for all non-mirror pods.  For mirror pods, this means we start tracking the mirror pod is pending graceful termination.  Users must call MarkMirrorPodTerminated to remove all mappings related to mirror pods.\"",
+        "createdAt" : "2020-06-29T19:29:05Z",
+        "updatedAt" : "2020-07-08T20:38:41Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d6ce931-ebae-473e-a4c4-ce68d1cf76b4",
+        "parentId" : "533f1a92-dcb6-4197-a4d5-24da3cfa5ba2",
+        "authorId" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "body" : "The concept of orphaned mirror pod refers to mirror pod which is in api server but which is no longer backed by file in static pod manifest source directory.\r\n\r\nFor GetOrphanedMirrorPodNames(), it seems we don't need to mention graceful termination since it is the responsibility of orphan pod cleaner (located in kubelet_pods.go as of this PR) to clean up orphaned mirror pods (respecting grace period specified for the underlying static pod).\r\n\r\nw.r.t. the suggestion of removing relevant podByFullName entry in MarkMirrorPodTerminated(), I have looked at the func's which depend on the value for podByFullName entry.\r\n\r\nLet's look at the following call in Kubelet#GetAttach:\r\n```\r\n\tpod, found := kl.GetPodByFullName(podFullName)\r\n\tif !found || (string(podUID) != \"\" && pod.UID != podUID) {\r\n\t\treturn nil, fmt.Errorf(\"pod %s not found\", podFullName)\r\n```\r\nCurrently, when the static pod is deleted, GetPodByFullName() would return false for ```found```, leading to early return from Kubelet#GetAttach.\r\n\r\nIf we remove podByFullName entry in MarkMirrorPodTerminated (but keep the entry in DeletePod), the above call would return true for ```found```,  likely resulting in proceeding to remaining part of Kubelet#GetAttach().\r\nThis may cause undesired effect down the road.\r\n\r\nI think we should remove podByFullName entry in DeletePod() because there seems to be existing code path(s) which depend on pod not being returned from GetPodByFullName() when the pod is undergoing termination.\r\n\r\nPlease let me know if you agree.",
+        "createdAt" : "2020-06-30T00:23:51Z",
+        "updatedAt" : "2020-07-08T20:38:41Z",
+        "lastEditedBy" : "42b1e004-4fa7-4e43-84cf-5378839b49ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d0566044-cb38-4cd7-aac8-e1d21f3c2d59",
+        "parentId" : "533f1a92-dcb6-4197-a4d5-24da3cfa5ba2",
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "i agree that if we evolve pod manager to track pods undergoing termination, then we need to keep the behavior you have.  i think it makes it harder to understand what pod manager is itself doing, and so that is why i was wondering if we could get to a simpler resolution that checks if (mirror,pod) is still present in pod killing channel.  ",
+        "createdAt" : "2020-06-30T22:11:52Z",
+        "updatedAt" : "2020-07-08T20:38:41Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a76a959294ba13bfe931a0c2df568450f71148e2",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +78,82 @@\t// mirror pods, this means deleting from indexes for all non-mirror pods.\n\tDeletePod(pod *v1.Pod)\n\t// GetOrphanedMirrorPodNames returns names of orphaned mirror pods\n\tGetOrphanedMirrorPodNames() []string\n\t// TranslatePodUID returns the actual UID of a pod. If the UID belongs to"
+  },
+  {
+    "id" : "f0437f27-8514-4086-8fab-b6ecc016960c",
+    "prId" : 50984,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/50984#pullrequestreview-75975721",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e1a88a37-b9ca-4f7f-a801-b67326adb10d",
+        "parentId" : null,
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "What's the expected behavior if this happens? kubelet simply won't restore the pod at startup?",
+        "createdAt" : "2017-08-25T01:31:28Z",
+        "updatedAt" : "2017-11-21T04:24:51Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4ba1cc1-75f4-49cc-8db4-607ab4f6186e",
+        "parentId" : "e1a88a37-b9ca-4f7f-a801-b67326adb10d",
+        "authorId" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "body" : "Yes, at some point intervention will be required, and given this is for bootstrapping this is ok. ",
+        "createdAt" : "2017-11-12T23:07:41Z",
+        "updatedAt" : "2017-11-21T04:24:51Z",
+        "lastEditedBy" : "f81960f6-a033-4403-bebf-c8ebb484e444",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "763122ae4bc86a055e9c0cca5a3ac987caef23e2",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +163,167 @@\tif pm.checkpointManager != nil {\n\t\tif err := pm.checkpointManager.WritePod(pod); err != nil {\n\t\t\tglog.Errorf(\"Error writing checkpoint for pod: %v\", pod.GetName())\n\t\t}\n\t}"
+  },
+  {
+    "id" : "510fd130-104a-4f2f-a13f-7601491c273f",
+    "prId" : 36984,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36984#pullrequestreview-15157289",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "776e8582-2a38-4300-b46a-5192a175c142",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "should this match MirrorClient in being exported?",
+        "createdAt" : "2017-01-03T15:37:46Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "64ba6cda-0e9b-4f59-92a3-03ae002cdaa2",
+        "parentId" : "776e8582-2a38-4300-b46a-5192a175c142",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "@yujuhong - WDYT?",
+        "createdAt" : "2017-01-04T08:05:08Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "69ef3578-3139-4529-ba6b-c615eaaba96d",
+        "parentId" : "776e8582-2a38-4300-b46a-5192a175c142",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "See my earlier comment about hiding the secrets in the pod manager.",
+        "createdAt" : "2017-01-04T17:35:20Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3c0d2bb1f0259b6b826b2a12d4e76b2db1e619ed",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +124,128 @@func NewBasicPodManager(client MirrorClient, secretManager secret.Manager) Manager {\n\tpm := &basicManager{}\n\tpm.secretManager = secretManager\n\tpm.MirrorClient = client\n\tpm.SetPods(nil)"
+  },
+  {
+    "id" : "f55af4fe-1975-481f-b94c-bb456fe1b1c2",
+    "prId" : 36984,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/36984#pullrequestreview-17533206",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "parentId" : null,
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "This would result in all pods being registered on every update. Is this intentional? You could also register the pod in `AddPod` or `UpdatePod` instead.",
+        "createdAt" : "2017-01-04T17:40:05Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7431cbb-c0e3-482d-813e-d1b22385ded7",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "Look more closely at your implementation below. This would result in multiple calls to `Add`, causing ref counts to be incorrect. Needs to be fixed.",
+        "createdAt" : "2017-01-04T18:18:56Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "326c3e76-c1fd-4487-ac60-6ed975e97e30",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Let me clarify one thing: \"is this function called only when pod changes, or also on some periodic syncs of pods\"?\r\nIf the former (which I was assuming), then we need to register a pod on every update, as it may have been updated with added/removed secrets.\r\nIn that situation, I think my code is correct. The logic of \"RegisterPod\" is the following:\r\n- take the previous version of a pod\r\n- register all secrets from a current version of a pod (the assuming that pod didn't change secrets, all secrets will have refcount = 2)\r\n- unregister all secrets from a previous version (which will descrease them back to 1)\r\n\r\nIt's probably suboptimal, but I think it is correct.",
+        "createdAt" : "2017-01-04T20:06:32Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "11990cda-06ef-4e11-8342-70cce023bddf",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "My mistake. Your assumption is right. There are some caveats which may cause extra fetches because pod manager doesn't distinguish update types:\r\n 1. In the case where the only the status of a pod changes, kubelet gets a RECONCILE event in the sync loop. `podManager.UpdatePod` will be called.\r\n 2. In the case where DeletionTimestamp is set (i.e., triggering a pod deletion),  kubelet gets a DELETE event in the sync loop. `podManager.UpdatePod` will be called.\r\n\r\n(2) is probably ok since it happen only once per pod on deletion. (1) may cause significant more fetches during batch creation of pods. It may make sense to distinguish these update types in the pod manager so that you can avoid registering again. ",
+        "createdAt" : "2017-01-04T22:53:39Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cab4470e-0a2e-4758-abef-78a6b42207bc",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I think we should leave as is for now, and (potentially) optimize it later. Added a TODO for it.",
+        "createdAt" : "2017-01-17T10:55:51Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "577d2e4a-b2ed-4980-9422-9a7dcd516387",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "I am ok with treating this an optimization, but I'll recommend running a simple test to see if this drastically reduces the effectiveness of this PR.",
+        "createdAt" : "2017-01-17T22:26:53Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95e332ea-7c4b-4606-a9e4-b311fc5a7a0d",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I run some larger kubemark tests and it didn't seem bad.\r\nThat said - I can promise that I will do this optimization (we should discuss how exactly you see it), within say next 2 weeks or so (100% sure that until 1.6 code freeze), but I would really prefer to avoid doing this in this PR and finally have this one in.",
+        "createdAt" : "2017-01-18T07:51:16Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "98bb2aa4-04f4-4256-b502-a3620081061b",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "0adf587c-aaa2-4e47-be0f-a26d4fde14ac",
+        "body" : "Where does the unregistering of the old version happen? To me it looks like this would keep incrementing each secret on an update?",
+        "createdAt" : "2017-01-19T18:59:52Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "0adf587c-aaa2-4e47-be0f-a26d4fde14ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34d460ba-fb70-4c7f-97f5-49530db9ab8b",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "0adf587c-aaa2-4e47-be0f-a26d4fde14ac",
+        "body" : "Can we update the unit test to ensure that Add + Update + Delete of a pod removes the secret?",
+        "createdAt" : "2017-01-19T19:02:37Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "0adf587c-aaa2-4e47-be0f-a26d4fde14ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c904a46e-f04f-4363-8808-d147294cbd09",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "@timstclair - IIUC, you are asking for the update case, right? For this case we are storing current version of pod in the secretStore itself. If this is not nil (which is the case in case of creation), we are removing old secrets based on this pod. Please see secretStore for it.",
+        "createdAt" : "2017-01-19T19:04:49Z",
+        "updatedAt" : "2017-01-19T19:12:15Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "987d842d-c5c4-4f56-9a1b-03e212563b06",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Test added.",
+        "createdAt" : "2017-01-19T19:12:16Z",
+        "updatedAt" : "2017-01-19T19:12:16Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20c522ee-4b8f-461e-b493-8889d8c30770",
+        "parentId" : "1ad6e795-5def-46a7-ad4e-67b09c5aae2f",
+        "authorId" : "0adf587c-aaa2-4e47-be0f-a26d4fde14ac",
+        "body" : "Yes, but doesn't the update call increment the ref count? I.e.\r\n1. Add: ref count -> 1\r\n2. Update: ref count -> 2\r\n3. Delete: ref count -> 1, and is orphaned?",
+        "createdAt" : "2017-01-19T19:15:26Z",
+        "updatedAt" : "2017-01-19T19:15:26Z",
+        "lastEditedBy" : "0adf587c-aaa2-4e47-be0f-a26d4fde14ac",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3c0d2bb1f0259b6b826b2a12d4e76b2db1e619ed",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +159,163 @@func (pm *basicManager) updatePodsInternal(pods ...*v1.Pod) {\n\tfor _, pod := range pods {\n\t\tif pm.secretManager != nil {\n\t\t\t// TODO: Consider detecting only status update and in such case do\n\t\t\t// not register pod, as it doesn't really matter."
+  },
+  {
+    "id" : "0db1792e-8449-4397-bd14-d6290190a941",
+    "prId" : 32232,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a1133b17-730c-4e2e-9687-00f57d29f37c",
+        "parentId" : null,
+        "authorId" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "body" : "Can you update this with more comment based on our offline discussion? Without the detail reason & logic behind, I am concerning the maintainability. \n",
+        "createdAt" : "2016-09-08T01:11:16Z",
+        "updatedAt" : "2016-09-08T01:11:16Z",
+        "lastEditedBy" : "a6409368-42e0-44a9-bf79-9d3042ac3b65",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1afe50db-a023-460a-8afb-401cdc5841a3",
+        "parentId" : "a1133b17-730c-4e2e-9687-00f57d29f37c",
+        "authorId" : "4e418bc8-21fb-4523-80c1-9c751c193126",
+        "body" : "ACK.\n",
+        "createdAt" : "2016-09-08T17:44:09Z",
+        "updatedAt" : "2016-09-08T17:44:09Z",
+        "lastEditedBy" : "4e418bc8-21fb-4523-80c1-9c751c193126",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1b1f2766ed29015622c91ba1e094e0b9f8f86bf4",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +237,241 @@\tpodToMirror = make(map[types.UID]types.UID, len(pm.translationByUID))\n\tmirrorToPod = make(map[types.UID]types.UID, len(pm.translationByUID))\n\t// Insert empty translation mapping for all static pods.\n\tfor uid, pod := range pm.podByUID {\n\t\tif !IsStaticPod(pod) {"
+  }
+]

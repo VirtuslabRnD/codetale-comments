@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "03686300-2046-4b1a-ae37-53d600b40a16",
+    "prId" : 49164,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/49164#pullrequestreview-53829461",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d3c235aa-6225-4373-b6ef-e0639ca7e92f",
+        "parentId" : null,
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "I am not sure the details, but feel that there are many different failure scenarios. When there is error returned, does it mean the disk failed to create or could be disk is already created, but other actions failed?",
+        "createdAt" : "2017-07-28T17:27:40Z",
+        "updatedAt" : "2017-08-02T15:05:30Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07b61008-ab57-410a-b292-29a3a9c61d6f",
+        "parentId" : "d3c235aa-6225-4373-b6ef-e0639ca7e92f",
+        "authorId" : "a52ffc16-075e-4ecb-8ec3-e5096ab48cb5",
+        "body" : "In order to create the disk with storage policy, we use the vmdm.Create(). For this, we do the following steps:\r\n1. Create a dummy VM.\r\n2. Create and attach the virtual disk (persistent volume) to this VM by doing a ReconfigureVM operation on VC.\r\n3. Detach the virtual disk from dummy VM.\r\n4. Delete the dummy VM.\r\n\r\nSince there are multiple steps involved we have handle error conditions for each of them accordingly.  In this case, it might happen the disk failed to create which will be in step2 (or) disk is already created but failed to detach the disk from dummy VM  as in step 3 or delete the dummy VM in step 4. If step 2 fails, kubernetes will attempt to call CreateVolume() again which will try to create and attach the disk to the previously created dummy VM. If step3 fails, kubernetes will attempt to call CreateVolume() which in this we check if the disk is already attached to dummy VM, if yes we detach the volume. ",
+        "createdAt" : "2017-07-31T15:31:03Z",
+        "updatedAt" : "2017-08-02T15:05:30Z",
+        "lastEditedBy" : "a52ffc16-075e-4ecb-8ec3-e5096ab48cb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b07ac45-b622-4364-9ac5-1217c6745e53",
+        "parentId" : "d3c235aa-6225-4373-b6ef-e0639ca7e92f",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "what will happen if it fails in step 3 or step 4?",
+        "createdAt" : "2017-08-01T17:11:42Z",
+        "updatedAt" : "2017-08-02T15:05:30Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "282a6735-feba-4b23-8204-7abeb5847f33",
+        "parentId" : "d3c235aa-6225-4373-b6ef-e0639ca7e92f",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "ping here",
+        "createdAt" : "2017-08-01T17:47:18Z",
+        "updatedAt" : "2017-08-02T15:05:30Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3394ccaf-07a2-4d0c-9bf0-5ef25bc14047",
+        "parentId" : "d3c235aa-6225-4373-b6ef-e0639ca7e92f",
+        "authorId" : "a52ffc16-075e-4ecb-8ec3-e5096ab48cb5",
+        "body" : "If step 3 fails, it checks if the disk is detached already. If yes, it will go to step 4. If not, it will error out which will let the kubernetes to try again.\r\n\r\nIf step4 fails, kubernetes will try this operation until it deletes the dummy VM. If the user stops the PVC creation operation, there is a background routine which CleanUpDummyVMs which will get executed every 5 mins to clean any dummy VM's created during this process.",
+        "createdAt" : "2017-08-01T17:59:49Z",
+        "updatedAt" : "2017-08-02T15:05:30Z",
+        "lastEditedBy" : "a52ffc16-075e-4ecb-8ec3-e5096ab48cb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6737a20f-0cd1-4b42-a93d-a9d9071aacfb",
+        "parentId" : "d3c235aa-6225-4373-b6ef-e0639ca7e92f",
+        "authorId" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "body" : "For step 3 and 4, I think it will try to attach the volume again and then detach, right? Could we assume that disk is created successfully even if step 4 has error?",
+        "createdAt" : "2017-08-01T20:04:23Z",
+        "updatedAt" : "2017-08-02T15:05:30Z",
+        "lastEditedBy" : "44594ff0-8fbc-44a7-84f9-654ffd54270f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb61ba11-3dce-4a49-a74d-153cbb6e42cc",
+        "parentId" : "d3c235aa-6225-4373-b6ef-e0639ca7e92f",
+        "authorId" : "a52ffc16-075e-4ecb-8ec3-e5096ab48cb5",
+        "body" : "\"For step 3 and 4, I think it will try to attach the volume again and then detach, right?\" - True.\r\n\"Could we assume that disk is created successfully even if step 4 has error?\" - Yes. I think in this case, I can return newly created volumePath and just log the error for this. The background routine will take of it's deletion. I will modify it.",
+        "createdAt" : "2017-08-01T20:25:29Z",
+        "updatedAt" : "2017-08-02T15:05:30Z",
+        "lastEditedBy" : "a52ffc16-075e-4ecb-8ec3-e5096ab48cb5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb058df9-4c2b-4080-b7f2-9d5ff695fb24",
+        "parentId" : "d3c235aa-6225-4373-b6ef-e0639ca7e92f",
+        "authorId" : "a52ffc16-075e-4ecb-8ec3-e5096ab48cb5",
+        "body" : "Hi jing, I have addressed it in the new commit. please take a look!",
+        "createdAt" : "2017-08-02T15:05:53Z",
+        "updatedAt" : "2017-08-02T15:05:53Z",
+        "lastEditedBy" : "a52ffc16-075e-4ecb-8ec3-e5096ab48cb5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3080bd87903583a07d12cc86f9880c3df817d22f",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +37,41 @@// Create implements Disk's Create interface\n// Contains implementation of VM based Provisioning to provision disk with SPBM Policy or VSANStorageProfileData\nfunc (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datastore) (err error) {\n\tif vmdisk.volumeOptions.SCSIControllerType == \"\" {\n\t\tvmdisk.volumeOptions.SCSIControllerType = vclib.PVSCSIControllerType"
+  }
+]

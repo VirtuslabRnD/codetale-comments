@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "e068f2d9-cedf-47c2-8568-4cf04ebcabb2",
+    "prId" : 88287,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88287#pullrequestreview-365812803",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d45af851-723a-40fa-8760-6e11904870f8",
+        "parentId" : null,
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "This is likely to cause some problems with air gaped environments. Suppose the following:\r\n- Users are in an air gaped environment\r\n- Users have a local container registry with all Windows images in it.\r\n- They have overwritten the kubeadm config to use that container registry.\r\nIn that case we are going to pull everything from the local registry except the Windows `pause` image which is going to be hardwired to `mcr.microsoft.com/oss/kubernetes` and will require internet access or manual intervention on each Windows node.\r\n\r\nThe right thing to do here is to have pause image as a fat multi-platform image in the GCR repo and not have separate version of this function. Another possibility is to switch to `mcr.microsoft.com/oss/kubernetes` as the default image repository for Windows nodes. ~~This would require the addition of kube-proxy to it (when kube-proxy starts to be executed as a DaemonSet).~~\r\nA third possibility is to have an ugly hack in kubeadm, that is going to check if the image repository is the default gcr one and replace it with `mcr.microsoft.com` only in the case of `pause`.\r\n\r\n@neolit123 WDYT?",
+        "createdAt" : "2020-02-24T16:05:08Z",
+        "updatedAt" : "2020-03-04T16:07:51Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a92300d-8eeb-4cde-8b4f-2a14ecd1fbd8",
+        "parentId" : "d45af851-723a-40fa-8760-6e11904870f8",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "i forgot about air gapped use case and given the complications around multi-OS manifests and licensing, i think we might want to go with the hack solution to solve the problem for `kubeadm config images` too.\r\n",
+        "createdAt" : "2020-02-24T16:12:19Z",
+        "updatedAt" : "2020-03-04T16:07:51Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "14f9f88a-72c9-4321-b176-07f6d045c36b",
+        "parentId" : "d45af851-723a-40fa-8760-6e11904870f8",
+        "authorId" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "body" : "Another possibility is to stop managing `pause` from kubeadm. It's really a CRI thing and we can add it as a requirement for folks to pre-pull manually after they install Docker/containerd/CRI-O.\r\nThat way we can get the same experience for all container runtimes.",
+        "createdAt" : "2020-02-25T10:20:19Z",
+        "updatedAt" : "2020-03-04T16:07:51Z",
+        "lastEditedBy" : "cccc7bed-95f4-42a9-83ef-6ba1a4dca7ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a76bfc81-80ee-44a1-8ca8-82398a7b70e0",
+        "parentId" : "d45af851-723a-40fa-8760-6e11904870f8",
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "we'd need a GA deprecation announcement of sorts to allow smoother transition for that.\r\nit will certainly break the existing user base that assumes kubeadm will pull pause for them on new nodes. \r\n\r\n",
+        "createdAt" : "2020-02-27T16:36:38Z",
+        "updatedAt" : "2020-03-04T16:07:51Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9fabafdbb113745709bdfc70c8d46701ef7fcf2a",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +31,35 @@\t\treturn GetGenericImage(cfg.ImageRepository, \"pause\", constants.PauseVersion)\n\t}\n\treturn GetGenericImage(\"mcr.microsoft.com/oss/kubernetes\", \"pause\", constants.PauseVersion)\n}"
+  },
+  {
+    "id" : "3179ae4b-1043-44be-88a6-82da6771c267",
+    "prId" : 88287,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/88287#pullrequestreview-368894879",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d6e26374-6dcf-423c-9e42-e61c94bfcd62",
+        "parentId" : null,
+        "authorId" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "body" : "non-blocking for the PR (please leave it as is).\r\n@rosti didn't we decide to use `kubeadmapiv1` for import aliases everywhere?",
+        "createdAt" : "2020-03-04T15:49:35Z",
+        "updatedAt" : "2020-03-04T16:07:51Z",
+        "lastEditedBy" : "2ce2b44c-9841-49e7-983e-fb7696974908",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9fabafdbb113745709bdfc70c8d46701ef7fcf2a",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +21,25 @@import (\n\tkubeadmapi \"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm\"\n\tkubeadmapiv1beta2 \"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1beta2\"\n\t\"k8s.io/kubernetes/cmd/kubeadm/app/constants\"\n)"
+  }
+]

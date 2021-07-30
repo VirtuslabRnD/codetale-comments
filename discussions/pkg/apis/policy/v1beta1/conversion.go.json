@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "c8d35239-e8f5-435c-85a2-c84dabddea57",
+    "prId" : 99290,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99290#pullrequestreview-606903978",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "It's simpler to call the generated auto-conversion method first, which will handle all of the boilerplate, then tweak the selector specifically.\r\n\r\nRather than trying to strip the deprecated v1beta1 label specifically, I _think_ we can do two mechanical transformations in each direction by seeing if the input selector is identical to a specific \"all\" or \"none\" selector, and translating that into a new specific selector. Something like this:\r\n\r\n```go\r\n\r\nvar (\r\n\tinternalMatchAllSelector  = &metav1.LabelSelector{}\r\n\tinternalMatchNoneSelector = &metav1.LabelSelector{\r\n\t\tMatchExpressions: []metav1.LabelSelectorRequirement{{Key: pdbV1beta1Label, Operator: metav1.LabelSelectorOpExists}},\r\n\t}\r\n\r\n\tv1beta1MatchNoneSelector = &metav1.LabelSelector{}\r\n\tv1beta1MatchAllSelector  = &metav1.LabelSelector{\r\n\t\tMatchExpressions: []metav1.LabelSelectorRequirement{{Key: pdbV1beta1Label, Operator: metav1.LabelSelectorOpDoesNotExist}},\r\n\t}\r\n)\r\n\r\nfunc Convert_v1beta1_PodDisruptionBudget_To_policy_PodDisruptionBudget(in *v1beta1.PodDisruptionBudget, out *policy.PodDisruptionBudget, s conversion.Scope) error {\r\n\tif err := autoConvert_v1beta1_PodDisruptionBudget_To_policy_PodDisruptionBudget(in, out, s); err != nil {\r\n\t\treturn err\r\n\t}\r\n\r\n\tswitch {\r\n\tcase apiequality.Semantic.DeepEqual(in.Spec.Selector, v1beta1MatchNoneSelector):\r\n\t\t// If the v1beta1 version has a non-nil but empty selector, it should be\r\n\t\t// selecting no pods, even when used with the internal or v1 api. We\r\n\t\t// add a selector that is non-empty but will never match any pods.\r\n\t\tout.Spec.Selector = internalMatchNoneSelector.DeepCopy()\r\n\tcase apiequality.Semantic.DeepEqual(in.Spec.Selector, v1beta1MatchAllSelector):\r\n\t\t// If the v1beta1 version has our v1beta1-specific \"match-all\" selector,\r\n\t\t// swap that out for a simpler empty \"match-all\" selector for v1\r\n\t\tout.Spec.Selector = internalMatchAllSelector.DeepCopy()\r\n\t}\r\n\treturn nil\r\n}\r\n\r\nfunc Convert_policy_PodDisruptionBudget_To_v1beta1_PodDisruptionBudget(in *policy.PodDisruptionBudget, out *v1beta1.PodDisruptionBudget, s conversion.Scope) error {\r\n\tif err := autoConvert_policy_PodDisruptionBudget_To_v1beta1_PodDisruptionBudget(in, out, s); err != nil {\r\n\t\treturn err\r\n\t}\r\n\r\n\tswitch {\r\n\tcase apiequality.Semantic.DeepEqual(in.Spec.Selector, internalMatchNoneSelector):\r\n\t\t// If the internal version has our v1beta1-specific \"match-none\" selector,\r\n\t\t// swap that out for a simpler empty \"match-none\" selector for v1beta1\r\n\t\tout.Spec.Selector = v1beta1MatchNoneSelector.DeepCopy()\r\n\tcase apiequality.Semantic.DeepEqual(in.Spec.Selector, internalMatchAllSelector):\r\n\t\t// If the internal version has a non-nil but empty selector, we want it to\r\n\t\t// select all pods. We make sure this happens even with the v1beta1 api by\r\n\t\t// adding a non-empty selector that selects all pods.\r\n\t\tout.Spec.Selector = v1beta1MatchAllSelector.DeepCopy()\r\n\t}\r\n\treturn nil\r\n}\r\n```",
+        "createdAt" : "2021-03-07T21:46:27Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f40d5d46-2495-48cc-954a-526db77906d4",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "I have updated the code to first use the auto-conversion and then fix the selector. \r\n\r\nBut I think we might need the functionality to strip only the v1beta1 label, since there might be situations we need to convert and the v1beta1 label is not the only element in the selector. Since the selector in PDBs is mutable, I think it would be possible to read a resource as v1beta1, add an additional label to the PDB, and then write it back. If so, we can't rely on the equality checks.\r\n\r\nThis situation covered by this test: https://github.com/kubernetes/kubernetes/pull/99290/files#diff-ac28b0c739c72c12d59ca4e60b5d43c82c582bc87a005258b2412332d7d72ac3R89.",
+        "createdAt" : "2021-03-08T04:56:21Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "261c08e3-4aba-4b1e-bae3-72b116eff340",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "> Since the selector in PDBs is mutable, I think it would be possible to read a resource as v1beta1, add an additional label to the PDB, and then write it back.\r\n\r\nI don't think that's an expected use case. Selectors are expected to be completely set by the writer... see https://github.com/kubernetes/kubernetes/issues/92913 and https://github.com/kubernetes/kubernetes/pull/93901\r\n\r\nWith the all-or-nothing conversion as proposed in #discussion_r589092943, what is the behavior in the following scenarios:\r\n\r\n1. empty v1beta1 -> non-empty v1 -> empty v1beta1\r\n    1. `kubectl apply` v1beta1 version of a PDB with an empty selector (`{}`)\r\n    2. `kubectl apply` v1 version of the same PDB with some other selector (`{\"matchLabels\":{\"foo\":\"bar\"}}`) - expect only foo=bar via v1 and v1beta1 on read\r\n    3. `kubectl apply` v1beta1 version of a PDB with an empty selector again (`{}`) - expect no trace of `foo=bar`\r\n\r\n2. non-empty v1beta1 -> empty v1 -> non-empty v1beta1\r\n    1. `kubectl apply` v1beta1 version of a PDB with a non-empty selector (`{\"matchLabels\":{\"foo\":\"bar\"}}`) - expect only foo=bar via v1 and v1beta1 on read\r\n    2. `kubectl apply` v1 version of the same PDB with an empty selector (`{}`) - expect no trace of foo=bar\r\n    3. `kubectl apply` v1beta1 version of a PDB with a non-empty selector again (`{\"matchLabels\":{\"foo\":\"bar\"}}`) - expect only foo=bar via v1 and v1beta1 on read",
+        "createdAt" : "2021-03-08T15:19:52Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "59d2c252-8fab-4227-8b4f-3810d13a6550",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "for this to behave as expected, I think the selector field has to have patchStrategy=replace\r\n\r\n```\r\ndiff --git a/staging/src/k8s.io/api/policy/v1/types.go b/staging/src/k8s.io/api/policy/v1/types.go\r\nindex 42eab54b3c8..904413203ad 100644\r\n--- a/staging/src/k8s.io/api/policy/v1/types.go\r\n+++ b/staging/src/k8s.io/api/policy/v1/types.go\r\n@@ -34,8 +34,9 @@ type PodDisruptionBudgetSpec struct {\r\n \t// budget.\r\n \t// A nil selector will match no pods, while an empty selector will select\r\n \t// all pods within the namespace.\r\n+\t// +patchStrategy=replace\r\n \t// +optional\r\n-\tSelector *metav1.LabelSelector `json:\"selector,omitempty\" protobuf:\"bytes,2,opt,name=selector\"`\r\n+\tSelector *metav1.LabelSelector `json:\"selector,omitempty\" patchStrategy:\"replace\" protobuf:\"bytes,2,opt,name=selector\"`\r\n \r\n \t// An eviction is allowed if at most \"maxUnavailable\" pods selected by\r\n \t// \"selector\" are unavailable after the eviction, i.e. even in absence of\r\ndiff --git a/staging/src/k8s.io/api/policy/v1beta1/types.go b/staging/src/k8s.io/api/policy/v1beta1/types.go\r\nindex 87c827d342b..4a1d2fee596 100644\r\n--- a/staging/src/k8s.io/api/policy/v1beta1/types.go\r\n+++ b/staging/src/k8s.io/api/policy/v1beta1/types.go\r\n@@ -36,8 +36,9 @@ type PodDisruptionBudgetSpec struct {\r\n \t// A nil selector selects no pods. An empty selector also selects no pods, which\r\n \t// is different than the normal behavior for selectors where an empty selector\r\n \t// does not restrict the selection space.\r\n+\t// +patchStrategy=replace\r\n \t// +optional\r\n-\tSelector *metav1.LabelSelector `json:\"selector,omitempty\" protobuf:\"bytes,2,opt,name=selector\"`\r\n+\tSelector *metav1.LabelSelector `json:\"selector,omitempty\" patchStrategy:\"replace\" protobuf:\"bytes,2,opt,name=selector\"`\r\n \r\n \t// An eviction is allowed if at most \"maxUnavailable\" pods selected by\r\n \t// \"selector\" are unavailable after the eviction, i.e. even in absence of\r\n```\r\n\r\n@apelisse @jpbetz - does that match your expectations? is there something similar that needs to be specified for server-side apply to treat this field as atomic, or is that the default?",
+        "createdAt" : "2021-03-08T16:25:29Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0495d9f3-ef2a-4738-99a1-b4091357b6cf",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "empty_v1beta1.yaml:\r\n```yaml\r\napiVersion: policy/v1beta1\r\nkind: PodDisruptionBudget\r\nmetadata:\r\n  name: empty-v1beta1\r\nspec:\r\n  minAvailable: 2\r\n  selector: {}\r\n```\r\n\r\nnonempty_v1.yaml:\r\n```yaml\r\napiVersion: policy/v1\r\nkind: PodDisruptionBudget\r\nmetadata:\r\n  name: empty-v1beta1\r\nspec:\r\n  minAvailable: 2\r\n  selector:\r\n    matchLabels:\r\n      foo: bar\r\n```\r\n\r\n\r\nsetting patchStrategy=replace and using a new kubectl aware of the go type change works as expected:\r\n\r\n```\r\n$ kubectl apply -f empty_v1beta1.yaml \r\n$ kubectl get -f empty_v1beta1.yaml  -o yaml\r\napiVersion: policy/v1beta1\r\nkind: PodDisruptionBudget\r\n...\r\nspec:\r\n  minAvailable: 2\r\n  selector: {}\r\n\r\n$ kubectl apply -f nonempty_v1.yaml \r\n$ kubectl get -f nonempty_v1.yaml -o yaml\r\napiVersion: policy/v1\r\nkind: PodDisruptionBudget\r\n...\r\nspec:\r\n  minAvailable: 2\r\n  selector:\r\n    matchLabels:\r\n      foo: bar\r\n\r\n$ kubectl apply -f empty_v1beta1.yaml \r\n$ kubectl get -f empty_v1beta1.yaml  -o yaml\r\napiVersion: policy/v1beta1\r\nkind: PodDisruptionBudget\r\n...\r\nspec:\r\n  minAvailable: 2\r\n  selector: {}\r\n```\r\n\r\nusing an old kubectl that doesn't have the go type change compiled in does not work:\r\n\r\n```\r\n$ kubectl-1.19 apply -f empty_v1beta1.yaml \r\n$ kubectl-1.19 get -f empty_v1beta1.yaml -o yaml\r\napiVersion: policy/v1beta1\r\nkind: PodDisruptionBudget\r\n...\r\nspec:\r\n  minAvailable: 2\r\n  selector: {}\r\n\r\n$ kubectl-1.19 apply -f nonempty_v1.yaml \r\n$ kubectl-1.19 get -f nonempty_v1.yaml -o yaml\r\napiVersion: policy/v1\r\nkind: PodDisruptionBudget\r\n...\r\nspec:\r\n  minAvailable: 2\r\n  selector:\r\n    matchExpressions:\r\n    - key: pdb.kubernetes.io/deprecated-v1beta1-empty-selector-match\r\n      operator: Exists\r\n    matchLabels:\r\n      foo: bar\r\n\r\n$ kubectl-1.19 apply -f empty_v1beta1.yaml \r\n$ kubectl-1.19 get -f empty_v1beta1.yaml -o yaml\r\napiVersion: policy/v1beta1\r\nkind: PodDisruptionBudget\r\n...\r\nspec:\r\n  minAvailable: 2\r\n  selector: {}\r\n```\r\n\r\n@apelisse @jpbetz - it looks like we can't change patchStrategy or set patchStrategy=replace on new go types and have old kubectl clients client-side apply correctly?",
+        "createdAt" : "2021-03-08T16:35:38Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9694ddf1-20a6-4f52-8707-a1f02ce680ae",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "kubectl 1.19 sends `\"Content-Type: application/merge-patch+json\"` when applying to `policy/v1`:\r\n```json\r\n{\r\n    \"metadata\": {\r\n        \"annotations\":{\r\n            \"kubectl.kubernetes.io/last-applied-configuration\":\"{\\\"apiVersion\\\":\\\"policy/v1\\\",\\\"kind\\\":\\\"PodDisruptionBudget\\\",\\\"metadata\\\":{\\\"annotations\\\":{},\\\"name\\\":\\\"empty-v1beta1\\\",\\\"namespace\\\":\\\"default\\\"},\\\"spec\\\":{\\\"minAvailable\\\":2,\\\"selector\\\":{\\\"matchLabels\\\":{\\\"foo\\\":\\\"bar\\\"}}}}\\n\"\r\n        }\r\n    },\r\n    \"spec\":{\r\n        \"selector\":{\r\n            \"matchLabels\":{\"foo\":\"bar\"}\r\n        }\r\n    }\r\n}\r\n```\r\n\r\nkubectl build from this branch sends `\"Content-Type: application/strategic-merge-patch+json\"` when applying to `policy/v1`, and works properly:\r\n```json\r\n{\r\n    \"metadata\": {\r\n        \"annotations\": {\r\n            \"kubectl.kubernetes.io/last-applied-configuration\":\"{\\\"apiVersion\\\":\\\"policy/v1\\\",\\\"kind\\\":\\\"PodDisruptionBudget\\\",\\\"metadata\\\":{\\\"annotations\\\":{},\\\"name\\\":\\\"empty-v1beta1\\\",\\\"namespace\\\":\\\"default\\\"},\\\"spec\\\":{\\\"minAvailable\\\":2,\\\"selector\\\":{\\\"matchLabels\\\":{\\\"foo\\\":\\\"bar\\\"}}}}\\n\"\r\n        }\r\n    },\r\n    \"spec\":{\r\n        \"selector\":{\r\n            \"matchLabels\":{\"foo\":\"bar\"}\r\n        }\r\n    }\r\n}\r\n```\r\n",
+        "createdAt" : "2021-03-08T16:50:53Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af6704c8-e003-4425-b6e2-83076d7d637c",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I thought kubectl would read patch info from openapi and send strategic merge patches even on types it did not have compiled in if the types supported it",
+        "createdAt" : "2021-03-08T16:51:19Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08c744f5-759e-4873-bb12-63cd0ef323e9",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "fortunately, both old and new kubectl's behave like a champ with `apply --server-side`",
+        "createdAt" : "2021-03-08T16:53:19Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "28f5058d-b1ea-4695-b3bf-a63d55980100",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "looks like kubectl doesn't send strategic merge patches for unknown types, even if the openapi schema indicates they are supported:\r\n\r\nhttps://github.com/kubernetes/kubernetes/blob/4fccba9e068f31a562f753caf4b37959b4ef829a/staging/src/k8s.io/kubectl/pkg/cmd/apply/patcher.go#L120-L166\r\n\r\nI'll open a separate issue to track that, but a fix there will be too late for this to take advantage of.\r\n\r\nGiven that, I think your approach of stripping the deprecated beta label would work well as a default case for the v1beta1->internal conversion (if we don't exactly match one of the well-known selectors). I think we also need to do that check in v1->internal conversion so that when we switch etcd storage to v1 (and never hit this v1beta1 conversion code), we'll catch selectors like that.\r\n\r\nMessing around with that in the last commit of https://github.com/liggitt/kubernetes/commits/PromotePDBsToGA seemed to work well.",
+        "createdAt" : "2021-03-08T17:56:44Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "795e2b7b-c4c5-4409-9cbd-548b0adcb034",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "2d9afee7-a404-4340-8fd9-d3187ed4f1da",
+        "body" : "I thought this rang a bell with a problem in _kubecfg_ from two years ago. See https://github.com/bitnami/kubecfg/issues/259#issuecomment-522054301. The related discussion in the \"sig-api-machinery\" Slack channel starts [here](https://kubernetes.slack.com/archives/C0EG7JC6T/p1565969006291300).",
+        "createdAt" : "2021-03-08T18:08:01Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "2d9afee7-a404-4340-8fd9-d3187ed4f1da",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d61a9b22-03d2-4fd9-98a6-77c1b8f244eb",
+        "parentId" : "dec3c8e7-6608-4058-9926-32705c0213a3",
+        "authorId" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "body" : "Updated based on the suggested solution at https://github.com/liggitt/kubernetes/commits/PromotePDBsToGA",
+        "createdAt" : "2021-03-09T03:36:52Z",
+        "updatedAt" : "2021-03-09T15:30:52Z",
+        "lastEditedBy" : "37016922-c330-4fc5-b602-08c675dca4fb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "66e722765a216db5288498b0a21bcededf8d9236",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +24,28 @@)\n\nfunc Convert_v1beta1_PodDisruptionBudget_To_policy_PodDisruptionBudget(in *v1beta1.PodDisruptionBudget, out *policy.PodDisruptionBudget, s conversion.Scope) error {\n\tif err := autoConvert_v1beta1_PodDisruptionBudget_To_policy_PodDisruptionBudget(in, out, s); err != nil {\n\t\treturn err"
+  }
+]

@@ -1,0 +1,750 @@
+[
+  {
+    "id" : "d5ac18ff-4bda-4fe7-bef3-60bf7aa14b69",
+    "prId" : 103520,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103520#pullrequestreview-700470605",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f2bbdbbc-d7d1-4b46-b91a-42bdbe2875c1",
+        "parentId" : null,
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "I'm not 100% sure this is necessary, but it may be safer to switch this around to focus on even subset distribution. Not sure how common this is, but it's theoretically possible that there are 5 subsets each with 1000 endpoints. Instead of just capturing the first subset, I think it would be better if we had 200 from each subset.",
+        "createdAt" : "2021-07-06T22:24:28Z",
+        "updatedAt" : "2021-07-06T22:32:11Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba18c209-b7fa-4d5a-82ec-1d31845181ba",
+        "parentId" : "f2bbdbbc-d7d1-4b46-b91a-42bdbe2875c1",
+        "authorId" : "795a7242-f965-4c9a-b641-070356320c29",
+        "body" : "The only concern I had about trying to even out the distribution was the efficiency, since this is in the critical path of every update. If we were to implement an even distribution it would loop through the endpoints ~3 times, which is still `O(n)`, so maybe not so bad.",
+        "createdAt" : "2021-07-07T00:07:11Z",
+        "updatedAt" : "2021-07-07T00:07:11Z",
+        "lastEditedBy" : "795a7242-f965-4c9a-b641-070356320c29",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9bd857ca047cbb5dc86b3232c37a7e0df4416535",
+    "line" : 87,
+    "diffHunk" : "@@ -1,1 +706,710 @@\tcanBeAdded := max\n\n\tfor i := range endpoints.Subsets {\n\t\tsubset := endpoints.Subsets[i]\n\t\tnumInSubset := len(subset.Addresses)"
+  },
+  {
+    "id" : "9e72470e-2a98-4854-8c0d-feeeada3634f",
+    "prId" : 102366,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/102366#pullrequestreview-677330317",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3e3e2e26-a561-489f-8ae4-791ed12ab9eb",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "cc @robscott - is changing this annotation value to UTC problematic?",
+        "createdAt" : "2021-06-01T13:17:07Z",
+        "updatedAt" : "2021-06-01T13:17:07Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "39fe8038-0891-417c-9aff-cd931fa61148",
+        "parentId" : "3e3e2e26-a561-489f-8ae4-791ed12ab9eb",
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "Thanks for catching this. I think it would result in some potentially weird values for the SyncProxyRulesLatenct kube-proxy metric after an upgrade if the master wasn't already running in UTC. cc @wojtek-t who added that metric.",
+        "createdAt" : "2021-06-01T14:26:23Z",
+        "updatedAt" : "2021-06-01T14:26:23Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "58a9f806-fbac-4708-aa97-4278435167e4",
+        "parentId" : "3e3e2e26-a561-489f-8ae4-791ed12ab9eb",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "Hmm...\r\nWe parse it here:\r\nhttps://github.com/kubernetes/kubernetes/blob/3723713c550f649b6ba84964edef9da6cc334f9d/pkg/proxy/endpoints.go#L343\r\npass it here:\r\nhttps://github.com/kubernetes/kubernetes/blob/3723713c550f649b6ba84964edef9da6cc334f9d/pkg/proxy/endpoints.go#L226\r\nand then use it here:\r\nhttps://github.com/kubernetes/kubernetes/blob/3723713c550f649b6ba84964edef9da6cc334f9d/pkg/proxy/iptables/proxier.go#L1632\r\n[by just substracting from now]\r\n\r\nI didn't check it, but shouldn't substracting handle UTC time well too?",
+        "createdAt" : "2021-06-01T14:44:12Z",
+        "updatedAt" : "2021-06-01T14:44:12Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6db170dd-3000-4c55-874c-4551fee3217e",
+        "parentId" : "3e3e2e26-a561-489f-8ae4-791ed12ab9eb",
+        "authorId" : "2d068038-5593-4ffc-a2d6-46dbdee326c0",
+        "body" : "> Hmm...\r\n> We parse it here:\r\n> https://github.com/kubernetes/kubernetes/blob/3723713c550f649b6ba84964edef9da6cc334f9d/pkg/proxy/endpoints.go#L343\r\n> \r\n> \r\n> pass it here:\r\n> https://github.com/kubernetes/kubernetes/blob/3723713c550f649b6ba84964edef9da6cc334f9d/pkg/proxy/endpoints.go#L226\r\n> \r\n> \r\n> and then use it here:\r\n> https://github.com/kubernetes/kubernetes/blob/3723713c550f649b6ba84964edef9da6cc334f9d/pkg/proxy/iptables/proxier.go#L1632\r\n> \r\n> \r\n> [by just substracting from now]\r\n> I didn't check it, but shouldn't substracting handle UTC time well too?\r\n\r\nThank you very much, I looked at it and it is not affected by `time.Format` timezone",
+        "createdAt" : "2021-06-01T14:50:36Z",
+        "updatedAt" : "2021-06-01T14:50:37Z",
+        "lastEditedBy" : "2d068038-5593-4ffc-a2d6-46dbdee326c0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e951098-9c2a-48d7-ae7c-2df5f6828316",
+        "parentId" : "3e3e2e26-a561-489f-8ae4-791ed12ab9eb",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I think this lgtm. @wojtek-t can you explicitly ack this and the other endpoint/endpointslice reconciler changes?\r\n\r\n/assign @wojtek-t ",
+        "createdAt" : "2021-06-03T15:31:15Z",
+        "updatedAt" : "2021-06-03T15:31:15Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2efe8d3-dbb5-480c-b603-703f0774ffcd",
+        "parentId" : "3e3e2e26-a561-489f-8ae4-791ed12ab9eb",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "I double checked the golang time package code and this change is safe.\r\n\r\nSo LGTM.",
+        "createdAt" : "2021-06-07T12:09:15Z",
+        "updatedAt" : "2021-06-07T12:10:07Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "51717256f978ad301a0eb236edcb5b41f185517c",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +530,534 @@\tif !endpointsLastChangeTriggerTime.IsZero() {\n\t\tnewEndpoints.Annotations[v1.EndpointsLastChangeTriggerTime] =\n\t\t\tendpointsLastChangeTriggerTime.UTC().Format(time.RFC3339Nano)\n\t} else { // No new trigger time, clear the annotation.\n\t\tdelete(newEndpoints.Annotations, v1.EndpointsLastChangeTriggerTime)"
+  },
+  {
+    "id" : "bc4c89f1-91ce-414c-809c-bcfacd8529e8",
+    "prId" : 99975,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99975#pullrequestreview-607699091",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f7814073-4c47-4db3-bfa1-21639104c0a8",
+        "parentId" : null,
+        "authorId" : "5fcdc717-54e1-453d-b59d-1ebc30e5755b",
+        "body" : "Endpoints ->endpoints ",
+        "createdAt" : "2021-03-09T07:47:33Z",
+        "updatedAt" : "2021-03-09T17:49:15Z",
+        "lastEditedBy" : "5fcdc717-54e1-453d-b59d-1ebc30e5755b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dff5cb6d-8ed2-4846-be58-4f323c3de2dc",
+        "parentId" : "f7814073-4c47-4db3-bfa1-21639104c0a8",
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "Thanks for the suggestion! This was actually intentional. I try to capitalize resource names to help differentiate them from other concepts, especially when it's a generic word like \"endpoints\". I've seen this same approach used throughout Kubernetes and actually picked it up from docs reviews, but it is admittedly a bit inconsistent. In this file, resource names look like they're capitalized around half of the time. If there's any formal guidance on this, it would be great to be more consistent one way or the other.",
+        "createdAt" : "2021-03-09T17:54:09Z",
+        "updatedAt" : "2021-03-09T17:54:09Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8a3f72074e6390f8f14a89a7b78cef4379737216",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +62,66 @@\n\t// maxCapacity represents the maximum number of addresses that should be\n\t// stored in an Endpoints resource. In a future release, this controller\n\t// may truncate endpoints exceeding this length.\n\tmaxCapacity = 1000"
+  },
+  {
+    "id" : "ea1803e7-649d-41c0-9582-4d86fe3740b7",
+    "prId" : 96327,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/96327#pullrequestreview-526524925",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "be93829b-7d35-48a2-8e07-00769f49ba0f",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Do we not have this equivalent in EPSlice?  Why not?",
+        "createdAt" : "2020-11-09T17:43:39Z",
+        "updatedAt" : "2020-11-09T19:09:01Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6bb7f6eb-27db-4b27-9992-600939dfb9c1",
+        "parentId" : "be93829b-7d35-48a2-8e07-00769f49ba0f",
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "Good question - it actually predated all of this (v1.17). This feature gate guards a later addition of the same field to Services and Endpoints: https://github.com/kubernetes/kubernetes/blob/release-1.17/staging/src/k8s.io/api/discovery/v1alpha1/types.go#L142-L148.",
+        "createdAt" : "2020-11-09T18:14:48Z",
+        "updatedAt" : "2020-11-09T19:09:01Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b044fadf66da7b5c940da417f5d4c527e7d03c2d",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +643,647 @@\t\tPort:        int32(portNum),\n\t\tProtocol:    servicePort.Protocol,\n\t\tAppProtocol: servicePort.AppProtocol,\n\t}\n\treturn epp"
+  },
+  {
+    "id" : "a40f1d99-08f7-443d-bcfb-e4c73b9a4811",
+    "prId" : 91399,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/91399#pullrequestreview-449191093",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6608f21d-5dbd-4ddb-8544-c0c1ccffd952",
+        "parentId" : null,
+        "authorId" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "body" : "Well done, this is a great simplification.",
+        "createdAt" : "2020-07-15T17:45:09Z",
+        "updatedAt" : "2020-07-17T19:27:33Z",
+        "lastEditedBy" : "399a0f74-29de-4365-9ae5-f743ae5f278c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e46572ef4b0f0a6b095c7dcdceb5bbca2ec0e9ff",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +217,221 @@\tif !utilfeature.DefaultFeatureGate.Enabled(features.IPv6DualStack) {\n\t\t// In a legacy cluster, the pod IP is guaranteed to be usable\n\t\tendpointIP = pod.Status.PodIP\n\t} else {\n\t\tipv6Service := endpointutil.IsIPv6Service(svc)"
+  },
+  {
+    "id" : "5dc4f0da-b506-4e5a-b9b2-db71a530d0bf",
+    "prId" : 80509,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/80509#pullrequestreview-266605636",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4292b40b-5831-4f03-801b-6a29122e0168",
+        "parentId" : null,
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "Is this the standard way to implement batching? if there is only one endpoint change (probably the most common case), this will delay the endpoint programming by batch period. \r\n\r\nIs it possible to implement batching on the dequeue end? For example:\r\n```\r\nkey, ok := e.queue.Get()\r\ntimestamp := BatchPeriodAfterLastSync(key) \r\nif now < timestamp{\r\n   e.queue.AddAfter(key, timestamp-now)\r\n   return\r\n}\r\nsync(key)\r\n\r\n```\r\n\r\nprobably need to maintain a map between key and lastSyncTimestamp. \r\n",
+        "createdAt" : "2019-07-24T17:42:10Z",
+        "updatedAt" : "2019-07-24T17:45:23Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac093f08-e5ec-49e7-a8c9-eb412f5c1a15",
+        "parentId" : "4292b40b-5831-4f03-801b-6a29122e0168",
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "> Is this the standard way to implement batching?\r\n\r\nIt's probably not. But it's certainly the easiest way - it's two lines of code and works.\r\n\r\nRegarding your idea - we've been thinking about that and my personal suggestion was that I'm not convinced whether it makes sense to complicate this code (though I don't have that strong opinion).\r\n\r\nHowever, let me throw a bit more data points here:\r\n- I strongly believe we don't need any batching for clusters with less than ~1000 nodes - it should just work once we do things that all under work (EndpointSlice & serialize object once)\r\n- For larger clusters, I also think that the batching period I have on my mind is probably 500ms \r\n- In clusters with 1000+ nodes, I would generally expect to have non-negligible amount of services, so programming iptables or programming NEGs or sth like that should eat that small \r\nbatching period overhead\r\n- in-cluster network programming latency SLO it's pretty clear that the threshold for SLO will be at least 15s (because that's what we observe even in 100-node clusters in scalability tests)\r\n\r\nSo this PR is exposing an ability for the operator to tune, with close to zero engineering work and no risk of bugs. The approach you're suggesting doesn't have this properties.",
+        "createdAt" : "2019-07-24T19:41:33Z",
+        "updatedAt" : "2019-07-24T19:41:33Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8b5b3850-f036-4ae6-9058-6f0325676342",
+        "parentId" : "4292b40b-5831-4f03-801b-6a29122e0168",
+        "authorId" : "5af3a49e-2ce9-4046-8a13-ee66b8cbca2e",
+        "body" : "This change is the simplest possible way to implement the batching. I agree that there is a number of better ways to find a correct delay (e.g. as you mentioned we can pass the first pod update without delay and delay only next ones, we can use different batch period depending on the factors like observed pod update rate, current size of endpoint etc), but I think this is a good starting point I think.\r\n\r\nPlease note that we are not changing any default behavior, the change is purely opt-in -- user needs to explicitly set the flag to enable this and can tune the values that makes sense for the given use case.\r\n\r\nI think that for large clusters, the reasonable values are around 0.5 seconds as wojtek-t mentioned. While I was testing this with 1s value, I was observing significant (5-10x) reduce in number of endpoints updates generated in scalability tests. Given that endpoints are usually large and observed by all nodes, they generate most of the traffic (in terms of bandwidth and cpu) sent from master.\r\n\r\nI think it can be fair tradeoff to increase network programming latency by e.g. 0.5s (out of mentioned 15s) to significantly reduce overall traffic generated on master.",
+        "createdAt" : "2019-07-25T12:56:33Z",
+        "updatedAt" : "2019-07-25T12:56:33Z",
+        "lastEditedBy" : "5af3a49e-2ce9-4046-8a13-ee66b8cbca2e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d96f24262d5e75fe6911ff1b4105d434ea54538d",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +215,219 @@\t}\n\tfor key := range services {\n\t\te.queue.AddAfter(key, e.endpointUpdatesBatchPeriod)\n\t}\n}"
+  },
+  {
+    "id" : "68db04a9-f8ef-468f-a157-951771d47373",
+    "prId" : 79386,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79386#pullrequestreview-264933785",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cb4dce1c-968e-4311-a10c-1c89c480df26",
+        "parentId" : null,
+        "authorId" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "body" : "So if `IPv6DualStack` is enabled we would ignore v4 addresses?",
+        "createdAt" : "2019-07-22T15:30:57Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "6dd71efb-88b1-4bb0-b30a-0df658362f14",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af7f3ab0-06c1-4dbf-907a-902d90147af9",
+        "parentId" : "cb4dce1c-968e-4311-a10c-1c89c480df26",
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "No, This ensures that the `PodStatus.PodIP[...].IP` selected is same `IPFamily` as `Service.Spec.ClusterIP`.",
+        "createdAt" : "2019-07-22T17:13:03Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c27e0b029d328552cc3ef0661f16a5ad3c422fb8",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +238,242 @@\t\t// TODO (khenidak) when we remove the max of 2 PodIP limit from pods\n\t\t// we will have to return multiple endpoint addresses\n\t\tif ipv6ClusterIP == ipv6PodIP {\n\t\t\treturn &v1.EndpointAddress{\n\t\t\t\tIP:       podIP.IP,"
+  },
+  {
+    "id" : "8376c8c8-5e23-40dd-aa41-28c21e6ed807",
+    "prId" : 79386,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/79386#pullrequestreview-276709455",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1b5fc899-f77a-44b7-b064-a6096a567ee7",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Why not add an IP argument `podToEndpointAddress` and call that with the IP?  Avoid duplicating this struct construction",
+        "createdAt" : "2019-08-12T21:57:02Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "603b0439-1c3f-42a5-8777-9a179962f2f7",
+        "parentId" : "1b5fc899-f77a-44b7-b064-a6096a567ee7",
+        "authorId" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "body" : "I understand your point. and it is valid. The testability of the change needed is a lot higher this way. right now we have two set of tests, one for the existing behavior. and one for the change we introduced and they work side by side.",
+        "createdAt" : "2019-08-19T17:37:19Z",
+        "updatedAt" : "2019-08-28T18:42:36Z",
+        "lastEditedBy" : "0c76e20f-41a5-4725-b3c3-d5b6cae89641",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c27e0b029d328552cc3ef0661f16a5ad3c422fb8",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +239,243 @@\t\t// we will have to return multiple endpoint addresses\n\t\tif ipv6ClusterIP == ipv6PodIP {\n\t\t\treturn &v1.EndpointAddress{\n\t\t\t\tIP:       podIP.IP,\n\t\t\t\tNodeName: &pod.Spec.NodeName,"
+  },
+  {
+    "id" : "15300a35-9add-4c77-b01a-17d413121904",
+    "prId" : 67622,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/67622#pullrequestreview-148106994",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6136a4a1-8db9-408b-bcd4-29fba2fbf761",
+        "parentId" : null,
+        "authorId" : "bcebf3b5-032b-4720-ba66-12ac441f6151",
+        "body" : "Previously, RepackSubsets() was being called for each pod. Did you move it after the loop to ensure the repacking is only done once?",
+        "createdAt" : "2018-08-21T04:12:13Z",
+        "updatedAt" : "2018-08-21T15:36:40Z",
+        "lastEditedBy" : "bcebf3b5-032b-4720-ba66-12ac441f6151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1c0beec-aa85-4414-82f6-e23338dabb60",
+        "parentId" : "6136a4a1-8db9-408b-bcd4-29fba2fbf761",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "Yeah, it really only needs to be done once.  That was a bug :)",
+        "createdAt" : "2018-08-21T15:06:02Z",
+        "updatedAt" : "2018-08-21T15:36:57Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "06b785ca5286c08592d50b4c0a4fe5b63e5040d6",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +475,479 @@\t\t}\n\t}\n\tsubsets = endpoints.RepackSubsets(subsets)\n\n\t// See if there's actually an update here."
+  },
+  {
+    "id" : "2b722ccc-6231-4c00-85b5-dbb9bf28ca75",
+    "prId" : 57747,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/57747#pullrequestreview-86142591",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d3a4a31e-df9e-47ac-ab02-fc4a1cf42b0b",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "Since we always queue based on the service lister (even when adding pods), I think this works.",
+        "createdAt" : "2018-01-02T13:47:44Z",
+        "updatedAt" : "2018-01-02T13:47:44Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ad0674702713fc36ebe53c99f2bab1d54d7a82ff",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +395,399 @@\tservice, err := e.serviceLister.Services(namespace).Get(name)\n\tif err != nil {\n\t\t// Service has been deleted. So no need to do any more operations.\n\t\treturn nil\n\t}"
+  },
+  {
+    "id" : "e59aaa5b-0110-459f-bbdb-0c4ea67cdd7f",
+    "prId" : 47731,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/47731#pullrequestreview-45078277",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2b6294e3-49be-4220-af8e-cfd03ee868a3",
+        "parentId" : null,
+        "authorId" : "2d9afee7-a404-4340-8fd9-d3187ed4f1da",
+        "body" : "- [ ] Did you mean to include this in the set supplied to `controller.WaitForCacheSync` in `(*EndpointController).Run` at line 150?",
+        "createdAt" : "2017-06-19T18:32:58Z",
+        "updatedAt" : "2017-06-27T09:17:15Z",
+        "lastEditedBy" : "2d9afee7-a404-4340-8fd9-d3187ed4f1da",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c04d4f4e-8bb3-4e25-a52d-16259db115dc",
+        "parentId" : "2b6294e3-49be-4220-af8e-cfd03ee868a3",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Yes, please wait for endpoint cache to sync.  You don't want to make decisions on unintentionally blank data.",
+        "createdAt" : "2017-06-19T21:08:26Z",
+        "updatedAt" : "2017-06-27T09:17:15Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "038b391c-8ac0-4806-bd11-cf8163b51ef6",
+        "parentId" : "2b6294e3-49be-4220-af8e-cfd03ee868a3",
+        "authorId" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "body" : "+1",
+        "createdAt" : "2017-06-20T08:09:36Z",
+        "updatedAt" : "2017-06-27T09:17:15Z",
+        "lastEditedBy" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a54e03a6-c65d-41b5-a640-8143d4959547",
+        "parentId" : "2b6294e3-49be-4220-af8e-cfd03ee868a3",
+        "authorId" : "c135d2c5-f879-4989-b899-96610cfb9026",
+        "body" : "Yup, I thought I had done it, will fix.",
+        "createdAt" : "2017-06-20T09:23:28Z",
+        "updatedAt" : "2017-06-27T09:17:15Z",
+        "lastEditedBy" : "c135d2c5-f879-4989-b899-96610cfb9026",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9fc5a547aeeb552f48a588f59c02eb76fc4d3262",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +129,133 @@\t// endpointsSynced returns true if the endpoints shared informer has been synced at least once.\n\t// Added as a member to the struct to allow injection for testing.\n\tendpointsSynced cache.InformerSynced\n\n\t// Services that need to be updated. A channel is inappropriate here,"
+  },
+  {
+    "id" : "2460a042-a066-41a7-9d7a-eb7207ea5891",
+    "prId" : 47731,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/47731#pullrequestreview-45061303",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c2a17ec4-58d6-4089-9f61-ea51dd4bb665",
+        "parentId" : null,
+        "authorId" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "body" : "You want to deep-copy these below before you mutate them.",
+        "createdAt" : "2017-06-19T23:06:04Z",
+        "updatedAt" : "2017-06-27T09:17:15Z",
+        "lastEditedBy" : "11efe503-096f-46dd-a8c8-28ba38a0157a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "660a655a-5aa8-406c-9888-1a0c47128b02",
+        "parentId" : "c2a17ec4-58d6-4089-9f61-ea51dd4bb665",
+        "authorId" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "body" : "+1. You need to do deep copy in line 432 (in case when you didn't enter `if` in line 415).",
+        "createdAt" : "2017-06-20T08:13:42Z",
+        "updatedAt" : "2017-06-27T09:17:15Z",
+        "lastEditedBy" : "3c437914-616b-4cfb-88a0-28dc812ff2b2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9fc5a547aeeb552f48a588f59c02eb76fc4d3262",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +430,434 @@\n\t// See if there's actually an update here.\n\tcurrentEndpoints, err := e.endpointsLister.Endpoints(service.Namespace).Get(service.Name)\n\tif err != nil {\n\t\tif errors.IsNotFound(err) {"
+  },
+  {
+    "id" : "5f89ff46-c41c-43dc-95cc-98de771a8e0d",
+    "prId" : 45478,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/45478#pullrequestreview-48841525",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "507fff86-293e-46af-95a2-bbaa0511a480",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "this seems inappropriate... I would have expected an empty service definition rather than changing the endpoints controller (as long as an endpoints object was still being used as a lock object... the move to configmaps makes this less relevant)",
+        "createdAt" : "2017-07-10T03:05:16Z",
+        "updatedAt" : "2017-07-10T03:05:40Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b69e73bc-9a6a-498d-9579-3c5758f94460",
+        "parentId" : "507fff86-293e-46af-95a2-bbaa0511a480",
+        "authorId" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "body" : "We discussed that here https://github.com/kubernetes/kubernetes/pull/45478#issuecomment-300267596, I prefer it as well. Happy to switch that over.",
+        "createdAt" : "2017-07-10T08:53:20Z",
+        "updatedAt" : "2017-07-10T08:53:20Z",
+        "lastEditedBy" : "392f7c7a-6820-4848-94e2-2b8e009fec9d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e7ea942aacf57a30126f83eda96c1f3dceeec030",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +463,467 @@\tfor i := range list.Items {\n\t\tep := &list.Items[i]\n\t\tif _, ok := ep.Annotations[resourcelock.LeaderElectionRecordAnnotationKey]; ok {\n\t\t\t// when there are multiple controller-manager instances,\n\t\t\t// we observe that it will delete leader-election endpoints after 5min"
+  },
+  {
+    "id" : "33ba23f9-b8b5-4eaa-b28d-3aedc7e37f75",
+    "prId" : 41114,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/41114#pullrequestreview-20800694",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce7d7be0-0df1-4a31-bbac-78f97cc8733e",
+        "parentId" : null,
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "how hard is it to deep copy the map copies that happening?  There's no mutation on `newEndpoints.Labels` as a for instance, but the map is the same as the shared cache for services.\r\n\r\nIf its non-trivial (it always is in Go), I could live without it.",
+        "createdAt" : "2017-02-08T15:31:13Z",
+        "updatedAt" : "2017-02-10T01:41:07Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9074e5e3-070c-4c5d-91de-085d08473ea5",
+        "parentId" : "ce7d7be0-0df1-4a31-bbac-78f97cc8733e",
+        "authorId" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "body" : "We'd just have to write a for loop to create a new map and copy the KVs in.",
+        "createdAt" : "2017-02-08T16:20:42Z",
+        "updatedAt" : "2017-02-10T01:41:07Z",
+        "lastEditedBy" : "b15d5707-82a8-4448-b49d-a2d6502b10f9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "80ddac7157b46c1edd0c29b482cff18b763f4806",
+    "line" : 182,
+    "diffHunk" : "@@ -1,1 +308,312 @@\t\treturn err\n\t}\n\tservice, err := e.serviceLister.Services(namespace).Get(name)\n\tif err != nil {\n\t\t// Delete the corresponding endpoint, as the service has been deleted."
+  },
+  {
+    "id" : "3cf3d947-4831-4ffe-b458-410668c4e7ea",
+    "prId" : 37093,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/37093#pullrequestreview-10236687",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7f255abf-3cc3-4c4e-8efc-4f33f61dbb09",
+        "parentId" : null,
+        "authorId" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "body" : "please augment the comment above the annotation definition with: \r\n// Endpoints of Services bearing this annotation retain their DNS \r\n// records and continue receiving traffic for the Service from the moment\r\n// the kubelet starts all containers in the pod and marks it \"Running\", till the \r\n// kubelet stops all containers and deletes the pod from the apiserver. \r\n",
+        "createdAt" : "2016-11-27T19:46:31Z",
+        "updatedAt" : "2017-01-03T13:00:55Z",
+        "lastEditedBy" : "395f4f9a-98be-4485-b436-51f0897d7c9f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b44de1ef27954e0bc52f133c29b568aa382f7fdd",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +408,412 @@\t\t\t\tcontinue\n\t\t\t}\n\t\t\tif !tolerateUnreadyEndpoints && pod.DeletionTimestamp != nil {\n\t\t\t\tglog.V(5).Infof(\"Pod is being deleted %s/%s\", pod.Namespace, pod.Name)\n\t\t\t\tcontinue"
+  },
+  {
+    "id" : "abbf9823-7eff-4ea6-8d9c-1f52251b201f",
+    "prId" : 37093,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/37093#pullrequestreview-48531611",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1214d651-f991-41e8-9e26-bfbd8eb77bfa",
+        "parentId" : null,
+        "authorId" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "body" : "To make self hosted etcd reliable (an important part of self hosted k8s effort), we want to have the DNS resolvable since pod initialization phase (init container). The current implementation does not prevent us from doing that. Basically, I hope after the pod gets the IP and before the Pod terminates, the DNS can be resolvable.",
+        "createdAt" : "2017-07-07T06:57:29Z",
+        "updatedAt" : "2017-07-07T06:57:29Z",
+        "lastEditedBy" : "55c0e4a8-86f8-4426-a163-752ee421c57e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b44de1ef27954e0bc52f133c29b568aa382f7fdd",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +64,68 @@\t// be using this Service for anything so unready endpoints don't matter.\n\t// Endpoints of these Services retain their DNS records and continue\n\t// receiving traffic for the Service from the moment the kubelet starts all\n\t// containers in the pod and marks it \"Running\", till the kubelet stops all\n\t// containers and deletes the pod from the apiserver."
+  },
+  {
+    "id" : "c2d7ee67-28cf-4017-80fb-c68de44522b5",
+    "prId" : 33269,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/33269#pullrequestreview-1187951",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "987f9b86-8bf3-46cb-b358-71a81c5614d8",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Clutch\n",
+        "createdAt" : "2016-09-22T17:14:20Z",
+        "updatedAt" : "2016-09-22T17:14:20Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7ee5b26ad191dc48ff968bcd8d8c1dab0926d1da",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +192,196 @@\t}\n\tfor i := range services {\n\t\tkey, err := keyFunc(services[i])\n\t\tif err != nil {\n\t\t\treturn nil, err"
+  },
+  {
+    "id" : "576cf73d-57ab-405e-8a63-d4a67df31427",
+    "prId" : 30807,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f8d02dc0-bac0-4ea9-a250-a01ddaedec11",
+        "parentId" : null,
+        "authorId" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "body" : "Not convinced this does a copy... (no need to change)\n",
+        "createdAt" : "2016-08-17T20:50:13Z",
+        "updatedAt" : "2016-08-17T20:50:13Z",
+        "lastEditedBy" : "b86e7e78-bb07-417f-8470-39407559c779",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "594234d61c4e6c7dd29be1a575d88aa899478cc6",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +383,387 @@\tfor i := range pods {\n\t\t// TODO: Do we need to copy here?\n\t\tpod := &(*pods[i])\n\n\t\tfor i := range service.Spec.Ports {"
+  },
+  {
+    "id" : "529476ab-917d-4522-baeb-7f4d36a10ff2",
+    "prId" : 30510,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c5bcefbf-298b-4fa8-b6f6-e4c4aab491fc",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Could potentially hide permission issues in the future if the endpoints controller doesn't have perm to create stuff.   But it's better than spamming the logs, which is very common.\n",
+        "createdAt" : "2016-08-12T15:52:17Z",
+        "updatedAt" : "2016-08-12T16:51:27Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8cdfb1ad-8c94-44e5-a339-d1c64db62dd9",
+        "parentId" : "c5bcefbf-298b-4fa8-b6f6-e4c4aab491fc",
+        "authorId" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "body" : "I thought the same thing, but came to same conclusion.\n",
+        "createdAt" : "2016-08-12T16:24:14Z",
+        "updatedAt" : "2016-08-12T16:51:27Z",
+        "lastEditedBy" : "6eca0ade-9879-4dd7-ad14-547e16f5c041",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "038c754b7fe8238e40aa8e5c15db9002e9d6254a",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +503,507 @@\t\t\t// 2. policy is misconfigured, in which case no service would function anywhere.\n\t\t\t// Given the frequency of 1, we log at a lower level.\n\t\t\tglog.V(5).Infof(\"Forbidden from creating endpoints: %v\", err)\n\t\t} else {\n\t\t\tutilruntime.HandleError(err)"
+  },
+  {
+    "id" : "d93fb600-8a29-4cad-a720-d2aa59cc70fc",
+    "prId" : 24362,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8ae91cd4-ab5c-489a-90d6-d9d89ca67533",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "do we still need the podHostNames map?\n",
+        "createdAt" : "2016-04-20T01:34:33Z",
+        "updatedAt" : "2016-04-28T17:57:24Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "78d756a0-cea8-48dd-8ea1-17f7925bb4f7",
+        "parentId" : "8ae91cd4-ab5c-489a-90d6-d9d89ca67533",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "we should stop writing the annotation\n",
+        "createdAt" : "2016-04-20T01:34:47Z",
+        "updatedAt" : "2016-04-28T17:57:24Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16573e6f-fc39-4733-b599-5f22f7403d59",
+        "parentId" : "8ae91cd4-ab5c-489a-90d6-d9d89ca67533",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "still open\n",
+        "createdAt" : "2016-04-20T06:21:39Z",
+        "updatedAt" : "2016-04-28T17:57:24Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53bf7ca2-df34-4dba-8bdb-a75e0e5a6684",
+        "parentId" : "8ae91cd4-ab5c-489a-90d6-d9d89ca67533",
+        "authorId" : "0970b119-085d-41b4-8f33-e10409965eba",
+        "body" : "discussed offline. adding todo.\n",
+        "createdAt" : "2016-04-20T18:06:09Z",
+        "updatedAt" : "2016-04-28T17:57:24Z",
+        "lastEditedBy" : "0970b119-085d-41b4-8f33-e10409965eba",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8a3ed48808185ec410a7450796da790790e1d3bd",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +394,398 @@\t\t\t\t}\n\t\t\t\t// TODO: stop populating podHostNames annotation in 1.4\n\t\t\t\tpodHostNames[string(pod.Status.PodIP)] = hostRecord\n\t\t\t\tepa.Hostname = hostname\n\t\t\t}"
+  },
+  {
+    "id" : "da6feb05-5b8d-4e24-aaac-401563b0ed3b",
+    "prId" : 23575,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3dbacf94-cd5e-49cc-be78-4e16c7d6a927",
+        "parentId" : null,
+        "authorId" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "body" : "If we want to proceed with this PR, we should avoid this code duplication. But I guess this is just POC now, so never mind :)\n",
+        "createdAt" : "2016-04-11T08:51:41Z",
+        "updatedAt" : "2016-04-18T12:51:59Z",
+        "lastEditedBy" : "24302707-9254-48df-89a5-cbcc349462b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c9489f3d-1fa8-4cda-8060-dc9b583b5e76",
+        "parentId" : "3dbacf94-cd5e-49cc-be78-4e16c7d6a927",
+        "authorId" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "body" : "> If we want to proceed with this PR, we should avoid this code duplication. But I guess this is just POC now, so never mind :)\n\nMy plan would be to switch over a couple controllers, prove that they work, then start phasing in the new approach and removing the old paths.  Probably once we have a standard way of tracking the shared informers for a given resource.\n",
+        "createdAt" : "2016-04-11T12:07:58Z",
+        "updatedAt" : "2016-04-18T12:51:59Z",
+        "lastEditedBy" : "fa477146-9a47-4754-b38c-de8062e65e13",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f0c33d65b6fea84d791059d96c93a15e4b3de4ec",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +85,89 @@\t\t\tDeleteFunc: e.enqueueService,\n\t\t},\n\t)\n\n\tpodInformer.AddEventHandler(framework.ResourceEventHandlerFuncs{"
+  },
+  {
+    "id" : "78c9feea-32cb-4a9e-b27a-d84900cf3e42",
+    "prId" : 20688,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "be5c540f-16ba-41ab-a6af-79ec520eb69c",
+        "parentId" : null,
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "this is safe as long as Go is used for all producers - go's marshaller sorts map input.  You might not want to count on that, or else at least document it and that it is safe, albeit wasteful, to get this wrong\n",
+        "createdAt" : "2016-02-09T23:32:08Z",
+        "updatedAt" : "2016-03-04T21:32:45Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a3c00aadd5da91288cca856dabbefbc9f261be69",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +434,438 @@\t\toldPodHostNames = oldAnnotations[endpoints.PodHostnamesAnnotation]\n\t}\n\treturn oldPodHostNames == newPodHostNames\n}\n"
+  }
+]

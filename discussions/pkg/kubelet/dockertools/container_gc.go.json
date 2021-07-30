@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "69002d2c-ef6e-4146-9edf-1bbb4e5ce3e8",
+    "prId" : 37036,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/37036#pullrequestreview-16455998",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "671fe0b8-8cac-4bbd-81a3-704672a8c374",
+        "parentId" : null,
+        "authorId" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "body" : "@dcbw actually, I have a slight concern.\r\n\r\nAt this point in execution, can we say that the pod that this net container used to belong to is not running? \r\n \r\ne.g is this sequence of events possible?\r\n- Pod \"nginx-abcdef\" is running with infra container X \r\n- Docker is restarted, infra container goes away.\r\n- Pod \"nginx-abcdef\" is recreated with a new infra container Y.\r\n- Kubelet (with this PR) tears down infra container X.\r\n\r\nI know that Calico has worked around this case for a long time by correlating some information with the namespace/podname (not sure if other plugins do anything similar).  This historically meant that the plugin could tell when a pod has been restarted (and clean up old IP allocations, for example).  However, if the above ordering is correct then the existing plugin will actually delete metadata about a currently running pod :(\r\n\r\nIt probably would mean changes to the Calico plugin (and any other plugins that might do something similar), but would also render older versions of the plugin incompatible with this change.",
+        "createdAt" : "2016-12-16T03:58:12Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca1ffb66-8e43-406e-9a6e-288c47dfa0f2",
+        "parentId" : "671fe0b8-8cac-4bbd-81a3-704672a8c374",
+        "authorId" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "body" : "@caseydavenport we can't say that at this point.  The net container being cleaned up may well be a dead net container of a still-running pod that has already created a new net container. The sequence of events you post here is exactly one of the sequences I saw when testing this out.\r\n\r\nIs there something I could do to mitigate this issue for plugin writers, and/or could it be documented for kube 1.5? Could you describe a bit more how the Calico plugin handles correlation between IPAM and specific container IDs versus pod name/namespace?\r\n\r\nAlso, does the existing Calico workaround handle the case where the pod does not get rescheduled on the same node, but the net container is still dead with its IP allocation intact?  In that case kubelet would never have called the plugin at all, either for setup or teardown, so the plugin would need some kind of node-external tracking service for the IPAM to know when the pod was rescheduled on another node and then clear out the allocation on the existing node somehow.",
+        "createdAt" : "2016-12-16T18:10:52Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e445355d-a870-422d-b4f2-e540c366cd54",
+        "parentId" : "671fe0b8-8cac-4bbd-81a3-704672a8c374",
+        "authorId" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "body" : "Yeah, that's what I thought.\r\n\r\nI have to think a bit more about how this might be mitigated.  The only way I can think of right now is if we were able to guarantee that this cleanup happened _before_ starting a new pod.\r\n\r\ne.g \r\n- Kubelet decides to start a pod\r\n- Kubelet checks that no dead containers correspond with that pod\r\n- Kubelet tears down any containers it finds\r\n- Kubelet starts the pod.\r\n\r\nNot familiar enough with that bit of code to actually know if that's reasonable.\r\n\r\nFor Calico in particular, we store various bits of information (IPAM allocation, labels, etc) related to a particular pod essentially keyed off of the pod_namespace+pod_name.  This has allowed the CNI plugin to detect when a pod has been restarted vs when it's a new pod.  It's also useful for people using the Calico APIs to see data represented in terms of pod names rather than container IDs.\r\n\r\n> Also, does the existing Calico workaround handle the case where the pod does not get rescheduled on the same node, but the net container is still dead with its IP allocation intact?\r\n\r\nNope, it does not.  It only works if the node comes back online before k8s decides to reschedule, which is why something like this PR will still be really useful.  If we can do something like I suggested above that would be really great.",
+        "createdAt" : "2016-12-16T20:37:31Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "364c9624-aeca-4c8c-a3f3-eb1f36b0471d",
+        "parentId" : "671fe0b8-8cac-4bbd-81a3-704672a8c374",
+        "authorId" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "body" : "GC and syncPod are separate in kubelet. From kubelet's point of view, GC dead infra container and creating new infra container are irrelevant. ",
+        "createdAt" : "2016-12-16T21:45:57Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "e83108b8-1fb2-416b-9298-d5b70c14f708",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a18cd90c-76ea-44f0-a01e-584dade03324",
+        "parentId" : "671fe0b8-8cac-4bbd-81a3-704672a8c374",
+        "authorId" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "body" : "@caseydavenport @freehan I was going to do a follow-on to this for the docker runtime that ensured that a previous infra container *was* cleaned up before starting a new one.  Currently the docker runtime only cleans up running infra containers:\r\n\r\n```\r\nfunc (dm *DockerManager) SyncPod(...) {\r\n\t<snip>\r\n\tif containerChanges.StartInfraContainer || (len(containerChanges.ContainersToKeep) == 0 && len(containerChanges.ContainersToStart) == 0) {\r\n\t\tif len(containerChanges.ContainersToKeep) == 0 && len(containerChanges.ContainersToStart) == 0 {\r\n\t\t\tglog.V(4).Infof(\"Killing Infra Container for %q because all other containers are dead.\", format.Pod(pod))\r\n\t\t} else {\r\n\t\t\tglog.V(4).Infof(\"Killing Infra Container for %q, will start new one\", format.Pod(pod))\r\n\t\t}\r\n\r\n\t\tkillResult := dm.killPodWithSyncResult(pod, kubecontainer.ConvertPodStatusToRunningPod(dm.Type(), podStatus), nil)\r\n```\r\n\r\nunfortunately that kubecontainer.ConvertPodStatusToRunningPod() call only converts running containers, so the dead infra is left to GC and not cleaned up.  Perhaps if we also solve this, it will fix the possible conflict with plugin workarounds by ensuring that the dead infra always gets cleaned up before a new one is started, as you suggest?",
+        "createdAt" : "2016-12-16T22:08:00Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "525ef376-ee60-42b4-b524-a67dbb354ef4",
+        "parentId" : "671fe0b8-8cac-4bbd-81a3-704672a8c374",
+        "authorId" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "body" : "Hm, I'll have to look at that code in a bit more detail but from what you said it sounds right.  Essentially SyncPod() will check for the dead infra container for the pod it is about to sync and call teardown if it exists prior to calling setup?",
+        "createdAt" : "2016-12-29T17:40:15Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da0ce1b9-c84a-48b3-9c73-6044370a4884",
+        "parentId" : "671fe0b8-8cac-4bbd-81a3-704672a8c374",
+        "authorId" : "0df1da34-610c-4ce5-b0cf-bbda668bf9c1",
+        "body" : "> unfortunately that kubecontainer.ConvertPodStatusToRunningPod() call only converts running containers, so the dead infra is left to GC and not cleaned up. Perhaps if we also solve this, it will fix the possible conflict with plugin workarounds by ensuring that the dead infra always gets cleaned up before a new one is started, as you suggest?\r\n\r\nSyncPod only kills unwanted running containers, and all dead containers are left to GC. I'm concerned of introducing much sync latency if killing dead containers are added into syncPod. ",
+        "createdAt" : "2016-12-30T02:59:15Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "0df1da34-610c-4ce5-b0cf-bbda668bf9c1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0701d847-bae2-421c-8b5f-eeaea94ca322",
+        "parentId" : "671fe0b8-8cac-4bbd-81a3-704672a8c374",
+        "authorId" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "body" : "> and all dead containers are left to GC\r\n\r\nIt wouldn't have to cleanup _all_ dead containers.. just any dead container that is relevant to the pod being synced (i.e a previous \"pause\" container).  Do we think that cleaning up a single container will introduce too much latency?  Also I would think this shouldn't introduce any latency in mainline \"I launched a new pod\" type scenarios, this should only happen when a running pod is killed by something external (e.g docker / the node restarting)",
+        "createdAt" : "2016-12-30T17:28:41Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "d168965e-f2a1-46dc-9041-18f8ba845ebe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "27a8f9f2-6697-4bde-8e84-7f35373f6df1",
+        "parentId" : "671fe0b8-8cac-4bbd-81a3-704672a8c374",
+        "authorId" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "body" : "@caseydavenport @feiskyer I agree with Casey, killing a dead infra container during sync is an exceptional event, not a normal one.  So I think that would be OK.",
+        "createdAt" : "2017-01-12T21:10:57Z",
+        "updatedAt" : "2017-02-16T19:52:46Z",
+        "lastEditedBy" : "57f729dd-988a-4d1a-83bf-ee70bf637c64",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "20e1cdb97c7399225a5a1db623c77faade73527a",
+    "line" : 174,
+    "diffHunk" : "@@ -1,1 +282,286 @@}\n\nfunc (cgc *containerGC) netContainerCleanup(containerInfo containerGCInfo) {\n\tif containerInfo.isHostNetwork {\n\t\treturn"
+  },
+  {
+    "id" : "79eefa6f-41f2-491f-95b4-fab9924320a7",
+    "prId" : 15051,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9a848765-6730-4e83-a6f0-efe8a2f6eb67",
+        "parentId" : null,
+        "authorId" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "body" : "Is there any functional change in this file?\n",
+        "createdAt" : "2015-10-05T20:04:46Z",
+        "updatedAt" : "2015-10-08T22:57:25Z",
+        "lastEditedBy" : "1bd2d65a-7c93-4c22-b408-c7794d037dc5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5ce8d8a1-8747-45a8-b15d-fa01829df39b",
+        "parentId" : "9a848765-6730-4e83-a6f0-efe8a2f6eb67",
+        "authorId" : "0df1da34-610c-4ce5-b0cf-bbda668bf9c1",
+        "body" : "@yujuhong No. Just move it into docker itself.\n",
+        "createdAt" : "2015-10-05T22:36:19Z",
+        "updatedAt" : "2015-10-08T22:57:25Z",
+        "lastEditedBy" : "0df1da34-610c-4ce5-b0cf-bbda668bf9c1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fb04edea3a46bb32245c7730d053fd74d1ce2ae2",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +-1,3 @@/*\nCopyright 2014 The Kubernetes Authors All rights reserved.\n"
+  }
+]

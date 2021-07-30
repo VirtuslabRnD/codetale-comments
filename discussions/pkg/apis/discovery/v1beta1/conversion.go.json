@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "57811d03-520d-4d8e-afbc-3a21402c373c",
+    "prId" : 99662,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/99662#pullrequestreview-605560623",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2167c180-a666-4f22-a1c4-988ab6f7de23",
+        "parentId" : null,
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "I thought when converting to v1, we were going to drop the hostname label from DeprecatedTopology if it matched nodeName, so under typical circumstances (no topology other than zone/hostname, no mismatch between nodeName and hostname), a v1 client would never see the deprecatedTopology field at all",
+        "createdAt" : "2021-03-05T07:30:31Z",
+        "updatedAt" : "2021-03-05T20:03:05Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b8db7039-2ae5-4410-8893-bf102a329ae7",
+        "parentId" : "2167c180-a666-4f22-a1c4-988ab6f7de23",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "I think we agreed to leave it alone - if the user wrote 2 different values they get to keep them, unless they write thru v1.  I don't see any real reason to unpack it further?",
+        "createdAt" : "2021-03-05T07:35:47Z",
+        "updatedAt" : "2021-03-05T20:03:05Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "413cec2f-cd99-4412-bada-9e26f2c0d982",
+        "parentId" : "2167c180-a666-4f22-a1c4-988ab6f7de23",
+        "authorId" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "body" : "the propagation of nodeName → deprecatedTopology[hostname] when writing via v1 is what I'm trying to think through... won't that make `deprecatedTopology[hostname]` always be populated in v1? I thought we wanted that deprecatedTopology empty/nil/omitted in the happy \"write via v1 and then read via v1\" path",
+        "createdAt" : "2021-03-05T07:39:30Z",
+        "updatedAt" : "2021-03-05T20:03:05Z",
+        "lastEditedBy" : "8be927c4-cfb4-4077-b355-f4f3d84849b8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db27db58-4de4-4400-ad86-a23b0666c228",
+        "parentId" : "2167c180-a666-4f22-a1c4-988ab6f7de23",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "You're right that `deprecatedTopology[hostname]` should show up in v1 but it doesn't (in my branch).  Hmm.  Will have to try this branch tomorrow.",
+        "createdAt" : "2021-03-05T08:00:41Z",
+        "updatedAt" : "2021-03-05T20:03:05Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bf7e3e91-ae13-489a-9691-63468ea1baf7",
+        "parentId" : "2167c180-a666-4f22-a1c4-988ab6f7de23",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "OK, I confirm that this DOES set `deprecatedTopology[hostname]`, as expected.  The question is whether we care?\r\n\r\nI'll see what a quick fix woould look like",
+        "createdAt" : "2021-03-05T18:37:47Z",
+        "updatedAt" : "2021-03-05T20:03:05Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e8474d98-d4c1-494f-869a-6919185bba84",
+        "parentId" : "2167c180-a666-4f22-a1c4-988ab6f7de23",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "This seems to work - Swetha, what do you think?  I did not update tests, but manual testing seems to work.   I think this solves the other issue too?\r\n\r\n```\r\ndiff --git a/pkg/apis/discovery/v1beta1/conversion.go b/pkg/apis/discovery/v1beta1/conversion.go\r\nindex f741c5955c8..507a28afcbe 100644\r\n--- a/pkg/apis/discovery/v1beta1/conversion.go\r\n+++ b/pkg/apis/discovery/v1beta1/conversion.go\r\n@@ -40,6 +40,16 @@ func Convert_v1beta1_Endpoint_To_discovery_Endpoint(in *v1beta1.Endpoint, out *d\r\n \t\tdelete(out.DeprecatedTopology, corev1.LabelTopologyZone)\r\n \t}\r\n \r\n+\t// Remove hostname from the topology map ONLY IF it is the same value as\r\n+\t// nodeName.  This preserves the (rather odd) ability to have different\r\n+\t// values for topology[hostname] and nodename in v1beta1, without showing\r\n+\t// duplicate values in v1.\r\n+\tif node, ok := in.Topology[corev1.LabelHostname]; ok {\r\n+\t\tif out.NodeName != nil && node == *out.NodeName {\r\n+\t\t\tdelete(out.DeprecatedTopology, corev1.LabelHostname)\r\n+\t\t}\r\n+\t}\r\n+\r\n \t// If zone was the only field in the map or topology was empty set DeprecatedTopology\r\n \t// to nil\r\n \tif len(out.DeprecatedTopology) == 0 {\r\n@@ -55,7 +65,7 @@ func Convert_discovery_Endpoint_To_v1beta1_Endpoint(in *discovery.Endpoint, out\r\n \t}\r\n \r\n \t// If no deprecated topology or zone or node field, no conversion is necessary\r\n-\tif in.DeprecatedTopology == nil && in.Zone == nil {\r\n+\tif in.DeprecatedTopology == nil && in.Zone == nil && in.NodeName == nil {\r\n \t\treturn nil\r\n \t}\r\n \r\n@@ -70,5 +80,12 @@ func Convert_discovery_Endpoint_To_v1beta1_Endpoint(in *discovery.Endpoint, out\r\n \t\tout.Topology[corev1.LabelTopologyZone] = *in.Zone\r\n \t}\r\n \r\n+\t// Add hostname into the topology map ONLY IF it is not already present.\r\n+\t// This preserves the (rather odd) ability to have different values for\r\n+\t// topology[hostname] and nodename in v1beta1.\r\n+\tif in.NodeName != nil && out.Topology[corev1.LabelHostname] == \"\" {\r\n+\t\tout.Topology[corev1.LabelHostname] = *in.NodeName\r\n+\t}\r\n+\r\n \treturn nil\r\n }\r\ndiff --git a/pkg/registry/discovery/endpointslice/strategy.go b/pkg/registry/discovery/endpointslice/strategy.go\r\nindex d8be219fd07..bf287afbf2a 100644\r\n--- a/pkg/registry/discovery/endpointslice/strategy.go\r\n+++ b/pkg/registry/discovery/endpointslice/strategy.go\r\n@@ -19,7 +19,6 @@ package endpointslice\r\n import (\r\n \t\"context\"\r\n \r\n-\tcorev1 \"k8s.io/api/core/v1\"\r\n \tdiscoveryv1 \"k8s.io/api/discovery/v1\"\r\n \tapiequality \"k8s.io/apimachinery/pkg/api/equality\"\r\n \tmetav1 \"k8s.io/apimachinery/pkg/apis/meta/v1\"\r\n@@ -146,8 +145,7 @@ func dropDisabledFieldsOnUpdate(oldEPS, newEPS *discovery.EndpointSlice) {\r\n \t}\r\n }\r\n \r\n-// dropTopologyOnV1 on V1 request wipes the DeprecatedTopology field  and copies\r\n-// the NodeName value into DeprecatedTopology\r\n+// dropTopologyOnV1 on V1 request wipes the DeprecatedTopology field.\r\n func dropTopologyOnV1(ctx context.Context, oldEPS, newEPS *discovery.EndpointSlice) {\r\n \tif info, ok := genericapirequest.RequestInfoFrom(ctx); ok {\r\n \r\n@@ -167,14 +165,6 @@ func dropTopologyOnV1(ctx context.Context, oldEPS, newEPS *discovery.EndpointSli\r\n \t\t\t\t\t//Silently clear out DeprecatedTopology\r\n \t\t\t\t\tep.DeprecatedTopology = nil\r\n \t\t\t\t}\r\n-\r\n-\t\t\t\t// Set topology[hostname] to match NodeName for compatibility with old clients\r\n-\t\t\t\tif ep.NodeName != nil {\r\n-\t\t\t\t\tif ep.DeprecatedTopology == nil {\r\n-\t\t\t\t\t\tep.DeprecatedTopology = make(map[string]string, 1)\r\n-\t\t\t\t\t}\r\n-\t\t\t\t\tep.DeprecatedTopology[corev1.LabelHostname] = *ep.NodeName\r\n-\t\t\t\t}\r\n \t\t\t}\r\n \t\t}\r\n \t}\r\n```",
+        "createdAt" : "2021-03-05T19:09:42Z",
+        "updatedAt" : "2021-03-05T20:03:05Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b6ee623-c1b0-46c1-9ed4-ac69fc1e4b71",
+        "parentId" : "2167c180-a666-4f22-a1c4-988ab6f7de23",
+        "authorId" : "795a7242-f965-4c9a-b641-070356320c29",
+        "body" : "If in v1beta1, `nodeName` is not populated, should we sync that with `topology[hostname]`?  Otherwise  v1beta1 -> v1, only deprecatedTopology has the hostname. ",
+        "createdAt" : "2021-03-05T19:25:36Z",
+        "updatedAt" : "2021-03-05T20:03:05Z",
+        "lastEditedBy" : "795a7242-f965-4c9a-b641-070356320c29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "961a7a97-a599-422d-8fa7-851dab892766",
+        "parentId" : "2167c180-a666-4f22-a1c4-988ab6f7de23",
+        "authorId" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "body" : "since nodeName is a field in v1beta1, I think it's easier to just leave it mapped to the v1 field.  read-clients can fall-back on topology, but when v1beta1 goes away, write-clients need to update to the field anyway.",
+        "createdAt" : "2021-03-05T19:45:44Z",
+        "updatedAt" : "2021-03-05T20:03:05Z",
+        "lastEditedBy" : "f87fe7d3-581c-4cb6-b17e-b807c6f2c789",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c033e179-afec-4b52-934c-0ab6ffd219c5",
+        "parentId" : "2167c180-a666-4f22-a1c4-988ab6f7de23",
+        "authorId" : "795a7242-f965-4c9a-b641-070356320c29",
+        "body" : "The only other consequence I see of this approach is that if in v1beta1 only `NodeName` is set, after the round trip, `topology[hostname]` will also be set. I don't think that is too much of an issue and it is behavior that will go away once v1beta1 is removed.",
+        "createdAt" : "2021-03-05T20:05:14Z",
+        "updatedAt" : "2021-03-05T20:05:15Z",
+        "lastEditedBy" : "795a7242-f965-4c9a-b641-070356320c29",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a9891b4b9b909b76533a50812c21575cd96c43b1",
+    "line" : 63,
+    "diffHunk" : "@@ -1,1 +61,65 @@}\n\nfunc Convert_discovery_Endpoint_To_v1beta1_Endpoint(in *discovery.Endpoint, out *v1beta1.Endpoint, s conversion.Scope) error {\n\tif err := autoConvert_discovery_Endpoint_To_v1beta1_Endpoint(in, out, s); err != nil {\n\t\treturn err"
+  }
+]
