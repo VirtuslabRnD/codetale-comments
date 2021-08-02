@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "cfc15538-9e98-401a-a352-fe593710eb6f",
+    "prId" : 622,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/622#pullrequestreview-284864723",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c5059221-a676-4443-be43-9391852283a5",
+        "parentId" : null,
+        "authorId" : "3a8946db-5185-4406-b0ab-c87d805d3a9a",
+        "body" : "This would mess with e.g. interruption and auto-forking on the target `G`. Should `liftIO` be used instead?",
+        "createdAt" : "2019-09-05T08:43:24Z",
+        "updatedAt" : "2019-12-06T18:29:11Z",
+        "lastEditedBy" : "3a8946db-5185-4406-b0ab-c87d805d3a9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e37a0cc6-3e5a-46c1-877b-6afa7f4ea62d",
+        "parentId" : "c5059221-a676-4443-be43-9391852283a5",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "Can you provide more details of how it can mess with interruption?\r\n\r\nAlso `SyncIO` is meant to be executed synchronously, no interruptions, no auto-forking and in this case the conversion works, you're just treating it like any other side effect.\r\n\r\nYou mean you wanted to interpret it somehow such that `SyncIO` `flatMap`s become `flatMap`s on `G`? \r\n\r\nThis might be possible, by building an interpreter for `SyncIO` here, however currently `SyncIO` is based on `IO`, so that's not possible currently, but in the future, sure.",
+        "createdAt" : "2019-09-05T08:59:43Z",
+        "updatedAt" : "2019-12-06T18:29:11Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "806fa1a4-7b9e-4718-8cb8-250bf6976dce",
+        "parentId" : "c5059221-a676-4443-be43-9391852283a5",
+        "authorId" : "3a8946db-5185-4406-b0ab-c87d805d3a9a",
+        "body" : "Interruption happens between flatMaps so just stuffing a big side-effect into delay will prevent it.\r\n\r\n> Also SyncIO is meant to be executed synchronously, no interruptions, no auto-forking and in this case the conversion works, you're just treating it like any other side effect.\r\n\r\n> You mean you wanted to interpret it somehow such that SyncIO flatMaps become flatMaps on G? This might be possible, by building an interpreter for SyncIO here, however currently SyncIO is based on IO, so that's not possible currently, but in the future, sure.\r\n\r\nWell, if it's meant to be treated as any other side effect then interpreting into G would be non-sensical, so we first have to decide on one of the semantics – does SyncEffect mean just running it or does it mean reinterpretation – that preserves properties of the target monad, but also requires a SyncEffect monad to have non-naive bracket model that can still work when interruption is possible? \r\nIMHO varying the semantic – letting some monads just delay, while others reinterpret – is unsafe, but it's just my opinion.",
+        "createdAt" : "2019-09-05T09:41:22Z",
+        "updatedAt" : "2019-12-06T18:29:11Z",
+        "lastEditedBy" : "3a8946db-5185-4406-b0ab-c87d805d3a9a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a002d054-a1ec-4576-b63b-3f94c9de6ed4",
+        "parentId" : "c5059221-a676-4443-be43-9391852283a5",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "> does SyncEffect mean just running it or does it mean reinterpretation\r\n\r\nDoes it really matter?\r\n\r\nShould be up to the one implementing the instance. Ideally it should be a reinterpretation. However just the ability to execute `F[_]` is useful. Consider that:\r\n\r\n1. Reinterpreting `F[_]` as `G[_]` requires knowledge of `F[_]`'s internals — you would have to look at internal state to unwrap `flatMap` calls, in order to build `G[_]` ... and due to SyncIO's implementation, right now we can't do it, since its internals don't reflect its capabilities\r\n2. We can't specify a reinterpretation by law — how would you describe it?\r\n3. For many purposes reinterpretation isn't relevant, but I agree it is nice when available ... consider that most uses of `SyncIO` in common practice is for initializing resources (e.g. file handles, vars), that aren't super expensive side effects, or at least that's my experience\r\n\r\nTherefore I would say it's up to the implementation.\r\n\r\nIf the author can provide a `SyncEffect[SyncIO]` instance that can reinterpret `F[_]`, then awesome, otherwise we'll take what we can get.\r\n\r\nDo you agree?",
+        "createdAt" : "2019-09-05T17:16:58Z",
+        "updatedAt" : "2019-12-06T18:29:11Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7c94e4ae-fa6a-4170-b68d-b0a430f5d9e4",
+        "parentId" : "c5059221-a676-4443-be43-9391852283a5",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "Although now that I think of it, this is also an efficiency issue.\r\n\r\nReinterpreting `SyncIO` into a Monix `Coeval` doesn't make much sense as you'd gain nothing by it 🤔",
+        "createdAt" : "2019-09-05T17:19:51Z",
+        "updatedAt" : "2019-12-06T18:29:11Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5284c8bb-6f00-4965-abd5-1dd6e432ae2e",
+        "parentId" : "c5059221-a676-4443-be43-9391852283a5",
+        "authorId" : "ff78fcf6-a54d-4325-a0c8-d28cc86fb75e",
+        "body" : "To me, this type class is a lot more about running than reinterpreting, it gives me a way to run code that's abstract in `F[_]` that I know to be sync only. In that way it's pretty much just like the other `*Effect` type classes. :)",
+        "createdAt" : "2019-09-06T12:43:51Z",
+        "updatedAt" : "2019-12-06T18:29:11Z",
+        "lastEditedBy" : "ff78fcf6-a54d-4325-a0c8-d28cc86fb75e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "035b287d-6ec5-4b67-913b-3e85e9f41d85",
+        "parentId" : "c5059221-a676-4443-be43-9391852283a5",
+        "authorId" : "3a8946db-5185-4406-b0ab-c87d805d3a9a",
+        "body" : "I think I've had an incorrect model of where I'd like to use this typeclass, i.e. enforce a split of an application into parts that can use Concurrent primitives (and can deadlock) and parts that can't (non-termination of which is at least easily debuggable). But, SyncIO and all SyncEffect implementors can't use asynchronous IO, they can't play a delimiting role in most apps and should, ideally, be used exclusively for CPU-bound computations – which means a lack of interruption and fairness is probably not that dangerous for valid uses of `SyncEffect`.\r\n\r\nThen I think it would be appropriate to mandate, recommend or at least make it clear that the user must be prepared to deal with running as the implementation.\r\n\r\n> We can't specify a reinterpretation by law — how would you describe it?\r\n\r\nWell, If we mandate running instead, we can copy a bunch of laws from bracket and delay.",
+        "createdAt" : "2019-09-06T13:30:17Z",
+        "updatedAt" : "2019-12-06T18:29:11Z",
+        "lastEditedBy" : "3a8946db-5185-4406-b0ab-c87d805d3a9a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ae5579e74e6ef2c7dee237fddfcc343b54e9c8d0",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +387,391 @@  implicit val syncIOsyncEffect: SyncEffect[SyncIO] = new SyncIOSync with SyncEffect[SyncIO] {\n    final override def runSync[G[_], A](fa: SyncIO[A])(implicit G: Sync[G]): G[A] =\n      G.delay(fa.unsafeRunSync())\n  }\n"
+  }
+]

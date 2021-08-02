@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "6eb2b8f3-b4cc-4788-9ab8-3e41c3d481e6",
+    "prId" : 1134,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/1134#pullrequestreview-478131790",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bfce3912-1fe7-4e9e-acdf-ab82ea0d6a52",
+        "parentId" : null,
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "You know, in retrospect, this is a really obvious idea. :-) Nice!",
+        "createdAt" : "2020-08-27T22:14:20Z",
+        "updatedAt" : "2020-08-30T22:15:10Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cafff22c-a75b-4e02-ae90-6373230a572e",
+        "parentId" : "bfce3912-1fe7-4e9e-acdf-ab82ea0d6a52",
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "I wonder if there are any concerns around false sharing if we do this",
+        "createdAt" : "2020-08-29T07:36:50Z",
+        "updatedAt" : "2020-08-30T22:15:10Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "843fb55f-eeda-4b8f-8a56-7d123b003aef",
+        "parentId" : "bfce3912-1fe7-4e9e-acdf-ab82ea0d6a52",
+        "authorId" : "566d094c-978a-46cc-94f5-bc87e03c9fd3",
+        "body" : "This ties to using a non-locking `ExternalQueue`:\r\n\r\nWe could make `IOFiberPlatform` here extend `AtomicReference[IOFiber[_]]` so that we can go with an implementation similar to `java.util.concurrent.ConcurrentLinkedQueue` from the standard library.\r\n\r\nIs anyone against measuring this?\r\n@RaasAhsan @johnynek @djspiewak ",
+        "createdAt" : "2020-08-29T14:29:32Z",
+        "updatedAt" : "2020-08-30T22:15:10Z",
+        "lastEditedBy" : "566d094c-978a-46cc-94f5-bc87e03c9fd3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "412008eb9f64d092ec05f6618aece641293712d6",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +29,33 @@  // Allocation free linked queue nodes of `IOFiber[_]` objects.\n  // Represents the external work stealing thread pool queue.\n  private[effect] var next: IOFiber[_] = _\n\n  protected final def interruptibleImpl("
+  },
+  {
+    "id" : "74d23ee4-f503-41a0-ba4d-3194f197f01d",
+    "prId" : 990,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/990#pullrequestreview-463886024",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "28eb0661-4eae-4768-9bd1-7c885deb69f8",
+        "parentId" : null,
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "Is it worth allocating `done`, `cb` and `canInterrupt` once as instance variables?",
+        "createdAt" : "2020-08-09T06:58:56Z",
+        "updatedAt" : "2020-08-12T00:29:25Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0b165a39-71d8-4f3c-9970-cfd6e73ce579",
+        "parentId" : "28eb0661-4eae-4768-9bd1-7c885deb69f8",
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "Hmm, that would certainly speed up `interruptible`, but at the cost of slowing down `start` and making fibers somewhat more heavyweight, even when `interruptible` isn't used. Is it worth it? `interruptible` doesn't seem like a particularly commonly-needed operation.",
+        "createdAt" : "2020-08-09T16:15:25Z",
+        "updatedAt" : "2020-08-12T00:29:25Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e9326e772361a933d08e2692896935b7e28c6a36",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +50,54 @@    IO.async[Any] { nextCb =>\n      for {\n        done <- IO(new AtomicBoolean(false))\n        cb <- IO(new AtomicReference[Either[Throwable, Unit] => Unit](null))\n"
+  },
+  {
+    "id" : "81cdfade-b3ea-49d0-8110-26a75bd9ff67",
+    "prId" : 990,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/990#pullrequestreview-465515118",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c1bcf839-1e99-4696-99c4-30567e698a6e",
+        "parentId" : null,
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "Apologies to do this to you again... :) But what if the blocking operation above succeeds and `done` is not yet set to `true`? This can happen even with the `Semaphore` protection because `cur.thunk()` can reset the interrupt status in response to the first interrupt, so `canInterrupt.acquire()` doesn't throw an `InterruptedException`.\r\n\r\nI haven't thought too much about it, but maybe we can fix this if we `getAndSet` and invoke  `cb` in the `finally` block, before setting `done`? I'll wait to see what you come up with :)",
+        "createdAt" : "2020-08-10T05:42:02Z",
+        "updatedAt" : "2020-08-12T00:29:25Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e8dd8df5-580c-4121-8762-311c20bc6bc7",
+        "parentId" : "c1bcf839-1e99-4696-99c4-30567e698a6e",
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "I *believe* this case is actually handled! Note that the blocking operation is wrapped in a `try`/`finally` in which `done` is set to `true`. If the operation succeeds without being interrupted, then `cb` will be non-`null`, which will trip this conditional.",
+        "createdAt" : "2020-08-11T04:04:26Z",
+        "updatedAt" : "2020-08-12T00:29:25Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed1a50ec-b22f-4f23-8240-77da9e0fb711",
+        "parentId" : "c1bcf839-1e99-4696-99c4-30567e698a6e",
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "Here is the ordering that I'm concerned about:\r\n1. At line 64, the target releases the `Semaphore` permit.\r\n2. At line 65, the target runs the blocking operation.\r\n3. Concurrently, the fiber is cancelled. `trigger` runs, which sets `cb`, acquires the `Semaphore` permit, interrupts the target once, and releases the permit. It breaks out of the loop.\r\n4. The canceller runs `repeat`, and reaches line 136. At this point, `done` is set to `false` and `cb` is not null, so the conditional fails and the carrier thread for the canceller exits the `async`.\r\n5. The target thread receives the interrupt signal during its blocking operation, but (this is the key part!) it resets the interrupt status, so the interrupt signal is effectively suppressed! `cur.thunk()` returns normally.\r\n6. At line 69, the target thread acquires the `Semaphore` permit successfully because the interrupt status isn't set, and so `InterruptedException` isn't thrown.\r\n7. At line 84, the target thread reaches the `finally` block and sets `done` to true, but at this point it's too late.\r\n8. `cb` was never invoked, so the canceller is perpetually blocked.\r\n\r\nWhenever I'm pointing out these bugs, I should probably describe the interleaving of effects that produces a race condition. It makes it much easier for both of us to follow but also easier to point out if I'm wrong.",
+        "createdAt" : "2020-08-11T06:01:42Z",
+        "updatedAt" : "2020-08-12T00:29:25Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70d7ad03-1448-4a61-a3b0-79f6fbd19abe",
+        "parentId" : "c1bcf839-1e99-4696-99c4-30567e698a6e",
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "> The canceller runs repeat, and reaches line 136. At this point, done is set to false and cb is not null, so the conditional fails and the carrier thread for the canceller exits the async.\r\n>\r\n> The target thread receives the interrupt signal during its blocking operation, but (this is the key part!) it resets the interrupt status, so the interrupt signal is effectively suppressed! cur.thunk() returns normally.\r\n\r\nOoooooooh this is a nice catch. I agree it's a problem. I wonder if we can solve it without introducing more state…",
+        "createdAt" : "2020-08-11T15:01:45Z",
+        "updatedAt" : "2020-08-12T00:29:25Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f4a9282-c44b-4fb1-a0ba-9c2b481cc5b2",
+        "parentId" : "c1bcf839-1e99-4696-99c4-30567e698a6e",
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "See latest push. I think I fixed it. I realized that we don't have to *only* check the callback on `InterruptedException`",
+        "createdAt" : "2020-08-12T00:29:38Z",
+        "updatedAt" : "2020-08-12T00:29:39Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e9326e772361a933d08e2692896935b7e28c6a36",
+    "line" : 136,
+    "diffHunk" : "@@ -1,1 +134,138 @@            } else {\n              IO {\n                if (done.get() && cb.get() != null) {\n                  // this indicates that the blocking action completed *before* we registered the callback\n                  finCb(RightUnit) // ...so we just complete cancelation ourselves"
+  }
+]

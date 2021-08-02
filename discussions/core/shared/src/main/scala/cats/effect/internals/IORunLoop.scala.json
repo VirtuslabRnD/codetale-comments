@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "0219d79c-c37f-4a6c-9f42-e8fdbf64d0f2",
+    "prId" : 1077,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/1077#pullrequestreview-467746434",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "96cf3d9d-372b-412a-9cf7-adc58cbfca48",
+        "parentId" : null,
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "So the idea here is that a reference equality is probably a lot faster than substring searches. After we augment an exception, we append the augmentation marker which can be used for comparison later. Notice that because it is declared `private`, callers can't access it and therefore they can't accidentally insert a marker.\r\n\r\nThe consequence of this is that printed stack traces show the marker at the end. I verified that we can't insert `null` as a marker.\r\n```scala\r\njava.lang.Throwable: hello world!\r\n\tat org.simpleapp.examples.Main$.b(Main.scala:29)\r\n\tat org.simpleapp.examples.Main$.a(Main.scala:26)\r\n\tat org.simpleapp.examples.Main$.$anonfun$foo$11(Main.scala:39)\r\n\tat main$ @ org.simpleapp.examples.Main$.main(Main.scala:23)\r\n\tat map @ org.simpleapp.examples.Main$.$anonfun$foo$10(Main.scala:39)\r\n\tat flatMap @ org.simpleapp.examples.Main$.$anonfun$foo$8(Main.scala:37)\r\n\tat flatMap @ org.simpleapp.examples.Main$.$anonfun$foo$6(Main.scala:36)\r\n\tat flatMap @ org.simpleapp.examples.Main$.$anonfun$foo$4(Main.scala:35)\r\n\tat flatMap @ org.simpleapp.examples.Main$.$anonfun$foo$2(Main.scala:34)\r\n\tat flatMap @ org.simpleapp.examples.Main$.foo(Main.scala:33)\r\n\tat flatMap @ org.simpleapp.examples.Main$.program(Main.scala:44)\r\n\tat as @ org.simpleapp.examples.Main$.run(Main.scala:50)\r\n\tat main$ @ org.simpleapp.examples.Main$.main(Main.scala:23)\r\n\tat .(:0)\r\n```\r\n\r\nWe're also doing a lot of `Array` and `List` manipulation here. Without thinking about it more, I'm not sure what the most efficient approach is (do everything in `Array` or `List`, and when should we convert back to an array?).\r\n\r\nI'll benchmark this tomorrow so we have a concrete answer.",
+        "createdAt" : "2020-08-14T04:53:35Z",
+        "updatedAt" : "2020-08-14T05:10:07Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0ef6aaaf-181d-48f2-aab8-9e3d0a46e498",
+        "parentId" : "96cf3d9d-372b-412a-9cf7-adc58cbfca48",
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "I just realized that users *can* access an instance of the market, through the stack trace itself! I don't think it'll be a problem either way because they would have to be deliberately manipulating stack traces for something to mess up. Same deal with checking ` @ ` probably.",
+        "createdAt" : "2020-08-14T15:03:04Z",
+        "updatedAt" : "2020-08-14T15:03:04Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "75990aee-9f24-472c-8180-ac789ac00817",
+        "parentId" : "96cf3d9d-372b-412a-9cf7-adc58cbfca48",
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "> So the idea here is that a reference equality is probably a lot faster than substring searches. After we augment an exception, we append the augmentation marker which can be used for comparison later. Notice that because it is declared private, callers can't access it and therefore they can't accidentally insert a marker.\r\n\r\nHmm, I think this is worth benchmarking. In my experience, `indexOf` is *really* really fast, so I don't think there'll be that much of a difference, but I could be mistaken!",
+        "createdAt" : "2020-08-14T17:26:04Z",
+        "updatedAt" : "2020-08-14T17:26:04Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dd2f6057c640a3291ca31cef6b7fdce13278f7ba",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +372,376 @@    val stackTrace = ex.getStackTrace\n    if (!stackTrace.isEmpty) {\n      val augmented = stackTrace(stackTrace.length - 1) eq augmentationMarker\n      if (!augmented) {\n        val prefix = dropRunLoopFrames(stackTrace)"
+  },
+  {
+    "id" : "a9a7441b-709f-47c5-9dc3-0b77095068d9",
+    "prId" : 1077,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/1077#pullrequestreview-467746634",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1646c960-713e-4db5-8b9d-fe42c97eab4d",
+        "parentId" : null,
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "We will throw a NPE here if `ex` is null. I think that would break existing code that happen to rely on this behavior",
+        "createdAt" : "2020-08-14T05:11:33Z",
+        "updatedAt" : "2020-08-14T05:11:33Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37be6b5b-43ac-45d1-a3d5-4448d332843b",
+        "parentId" : "1646c960-713e-4db5-8b9d-fe42c97eab4d",
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "Do people actually run `raiseError(null)`? I think I'm pretty comfortable telling those people that they just have to turn off augmented exceptions, because they don't deserve nice things. :-P",
+        "createdAt" : "2020-08-14T17:26:22Z",
+        "updatedAt" : "2020-08-14T17:26:48Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dd2f6057c640a3291ca31cef6b7fdce13278f7ba",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +370,374 @@   */\n  private def augmentException(ex: Throwable, ctx: IOContext): Unit = {\n    val stackTrace = ex.getStackTrace\n    if (!stackTrace.isEmpty) {\n      val augmented = stackTrace(stackTrace.length - 1) eq augmentationMarker"
+  },
+  {
+    "id" : "478306ab-ec28-4c95-8c77-1ff97b234687",
+    "prId" : 886,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/886#pullrequestreview-421470648",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a9a0db0e-994c-421b-b66b-d585756a3a9d",
+        "parentId" : null,
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "I removed the bind stack check so all asynchronous run-loop instructions are just wrapped in an `Async` node, but that means there may be an redundant `Async` node inserted.\r\n\r\nAlternatively, we can create another method to suspend non-Async nodes (basically `ContextSwitch` right now), or just re-assign the mutable variables to an immutable value directly in the run-loop.",
+        "createdAt" : "2020-05-31T07:55:31Z",
+        "updatedAt" : "2020-05-31T21:02:18Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c59266d70768f529033aa11cee3d09ff4c791691",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +256,260 @@    // Encountered an instruction that can't be interpreted synchronously,\n    // so suspend it in an Async node that can be invoked later.\n    Async { (conn, cb) =>\n      loop(currentIO, conn, cb.asInstanceOf[Callback], null, bFirst, bRest)\n    }"
+  },
+  {
+    "id" : "5ddf8539-1b17-4e47-96dd-fdbf22aae372",
+    "prId" : 250,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/250#pullrequestreview-123842750",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "12ad0272-b7f4-4472-ba1b-7d1e1fddf866",
+        "parentId" : null,
+        "authorId" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "body" : "Curiosity: is this known to be faster in practice?  (I don't have a problem with it.)",
+        "createdAt" : "2018-05-29T02:49:52Z",
+        "updatedAt" : "2018-05-30T05:40:32Z",
+        "lastEditedBy" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1db178db-04c5-4005-8994-ee6d712b4813",
+        "parentId" : "12ad0272-b7f4-4472-ba1b-7d1e1fddf866",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "It's not faster, but I just replaced Scala's ArrayStack with my own, simpler implementation that doesn't have `nonEmpty` 🙂",
+        "createdAt" : "2018-05-29T04:03:17Z",
+        "updatedAt" : "2018-05-30T05:40:32Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d84b8c10c71f9e47332b2561aa15ef49654dc551",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +235,239 @@    // if we had previous `flatMap` operations then we need to resume\n    // the loop with the collected stack\n    if (bFirst != null || (bRest != null && !bRest.isEmpty))\n      Async { (conn, cb) =>\n        loop(currentIO, conn, cb.asInstanceOf[Callback], null, bFirst, bRest)"
+  }
+]

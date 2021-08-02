@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "d5ed6da7-c956-4245-ae7e-f56d6adea15a",
+    "prId" : 1194,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/1194#pullrequestreview-489094469",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9a65703f-e0ac-440d-bba9-0eeb4db909a4",
+        "parentId" : null,
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "*Deferring* `null` is what we should forbid. Here's what it looks like when you try this in CE2:\r\n\r\n```\r\n@ cats.effect.IO.suspend(null).unsafeRunSync() \r\nscala.MatchError: null\r\n  cats.effect.internals.IORunLoop$.cats$effect$internals$IORunLoop$$loop(IORunLoop.scala:83)\r\n  cats.effect.internals.IORunLoop$.$anonfun$suspendAsync$1(IORunLoop.scala:315)\r\n  cats.effect.internals.IORunLoop$.$anonfun$suspendAsync$1$adapted(IORunLoop.scala:314)\r\n  cats.effect.internals.IORunLoop$RestartCallback.start(IORunLoop.scala:439)\r\n  cats.effect.internals.IORunLoop$.cats$effect$internals$IORunLoop$$loop(IORunLoop.scala:155)\r\n  cats.effect.internals.IORunLoop$.start(IORunLoop.scala:37)\r\n  cats.effect.IO.unsafeRunAsync(IO.scala:274)\r\n  cats.effect.internals.IOPlatform$.unsafeResync(IOPlatform.scala:39)\r\n  cats.effect.IO.unsafeRunTimed(IO.scala:342)\r\n  cats.effect.IO.unsafeRunSync(IO.scala:256)\r\n  ammonite.$sess.cmd3$.<clinit>(cmd3.sc:1)\r\n```\r\n\r\nWe can probably do a `NullPointerException` instead, but tldr we should check for it. I believe the correct place to look is in the `FlatMap` hander. Specifically, if the `f` continuation returns `null`, we should raise an NPE.",
+        "createdAt" : "2020-09-15T21:20:36Z",
+        "updatedAt" : "2020-09-16T18:14:45Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a25160da7e90c49e07b31c7472e54b235e9e3b7d",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +216,220 @@\n      \"result in an NPE if deferring a null IO\" in ticked { implicit ticker =>\n        IO.defer(null)\n          .attempt\n          .map(_.left.toOption.get.isInstanceOf[NullPointerException]) must completeAs(true)"
+  },
+  {
+    "id" : "397027ec-3a99-4aaa-87ec-37776ae18d33",
+    "prId" : 1069,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/1069#pullrequestreview-464921334",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3edcfe34-3d4a-492b-9475-23a9499c847d",
+        "parentId" : null,
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "I think it would be worth adding a scalacheck test. Something like:\r\n\r\n```scala\r\nin ticked { implicit ticker =>\r\n  forAll { (ioa: IO[Int], f: Int => IO[Int], e: Throwable => IO[Int]) =>\r\n    ioa.attempt.flatMap(_.bitraverse(f, e)) === ioa.redeemWith(f, e)\r\n  }\r\n}\r\n```\r\n\r\nAnd maybe something similar for `redeem` and `attempt`. Just because I don't trust unit tests on this sort of thing. :-D",
+        "createdAt" : "2020-08-11T03:10:06Z",
+        "updatedAt" : "2020-08-13T16:18:35Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e0f9d21-10c6-483e-b494-1f2c24d18aef",
+        "parentId" : "3edcfe34-3d4a-492b-9475-23a9499c847d",
+        "authorId" : "566d094c-978a-46cc-94f5-bc87e03c9fd3",
+        "body" : "Done.",
+        "createdAt" : "2020-08-11T09:59:12Z",
+        "updatedAt" : "2020-08-13T16:18:35Z",
+        "lastEditedBy" : "566d094c-978a-46cc-94f5-bc87e03c9fd3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "08dfc336c1d833ee3bc6d9f8fd5627262291cb93",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +163,167 @@      IO.unit.redeem(_ => IO.pure(41), _ => throw ThrownException).attempt must completeAs(\n        Left(ThrownException))\n    }\n\n    \"start and join on a successful fiber\" in ticked { implicit ticker =>"
+  },
+  {
+    "id" : "7854f85f-6bad-4afd-bf51-ff9087c788b5",
+    "prId" : 998,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/998#pullrequestreview-455332569",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1325a876-e13e-441b-a667-a71a7a759b74",
+        "parentId" : null,
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "I think it's worth also adding the following test case:\r\n\r\n```scala\r\n\"never terminate when racing infinite cancels\" in ticked { implicit ticker =>\r\n  val test = IO.never.onCancel(IO.never).start flatMap { f => \r\n    IO.race(f.cancel, f.cancel)\r\n  }\r\n\r\n  test.void should nonTerminate\r\n}\r\n```\r\n\r\nThis gets a bit at part of what was changed, and also codifies in test-form one of the weirder consequences.",
+        "createdAt" : "2020-07-25T18:55:31Z",
+        "updatedAt" : "2020-07-26T04:34:08Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5825298-5b4e-451c-952a-3e3f8123c43a",
+        "parentId" : "1325a876-e13e-441b-a667-a71a7a759b74",
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "Needed to modify the test a little bit to ensure that the finalizer is registered before attempting cancellation.\r\n```scala\r\n \"never terminate when racing infinite cancels\" in ticked { implicit ticker =>\r\n      var started = false\r\n\r\n      val markStarted = IO { started = true }\r\n      lazy val cedeUntilStarted: IO[Unit] =\r\n        IO(started).ifM(IO.unit, IO.cede >> cedeUntilStarted)\r\n\r\n      val test = for {\r\n        f <- (markStarted *> IO.never).onCancel(IO.never).start\r\n        _ <- cedeUntilStarted\r\n        _ <- IO.race(f.cancel, f.cancel)\r\n      } yield ()\r\n\r\n      test should nonTerminate\r\n    }\r\n```\r\nI wonder if we should just use `Deferred` for asynchronous blocking",
+        "createdAt" : "2020-07-26T02:49:49Z",
+        "updatedAt" : "2020-07-26T04:34:08Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2eb0ca4f-ab72-4116-9553-bb4bd2bb48ff",
+        "parentId" : "1325a876-e13e-441b-a667-a71a7a759b74",
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "> I wonder if we should just use Deferred for asynchronous blocking\r\n\r\nI'm okay with that. :-) I had been using the busy-wait mostly because it reduces the surface area of problems when trying to minimize stuff, but `Deferred` is far simpler to work with in tests.",
+        "createdAt" : "2020-07-26T05:19:45Z",
+        "updatedAt" : "2020-07-26T05:19:46Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd829f56f89f4b114a6fc9609e5ac130e0ab98ba",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +598,602 @@      test must completeAs(())\n      success must beTrue\n    }\n\n    \"never terminate when racing infinite cancels\" in ticked { implicit ticker =>"
+  },
+  {
+    "id" : "e2314971-b194-4caa-8b39-5d66b0589dea",
+    "prId" : 962,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/962#pullrequestreview-451650623",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d5fabcf-f126-4c57-9937-ce231b9b53b9",
+        "parentId" : null,
+        "authorId" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "body" : "Poor man's `Deferred` 😂 ",
+        "createdAt" : "2020-07-20T04:51:11Z",
+        "updatedAt" : "2020-07-20T04:55:40Z",
+        "lastEditedBy" : "3b5d55eb-40d5-4d14-a8a4-3ed1601b5bff",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74a46a4d-fc53-4410-96c8-d104c36e8a78",
+        "parentId" : "7d5fabcf-f126-4c57-9937-ce231b9b53b9",
+        "authorId" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "body" : "LOL exactly",
+        "createdAt" : "2020-07-20T14:18:48Z",
+        "updatedAt" : "2020-07-20T14:18:49Z",
+        "lastEditedBy" : "5b44dcf3-8819-42b0-9a49-4cdbf5a8a305",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5084755d7b1dabc1081a9bb7311cd129e9361e94",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +534,538 @@      val markStarted = IO { started = true }\n      lazy val cedeUntilStarted: IO[Unit] =\n        IO(started).ifM(IO.unit, IO.cede >> cedeUntilStarted)\n\n      IO.uncancelable(_ => markStarted *> IO.never)"
+  }
+]

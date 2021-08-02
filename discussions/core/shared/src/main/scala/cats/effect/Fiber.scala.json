@@ -1,0 +1,189 @@
+[
+  {
+    "id" : "7fb1b99c-bf7a-4c28-a82c-038770667748",
+    "prId" : 311,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/311#pullrequestreview-147430149",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "parentId" : null,
+        "authorId" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "body" : "I thought `racePair` already guaranteed cancellation of the loser in case of error, is that not the case? If so the scaladoc needs changing\r\n\r\n```\r\nIf the first task completes in error, then the result will\r\ncomplete in error, the other task being canceled.\r\n```",
+        "createdAt" : "2018-08-18T08:37:11Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2bd262e9-6eb1-40e2-84df-cf8300751330",
+        "parentId" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "This here is an instance where `start` (and Fiber) are shown to be leaky abstractions.\r\n\r\nThe problem is that a `Fiber` is attached to an already running process, however with an auto-cancelable IO if the first task finishes *before* the second task is even started, then the second task is never executed and thus the cancellation of the fiber never goes through.",
+        "createdAt" : "2018-08-18T12:06:54Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "945d7b82-cd69-4176-94f2-ccbe8609ea59",
+        "parentId" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "Or in other words, what we have here is a gotcha related to Fiber not being pure. A Fiber is nothing more than a Future.",
+        "createdAt" : "2018-08-18T12:11:18Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "15dea418-aace-4e8e-8e5c-1ee73f1f36e6",
+        "parentId" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "authorId" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "body" : "I'm not following at all I'm afraid :(\r\n\r\n> auto-cancelable IO if the first task finishes before the second task is even started, then the second task is never executed and thus the cancellation of the fiber never goes through.\r\n\r\nthe cancellation of which fiber?",
+        "createdAt" : "2018-08-18T12:12:37Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bfcfc710-68cd-4d81-92c3-18f9de34766c",
+        "parentId" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "`race(task1, task2)` usually executes both tasks in parallel.\r\n\r\nHowever if `task1` finishes before the evaluation of `task2` is triggered, then `task2` is never executed.\r\n\r\nBy not executing `task2`, its finalizers are never registered.\r\n\r\nIf `task2` is a `fiber.join` however, we have a problem, because not executing `fiber.join` ensures that the fiber is never cancelled.",
+        "createdAt" : "2018-08-18T12:18:50Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa8254a9-9351-4a2a-8417-1b3bf2d4171e",
+        "parentId" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "This problem btw showed up in tests. Change the implementation to the old one and you’ll see `FiberTests` breaking.",
+        "createdAt" : "2018-08-18T12:20:42Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "302da7bc-07bb-4a74-a32b-4751957f85ae",
+        "parentId" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "authorId" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "body" : "Oh, I'm not saying that there isn't a problem and that the fix is incorrect :)\r\n\r\nI merely want to understand what the problem is, and more importantly figure out if it applies to `racePair` as a whole, since the current docs don't say anything about how it behaves wrt to cancellation, and perhaps this PR means that its semantics have changed or should change.\r\n\r\n> If task2 is a fiber.join however, we have a problem, because not executing fiber.join ensures that the fiber is never cancelled.\r\n\r\nWell, which fiber? `fa` or `fb`? Task2 is `fb.join`, do you mean that `fb` is never cancelled or that `fa` is never cancelled? (sorry for the thickness :) )",
+        "createdAt" : "2018-08-18T12:23:58Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "370c9ca4-ca5b-4959-883e-0c13683db101",
+        "parentId" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "authorId" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "body" : "~~Ok, I think I get what the problem is, but I feel like `racePair` is broken now, or at least its scaladoc is lying:~~\r\n\r\n> If the first task completes in error, then the result will complete in error, the other task being canceled.\r\n\r\n~~That should apply regardless of what `task` you pass to `racePair`, and `fa.join` shouldn't be different from any other `task`, yet this guarantee is broken and we need to insert another `guaranteeCase` manually. If feels it isn't `Fiber` that's a leaking abstraction, but `racePair`.~~\r\n~~I don't mind weakening `racePair` guarantees if it's unavoidable, but we need to document that.~~\r\n\r\n~~On a similar note, isn't `race` broken as well if the first task finishes before the second is even started?~~",
+        "createdAt" : "2018-08-18T12:30:16Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "87f64884-2351-49b4-b914-47cd29c9129f",
+        "parentId" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "authorId" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "body" : "Ok, I just typed that and realised why it's wrong ;)\r\n\r\n`racePair` ensures that the second task is cancelled, which I have confused with \"`fb.cancel` is called\", but that's an entirely different thing, because we are racing `fb.join`, not `fb`. The second task can be meaningfully cancelled by not running it at all. But even without auto-cancellable `IO`, not having that `fb.cancel` there is conceptually wrong. \r\nSorry for wasting your time.",
+        "createdAt" : "2018-08-18T12:37:00Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e679e4b-e394-4074-b943-bc5fe4c532bb",
+        "parentId" : "096779f4-5b49-4b0d-b250-f1ebb7b3ffde",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "Exactly, so with a Fiber you have to involve its “cancel” in a bracket, otherwise it’s wrong.\r\n\r\nNp, it took me some time to understand why the tests are failing.\r\n\r\nThis is a good example of  non-obvious specialization.",
+        "createdAt" : "2018-08-18T12:49:07Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2f0cc636b5ce3a0e66ca7fd41ef0afd7649bf57",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +93,97 @@      map2(ff, fa)(_(_))\n    final override def map2[A, B, Z](fa: Fiber[F, A], fb: Fiber[F, B])(f: (A, B) => Z): Fiber[F, Z] = {\n      val fa2 = F.guaranteeCase(fa.join) { case ExitCase.Error(_) => fb.cancel; case _ => F.unit }\n      val fb2 = F.guaranteeCase(fb.join) { case ExitCase.Error(_) => fa.cancel; case _ => F.unit }\n      Fiber("
+  },
+  {
+    "id" : "3d47c359-09db-4a0d-8ca4-950504b54108",
+    "prId" : 311,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/311#pullrequestreview-147430090",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e875c3fe-118b-4a81-bb67-a0c98bd76b76",
+        "parentId" : null,
+        "authorId" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "body" : "How is this any different from `*>` ?",
+        "createdAt" : "2018-08-18T08:37:33Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "58948c4e-9818-4172-88c4-fa5b142a2dfd",
+        "parentId" : "e875c3fe-118b-4a81-bb67-a0c98bd76b76",
+        "authorId" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "body" : "It’s not, that’s an artifact from me trying several variations of this.\r\n\r\nRace usage is regrettable for this operation, what we needed is `parMap2`.",
+        "createdAt" : "2018-08-18T12:12:53Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "efc45bfc-463c-4c9e-946d-ad472fabc9f0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6863183e-61e3-4f69-82ad-32fd5bc05328",
+        "parentId" : "e875c3fe-118b-4a81-bb67-a0c98bd76b76",
+        "authorId" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "body" : "It used to be `parMapN`, ~~but that's not what we need~~ but we can't use that, because that doesn't work for all `Parallel`",
+        "createdAt" : "2018-08-18T12:13:50Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6c2cbc7b-5f61-4e75-9aa8-33bde20cabca",
+        "parentId" : "e875c3fe-118b-4a81-bb67-a0c98bd76b76",
+        "authorId" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "body" : "~~`racePair` and then `join` the other should be equivalent to `parMapN`, and if it isn't  it suggests we might have a problem with `racePair` instead.~~",
+        "createdAt" : "2018-08-18T12:17:48Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dfe99037-d102-410c-a311-59cb254ffa67",
+        "parentId" : "e875c3fe-118b-4a81-bb67-a0c98bd76b76",
+        "authorId" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "body" : "The equivalence does hold I think, and in fact the old implementation with Parallel was this\r\n```scala\r\n (\t\t         \r\n      F.onError(fa.join)({case NonFatal(_) => fb.cancel}),\t\t         \r\n      F.onError(fb.join)({case NonFatal(_) => fa.cancel})\r\n).parMapN(f)\r\n```\r\n\r\nWhich still manually registers the finaliser (although that should probably be a `guarantee`)\r\nMy mistake was removing that when putting `racePair` in, by misunderstanding it's guarantees (it guarantees calling `fb.cancel` if we are racing `fb`, but we're racing `fb.join`) ",
+        "createdAt" : "2018-08-18T12:46:00Z",
+        "updatedAt" : "2018-08-19T22:14:52Z",
+        "lastEditedBy" : "a5a514ff-cd89-45cb-bcc8-796f0fa2a445",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2f0cc636b5ce3a0e66ca7fd41ef0afd7649bf57",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +100,104 @@          case Right((fiberA, b)) => (fiberA.join, b.pure[F]).mapN(f)\n        },\n        F.map2(fa.cancel, fb.cancel)((_, _) => ()))\n    }\n    final override def product[A, B](fa: Fiber[F, A], fb: Fiber[F, B]): Fiber[F, (A, B)] ="
+  }
+]

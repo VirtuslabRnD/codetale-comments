@@ -1,0 +1,266 @@
+[
+  {
+    "id" : "36d8b646-973a-4004-b3a9-4ae9e837551b",
+    "prId" : 237,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/237#pullrequestreview-123509436",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "64455ee5-a390-4f53-a126-e1c318cf7b9e",
+        "parentId" : null,
+        "authorId" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "body" : "This law looks correct—It waits until both `loserA` and `loserB` are inside `use` of `bracket`, and then interrupts them, which should result in both finalizers being invoked, completing the promises, and allowing resumption of the final two lines of the for comprehension.",
+        "createdAt" : "2018-05-25T20:50:02Z",
+        "updatedAt" : "2018-05-28T20:31:19Z",
+        "lastEditedBy" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f432bc932d668a1bf30f9b4fd7ad763609c7efc7",
+    "line" : 65,
+    "diffHunk" : "@@ -1,1 +274,278 @@      _ <- s.acquireN(2L) *> race.cancel\n      a <- pa.get\n      b <- pb.get\n    } yield f(a, b)\n"
+  },
+  {
+    "id" : "501b7442-e81e-49f5-a038-5110efd351ea",
+    "prId" : 237,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/237#pullrequestreview-123546263",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "79ccd517-8be6-4f97-954c-b55c8e100aeb",
+        "parentId" : null,
+        "authorId" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "body" : "This looks correct to me. The winner cannot complete until the loser enters `use`, which means canceling the loser must complete `effect` with `b`.\r\n\r\nI am confused, however, at why you are calling `attempt` on `race`. I would delete both this and the `case Left(_)`, because it can mask bugs.\r\n\r\nNote that if you have the guarantee that `cancel` will not resume until the action is actually canceled (as with Scalaz 8), you can simplify this code and use a `Ref` instead of a `Deferred`.",
+        "createdAt" : "2018-05-25T20:56:22Z",
+        "updatedAt" : "2018-05-28T20:31:19Z",
+        "lastEditedBy" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d6e6695b-f625-4f44-8a45-414841b5fc7f",
+        "parentId" : "79ccd517-8be6-4f97-954c-b55c8e100aeb",
+        "authorId" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "body" : "See above for why `attempt` and why `Deferred`.",
+        "createdAt" : "2018-05-26T03:54:22Z",
+        "updatedAt" : "2018-05-28T20:31:19Z",
+        "lastEditedBy" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f432bc932d668a1bf30f9b4fd7ad763609c7efc7",
+    "line" : 99,
+    "diffHunk" : "@@ -1,1 +237,241 @@          effect.get\n      }\n    } yield b\n    received <-> F.pure(b)\n  }"
+  },
+  {
+    "id" : "baac87fa-79a6-4eff-b859-6c710dd192be",
+    "prId" : 237,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/237#pullrequestreview-123546263",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ea124389-bd71-42d2-b32d-c09048bdc781",
+        "parentId" : null,
+        "authorId" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "body" : "This code looks correct to me. The race will not be canceled until both losers are in `use`, which means the promises must be completed with `a` and `b`.\r\n\r\nNote that if you have the guarantee that cancel will not resume until the action is actually canceled (as with Scalaz 8), you can simplify this code and use a `Ref` instead of a `Deferred`.",
+        "createdAt" : "2018-05-25T20:57:49Z",
+        "updatedAt" : "2018-05-28T20:31:19Z",
+        "lastEditedBy" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "610b9b30-f4b4-41d3-8616-70a5fd3f4736",
+        "parentId" : "ea124389-bd71-42d2-b32d-c09048bdc781",
+        "authorId" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "body" : "From `Fiber#cancel`\r\n> Returns a new task that will complete when the cancellation is sent (but not when it is observed or acted upon).\r\n\r\n`Deferred` is necessary to support this weaker guarantee of what has occurred before `cancel` completes.",
+        "createdAt" : "2018-05-26T03:54:06Z",
+        "updatedAt" : "2018-05-28T20:31:19Z",
+        "lastEditedBy" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f432bc932d668a1bf30f9b4fd7ad763609c7efc7",
+    "line" : 64,
+    "diffHunk" : "@@ -1,1 +188,192 @@      race <- F.start(F.race(loserA, loserB))\n      _ <- s.acquireN(2L) *> race.cancel\n      a <- pa.get\n      b <- pb.get\n    } yield f(a, b)"
+  },
+  {
+    "id" : "2c43ad91-84c3-421e-96ed-1db17e107aa1",
+    "prId" : 237,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/237#pullrequestreview-123546263",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "20cfd68c-4a0b-4935-86e8-73d4e5a6e715",
+        "parentId" : null,
+        "authorId" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "body" : "Modulo the spurious `attempt`, which is not needed (AFAIK), and could mask bugs, this looks correct. The winner cannot succeed until the loser is in `use`, which means `effect` must be completed with `b`.",
+        "createdAt" : "2018-05-25T21:01:02Z",
+        "updatedAt" : "2018-05-28T20:31:19Z",
+        "lastEditedBy" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f2f36c1-03f9-465c-a993-c80cfe607b02",
+        "parentId" : "20cfd68c-4a0b-4935-86e8-73d4e5a6e715",
+        "authorId" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "body" : "From `Concurrent#race`\r\n> Run two tasks concurrently and return the first to finish, either in success or error. The loser of the race is canceled.\r\n\r\n`attempt` is needed to ensure that the loser is canceled if the winner raised an error.",
+        "createdAt" : "2018-05-26T03:51:19Z",
+        "updatedAt" : "2018-05-28T20:31:19Z",
+        "lastEditedBy" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f432bc932d668a1bf30f9b4fd7ad763609c7efc7",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +175,179 @@\n      b <- F.attempt(race) *> effect.get\n    } yield b\n    received <-> F.pure(b)\n  }"
+  },
+  {
+    "id" : "8e2e816e-96a2-4f28-ab85-f50b1ea7f694",
+    "prId" : 237,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/237#pullrequestreview-123546263",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "aa99094b-ab61-441a-b5a4-0514578e316b",
+        "parentId" : null,
+        "authorId" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "body" : "I am not sure if this is correct, but it is certainly different. In Scalaz 8, joining an interrupted fiber results in interruption (this is required both by laws and types). ",
+        "createdAt" : "2018-05-25T21:04:02Z",
+        "updatedAt" : "2018-05-28T20:31:19Z",
+        "lastEditedBy" : "48fedc4e-e172-4fdb-b3c7-151c746edaf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62201096-8529-44e4-8cbf-c3b3651274f8",
+        "parentId" : "aa99094b-ab61-441a-b5a4-0514578e316b",
+        "authorId" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "body" : "This is correct for the `cats.effect.Fiber`.  From `Concurrent#onCancelRaiseError`:\r\n\r\n> This `onCancelRaiseError` operator transforms any task into one that on cancellation will terminate with the given error, thus transforming potentially non-terminating tasks into ones that yield a certain error.",
+        "createdAt" : "2018-05-26T03:49:58Z",
+        "updatedAt" : "2018-05-28T20:31:19Z",
+        "lastEditedBy" : "19f1b7b0-eaed-49a1-9ac5-80ac65598c75",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f432bc932d668a1bf30f9b4fd7ad763609c7efc7",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +131,135 @@        never = F.onCancelRaiseError(F.bracket(s.release)(_ => F.never[A])(_ => F.unit), e)\n        fiber <- F.start(never)\n        _ <- s.acquire *> fiber.cancel\n        r <- fiber.join\n      } yield r"
+  },
+  {
+    "id" : "4199e037-1b07-4d4c-8af4-139e1b5ac267",
+    "prId" : 204,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/204#pullrequestreview-118459783",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8e65b99c-f7c8-4096-93ed-15a75684ab61",
+        "parentId" : null,
+        "authorId" : "b93e2985-c394-41e6-a036-b46320cfbf21",
+        "body" : "Just in the comments can you remind me why some times we lift to IO but sometimes work directly with F? I couldn’t see the pattern.",
+        "createdAt" : "2018-05-08T16:10:06Z",
+        "updatedAt" : "2018-05-08T16:10:45Z",
+        "lastEditedBy" : "b93e2985-c394-41e6-a036-b46320cfbf21",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "990749ac-19b6-4aae-9963-08cdb76a2f95",
+        "parentId" : "8e65b99c-f7c8-4096-93ed-15a75684ab61",
+        "authorId" : "e856ded5-89e9-4e09-937c-311c66e1f1a6",
+        "body" : "Yeah, the issue is `F.cancelable` requires us to return the effect to run upon cancelation as an `IO[Unit]`. In these tests, we are completing defered values from that effect, which makes us have to use a `Deferred[IO, Unit]`. So then we have to `liftIO` when blocking on those deferred values.",
+        "createdAt" : "2018-05-08T17:32:02Z",
+        "updatedAt" : "2018-05-08T17:32:02Z",
+        "lastEditedBy" : "e856ded5-89e9-4e09-937c-311c66e1f1a6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dffb48363232e3caf9f4733284dfdf27c4a10bb1",
+    "line" : 200,
+    "diffHunk" : "@@ -1,1 +226,230 @@      race <- F.start(F.racePair(loserA, loserB))\n      _ <- race.cancel\n      a <- F.liftIO(pa.get)\n      b <- F.liftIO(pb.get)\n    } yield f(a, b)"
+  },
+  {
+    "id" : "06117d9a-cb72-480a-9984-2b3b3684c4d9",
+    "prId" : 204,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/204#pullrequestreview-118484132",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e031a3fb-df91-4548-b97c-bc34ed0f52ff",
+        "parentId" : null,
+        "authorId" : "b93e2985-c394-41e6-a036-b46320cfbf21",
+        "body" : "@mpilquist I hear you about the get cases, but here it isn't clear. Why not `Deferred[F, A]` here?",
+        "createdAt" : "2018-05-08T18:01:10Z",
+        "updatedAt" : "2018-05-08T18:01:10Z",
+        "lastEditedBy" : "b93e2985-c394-41e6-a036-b46320cfbf21",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "07cee110-5e99-4f3a-ba0c-4645cc582e4b",
+        "parentId" : "e031a3fb-df91-4548-b97c-bc34ed0f52ff",
+        "authorId" : "e856ded5-89e9-4e09-937c-311c66e1f1a6",
+        "body" : "On the next line, we have:\r\n```scala\r\nval async = F.cancelable[Unit](_ => effect.complete(a))\r\n```\r\n\r\n`F.cancelable` requires `effect.complete(a)` to have type `IO[Unit]`, which means `effect` must have type `Deferred[IO, A]`.",
+        "createdAt" : "2018-05-08T18:07:51Z",
+        "updatedAt" : "2018-05-08T18:07:52Z",
+        "lastEditedBy" : "e856ded5-89e9-4e09-937c-311c66e1f1a6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a21116c-3f8c-4b8a-af5c-8a56418e78d9",
+        "parentId" : "e031a3fb-df91-4548-b97c-bc34ed0f52ff",
+        "authorId" : "b93e2985-c394-41e6-a036-b46320cfbf21",
+        "body" : "ahhh. yeah, sorry... duh. I somehow imagined this was converting to `Deferred[F, A]` but forgot this is not possible. We need a bijective natural transformation from `F <~> IO` to do a conversion, and we don't actually have that method.",
+        "createdAt" : "2018-05-08T18:38:10Z",
+        "updatedAt" : "2018-05-08T18:38:10Z",
+        "lastEditedBy" : "b93e2985-c394-41e6-a036-b46320cfbf21",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dffb48363232e3caf9f4733284dfdf27c4a10bb1",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +55,59 @@\n  def asyncCancelableReceivesCancelSignal[A](a: A) = {\n    val lh = F.liftIO(Deferred[IO, A]).flatMap { effect =>\n      val async = F.cancelable[Unit](_ => effect.complete(a))\n      F.start(async).flatMap(_.cancel) *> F.liftIO(effect.get)"
+  },
+  {
+    "id" : "6ce28fc6-57b9-4f65-940f-eb1fe8b4f18b",
+    "prId" : 204,
+    "prUrl" : "https://github.com/typelevel/cats-effect/pull/204#pullrequestreview-118473262",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d884b7bd-609c-4731-8808-8160025eecdc",
+        "parentId" : null,
+        "authorId" : "b93e2985-c394-41e6-a036-b46320cfbf21",
+        "body" : "@mpilquist And here. why do we not do `Deferred[F, A]`",
+        "createdAt" : "2018-05-08T18:01:58Z",
+        "updatedAt" : "2018-05-08T18:01:59Z",
+        "lastEditedBy" : "b93e2985-c394-41e6-a036-b46320cfbf21",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa1c9f59-a057-40f1-ad46-5d0048df6353",
+        "parentId" : "d884b7bd-609c-4731-8808-8160025eecdc",
+        "authorId" : "e856ded5-89e9-4e09-937c-311c66e1f1a6",
+        "body" : "Same as previous example -- `F.cancelable` is the root cause.",
+        "createdAt" : "2018-05-08T18:08:14Z",
+        "updatedAt" : "2018-05-08T18:08:14Z",
+        "lastEditedBy" : "e856ded5-89e9-4e09-937c-311c66e1f1a6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dffb48363232e3caf9f4733284dfdf27c4a10bb1",
+    "line" : 73,
+    "diffHunk" : "@@ -1,1 +82,86 @@\n  def uncancelablePreventsCancelation[A](a: A) = {\n    val lh = F.liftIO(Deferred[IO, A]).flatMap { p =>\n      val async = F.cancelable[Unit](_ => p.complete(a))\n      F.start(F.uncancelable(async)).flatMap(_.cancel) *> F.liftIO(p.get)"
+  }
+]
