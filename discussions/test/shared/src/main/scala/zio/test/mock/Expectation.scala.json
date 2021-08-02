@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "cc7961b7-ef01-4bd6-8a56-05f02214a3b4",
+    "prId" : 2000,
+    "prUrl" : "https://github.com/zio/zio/pull/2000#pullrequestreview-305100622",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d00d85c-283a-4123-8438-3c7e24098676",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Should we put this in some separate object that can be optionally imported like `ZIOSyntax`? I understand why you want to have it for a more convenient API but using implicits, especially implicit conversions as opposed to implicit syntax and implicit conversions that are automatically imported when you import a top level object, seems like an anti-pattern for ZIO.\r\n\r\nAlternatively. What if we just have syntax that adds a `provideExpectation` method on `ZIO` that would take an expectation, convert it to a mock environment, and then provide that to the effect. I think that would have the same benefits for usability but have less of the \"magic\" of implicit conversions.",
+        "createdAt" : "2019-10-21T11:17:21Z",
+        "updatedAt" : "2019-10-22T08:01:53Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6bb5dae3-9af6-481b-b613-b394a6f68f4a",
+        "parentId" : "3d00d85c-283a-4123-8438-3c7e24098676",
+        "authorId" : "73db70fa-89e1-4c46-9a34-73cfc3db7d43",
+        "body" : "I've put it in `Expectation` on purpose. I'd like that implicit to be always available without the user haveing to import it. Basically, it allows to use the for-comprehension builder directly in `provideManaged`.\r\n\r\nI don't think we should introduce a seperate `provideExpectation` for this.\r\nThe `Expectation` structure is supposed to be only a supporting builder, it's always going to be converted to managed environment. While I understand that haveing implicit magic is not always the best experience for the user, in this case I believe its beneficial:\r\n* the user always wants to perform this conversion\r\n* the user does not have to import anything, this conversion will always be in scope becouse it's placed in`Expectation`'s companion object\r\n* the implicit conversion is total -> for every expectation it will yield a managed env\r\n* there is no scenario where the user might want to perform this conversion with a diffrent implementation -> given a set of expectations there is only one way to return a valid mocked environment that corresponds to them\r\n\r\nTo summarize: this is to reduce the boilerplate and should be transparent to the user.",
+        "createdAt" : "2019-10-21T11:49:22Z",
+        "updatedAt" : "2019-10-22T08:01:53Z",
+        "lastEditedBy" : "73db70fa-89e1-4c46-9a34-73cfc3db7d43",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c5309ea4-63d6-4302-8968-b865c90a4931",
+        "parentId" : "3d00d85c-283a-4123-8438-3c7e24098676",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Those are great points. I'll defer to you on this one. I was just thinking if you go back to the examples you currently have:\r\n\r\n```scala\r\ntestM(\"expect call returning output\") {\r\n  val app     = clock.nanoTime\r\n  val mockEnv = MockClock.nanoTime returns value(1000L)\r\n  val result  = app.provideManaged(mockEnv)\r\n  assertM(result, equalTo(1000L))\r\n},\r\n```\r\n\r\nWhere the implicit conversion is necessary to make the call to `provideManaged` work. With a `provideMock` syntax method you could instead write this as:\r\n\r\n```scala\r\ntestM(\"expect call returning output\") {\r\n  val app     = clock.nanoTime\r\n  val mockEnv = MockClock.nanoTime returns value(1000L)\r\n  val result  = app.provideMock(mockEnv)\r\n  assertM(result, equalTo(1000L))\r\n}\r\n```\r\n\r\nAt least to me that seems as convenient and maybe even has some value in clarifying intent that you are providing a mock implementation which behaves significantly differently than other implementations.\r\n\r\nBut happy to do what you think makes sense. I don't know this as well as you so maybe there are other use cases where this would not work as well.",
+        "createdAt" : "2019-10-21T16:59:14Z",
+        "updatedAt" : "2019-10-22T08:01:53Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "60991929-e8f6-4ffa-a326-d62e8a1a1f3d",
+        "parentId" : "3d00d85c-283a-4123-8438-3c7e24098676",
+        "authorId" : "73db70fa-89e1-4c46-9a34-73cfc3db7d43",
+        "body" : "Let me sleep with this one, I'll think about possible use cases and if provideMock solves them.",
+        "createdAt" : "2019-10-21T19:48:44Z",
+        "updatedAt" : "2019-10-22T08:01:53Z",
+        "lastEditedBy" : "73db70fa-89e1-4c46-9a34-73cfc3db7d43",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f84667c2-14d5-4879-8011-9b3de1473140",
+        "parentId" : "3d00d85c-283a-4123-8438-3c7e24098676",
+        "authorId" : "73db70fa-89e1-4c46-9a34-73cfc3db7d43",
+        "body" : "I think we should leave it as is. To introduce `provideMock` we'd have to modify `ZIO` which is in `core`, while `Expectation` is in `test`. We could ofcourse extend `ZIO` via implicit class, but... that would trade one implicit for another, so there is no point.\r\n\r\nThe other solution would be to move Expectation from `test` to `core`, but I feel thats not a good idea too.\r\n\r\nRegarding the use cases I have some ideas what else could be improved, but nothing concrete yet, so let's merge it as is, and if I come up with some better design I'll put that into next PR.",
+        "createdAt" : "2019-10-22T08:06:39Z",
+        "updatedAt" : "2019-10-22T08:06:40Z",
+        "lastEditedBy" : "73db70fa-89e1-4c46-9a34-73cfc3db7d43",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "50f73c78-83b2-430c-a3b8-7839d32a23e9",
+        "parentId" : "3d00d85c-283a-4123-8438-3c7e24098676",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Okay. I think if we went with `provideMock` we would definitely want to do it as a syntax class the user could import, something like `zio.test.mock.syntax._` analogous to `zio.syntax._`. That would avoid changing anything in `core`.\r\n\r\nYou're right we would still have an implicit but I think an implicit syntax class is better than an implicit conversion from a ZIO perspective. It just gives the user an additional method they can call on something versus \"magically\" changing types. I think that is reflected in how there is some optional implicit syntax in ZIO today, for example in `ZIOSyntax` but to my knowledge there is no use of implicit conversions.\r\n\r\nI'm okay with keeping it as is but just wanted to make sure I was clear about what I was proposing.",
+        "createdAt" : "2019-10-22T10:24:48Z",
+        "updatedAt" : "2019-10-22T10:24:48Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "901a54629a9e9a8d790d34867518228e76fb637c",
+    "line" : 175,
+    "diffHunk" : "@@ -1,1 +188,192 @@   * Implicitly converts Expectation to ZManaged mock environment.\n   */\n  implicit final def toManagedEnv[M, E, A](\n    expectation: Expectation[M, E, A]\n  )(implicit mockable: Mockable[M]): Managed[Nothing, M] ="
+  }
+]

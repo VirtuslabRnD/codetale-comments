@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "8d5184d0-adf5-49f8-818b-ebc321befb7f",
+    "prId" : 2594,
+    "prUrl" : "https://github.com/zio/zio/pull/2594#pullrequestreview-343429597",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "08524dc7-169d-40a2-ac1a-b51809ca2c07",
+        "parentId" : null,
+        "authorId" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "body" : "@jdegoes @adamgfraser \r\nPlease do not use TypeTags, they don't work!\r\n\r\n1. `scala-reflect` is not thread-safe at all, see - https://github.com/scala/bug/issues/10766, under any kind of concurrency, it will break, in our case even surrounding every use with a lock didn't remove all random failures. You may experience any kind of random data corruption and false positives anywhere, e.g. `Set[Int]` may be printed as `Set[String]` on a bad day (that happened)\r\n2. `equals` is pointer equality, if it works here – it's only because of scala-reflect's caching. But there are many ways to obtain equal types with different identities that will fail `equals`. You must use `=:=` – but `=:=` may be noticeably slow. Also, `=:=` does not obey `equals-hashCode` contract, if you use HashMaps, they will be inconsistent, if you use a ListMap they wil be slow – pick your poison \r\n3. TypeTags have a large impact on compile-times. Each type tag splices about 25 lines of mutable initialization logic – it's not even a macro call, it's intrinsic, but it manages to be massively slower than LightTypeTag due to just the size of the tree. (LightTypeTag splices just two string literals)\r\n4. `scala-reflect` takes multiple seconds to initialize\r\n5. Doesn't work on JS\r\n6. Doesn't work on dotty, but dotty's alternative `tasty-reflect` needs the entire compiler on the classpath, takes even longer to initialize.\r\n\r\nIn Izumi we ditched scala-reflect and made `LightTypeTag` – and an entire Universe of problems went away (pun intended), they solve all of the above problems except dotty support – for now. They support subtype checks and refinement unpacking used here in `taggedIsSubtype` & `taggedGetHasServices`. (although I think these are a bad idea – a list of types is better collected with a macro at compile time, that way a simpler version of type tags without inheritance data can be used).\r\nThey also support construction from partially-known types, so the following will work:\r\n\r\n```scala\r\nimport izumi.fundamentals.reflection.tags.TagKK\r\n\r\ndef getSvc[F[_, _]: TagKK]: URIO[Has[Service[F]], Service[F]] = ZIO.access(_.get[Service[F]])\r\n```\r\n\r\nWhere Tag for Service[F] is combined from the known monomorphic `Service[_]` constructor + `TagKK[F]` implicit evidence for unknown polymorphic type.\r\n\r\nI'm surprised because I thought you knew about this library since you read the [blog post](https://blog.7mind.io/lightweight-reflection.html) before, but anyway, this is the exact problem that it's created to address, so I think it's a good idea to use it.\r\n\r\n[1] Tag API – https://github.com/7mind/izumi/blob/develop/fundamentals/fundamentals-reflection/src/main/scala/izumi/fundamentals/reflection/Tags.scala\r\n[2] LightTypeTag API – https://github.com/7mind/izumi/blob/develop/fundamentals/fundamentals-reflection/src/main/scala/izumi/fundamentals/reflection/macrortti/LightTypeTag.scala",
+        "createdAt" : "2020-01-11T23:58:10Z",
+        "updatedAt" : "2020-01-15T18:19:35Z",
+        "lastEditedBy" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "55063efd-9103-4f97-b18e-ff0b40f13364",
+        "parentId" : "08524dc7-169d-40a2-ac1a-b51809ca2c07",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Would you be willing to donate and help integrate LightTypeTag for Scala 2.x?",
+        "createdAt" : "2020-01-12T01:34:46Z",
+        "updatedAt" : "2020-01-15T18:19:35Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "50a0b424-4e16-4168-9f17-c173995dc5fd",
+        "parentId" : "08524dc7-169d-40a2-ac1a-b51809ca2c07",
+        "authorId" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "body" : "@jdegoes\nYeah, if we extract it into `zio/izumi-reflect`, then zio core can depend on it - is that what you have in mind?",
+        "createdAt" : "2020-01-14T00:14:58Z",
+        "updatedAt" : "2020-01-15T18:19:35Z",
+        "lastEditedBy" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "019bf273-e21b-432a-801f-b832cb05403e",
+        "parentId" : "08524dc7-169d-40a2-ac1a-b51809ca2c07",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "If we \"move\" it into ZIO then we can strip it down to the bare minimum of what we need, which could reduce sizes. Could that work?",
+        "createdAt" : "2020-01-14T23:04:25Z",
+        "updatedAt" : "2020-01-15T18:19:35Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "250108c2-f186-41f1-82d1-a26c03baa1c3",
+        "parentId" : "08524dc7-169d-40a2-ac1a-b51809ca2c07",
+        "authorId" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "body" : "@jdegoes \r\nYou mean copypaste an altered version directly into this repository? That would mean having to maintain two slightly different copies of the same codebase and would double the maintenance effort, so I don't think that can work very well. Re: sizes, LTT jar is currently 1 MB, most of which is macros, vs. scala-reflect's 3.5 MB – and Scala.js eliminates all unreachable code, so I would expect only a fraction of that to make into output JS.",
+        "createdAt" : "2020-01-15T02:30:47Z",
+        "updatedAt" : "2020-01-15T18:19:35Z",
+        "lastEditedBy" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dbc3d5c8-ae64-4427-9bee-1b979593b011",
+        "parentId" : "08524dc7-169d-40a2-ac1a-b51809ca2c07",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "All right, let's pull the whole thing into ZIO and publish as a separate JAR. That work?",
+        "createdAt" : "2020-01-15T18:28:58Z",
+        "updatedAt" : "2020-01-15T18:28:58Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3f4ce8cf7b90807868c13938a6d51a1cd0fb0da0",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +20,24 @@  import scala.reflect.runtime.universe._\n\n  type Tagged[A] = TypeTag[A]\n  type TagType   = Type\n"
+  }
+]

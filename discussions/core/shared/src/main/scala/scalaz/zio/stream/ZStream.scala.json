@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "f73db4c7-910a-4c2e-a3b4-9d8478a0337b",
+    "prId" : 682,
+    "prUrl" : "https://github.com/zio/zio/pull/682#pullrequestreview-219293420",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4c2cd7b3-067d-4aa6-8225-05ab6d4d4323",
+        "parentId" : null,
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "This will return `extractNeeded = true` to the fold when the sink is saying that it needs more data. Should this be `false` here?",
+        "createdAt" : "2019-03-22T13:32:56Z",
+        "updatedAt" : "2019-03-25T10:33:54Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "00321b53-cb02-4f3c-8d7d-eb6cf7be9302",
+        "parentId" : "4c2cd7b3-067d-4aa6-8225-05ab6d4d4323",
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "Also, if you could add a test that uses a sink that requires more than one element until it finishes, it'd be great.",
+        "createdAt" : "2019-03-22T13:34:08Z",
+        "updatedAt" : "2019-03-25T10:33:54Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c79d5438-7c30-43bb-8782-1235f3d2975c",
+        "parentId" : "4c2cd7b3-067d-4aa6-8225-05ab6d4d4323",
+        "authorId" : "d658ecdb-5876-4c2e-b729-b795b39dd4e8",
+        "body" : "The understanding I reached is that `feed` has three cases:\r\n\r\n1. Sink says done, no remainder: emit downstream and exit back to the upstream fold (`f0`)\r\n2. Sink says done, with remainder: emit downstream and loop `feed` again with the remainder\r\n3. Sink says more: exit back to the upstream fold with the new state\r\n\r\nIn cases 1 and 2, `feed` itself does the `extract` and call to `f` to emit. In case 3, you're right that we don't want to call `extract`, _except_ in the case where the upstream runs dry, at which point you have no option but to `extract` and emit what you have, which is what the `extract.flatMap(f…)` at the end of the method seems to be for. So I guess `extractNeeded = true` means \"do a final extract and emit if the input runs out\".\r\n\r\nI can add the multiple element test 👍 ",
+        "createdAt" : "2019-03-23T03:38:01Z",
+        "updatedAt" : "2019-03-25T10:33:54Z",
+        "lastEditedBy" : "d658ecdb-5876-4c2e-b729-b795b39dd4e8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66b1d22a-b568-46f4-9255-9f426f49f0f0",
+        "parentId" : "4c2cd7b3-067d-4aa6-8225-05ab6d4d4323",
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "@quelgar - sorry, I must be misunderstanding. This branch says that the sink requires more data. `true` is returned from `feed` which causes the `extract` to happen on line 551. Could you explain why this is correct?",
+        "createdAt" : "2019-03-26T12:03:35Z",
+        "updatedAt" : "2019-03-26T12:03:35Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "138c3ddb-31c5-4d41-ba00-8153c8605b90",
+        "parentId" : "4c2cd7b3-067d-4aa6-8225-05ab6d4d4323",
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "Oh and I agree with your analysis in the comment, it just doesn't seem to be reflected in the code.",
+        "createdAt" : "2019-03-26T12:11:42Z",
+        "updatedAt" : "2019-03-26T12:11:43Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "55344582-d5bc-4e35-94aa-90e02afd40d1",
+        "parentId" : "4c2cd7b3-067d-4aa6-8225-05ab6d4d4323",
+        "authorId" : "d658ecdb-5876-4c2e-b729-b795b39dd4e8",
+        "body" : "I believe it's correct because the `extract` at 551 only happens after the `self.fold` has completed, meaning the upstream cannot provide any more elements to us (right?). So the situation is the sink has asked for more data, but there isn't any more to give. In that case line 551 just extracts whatever we have (which might well fail for certain sink implementations).\r\n\r\nIn the more typical case, where the sink asks for more and the upstream _can_ provide more, then the `self.fold` keeps looping, line 551 isn't reached, and the boolean returned by `feed` is ignored completely.\r\n",
+        "createdAt" : "2019-03-26T23:04:58Z",
+        "updatedAt" : "2019-03-26T23:04:59Z",
+        "lastEditedBy" : "d658ecdb-5876-4c2e-b729-b795b39dd4e8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "115078f8-fade-4566-8f3f-8c964739ef27",
+        "parentId" : "4c2cd7b3-067d-4aa6-8225-05ab6d4d4323",
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "Yes, entirely true! Sorry for this dragging along. This is what happens when reviewing without checking out the code locally.",
+        "createdAt" : "2019-03-27T07:04:24Z",
+        "updatedAt" : "2019-03-27T07:04:24Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6aaeb705f6e9118e44407fc8802ef74ab30ef4b8",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +524,528 @@            sink.stepChunk(s1, a).flatMap { step =>\n              if (ZSink.Step.cont(step)) {\n                IO.succeed((ZSink.Step.state(step), s2, true))\n              } else {\n                sink.extract(ZSink.Step.state(step)).flatMap { c =>"
+  }
+]

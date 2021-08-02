@@ -1,0 +1,189 @@
+[
+  {
+    "id" : "1c6e7292-52db-4491-ba9d-bc248e40ef83",
+    "prId" : 2009,
+    "prUrl" : "https://github.com/zio/zio/pull/2009#pullrequestreview-304928546",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5bdd18f5-cf17-429b-aae4-6594395e4134",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "I would use `TestClock.setTime(0.hours)` here. I think the reason you were having issues with some of these tests is that the testing framework provides a separate copy of the `TestEnvironment` to each test, but that environment is shared between successive invocations of the same test via `nonFlaky`. So like in this test on the first run the clock time will start at 0 hours and then you will sleep until the time is 10 hours. But on the second run the clock time will start at 11 hours so now an effect that sleeps for 10 hours will immediately run.\r\n\r\nI think if you generally use the `TestClock` in the `TestEnvironment` and set the time to zero as your first action in any test where you are using `nonFlaky` that should get you to a pretty good place.",
+        "createdAt" : "2019-10-21T12:04:38Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "962d770b-fe19-4072-bf4d-3fc8cf7a85c2",
+        "parentId" : "5bdd18f5-cf17-429b-aae4-6594395e4134",
+        "authorId" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "body" : ">... the testing framework provides a separate copy of the TestEnvironment to each test, but that environment is shared between successive invocations of the same test via nonFlaky.\r\n\r\nThis is handy to know. I'll add a note to the aspect doco. seems like a good case for `@@ after(setTime(0.hours))`\r\n\r\n> So like in this test on the first run the clock time will start at 0 hours and then you will sleep until the time is 10 hours. But on the second run the clock time will start at 11 hours so now an effect that sleeps for 10 hours will immediately run.\r\n\r\nI don't think this example is quite right but I get the point :) (second run the clock starts at `11.hours`, then `sleep(10.hours)` sleeps to `21.hours`).",
+        "createdAt" : "2019-10-21T22:56:58Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ab120c4b-37d6-4592-94d8-07b710eb515b",
+        "parentId" : "5bdd18f5-cf17-429b-aae4-6594395e4134",
+        "authorId" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "body" : "@adamgfraser  I'm looking at \"sleep correctly handles multiple sleeps\" and my confusion is increasing... my (now improved) understanding of `nonFlaky` this is it's effectively checking the assertion over and over in the same environment, with the clock (in this particular case) increasing in 2 hr increments. Tasks are scheduled to start on odd hours, time is always even. The latches prevent the creations of race conditions caused by swapping fibers that the documentation mentions. The latches and ref are new for each iteration. Nothing seems dependent on the absolute time (sleep & adjust are both relative to the current time) so resetting the clock should have no effect here, yet this is still flaky without ` @@ after(setTime(0.hours))`\r\n\r\nIs there some way of debugging in ZIO? I'm really missing being able to pause at arbitrary locations and check state.\r\n```\r\nfor {                                    // time is 0 hours\r\n  latch1 <- Promise.make[Nothing, Unit]  // new latch\r\n  latch2 <- Promise.make[Nothing, Unit]  // new latch\r\n  ref    <- Ref.make(\"\")                 // new ref\r\n                                         // set up fiber 1, delayed till 3.hours\r\n  _      <- (sleep(3.hours) *> ref.update(_ + \"World!\") *> latch2.succeed(())).fork\r\n                                         // set up fiber 2, delayed till 1.hour\r\n  _      <- (sleep(1.hours) *> ref.update(_ + \"Hello, \") *> latch1.succeed(())).fork \r\n  _      <- adjust(2.hours)              // adjust time to 2.hours, starts fiber 2\r\n  _      <- latch1.await                 // wait for fiber 2 to finish, ref should now be \"Hello, \"\r\n  _      <- adjust(2.hours)              // adjust time to 4.hours, starts fiber 1\r\n  _      <- latch2.await                 // wait for fiber 1 to finish, ref should now be \"Hello, World!\"\r\n  result <- ref.get\r\n} yield assert(result, equalTo(\"Hello, World!\"))\r\nfor {                                    // time is still 4.hours\r\n  latch1 <- Promise.make[Nothing, Unit]  // new latch\r\n  latch2 <- Promise.make[Nothing, Unit]  // new latch\r\n  ref    <- Ref.make(\"\")                 // new ref\r\n                                         // set up fiber 3, delayed till 7.hours\r\n  _      <- (sleep(3.hours) *> ref.update(_ + \"World!\") *> latch2.succeed(())).fork\r\n                                         // set up fiber 4, delayed till 5.hours\r\n  _      <- (sleep(1.hours) *> ref.update(_ + \"Hello, \") *> latch1.succeed(())).fork\r\n  _      <- adjust(2.hours)              // adjust time to 6.hours, starts fiber 4\r\n  _      <- latch1.await                 // wait for fiber 4 to finish, ref should now be \"Hello, \"\r\n  _      <- adjust(2.hours)              // adjust time to 8.hours, starts fiber 3\r\n  _      <- latch2.await                 // wait for fiber 3 to finish, ref should now be \"Hello, World!\"\r\n  result <- ref.get\r\n} yield assert(result, equalTo(\"Hello, World!\"))\r\n//rinse, repeat 98 more times\r\n```",
+        "createdAt" : "2019-10-22T01:08:46Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e6d090d44acc629bfdce4d36049dcdef5bb8cd3",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +18,22 @@        testM(\"sleep does not require passage of clock time\") {\n          for {\n            latch <- Promise.make[Nothing, Unit]\n            _     <- (sleep(10.hours) *> latch.succeed(())).fork\n            _     <- adjust(11.hours)"
+  },
+  {
+    "id" : "9bcfbe66-b90b-43b5-a359-6bc11ce969d2",
+    "prId" : 2009,
+    "prUrl" : "https://github.com/zio/zio/pull/2009#pullrequestreview-304904206",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8f6cd43f-8f97-4d65-8f9b-6c3d93ebbffa",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "I don't think this test is working correctly right now because setting the time is an effect so it needs to be chained in a `flatMap` or a for comprehension to the assertion. The test is just passing right now because the default time zone is \"UTC\".",
+        "createdAt" : "2019-10-21T12:12:50Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d0a1add-1603-48ac-b1f7-299ad033ce86",
+        "parentId" : "8f6cd43f-8f97-4d65-8f9b-6c3d93ebbffa",
+        "authorId" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "body" : "i still have my imperative hat on :(",
+        "createdAt" : "2019-10-21T23:22:03Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e6d090d44acc629bfdce4d36049dcdef5bb8cd3",
+    "line" : 115,
+    "diffHunk" : "@@ -1,1 +113,117 @@          } yield assert(sleeps, isEmpty)\n        },\n        testM(\"setTimeZone correctly sets timeZone\") {\n          setTimeZone(ZoneId.of(\"UTC+10\")) *>\n            assertM(timeZone, equalTo(ZoneId.of(\"UTC+10\")))"
+  },
+  {
+    "id" : "70f168b3-c868-48df-a8a0-635bfedc9ed6",
+    "prId" : 2009,
+    "prUrl" : "https://github.com/zio/zio/pull/2009#pullrequestreview-305110307",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "56b24b1c-322f-4e1f-b115-c185653c92f2",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "The problem here is that since `zipPar` is joining back the fibers after each run the fiber time is being incremented on each run by 2 milliseconds, which over the course of 100 runs becomes 200 milliseconds, hence your off by a factor of 100 error. This is getting further complicated by the bug in `nonFlaky` I am fixing in #2013 which is causing the test to run for all 100 iterations instead of failing early.\r\n\r\nYou can fix this by keeping the clock time in sync with the fiber time.\r\n\r\n```scala\r\ntestM(\"fiber time is not subject to race conditions\") {\r\n  for {\r\n    _        <- adjust(2.millis)\r\n    _        <- sleep(2.millis).zipPar(sleep(1.millis))\r\n    result   <- fiberTime\r\n    expected <- clock.currentTime(TimeUnit.MILLISECONDS)\r\n  } yield assert(result.toMillis, equalTo(expected))\r\n} @@ nonFlaky(100)\r\n```",
+        "createdAt" : "2019-10-22T03:23:52Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c07a733f-fe9d-477a-97b5-039ea0888faa",
+        "parentId" : "56b24b1c-322f-4e1f-b115-c185653c92f2",
+        "authorId" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "body" : "as below I don't think this is testing the same thing anymore. The original test was pushing the clock time out to infinity, so it'd never be in sync with fiber time even the first time through. I think what it was trying to test is that with the clock set to infinity, fiber time still advances by the expected amount (2ms) each time",
+        "createdAt" : "2019-10-22T09:27:56Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "99fd99a1-8f89-4617-9c4a-74fd013c3c14",
+        "parentId" : "56b24b1c-322f-4e1f-b115-c185653c92f2",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "The goal of this test is to check for a race condition in `ZipPar` with regard to the fiber time. As long as the clock time is equal to or greater than 2 milliseconds (ignoring repeated runs), both the left and right fibers in `zipPar` will wake up. There is a potential race condition that normally when child fibers are joined the `FiberRef` of the \"last child\" joined takes precedence. So there could be a situation where the left join takes places before the right join, leading to the right fiber time of 1 millisecond being inherited by the parent and leading to data corruption. We solved that by adding logic to `FiberRef` allowing to specify custom logic for joining and using a \"greater duration wins\" rule and this test is to prevent regressions in that. So in the new test the only way the result is equal to the expected value each time is if the fiber time is always incremented by 2 milliseconds, which is what we want.\r\n\r\nThere are definitely other way you could do this if you want but this seemed like a natural one to me.",
+        "createdAt" : "2019-10-22T10:44:20Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e6d090d44acc629bfdce4d36049dcdef5bb8cd3",
+    "line" : 145,
+    "diffHunk" : "@@ -1,1 +143,147 @@          assertM(example, isTrue)\n        },\n        testM(\"fiber time is not subject to race conditions\") {\n          for {\n            _        <- adjust(2.millis)"
+  },
+  {
+    "id" : "66bfa7c4-6f41-40a4-8522-024ce2121cf6",
+    "prId" : 2009,
+    "prUrl" : "https://github.com/zio/zio/pull/2009#pullrequestreview-306195055",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1f4fb903-003c-4545-b808-dd8c9245aef4",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "This isn't working without resetting the clock because the `sleep` calls never occur on the main fiber, so the `sleep` calls are always setting up the first fiber to wake up at a clock time of 3 hours and the second fiber to wake up after a clock time of 1 hour. That works fine for the first run, but by the second run the clock time is already set to 4 hours so both effects will run immediately, leading to flakiness.",
+        "createdAt" : "2019-10-22T03:31:35Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e805c1f9-5a59-4db3-88fc-8551abd56e75",
+        "parentId" : "1f4fb903-003c-4545-b808-dd8c9245aef4",
+        "authorId" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "body" : "I'll have to do some more reading of comments/doco on this one, but happy enought to leave the clock reset as it doesn't change the meaning of the test. I thought that forking would result in child fibers that would have the same fiber time as the fiber that created them, & sleep would sleep for the specified duration from whatever the current clock time is set to. Is there anywhere this interaction is documented in one place? I can't find anything on the website that even mentions `fiberTime`",
+        "createdAt" : "2019-10-22T09:44:19Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d019c4a4-168b-4353-b839-e37524329592",
+        "parentId" : "1f4fb903-003c-4545-b808-dd8c9245aef4",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Yes, I think fine to leave as is. The reason we need the fiber time in addition to the clock time is otherwise in code like this there is a race condition.\r\n\r\n```scala\r\nfor {\r\n  fiber <- TestClock.sleep(1.second).fork\r\n  _ <- TestClock.adjust(1.second)\r\n  _ <- fiber.join\r\nyield ()\r\n}\r\n```\r\n\r\nThe `sleep` call and the `adjust` call are occurring on separate fibers so we can't guarantee the ordering between them. If the sleep call happens first we sleep until the time is 1 second and then adjust to 1 second so everything is fine. But if the `adjust` call completes first the clock gets set to 1 second, now the `sleep` call is sleeping until 2 seconds, and we hang forever on `join`. To get around this we need the need the fiber time concept and we need the inheritance behavior so that we get the expected behavior on forks and joins (e.g. if you fork a fiber and have it sleep for 2 seconds, then fork a fiber from that fiber and have it sleep for 2 seconds, then advance the clock by three seconds, the second fiber should no wake up.\r\n\r\nWe have some ideas of how we could simplify this but they require changing the runtime to allow the `TestClock` to examine the queue of pending actions to avoid the race conditions.\r\n\r\nThere is some documentation on this [here](https://github.com/zio/zio/blob/48891c29d0ba58e953e30cde6c598e381d84ffbd/test/shared/src/main/scala/zio/test/environment/TestClock.scala#L61).",
+        "createdAt" : "2019-10-22T10:10:58Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37355ad3-0587-49ea-a643-be087b383fb3",
+        "parentId" : "1f4fb903-003c-4545-b808-dd8c9245aef4",
+        "authorId" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "body" : "> the testing framework provides a separate copy of the TestEnvironment to each test, but that environment is shared between successive invocations of the same test via nonFlaky.\r\n\r\nhow does this work with database connections? surely it's not providing 100s of connections to run the tests. Could this same mechanism be exploited for `nonFlaky`?\r\n\r\nConceptually I think `nonFlaky` could turn a test into a suite consiting of `n0` copies of the test. \r\n\r\ne.g.\r\n```\r\nobject concept\r\n    extends ZIOBaseSpec(\r\n      suite(\"ClockSpec\")(\r\n        testM(\"sleep does not require passage of clock time\") {\r\n          ???\r\n        } @@ nonFlaky(100)\r\n      )\r\n    )\r\n```\r\nand turning it into this:\r\n```\r\nobject conceptTranslated\r\n    extends ZIOBaseSpec(\r\n      suite(\"ClockSpec\")(\r\n        suite(\"sleep does not require passage of clock time\")(\r\n          testM(\"sleep does not require passage of clock time\") {\r\n            ???\r\n          },\r\n          testM(\"sleep does not require passage of clock time\") {\r\n            ???\r\n          },\r\n          testM(\"sleep does not require passage of clock time\") {\r\n            ???\r\n          }\r\n          /// 97 more copies\r\n        )\r\n      )\r\n    )\r\n```\r\nyou'd probably want a way to suppress the logging of this to the lowest suite level. This might mean moving it away from an aspect, more like `Spec#provideManagedShared`",
+        "createdAt" : "2019-10-23T04:14:28Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d28151f-3246-4bc6-ba17-4094a31184d6",
+        "parentId" : "1f4fb903-003c-4545-b808-dd8c9245aef4",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "With something like a database connection you would provide it once to the entire suite with `provideShared`. So then if you repeat a test 100 times you are necessarily doing it with the same database connection and may need to perform cleanup actions after each run using `after`. My point is just that `nonFlaky` has to be polymorphic in `R`, so it has to work for any data type whether it is one we can create new copies of like `TestClock` or one that is outside of our control like a database connection.\r\n\r\nFor that reason, I don't think it really works to create more copies of the test. That happens to work for the standard ZIO environment types because the `TestExecutor` provides a separate copy of the `TestEnvironment` to each test but doesn't work for any other environment type. It would also require a lot of special case logic in different places because now we need to keep track of whether tests are regular tests or \"copied\" tests that need to be reported differently.\r\n\r\nI think a better solution is to document the fact that the same environment will be shared across runs and that the user may want to provide a separate copy of a required environment for separate runs or use combinators like `after` to ensure a consistent state for each one.",
+        "createdAt" : "2019-10-23T21:13:12Z",
+        "updatedAt" : "2019-10-24T20:30:07Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e6d090d44acc629bfdce4d36049dcdef5bb8cd3",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +34,38 @@        } @@ after(setTime(0.hours))\n          @@ nonFlaky(100),\n        testM(\"sleep correctly handles multiple sleeps\") {\n          for {\n            latch1 <- Promise.make[Nothing, Unit]"
+  }
+]

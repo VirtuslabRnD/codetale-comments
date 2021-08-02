@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "72cad5d8-ee44-496d-b821-f630a7fc1bc5",
+    "prId" : 2651,
+    "prUrl" : "https://github.com/zio/zio/pull/2651#pullrequestreview-345036445",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "150a3f4e-7a67-4284-bedc-98dc0f227e5f",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "The other alternative would be placing as many as we can now, and then offeringAll the rest. I think this would result in less surprising behavior (imaging putting 101 elements into a queue with capacity 100—it would never succeed unless you put some of them in and wait to put the rest in).",
+        "createdAt" : "2020-01-18T22:46:11Z",
+        "updatedAt" : "2020-01-19T23:21:27Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3bbc7b4-5b6a-4d51-83c4-53b9b6a5ff19",
+        "parentId" : "150a3f4e-7a67-4284-bedc-98dc0f227e5f",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "I thought about the same thing but struggled with how to do it in a transactional context. Here is an implementation that tries to do what you describe and a test for it:\r\n\r\n```scala\r\ndef offerAll(as: Iterable[A]): STM[Nothing, Unit] =\r\n  if (as.isEmpty)\r\n    STM.unit\r\n  else\r\n    ref.get.flatMap { q =>\r\n      val (forQueue, remaining) = as.splitAt(capacity - q.size)\r\n      if (forQueue.isEmpty) offerAll(remaining)\r\n      else ref.set(q.enqueue(forQueue.toList)) *> offerAll(remaining)\r\n    }\r\n\r\ntestM(\"offerAll respects capacity\") {\r\n  for {\r\n    tq     <- TQueue.bounded[Int](3).commit\r\n    _      <- tq.offerAll(List(1, 2, 3)).commit.fork\r\n    first  <- STM.collectAll(List(tq.take, tq.take, tq.take)).commit\r\n    second <- STM.collectAll(List(tq.take, tq.take)).commit\r\n  } yield assert(first)(equalTo(List(1, 2, 3))) &&\r\n    assert(second)(equalTo(List(4, 5)))\r\n},\r\n```\r\n\r\nThe challenge is what we do if the queue is at capacity. In the current version, we immediately try to offer again, which results in us just spinning in a tight loop. If instead we retry at that point we risk not being productive, because if we try to put 101 elements into a queue with capacity 100 we're always going to hit a point where the queue doesn't have capacity at which point we will have to retry and start the whole thing over again.\r\n\r\nConceptually it seems like we need a way to suspend until one of the transactional variables has changed without retrying the transaction. Is there a way to do that or is there something I'm missing here? ",
+        "createdAt" : "2020-01-19T03:53:01Z",
+        "updatedAt" : "2020-01-19T23:21:27Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e245c922-7494-465f-99fa-f4d4820fd8de",
+        "parentId" : "150a3f4e-7a67-4284-bedc-98dc0f227e5f",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Ah right, the retry will rollback and wait... Possibly we could \"fix\" it like this:\r\n\r\n```scala\r\ndef offerAll(as: Iterable[A]): STM[Nothing, Iterable[A]]\r\n```\r\n\r\nThen the user can decide what to do with the excess.\r\n\r\nThough possibly `offerMax` is a better name for such a thing.\r\n\r\nPerhaps for `offerAll`, we can just `STM.die` if the user tries to do something impossible, like offering 10 in a 9 element queue?",
+        "createdAt" : "2020-01-19T13:10:05Z",
+        "updatedAt" : "2020-01-19T23:21:27Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "51daded1-32a7-497d-b004-943149bc4d67",
+        "parentId" : "150a3f4e-7a67-4284-bedc-98dc0f227e5f",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Yes, done in the latest version. Is it possible to implement the \"suspend for a change but don't retry\" functionality?",
+        "createdAt" : "2020-01-19T13:57:57Z",
+        "updatedAt" : "2020-01-19T23:21:27Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e1e86ce8-f40b-4408-b1b9-995e046c0fee",
+        "parentId" : "150a3f4e-7a67-4284-bedc-98dc0f227e5f",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Not in STM. That would violate transactionality. Of course we could just return IO for this method. Is that better than dying?",
+        "createdAt" : "2020-01-19T21:14:41Z",
+        "updatedAt" : "2020-01-19T23:21:27Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a19c2065-7248-4e61-a7ff-013042849f27",
+        "parentId" : "150a3f4e-7a67-4284-bedc-98dc0f227e5f",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "I think people are going to want to compose multiple offers and are just going to do it with something like `collectAll` if we don't provide something which will go back to hanging if the number of elements is greater than the capacity. Maybe we want to just provide `offerMax` and maybe rename it to `offerAll`?",
+        "createdAt" : "2020-01-19T21:54:52Z",
+        "updatedAt" : "2020-01-19T23:21:27Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3d31deb1-9431-4343-a4ad-8d5e34f651d8",
+        "parentId" : "150a3f4e-7a67-4284-bedc-98dc0f227e5f",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Ok, sounds good!",
+        "createdAt" : "2020-01-19T22:19:31Z",
+        "updatedAt" : "2020-01-19T23:21:27Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1bdbe00-8691-4129-bcec-1dda9b643694",
+        "parentId" : "150a3f4e-7a67-4284-bedc-98dc0f227e5f",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "All set.",
+        "createdAt" : "2020-01-19T23:45:58Z",
+        "updatedAt" : "2020-01-19T23:45:59Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8ae2955d0f934445f1fad52c6d41389355cfe544",
+    "line" : 88,
+    "diffHunk" : "@@ -1,1 +65,69 @@    ref.get.flatMap { q =>\n      if (forQueue.size <= capacity - q.length) ref.update(_.enqueue(forQueue.toList))\n      else STM.retry\n    } *> STM.succeed(remaining)\n  }"
+  },
+  {
+    "id" : "15d03486-9bb5-4758-9611-8c978d1f3177",
+    "prId" : 2651,
+    "prUrl" : "https://github.com/zio/zio/pull/2651#pullrequestreview-344975303",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "41cd6002-0076-4c7c-82ea-2f44b99665f1",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "This is useful, and also equivalent to, `peek.map(Some(_)) orElse STM.succeed(None)`.",
+        "createdAt" : "2020-01-18T22:46:45Z",
+        "updatedAt" : "2020-01-19T23:21:27Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4f423909-6914-48d6-a459-fb34866a6f02",
+        "parentId" : "41cd6002-0076-4c7c-82ea-2f44b99665f1",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Uh oh, our code is too compositional! Better switch to actors! 😉 ",
+        "createdAt" : "2020-01-19T03:53:44Z",
+        "updatedAt" : "2020-01-19T23:21:27Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8ae2955d0f934445f1fad52c6d41389355cfe544",
+    "line" : 111,
+    "diffHunk" : "@@ -1,1 +85,89 @@   * if the queue is empty.\n   */\n  def peekOption: STM[Nothing, Option[A]] =\n    ref.get.map(_.headOption)\n"
+  },
+  {
+    "id" : "19f01683-dc09-4221-b66e-d1c3002ac049",
+    "prId" : 2612,
+    "prUrl" : "https://github.com/zio/zio/pull/2612#pullrequestreview-345099244",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1330074d-5103-4623-8d71-0e44f375b197",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "We should call this `bounded` after `Queue.bounded`. If you have the energy to do a followup PR, that'd be great!",
+        "createdAt" : "2020-01-18T13:13:02Z",
+        "updatedAt" : "2020-01-18T13:13:02Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b678285-7cfa-4a6c-ac54-3c5c5593617c",
+        "parentId" : "1330074d-5103-4623-8d71-0e44f375b197",
+        "authorId" : "6eb4008b-2307-43f9-8ff5-843b565f7ea1",
+        "body" : "i'll open the issue so i dont forget!",
+        "createdAt" : "2020-01-20T06:29:08Z",
+        "updatedAt" : "2020-01-20T06:29:08Z",
+        "lastEditedBy" : "6eb4008b-2307-43f9-8ff5-843b565f7ea1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e429c09016c92c527ae8aa0dbe73ef5d93c16d30",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +106,110 @@\nobject TQueue {\n  def make[A](capacity: Int): STM[Nothing, TQueue[A]] =\n    TRef.make(ScalaQueue.empty[A]).map(ref => new TQueue(capacity, ref))\n"
+  }
+]

@@ -1,0 +1,442 @@
+[
+  {
+    "id" : "02a687d3-4b45-4cd9-b6c3-33e7a4525555",
+    "prId" : 4121,
+    "prUrl" : "https://github.com/zio/zio/pull/4121#pullrequestreview-481978045",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ae5ad3bc-bd2c-4127-bf55-437e350ad824",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "There is a race condition in `if !oldState.interrupting`. I think it's ok. \r\n\r\nWe may want to add a test for this if one doesn't exist, basically that async finalizers during winddown can't be interrupted. Could be tested with a latch.",
+        "createdAt" : "2020-09-03T12:57:12Z",
+        "updatedAt" : "2020-09-03T16:02:37Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac12306b-8025-4715-8fa2-bb74ca073cdd",
+        "parentId" : "ae5ad3bc-bd2c-4127-bf55-437e350ad824",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Sorry, can you say more about this?\r\n\r\nWe're getting the interrupting status from the old state so we're working off of one consistent snapshot of the state at a single point in time.\r\n\r\nIf the interrupting status gets changed to `true`  while we executing then the `compareAndSet` will return `false` and we will loop again, at which point `interrupting` will be `true` so we won't do anything here.\r\n\r\nSo we are relying on whatever other fiber changed the `interrupting` status to `true` to actually do the interruption since this fiber won't. Is that right?\r\n\r\nCan definitely work on adding a test for this.",
+        "createdAt" : "2020-09-03T13:29:52Z",
+        "updatedAt" : "2020-09-03T16:02:37Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a94d58b6-9098-46c8-aa7f-387fd184ca9d",
+        "parentId" : "ae5ad3bc-bd2c-4127-bf55-437e350ad824",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "`kill` is called from other fibers, so what happens if the fiber itself changes the state of `setInterrupting` to false at the same time this check is happening. In this case, this code here (in `kill`) will make a different decision about what to do based on the changing boolean value.",
+        "createdAt" : "2020-09-03T14:06:57Z",
+        "updatedAt" : "2020-09-03T16:02:37Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "18862c29-5355-4a20-8e2c-ac2d3660f2a5",
+        "parentId" : "ae5ad3bc-bd2c-4127-bf55-437e350ad824",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Right. Then `state` would not be equal to `oldState` and we would loop and then on the next loop `interrupting` would be `false` and we would interrupt. But isn't that the behavior we want? You're definitely right there can be a race between setting the interrupting status and interrupting but I think with this whatever the interrupting status is when the `compareAndSet` gets evaluated will control which seems correct.",
+        "createdAt" : "2020-09-03T14:28:15Z",
+        "updatedAt" : "2020-09-03T16:02:37Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "64b11790-90d0-46dd-b0b4-b4652acf5301",
+        "parentId" : "ae5ad3bc-bd2c-4127-bf55-437e350ad824",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Added a test for this.",
+        "createdAt" : "2020-09-03T14:53:03Z",
+        "updatedAt" : "2020-09-03T16:02:37Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2db993de-aa76-4a0e-bd3c-7c1d6f175eda",
+        "parentId" : "ae5ad3bc-bd2c-4127-bf55-437e350ad824",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Ah, you're right, because you are looking at `oldState.interrupting`, which will be consistent with the state. \r\n\r\nGood with me. 👍 ",
+        "createdAt" : "2020-09-03T15:52:13Z",
+        "updatedAt" : "2020-09-03T16:02:37Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3885675f7f9714a3149d66aa197e4ef5dc66db6a",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +967,971 @@\n      oldState match {\n        case Executing(Status.Suspended(oldStatus, true, _, _, _), observers, interrupted) if !oldState.interrupting =>\n          val newCause = interrupted ++ interruptedCause\n"
+  },
+  {
+    "id" : "4e7db08e-0732-43ff-a120-2ea7383bfb71",
+    "prId" : 2748,
+    "prUrl" : "https://github.com/zio/zio/pull/2748#pullrequestreview-366869336",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "46c1e481-2297-40c1-8c89-2a45d1b7dad2",
+        "parentId" : null,
+        "authorId" : "cc8bc8c4-90ec-4817-908a-529be81ef42a",
+        "body" : "😆 ",
+        "createdAt" : "2020-03-01T15:30:43Z",
+        "updatedAt" : "2020-03-01T18:33:37Z",
+        "lastEditedBy" : "cc8bc8c4-90ec-4817-908a-529be81ef42a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "284c9c81-a378-4ad4-8bfc-86f0bb85b605",
+        "parentId" : "46c1e481-2297-40c1-8c89-2a45d1b7dad2",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "😆 ",
+        "createdAt" : "2020-03-01T16:09:35Z",
+        "updatedAt" : "2020-03-01T18:33:37Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8106319c9c2a9300eb1dd1aec0aeee42c9b2f451",
+    "line" : 316,
+    "diffHunk" : "@@ -1,1 +779,783 @@  @inline\n  private[this] final def shouldInterrupt(): Boolean =\n    isInterrupted() && isInterruptible() && !isInterrupting()\n\n  @tailrec"
+  },
+  {
+    "id" : "b45fd2bd-42b9-4002-86a1-4ce133f14ef6",
+    "prId" : 2748,
+    "prUrl" : "https://github.com/zio/zio/pull/2748#pullrequestreview-366869391",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4fb55668-d1e8-4d64-8cc5-e44cb7cdd681",
+        "parentId" : null,
+        "authorId" : "cc8bc8c4-90ec-4817-908a-529be81ef42a",
+        "body" : "Is there any perf improvement that could be made by making this function return `Any`?",
+        "createdAt" : "2020-03-01T15:42:20Z",
+        "updatedAt" : "2020-03-01T18:33:37Z",
+        "lastEditedBy" : "cc8bc8c4-90ec-4817-908a-529be81ef42a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74c7995b-8d64-4c1b-b0a5-4b5592f7fd75",
+        "parentId" : "4fb55668-d1e8-4d64-8cc5-e44cb7cdd681",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "I think it would roughly be the same...",
+        "createdAt" : "2020-03-01T16:10:30Z",
+        "updatedAt" : "2020-03-01T18:33:37Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8106319c9c2a9300eb1dd1aec0aeee42c9b2f451",
+    "line" : 228,
+    "diffHunk" : "@@ -1,1 +686,690 @@  private[this] def resumeAsync(epoch: Long): IO[E, Any] => Unit = { zio => if (exitAsync(epoch)) evaluateLater(zio) }\n\n  private def withChildren[A](f: java.util.Set[FiberContext[Any, Any]] => A): A =\n    Sync(self._children)(f(self._children))\n"
+  },
+  {
+    "id" : "2b7c71bb-60f1-4557-b833-f11750f75f7d",
+    "prId" : 2274,
+    "prUrl" : "https://github.com/zio/zio/pull/2274#pullrequestreview-318824477",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ebd54691-26b8-4cba-8916-7e5541d0f01d",
+        "parentId" : null,
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "I think we need an `onDone` here that clears the child from the tracking set.",
+        "createdAt" : "2019-11-19T06:47:52Z",
+        "updatedAt" : "2019-12-03T02:27:53Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed47e91e-7d59-4554-859e-8d3fcd07b075",
+        "parentId" : "ebd54691-26b8-4cba-8916-7e5541d0f01d",
+        "authorId" : "cc8bc8c4-90ec-4817-908a-529be81ef42a",
+        "body" : "Yes It is part of `track` ",
+        "createdAt" : "2019-11-19T07:08:32Z",
+        "updatedAt" : "2019-12-03T02:27:53Z",
+        "lastEditedBy" : "cc8bc8c4-90ec-4817-908a-529be81ef42a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10d91491-f8ee-4f91-a242-6f212fc3e1f5",
+        "parentId" : "ebd54691-26b8-4cba-8916-7e5541d0f01d",
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "Ah right",
+        "createdAt" : "2019-11-19T07:20:56Z",
+        "updatedAt" : "2019-12-03T02:27:54Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e89e3e23d63260930a8685e2a93729e42a8932dc",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +823,827 @@\n            if (self.parentFiber ne null) child.parentFiber = self.parentFiber\n            else Fiber.track(child)\n          }\n          self.parentFiber = null"
+  },
+  {
+    "id" : "94b9f0aa-c724-4f6b-8ed4-3f506c8d25cf",
+    "prId" : 2169,
+    "prUrl" : "https://github.com/zio/zio/pull/2169#pullrequestreview-314120356",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "acf72951-6de6-4e0b-92ce-f3a99b737592",
+        "parentId" : null,
+        "authorId" : "cc8bc8c4-90ec-4817-908a-529be81ef42a",
+        "body" : "Not `private[this]`?",
+        "createdAt" : "2019-11-07T13:44:00Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "cc8bc8c4-90ec-4817-908a-529be81ef42a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e36a9882-6c98-414c-8ee4-efe2abfc807f",
+        "parentId" : "acf72951-6de6-4e0b-92ce-f3a99b737592",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "I had to weaken it, because now I have to access the parent state from the child.",
+        "createdAt" : "2019-11-08T10:37:51Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e597a3f9ff4c9895deccd1a7dc9ed0e94e93be52",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +49,53 @@\n  // Accessed from multiple threads:\n  private val state = new AtomicReference[FiberState[E, A]](FiberState.initial)\n\n  @volatile"
+  },
+  {
+    "id" : "619ab41a-7df6-470d-b9d9-2c70813a10f5",
+    "prId" : 2169,
+    "prUrl" : "https://github.com/zio/zio/pull/2169#pullrequestreview-314200048",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "21bf73d1-6d5b-42f0-9289-518e5bcfb5db",
+        "parentId" : null,
+        "authorId" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "body" : "It will need to be documented later that propagation is not hierarchical – a nested fiber will be interrupted even when all of its superiors are uninterruptible/unresponsive, as long as any one of them is targeted by kill0.",
+        "createdAt" : "2019-11-07T16:26:57Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "02dc9829-9d95-4a9f-92ee-5c16099530ff",
+        "parentId" : "21bf73d1-6d5b-42f0-9289-518e5bcfb5db",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Only if the children are interruptible, which by default they would not be, because interruptibility status is inheritable.\r\n\r\nIt's only if someone specifically made some section (or fiber) interruptible that the children would potentially terminate first, but that's the same as in-fiber semantics: if you call downstream code and there's an interruptible section in there, it could interrupt yourself unless you're dealing with it.\r\n\r\nIt's still worth documenting, of course.",
+        "createdAt" : "2019-11-08T13:31:01Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e597a3f9ff4c9895deccd1a7dc9ed0e94e93be52",
+    "line" : 909,
+    "diffHunk" : "@@ -1,1 +751,755 @@      addInterruptor(fiber.state.get.interrupted)\n\n      fiber = fiber.parentFiber\n    }\n  }"
+  },
+  {
+    "id" : "6e9e2380-6f83-4677-8ab6-68fb64ff9f74",
+    "prId" : 2169,
+    "prUrl" : "https://github.com/zio/zio/pull/2169#pullrequestreview-314272055",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4f0dd0f7-1702-402b-b3b1-c86d06746bb7",
+        "parentId" : null,
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "Hmm why did we stop resuming on the threadpool here? Does this not execute the resumptions sequentially?",
+        "createdAt" : "2019-11-08T14:30:24Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc24ef50-95ba-4522-b8c9-5c02bad263e0",
+        "parentId" : "4f0dd0f7-1702-402b-b3b1-c86d06746bb7",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "It does, but now async operations just \"trigger\" resumption of the computation on the normal ZIO thread pool, so this improves performance because it eliminates the extra unnecessary redundant submission.",
+        "createdAt" : "2019-11-08T15:25:33Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e597a3f9ff4c9895deccd1a7dc9ed0e94e93be52",
+    "line" : 1064,
+    "diffHunk" : "@@ -1,1 +908,912 @@\n    // For improved fairness, we resume in order of submission:\n    observers.reverse.foreach(k => k(result))\n  }\n"
+  },
+  {
+    "id" : "ba3b85e8-8658-49a7-b7bc-26442ebd8752",
+    "prId" : 2169,
+    "prUrl" : "https://github.com/zio/zio/pull/2169#pullrequestreview-315422580",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6fff4a88-79d7-4950-9d8a-57bb4ffee5e4",
+        "parentId" : null,
+        "authorId" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "body" : "Ok, if `.refailWithTrace` didn't work, why not `.haltWith`? As is there's no info on what the fiber has been executing immediately before interruption",
+        "createdAt" : "2019-11-11T23:18:29Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac63f757-3aaf-479e-8c98-a5492706d4ae",
+        "parentId" : "6fff4a88-79d7-4950-9d8a-57bb4ffee5e4",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "It can't be a composite instruction or it will end in an infinite loop. So we have to build the full cause right here. I could attach the trace here, I suppose?",
+        "createdAt" : "2019-11-12T00:32:53Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43e91b29-8d04-4e9e-b7a6-59281314e441",
+        "parentId" : "6fff4a88-79d7-4950-9d8a-57bb4ffee5e4",
+        "authorId" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "body" : "@jdegoes Yeah you can construct with one op:\r\n\r\n```scala\r\nval snapshot = state.get.interrupted\r\nZIO.haltWith(trace => Cause.traced(snapshot, trace())\r\n```",
+        "createdAt" : "2019-11-12T01:57:16Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bc21a293-393b-4986-a59b-e3a733da463e",
+        "parentId" : "6fff4a88-79d7-4950-9d8a-57bb4ffee5e4",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Actually I see `ZIO.halt` will generate `Fail` which will be filled with the trace. Should be good enough, right?",
+        "createdAt" : "2019-11-12T02:21:58Z",
+        "updatedAt" : "2019-11-12T02:32:19Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4cad8853-80ae-42a9-8b32-ab038e2a07ff",
+        "parentId" : "6fff4a88-79d7-4950-9d8a-57bb4ffee5e4",
+        "authorId" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "body" : "@jdegoes `fail` and `die` do generate the trace, but`halt` passes the raw Cause, see impl - https://github.com/zio/zio/blob/4b7225dd36f6a4b16f170a778cb553e18cb461d1/core/shared/src/main/scala/zio/ZIO.scala#L2279",
+        "createdAt" : "2019-11-12T10:14:26Z",
+        "updatedAt" : "2019-11-12T10:14:26Z",
+        "lastEditedBy" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e597a3f9ff4c9895deccd1a7dc9ed0e94e93be52",
+    "line" : 677,
+    "diffHunk" : "@@ -1,1 +584,588 @@            } else {\n              // Fiber was interrupted\n              curZio = ZIO.halt(state.get.interrupted)\n            }\n"
+  },
+  {
+    "id" : "f991e246-4571-43e3-beaf-3228464fcd94",
+    "prId" : 2091,
+    "prUrl" : "https://github.com/zio/zio/pull/2091#pullrequestreview-311208394",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "de9fa3ad-17ec-467b-8cea-150a2370d985",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "You probably don't need this cast because `raceWithImpl` is polymorphic.",
+        "createdAt" : "2019-11-04T04:13:36Z",
+        "updatedAt" : "2019-11-05T10:45:26Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c390c78a-b7b2-4a06-ac3a-68df01ffe9ae",
+        "parentId" : "de9fa3ad-17ec-467b-8cea-150a2370d985",
+        "authorId" : "9bd3b19c-4c36-4bed-bf40-e006d1b18e7d",
+        "body" : "`raceWithImpl` needs a `RaceWith` instance. `curZio` would be `IO[E, Any]` otherwise",
+        "createdAt" : "2019-11-04T16:49:21Z",
+        "updatedAt" : "2019-11-05T10:45:26Z",
+        "lastEditedBy" : "9bd3b19c-4c36-4bed-bf40-e006d1b18e7d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3e631beee2e7d26db97fb6569eb19fa375713e49",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +576,580 @@\n                case ZIO.Tags.RaceWith =>\n                  val zio = curZio.asInstanceOf[ZIO.RaceWith[Any, Any, Any, Any, Any, Any, Any]]\n                  curZio = raceWithImpl(zio).asInstanceOf[IO[E, Any]]\n              }"
+  },
+  {
+    "id" : "af7200b7-f4ca-41ae-9958-108352866750",
+    "prId" : 1939,
+    "prUrl" : "https://github.com/zio/zio/pull/1939#pullrequestreview-307449514",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "38b904aa-d97d-4549-a43f-4f662d67f2a9",
+        "parentId" : null,
+        "authorId" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "body" : "Just `asyncEpoch += 1` should be ok",
+        "createdAt" : "2019-10-25T20:43:05Z",
+        "updatedAt" : "2019-10-30T12:11:08Z",
+        "lastEditedBy" : "fe8c0309-9574-4c2c-a95a-2f54e9bd5411",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "afb6c72c-87b2-4db9-ac5c-f29f85ed75a0",
+        "parentId" : "38b904aa-d97d-4549-a43f-4f662d67f2a9",
+        "authorId" : "68c1c91e-6bf0-4665-9804-75ecdc1c3b42",
+        "body" : "need to capture current value to local `val`\r\nand avoid double volatile reads",
+        "createdAt" : "2019-10-25T20:58:23Z",
+        "updatedAt" : "2019-10-30T12:11:08Z",
+        "lastEditedBy" : "68c1c91e-6bf0-4665-9804-75ecdc1c3b42",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "88e5ebfb3b3ac91d9c33e4261d4e9911fab87341",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +417,421 @@\n                  val epoch = asyncEpoch\n                  asyncEpoch = epoch + 1\n\n                  // Enter suspended state:"
+  },
+  {
+    "id" : "623d8ccb-d32b-4bd4-9dd1-bb0807ee55ca",
+    "prId" : 1792,
+    "prUrl" : "https://github.com/zio/zio/pull/1792#pullrequestreview-292009825",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c82d035a-4d21-45a8-b9f9-e2b499c17190",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "This extra flag is necessary in your fix. In my fix the model changed a bit, so pushing the \"set\" prior to the atomic ref update should in theory take care of it. But this looks good for now!",
+        "createdAt" : "2019-09-23T19:43:10Z",
+        "updatedAt" : "2019-09-25T23:41:34Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a020f5ffd83288f0c54587e42508d946cb983f46",
+    "line" : 121,
+    "diffHunk" : "@@ -1,1 +752,756 @@        }\n\n      case Executing(status, observers0, _) =>\n        val observers = k :: observers0\n"
+  }
+]

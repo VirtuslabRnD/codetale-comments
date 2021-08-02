@@ -1,0 +1,156 @@
+[
+  {
+    "id" : "66f81f93-314e-497f-a37f-f5d1af7de283",
+    "prId" : 2533,
+    "prUrl" : "https://github.com/zio/zio/pull/2533#pullrequestreview-339082214",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Is the issue here that JUnit needs a more event based interface and the way ZIO Test is currently structured we run all the tests at once and then render all the tests at once?\r\n\r\nCurrently we're unsafely running the specs once to get the descriptions and then a second time to run the tests, which could create issues if there are suite level effects such as with `provideManagedShared`. Would it be possible to move to more of a model where we execute all the specs and then report their results? I think this would allow us to avoid the double evaluation problem and reuse more of the existing functionality in ZIO Test.\r\n\r\nSeparately I do think we want to look into having an interface where it is easier to get notifications in real time about test events instead of waiting for the full output since that is a request we have gotten for ZIO Intellij as well but I think that is outside the scope of this PR.",
+        "createdAt" : "2019-12-30T15:10:01Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e8eef6c-c89a-4f9a-bcc7-f515bee244d9",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "body" : "The leaf tests are not actually evaluated, just the `specs` effects in the suites.\r\nI can actually return an empty `Descriprion` and just report test events as they happen.\r\n(I'm actually reporting start/finish/fail events asynchronously already - look at `instrumentSpec` method).\r\nIn this case however, there is no way to report the nested structure of the Spec, the results just come out flat. \r\nThe best I can do is to include the path in the label of each leaf test.",
+        "createdAt" : "2019-12-31T09:30:12Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "32833fd3-1766-4b6c-98b8-2555156ce643",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "The problem is the `specs` effects in the suites could have real logic in them. They might create a Kafka client for example and then dispose of it.\r\n\r\nCan we have the test executor execute the specs so we get one set of executed specs that don't have any environmental dependency and then traverse that to report everything?",
+        "createdAt" : "2019-12-31T13:47:31Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6c7cf382-de56-4c2f-aa6c-3b7948d9cd12",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "body" : "Well, I don't think having the spec executed in `getDescription` instead of `run` will be following the JUnit Runner contract (if that's what you mean). IDEs and build tools won't expect this. And also you will loos the live reporting of the test as they run.\r\nThe only other option I see to prevent double evaluation is to have empty description and and accept flat spec structure being reported from inside the `run` method. ",
+        "createdAt" : "2019-12-31T14:40:54Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5eead881-48a3-41a4-be95-4f502e13c35c",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Yes, we're running into an issue where specs in JUnit are static (there are just a certain number of tests sitting out there) versus tests in ZIO Test are dynamic (creating tests in a spec is itself an effect).\r\n\r\nI see two options:\r\n1. `getDescription` evaluates suite level effects and returns the full structure of the spec. The advantage is you get a description up front with all the suite and test labels. The disadvantage is that you run all suite level effects, like acquiring and releasing shared managed values, when you get the description, which to your point is probably not the contract for getting a description, and then you have to evaluate them again when calling `run`, which is inefficient.\r\n2. `getDescription` just returns the label of the top suite or test and doesn't evaluate anything. I think we could still include information on the full ancestry of tests in events we report for each test by either traversing the spec and recursively passing down a list of ancestors or keeping track of it in a `Ref`. The disadvantage is that calling that `getDescription` method won't be that informative, but it would accurately reflect that we don't have static descriptions beyond the top level label before running the spec and would avoid the double evaluation issue.\r\n\r\nI think the second approach is preferable. What do you think?",
+        "createdAt" : "2019-12-31T15:14:52Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "63ae4829-bce5-49c6-95ca-8a53af889c4e",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "body" : "I'm good with 2, but I couldn't find a way to report the full ancestry of the leaves being executed.\r\nI can the report the direct parent though. So what I can do is concatenate the full path in the parent name, so in IntelliJ it will look something like this:\r\n```\r\nSomeSpecWithJUnit\r\n   + suite 1:suite 2\r\n      - test1\r\n      - test2 \r\n   + suite 3:suite 4\r\n      - test3\r\n      - test4 \r\n```\r\n",
+        "createdAt" : "2020-01-01T12:30:55Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9dd222a0-65bc-45e0-945d-5690bfc424c8",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "body" : "Unfortunately, I just discovered that while this works with IDEA JUnit runner, returning empty or fake description doesn't work with Bazel. It seems to expect tests to have accurate descriptions. This may also be the case for Gradle and Maven.",
+        "createdAt" : "2020-01-01T14:07:09Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a289b76d-6f2d-422c-845a-18c921d8952d",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Sorry I missed this. Can you say a little more about what you mean by \"accurate descriptions\"? Trying to understand if there is something we can do about that or that effectively means that Option 2 above is not possible.",
+        "createdAt" : "2020-01-06T14:35:39Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "988f8e0d-a727-417e-ba32-6376af47e730",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "body" : "Well, I can describe what is happening in our Bazel environment with Intellj with our customized version of Bazel Intellij plugin, when the runner returns empty description.\r\nWhen running all tests under target (package) Bazel output reflects the tests run and failures, but IDEA is showing success and doesn't reflect tests run.\r\nWhen running a single test using a filter like `--test_filter=com.wixpress.infra.zio.test.SimpleFailingTest#` we get  `No tests found matching RegEx[com.wixpress.infra.zio.test.SimpleFailingTest#]`.\r\nIt seems that bazel test filter for JUnit expects the class name to appear in the descriptions of leaf tests.\r\n",
+        "createdAt" : "2020-01-06T14:54:30Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ea9cf84-3e96-4642-a180-61999e33f980",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "So you think that if we got the full ancestry to the leaves it would?",
+        "createdAt" : "2020-01-06T14:57:15Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ce2b555-d8f7-47b4-bff5-33c2ecafd160",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "body" : "I've been testing it in our project and if the `getDescription` returns the hierarchical structure of our spec with the spec class name included in the leaves, everything works in our environment.\r\nBy class name included in the leaves I mean `Description.createTestDescription(className, label)` \r\n\r\n![image](https://user-images.githubusercontent.com/1577551/71830555-a7bfdb00-30af-11ea-91de-e7a0e0219f3f.png)\r\n",
+        "createdAt" : "2020-01-06T16:10:08Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e424ea57-43f8-42fb-bc4a-86132aa4b1c7",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Okay, so how about we do this?\r\n\r\nCreate a new simple algebraic data type for a description:\r\n\r\n```scala\r\nsealed trait SpecDescription extends Product with Serializable {\r\n  // Converts to JUnit's representation of a description\r\n  def toDescription: Description = ???\r\n}\r\nfinal case class TestDescription(label: String) extends SpecDescription\r\nfinal case class SuiteDescription(label: String, specs: Vector[SpecDescription]) extends SpecDescription\r\n```\r\n\r\nCreate an `AtomicReference` to store the description so it is safe for concurrent access, initially populated with just the top level spec name:\r\n\r\n```scala\r\nprivate val description: AtomicReference[SpecDescription] = ???\r\n```\r\n\r\nThen `getDescription` becomes:\r\n```scala\r\n`def getDescription = description.get.toDescription\r\n```\r\n\r\nThen the final step is in `traverse` we add an additional parameter `ancestors` and add the current label to `ancestors` each time we recurse. This will give us the information we need to update the description as we go.\r\n\r\nI think this is all very doable. The upshot though is that `getDescription` will return a different description depending on when it is evaluated (e.g. if it evaluated before any tests are run it will just show the top level label, as suites and tests are created theyl be added to the description). So we need to make sure that works. Otherwise I think we will have to fall back to Option 1 above.\r\n\r\nThoughts?",
+        "createdAt" : "2020-01-06T18:47:18Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8fa7095b-26f8-4791-a78e-05efdc0c7092",
+        "parentId" : "ab9f7d6c-a878-49e7-87ad-17eb95879792",
+        "authorId" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "body" : "Well at least for bazel, `getDiscription` is called before running the test, and filtering considers the description returned, this will not work, at least not for filtering by class name...\r\nAs far as I can tell, this is the contract - `getDescription` is called before `run` and is not expected to change if you called again.\r\nIt looks like Option 1 is the way to go, unfortunately.\r\nPerhaps there could be a way to separate the suite effect into \"dry run\" mode - which only generates the structure and \"actual run\" mode that also performs setup and cleanup effects and such? \r\nWhat if SuiteSpec.specs was `Mode => ZIO[R, E, Vector[A]]` where Mode is either `Run` or `Describe`? ",
+        "createdAt" : "2020-01-07T08:09:59Z",
+        "updatedAt" : "2020-01-15T23:12:51Z",
+        "lastEditedBy" : "1ca841ad-cf41-4d4d-ab0f-56c3559e6a2f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "874e5a0c58acdec2bee7099e99c0c6660d56b8b9",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +35,39 @@  private var filter = Filter.ALL\n\n  lazy val getDescription: Description = {\n    val description = Description.createSuiteDescription(className)\n    def traverse[R, E, L, S]("
+  }
+]

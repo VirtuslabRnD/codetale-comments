@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "cbac7c50-fa19-4497-834e-12a8f3f07210",
+    "prId" : 1760,
+    "prUrl" : "https://github.com/zio/zio/pull/1760#pullrequestreview-291481258",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "76480d92-48e9-4f6e-bb10-213b1a88b254",
+        "parentId" : null,
+        "authorId" : "524c15e0-b013-4ec4-bd1d-2b61884828d1",
+        "body" : "What is semantic change here?\r\nBefore `fiber.interrupt` was running with `Clock.Live` and now only `.timeout` is running with it?\r\nHow does it help with flakiness?",
+        "createdAt" : "2019-09-21T21:14:12Z",
+        "updatedAt" : "2019-09-21T21:14:58Z",
+        "lastEditedBy" : "524c15e0-b013-4ec4-bd1d-2b61884828d1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1c4d704-53da-4076-8de7-f65c9f6f7803",
+        "parentId" : "76480d92-48e9-4f6e-bb10-213b1a88b254",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "No, you're totally fine. Changing `provide(Clock.Live)` to `withLive` doesn't have any semantic effect, it is just trying to clean up the code a little.\r\n\r\nThe semantically significant change is moving the `ref.set(false)` effect to after the interruption. I am using the `Ref` so that the cancelation action is non-terminating and we can check that it is uninterruptible. But since it never terminates the finalizer will still run at the end of the `Managed`, and we want that to terminate so that we don't hang. The problem is that created a race condition, because if the `Ref` is set to `false` before the forked canceler checks the `whenM` condition the canceler will become terminating and our test will fail, causing the flakiness. We fix that by moving the effect to set the Ref to after we have checked if we can interrupt the canceler.\r\n\r\nDoes that make sense?",
+        "createdAt" : "2019-09-21T21:29:26Z",
+        "updatedAt" : "2019-09-21T21:29:27Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc3b57ec-8466-4677-b025-0801ef5d13cb",
+        "parentId" : "76480d92-48e9-4f6e-bb10-213b1a88b254",
+        "authorId" : "524c15e0-b013-4ec4-bd1d-2b61884828d1",
+        "body" : "Yes, it does!\r\nI think the `.either` doesn't bring any value, E is Nothing here and `.either` doesn't help with defects.",
+        "createdAt" : "2019-09-21T21:37:09Z",
+        "updatedAt" : "2019-09-21T21:37:28Z",
+        "lastEditedBy" : "524c15e0-b013-4ec4-bd1d-2b61884828d1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d1266e842ec68b7df21629f8ebf62a5418be303f",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +671,675 @@                             fiber        <- canceler.fork\n                             _            <- latch.await\n                             interruption <- withLive(fiber.interrupt)(_.timeout(5.seconds)).either\n                             _            <- ref.set(false)\n                           } yield interruption"
+  }
+]

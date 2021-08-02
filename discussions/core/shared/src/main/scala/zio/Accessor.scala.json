@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "2f805577-8fc4-4e2b-8a5d-f9e9d9195d31",
+    "prId" : 5130,
+    "prUrl" : "https://github.com/zio/zio/pull/5130#pullrequestreview-664721417",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5fecd17e-b0c8-4342-a118-e3b3a3303b03",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "@adamgfraser @kitlangton \r\n\r\nMy only potential concern with this was the name `Accessor`, which might be pretty common.\r\n\r\nThe other potential improvement we could make: warn if the user tries to use this on an effect that requires an environment.\r\n\r\n```scala\r\ntrait Accessor[R] {\r\n   def apply[R2, E, A](f: R => ZIO[R2, E, A])(implicit tag: Tag[R], isAny: Accessor.IsAny[R2]): ZIO[Has[R], E, A] = ...\r\n}\r\nobject Accessor {\r\n  @implicitNotFound(\"The methods of your service definition should not use the environment, because this leaks implementation details to clients of the service, and these implementation details should be hidden and free to change based on the specific nature of the implementation. In order to use this accessor, please consider refactoring your service methods so they no longer use ZIO environment.\")\r\n  sealed trait IsAny[R]\r\n  implicit val anyIsAny: IsAny[Any] = new IsAny{}\r\n```\r\n\r\nFinally, we should probably extend all companion objects of our own services by this trait.",
+        "createdAt" : "2021-05-20T13:59:20Z",
+        "updatedAt" : "2021-05-20T13:59:20Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57c67163-bc19-4856-8670-bbb591b7abd8",
+        "parentId" : "5fecd17e-b0c8-4342-a118-e3b3a3303b03",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "On trait name:\r\n\r\n - `ServiceCompanion`\r\n - `ServiceAccessor`\r\n  - ???\r\n\r\nIt could also be useful to think of other utilities which could be placed into the service companion object.\r\n\r\nFor example:\r\n\r\n```scala\r\ndef makeLayer[R2, E](zio: ZIO[R2, E, R])(implicit tag: Tag[R]): ZLayer[R2, E, Has[R]] = zio.toLayer\r\n```\r\n\r\nI am not sure if this utility pays for itself, but right now, using `toLayer` sometimes fails because of the invariance of `Has`, requiring you to widen to the service in the final `yield` of the `for` comprehension that builds the effect, e.g.:\r\n\r\n```scala\r\n(for {\r\n a <- b \r\n c <- d \r\n} yield ServiceLive(a, c): Service).toLayer\r\n```\r\n\r\nIn the companion object, you have access to the type `R` of the service so you can add utilities that fix it.\r\n\r\nThis could be changed to:\r\n\r\n```scala\r\nService.makeLayer {\r\n  for {\r\n    a <- b \r\n    c <- d \r\n  } yield ServiceLive(a, c)\r\n}\r\n```\r\n\r\nIf not this one, we should look at opportunities to introduce other utilities that require the service type to be known.\r\n\r\n/cc @kitlangton @adamgfraser ",
+        "createdAt" : "2021-05-20T14:07:00Z",
+        "updatedAt" : "2021-05-20T14:07:01Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8206dfd0-2a4c-41f5-8495-a979130f5044",
+        "parentId" : "5fecd17e-b0c8-4342-a118-e3b3a3303b03",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "@jdegoes Yes. If we just want to use it for these accessors then perhaps we could do `Accessible` which I imagine would be less common but if we want to have other generic utilities related to services then something like `ServiceCompanion` seems more appropriate.\r\n\r\nThere is a little risk that we are creating two ways to do things here (e.g. `Clock.nanotime` versus `Clock(_.nanotime)`) so could be good to think about our messaging around this. The `Clock.nanotime` reads really nicely like it is just a method on a static object but does require a little more work to implement the accessors. Is this the \"not quite as nice\" shortcut for when you don't want to do that? Is it a replacement for the accessors?",
+        "createdAt" : "2021-05-20T15:40:40Z",
+        "updatedAt" : "2021-05-20T15:40:40Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d13b2899-60a9-4ece-b42c-e41130c89c87",
+        "parentId" : "5fecd17e-b0c8-4342-a118-e3b3a3303b03",
+        "authorId" : "cfcc6d7b-bd8b-4cf1-994d-6e0971f0180e",
+        "body" : "> perhaps we could do Accessible\r\n\r\n@adamgfraser I like that. Good to have the same name as the macro it's going to replace (in Scala 3).\r\n\r\n\r\n\r\n> Is this the \"not quite as nice\" shortcut for when you don't want to do that\r\n\r\n@adamgfraser That would be my argument. The default services are used in lots of places, and the difference in niceness is worth making the accessors. I was just thinking this could be useful when you likely are just going to want some less verbose way of using the accessors in test code/a small smattering of places. If you're making a Service that's generally useful and going to be accessed often, I think it's very much worth it to define the individual accessors. The motivation for this was mainly to provide a replacement for @accessible in Scala 3.\r\n\r\n\r\n> I am not sure if this utility pays for itself, but right now, using toLayer sometimes fails because of the invariance of Has, requiring you to widen to the service in the final yield of the for comprehension that builds the effect, e.g.:\r\n\r\n@jdegoes I think that's possible to fix if its broken, though I believe you can currently do `zio.toLayer[SuperType]` to widen it at the call-site. This works for the `toLayer` conversions on functions, it'll infer based on the type-signature of the val, or one can pass an  type to `toLayer`. \r\n\r\n\r\n> The other potential improvement we could make: warn if the user tries to use this on an effect that requires an environment\r\n\r\n@jdegoes That's great! I was thinking of extending #4823 with environment related warnings. That'll be a great way to teach. We can also add links to our docs from the warnings :)",
+        "createdAt" : "2021-05-20T17:36:42Z",
+        "updatedAt" : "2021-05-20T17:37:55Z",
+        "lastEditedBy" : "cfcc6d7b-bd8b-4cf1-994d-6e0971f0180e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a77e086-8e59-432c-a7cf-1ba89a13bef6",
+        "parentId" : "5fecd17e-b0c8-4342-a118-e3b3a3303b03",
+        "authorId" : "cfcc6d7b-bd8b-4cf1-994d-6e0971f0180e",
+        "body" : "Made changes: #5133 ",
+        "createdAt" : "2021-05-20T18:20:05Z",
+        "updatedAt" : "2021-05-20T18:20:05Z",
+        "lastEditedBy" : "cfcc6d7b-bd8b-4cf1-994d-6e0971f0180e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bd790d858c682594628274d13d0b64f3f163c3b4",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +23,27 @@ * }}}\n */\ntrait Accessor[R] {\n  def apply[E, A](f: R => ZIO[Any, E, A])(implicit tag: Tag[R]): ZIO[Has[R], E, A] =\n    ZIO.serviceWith[R](f)"
+  }
+]

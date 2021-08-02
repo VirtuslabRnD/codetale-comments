@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "acc48143-93a2-4577-a509-7efb74c99dd0",
+    "prId" : 2464,
+    "prUrl" : "https://github.com/zio/zio/pull/2464#pullrequestreview-333305125",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "03fa1437-5f69-4d85-8ad2-c8d8d2563334",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Can we use the new `Eql` in Dotty?",
+        "createdAt" : "2019-12-17T11:26:46Z",
+        "updatedAt" : "2019-12-18T13:23:46Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23df6156-44d2-4c50-8c7e-8144d2079bbb",
+        "parentId" : "03fa1437-5f69-4d85-8ad2-c8d8d2563334",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Unfortunately not, or at least not right now. We have an issue with the type of assertions composed with combinators such as `||` being inferred as `Nothing` when we use the same technique. See minimized example and link below. This looked like a type checking issue but I wanted to look at it a little more before opening an issue with the Dotty team.\r\n\r\n```scala\r\nobject Example extends App {\r\n  \r\n  def assert[A](value: A)(assertion: Assertion[A]): Boolean =\r\n    assertion.run(value)\r\n  \r\n  trait Assertion[-A] { self =>\r\n    def run(a: A): Boolean\r\n    def ||[A1 <: A](that: Assertion[A1]): Assertion[A1] =\r\n      a => self.run(a) && that.run(a)\r\n  }\r\n  \r\n  def equalTo[A, B](expected: A)(implicit eq: Eql[A, B]): Assertion[B] =\r\n    _ == expected\r\n  \r\n  def isGreaterThan(a: Int): Assertion[Int] =\r\n    _ > a\r\n  \r\n  // okay\r\n  assert(List(1, 2, 3))(equalTo(List.empty))\r\n  \r\n  // does not compile\r\n  // values of type Int and String cannot be compared with ==  or != \r\n  // assert(\"Adam\")(equalTo(1))\r\n  \r\n  // does not compile\r\n  // expected Assertion[Int] but found Assertion[Nothing]\r\n  // assert(10)(equalTo(5) || isGreaterThan(9))\r\n}\r\n```\r\n\r\nhttps://scastie.scala-lang.org/p41x4qlvQmiXbxyJKk7K9w",
+        "createdAt" : "2019-12-17T11:59:11Z",
+        "updatedAt" : "2019-12-18T13:23:46Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5fa9ed1c-e0f9-4bc0-9e49-2b571161317b",
+        "parentId" : "03fa1437-5f69-4d85-8ad2-c8d8d2563334",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "I thought it was the `A1 <: A` that's forcing it to be `Nothing`, but changing that has no effect. Interesting...\r\n\r\nWe can make \"too much\" compile but still use `Eql` by adding a type bound:\r\n\r\n```scala\r\n  def equalTo[A, B >: A](expected: A)(implicit eq: Eql[A, B]): Assertion[B] =\r\n    _ == expected\r\n```\r\n\r\nI'm not sure if using `Eql` would have any practical benefits in the short-term so maybe it's not worth it. Thoughts?",
+        "createdAt" : "2019-12-17T12:18:27Z",
+        "updatedAt" : "2019-12-18T13:23:46Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ac5a521-0241-4124-88fd-88246059c1b0",
+        "parentId" : "03fa1437-5f69-4d85-8ad2-c8d8d2563334",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "I noticed the same thing too and initially rejected it because it would allow `assert(\"Adam\")(equalTo(1))` to compile so it didn't seem like it was buying us anything. But thinking about it more I think it would allow us to at least unify the signature of `equalTo` and move it back into `Assertion.scala`, removing the `AssertionVariants` files, which would be nice.",
+        "createdAt" : "2019-12-17T12:27:07Z",
+        "updatedAt" : "2019-12-18T13:23:46Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c05b88db-def2-429e-a581-13ef2e0b1e62",
+        "parentId" : "03fa1437-5f69-4d85-8ad2-c8d8d2563334",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Ah, with the type bound on Scala 2 comparison's that don't make sense compile, so we can't do that. I don't think we really get any benefit out of using `Eql` in Dotty until we resolve the compilation issue but am fine either way.",
+        "createdAt" : "2019-12-17T14:17:32Z",
+        "updatedAt" : "2019-12-18T13:23:46Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "656aa9b3-05e9-4cda-abf7-97eabcb76aa1",
+        "parentId" : "03fa1437-5f69-4d85-8ad2-c8d8d2563334",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "OK, no worries",
+        "createdAt" : "2019-12-17T14:17:59Z",
+        "updatedAt" : "2019-12-18T13:23:46Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5b868f5f88e2d9cafda9857459b94ad0ee1023e7",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +24,28 @@   * Makes a new assertion that requires a value equal the specified value.\n   */\n  final def equalTo[A](expected: A): Assertion[A] =\n    Assertion.assertion(\"equalTo\")(param(expected)) { actual =>\n      (actual, expected) match {"
+  }
+]

@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "881fd0aa-c227-4712-8297-eb16b3361c16",
+    "prId" : 4115,
+    "prUrl" : "https://github.com/zio/zio/pull/4115#pullrequestreview-472007032",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "48deda64-902c-43a7-864a-d0348be87ad8",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "I think we need a way to yield to the runtime in the middle of evaluating `commit`. Right now we are racing an STM effect that retries as long as the reference is less than 500 with an effect that increments the reference. But it looks like since we are single threaded and we don't yield we are just caught on the left hand side and never complete. @mijicd Not sure what the best way to do this is. Any thoughts?",
+        "createdAt" : "2020-08-19T21:17:52Z",
+        "updatedAt" : "2020-08-25T16:58:51Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5bfbcf50-9b43-4f81-9e86-07bdb469a2cb",
+        "parentId" : "48deda64-902c-43a7-864a-d0348be87ad8",
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "I think `repeatN` and any other \"spin loops\" should yield in the middle. We can't really make `commit` yield without killing performance, and it shouldn't be necessary anyway if we don't have spin loops elsewhere.",
+        "createdAt" : "2020-08-20T02:29:48Z",
+        "updatedAt" : "2020-08-25T16:58:51Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7139ff9d-7b7d-4054-8ef5-0fc69b3e5030",
+        "parentId" : "48deda64-902c-43a7-864a-d0348be87ad8",
+        "authorId" : "6080cd8f-e671-4d49-a54c-b6159456ac0e",
+        "body" : "Imho, \"early yield\" approach you mentioned seems to be the only reasonable solution here.",
+        "createdAt" : "2020-08-20T07:05:35Z",
+        "updatedAt" : "2020-08-25T16:58:51Z",
+        "lastEditedBy" : "6080cd8f-e671-4d49-a54c-b6159456ac0e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2bceaeb9-dfcc-43aa-8ccd-145d12d6a732",
+        "parentId" : "48deda64-902c-43a7-864a-d0348be87ad8",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Agreed on the spin loops yielding in the middle but I don't think that helps here. In this example the right hand side is using `forever` and is yielding back to the runtime on every evaluation. But the right hand side is never getting evaluated at all because the left hand side is never completing or yielding because the transactional condition is never satisfied. In fact if I put a debug statement in `left` it looks like `left` is getting evaluated repeatedly in a busy loop, which I think is undesirable no matter what. So I think maybe if we fix that then if there are no more changes to the transactional variables the left hand side should be able to suspend which would then allow the runtime to use the thread to evaluate the right hand side and make progress?",
+        "createdAt" : "2020-08-20T17:52:30Z",
+        "updatedAt" : "2020-08-25T16:58:51Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a244ece-ea82-47c1-a778-71867c7343a8",
+        "parentId" : "48deda64-902c-43a7-864a-d0348be87ad8",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "@mijicd Tried an alternative implementation of `orTry` that seems to avoid the issue. Would you take a look when you have the chance?",
+        "createdAt" : "2020-08-20T21:43:59Z",
+        "updatedAt" : "2020-08-25T16:58:51Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e3fac45cf9f8ec359dadc1637487ba5e1d05608b",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +1102,1106 @@          right   = STM.retry\n          updater = ref.update(_ + 10).commit.forever\n          res    <- (left <|> right).commit.race(updater)\n        } yield assert(res)(equalTo(\"left\"))\n      },"
+  },
+  {
+    "id" : "78821eb2-8bb7-400d-a031-3943a825dea2",
+    "prId" : 2817,
+    "prUrl" : "https://github.com/zio/zio/pull/2817#pullrequestreview-354732376",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a9c61a39-c110-4984-8d93-0c13c734b7a4",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "You can do this one and the one below in a single transaction instead of committing after each step. Generally better to stay within the transactional context if possible.",
+        "createdAt" : "2020-02-06T19:59:31Z",
+        "updatedAt" : "2020-02-06T20:21:42Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eae15088e41dcc5c3e617dd915d177db2f1af435",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +35,39 @@        }\n      ),\n      testM(\"`doWhile` to run effect while it satisfies predicate\") {\n        (for {\n          a <- TQueue.bounded[Int](5)"
+  },
+  {
+    "id" : "7a644984-f6b2-459b-bd5d-f921d580b6a9",
+    "prId" : 2817,
+    "prUrl" : "https://github.com/zio/zio/pull/2817#pullrequestreview-354747322",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ecca71e5-de31-4c23-b004-f178089ca616",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "You can also define a local variable here if you don't want to have to put the parentheses around the for comprehension.\r\n\r\n```\r\nval transaction = for { ... }\r\nassertM(transaction.commit)(???)\r\n```",
+        "createdAt" : "2020-02-06T20:25:13Z",
+        "updatedAt" : "2020-02-06T20:25:14Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eae15088e41dcc5c3e617dd915d177db2f1af435",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +36,40 @@      ),\n      testM(\"`doWhile` to run effect while it satisfies predicate\") {\n        (for {\n          a <- TQueue.bounded[Int](5)\n          _ <- a.offerAll(List(0, 0, 0, 1, 2))"
+  },
+  {
+    "id" : "34a01246-99fa-413b-86a6-e5edfd663a89",
+    "prId" : 2607,
+    "prUrl" : "https://github.com/zio/zio/pull/2607#pullrequestreview-342008000",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f9ee4fef-2ffb-4029-94db-d3182928d3fe",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Can we also test that the transaction is not executed if the condition is false?",
+        "createdAt" : "2020-01-13T16:48:23Z",
+        "updatedAt" : "2020-01-13T17:27:50Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e55fdb2-46bb-47dc-9c96-9d634c7092fd",
+        "parentId" : "f9ee4fef-2ffb-4029-94db-d3182928d3fe",
+        "authorId" : "53ab038b-ef2d-4fc9-b239-9bb8213b6d0c",
+        "body" : "I've added them",
+        "createdAt" : "2020-01-13T17:22:34Z",
+        "updatedAt" : "2020-01-13T17:27:50Z",
+        "lastEditedBy" : "53ab038b-ef2d-4fc9-b239-9bb8213b6d0c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "100a82abab8bf6dfcec158ecf58f168442648325",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +415,419 @@      }\n    ),\n    suite(\"when combinators\")(\n      testM(\"when true\") {\n        for {"
+  }
+]

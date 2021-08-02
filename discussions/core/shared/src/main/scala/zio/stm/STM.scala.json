@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "6cea3432-dbcf-4d0c-8013-f7c0ff3891a5",
+    "prId" : 2450,
+    "prUrl" : "https://github.com/zio/zio/pull/2450#pullrequestreview-329724690",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "37897d88-ee38-4d52-b88c-90dc9e689c3c",
+        "parentId" : null,
+        "authorId" : "2a2f79ba-933f-43cd-9d45-5d769ab0f54d",
+        "body" : "Should we use https://github.com/scala/scala/blob/2.13.x/src/library/scala/util/control/ControlThrowable.scala for this?",
+        "createdAt" : "2019-12-09T18:31:33Z",
+        "updatedAt" : "2019-12-13T15:13:35Z",
+        "lastEditedBy" : "2a2f79ba-933f-43cd-9d45-5d769ab0f54d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d4984042-ac1d-4d91-b468-ed5ed2a81ba1",
+        "parentId" : "37897d88-ee38-4d52-b88c-90dc9e689c3c",
+        "authorId" : "6080cd8f-e671-4d49-a54c-b6159456ac0e",
+        "body" : "I wouldn't go for it. Its representation has been changed in 2.13, from trait inheriting `NoStackTrace` to an abstract class, and according to the docs, it seems that its purpose is also changed a bit. \r\n\r\nRelated to this, the reason to avoid `NoStackTrace` in the first place was the possibility to override the suppression via system properties.",
+        "createdAt" : "2019-12-09T19:37:02Z",
+        "updatedAt" : "2019-12-13T15:13:35Z",
+        "lastEditedBy" : "6080cd8f-e671-4d49-a54c-b6159456ac0e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "05f1ebf1-bbe5-4fc2-ad32-0352b0d2800d",
+        "parentId" : "37897d88-ee38-4d52-b88c-90dc9e689c3c",
+        "authorId" : "2a2f79ba-933f-43cd-9d45-5d769ab0f54d",
+        "body" : "makes sense 👍 ",
+        "createdAt" : "2019-12-10T10:18:30Z",
+        "updatedAt" : "2019-12-13T15:13:35Z",
+        "lastEditedBy" : "2a2f79ba-933f-43cd-9d45-5d769ab0f54d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "191c444eaf82d5a601cdbf7a5241e624b04d5cab",
+    "line" : 244,
+    "diffHunk" : "@@ -1,1 +367,371 @@object STM {\n\n  private final class Resumable[E, E1, A, B](val stm: STM[E, A], val ks: Stack[internal.TExit[E, A] => STM[E1, B]])\n      extends Throwable(null, null, false, false)\n"
+  },
+  {
+    "id" : "5adb7487-5aff-4bed-8669-67b79abac6e3",
+    "prId" : 1613,
+    "prUrl" : "https://github.com/zio/zio/pull/1613#pullrequestreview-286369049",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d7aaa892-3639-410d-bd86-8a3ba3ba1d61",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "I'm surprised this fixes anything, because above, we already have that `analysis ne JournalAnalysis.Invalid`. In other words, it may fix something only non-deterministically, because it happens to be checking \"again\" to see if it became invalid (and more will be invalid if checked again, so you'll occasionally fix a race issue this way).\r\n\r\nCould be the real fix is a bit deeper. \r\n\r\nWhat are your thoughts?",
+        "createdAt" : "2019-09-09T00:13:05Z",
+        "updatedAt" : "2019-09-09T06:36:29Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25a2ee98-22b3-4a67-bfe2-2915c0055f92",
+        "parentId" : "d7aaa892-3639-410d-bd86-8a3ba3ba1d61",
+        "authorId" : "524c15e0-b013-4ec4-bd1d-2b61884828d1",
+        "body" : "Scenario:\r\nOne more try to convince you:\r\n- please take a look at test, only `r0` and `r1` exists. STM that reads them both and other STM that updates them both, racing.\r\n- `stm` being processed here is read-only only - it won't contain `Entry` that `isChanged`.\r\n- the other, updating, `STM` on same `TRef`s, it's commiting at this moment - `r0` has been committed and thread pauses before committing `r1`.\r\n- hence `value = stm.exec(journal)` assigns `Succeed(1)` to `value` and adds `r0` and `r1` to `journal`.\r\n- `val analysis = analyzeJournal(journal)` assigns `ReadOnly` to `analysis` <- I think it's possible, because `stm.exec` started after other STM commited `r0`.\r\n- now the other STM continues to commit and updates `r1.versioned` with `1`\r\n- our `stm` enters `if` in L522, then without my fix it breaks the loop, having `value == Succeed(1)`\r\n- if my fix was in place validity of `journal` would be checked again in critical section - not running concurrently with other thread commiting `TRef`s",
+        "createdAt" : "2019-09-09T06:35:10Z",
+        "updatedAt" : "2019-09-09T06:36:29Z",
+        "lastEditedBy" : "524c15e0-b013-4ec4-bd1d-2b61884828d1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a0ffb37-d958-4a70-8fbc-005e9732a53f",
+        "parentId" : "d7aaa892-3639-410d-bd86-8a3ba3ba1d61",
+        "authorId" : "524c15e0-b013-4ec4-bd1d-2b61884828d1",
+        "body" : "My proposal adds check of journal validity for ReadOnly journal **inside critical section**.\r\nJournal check outside critical section can only decide that journal is invalid, but for decision that journal is valid, it has to be done inside critical section.\r\n",
+        "createdAt" : "2019-09-10T19:02:11Z",
+        "updatedAt" : "2019-09-10T19:02:12Z",
+        "lastEditedBy" : "524c15e0-b013-4ec4-bd1d-2b61884828d1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5269c76552ee2207461eda189b5d09b71e54f448",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +561,565 @@              } else {\n                Sync(globalLock) {\n                  if (isInvalid(journal)) loop = true\n                }\n              }"
+  }
+]

@@ -1,0 +1,200 @@
+[
+  {
+    "id" : "a88908cf-6f17-480d-ab39-227726205a64",
+    "prId" : 4910,
+    "prUrl" : "https://github.com/zio/zio/pull/4910#pullrequestreview-644221814",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2b519e9-07d5-4816-9a8e-0191459403e3",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "This is actually the bigger annoyance than name clashes with `scala.concurrent.Duration`.",
+        "createdAt" : "2021-04-22T04:44:55Z",
+        "updatedAt" : "2021-04-26T07:23:03Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e44e5321-b302-4741-a87b-7f83c30d91bd",
+        "parentId" : "e2b519e9-07d5-4816-9a8e-0191459403e3",
+        "authorId" : "cfcc6d7b-bd8b-4cf1-994d-6e0971f0180e",
+        "body" : "Yeah :(",
+        "createdAt" : "2021-04-26T02:15:03Z",
+        "updatedAt" : "2021-04-26T07:23:03Z",
+        "lastEditedBy" : "cfcc6d7b-bd8b-4cf1-994d-6e0971f0180e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "94922c1a634a230e98f2782a78f336c91a0be2a4",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +7,11 @@import zio.test.{check => Check, checkN => CheckN}\n\nimport java.time.{Duration => _, _}\nimport scala.math.Numeric.DoubleIsFractional\n"
+  },
+  {
+    "id" : "196b19c5-0013-48ac-afa3-60c35de7dd57",
+    "prId" : 2583,
+    "prUrl" : "https://github.com/zio/zio/pull/2583#pullrequestreview-339003124",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e683193a-c371-4f72-b876-e3c34c7a99f2",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Looked into this a bit more. It looks like this implicit is actually available on Scala 2.13.1 but not on 2.12.10. Specifically, they use a slightly different encoding to derive an `Ordering` for any type for which `Comparable` is defined (which includes `LocalDateTime`). In Scala 2.13:\r\n\r\n```scala\r\ntype AsComparable[A] = A => Comparable[_ >: A]\r\n\r\nimplicit def ordered[A](implicit asComparable: AsComparable[A]): Ordering[A] = new Ordering[A] {\r\n  def compare(x: A, y: A): Int = asComparable(x).compareTo(y)\r\n}\r\n```\r\n\r\nIn Scala 2.12:\r\n\r\n```scala\r\nimplicit def ordered[A <% Comparable[A]]: Ordering[A] = new Ordering[A] {\r\n  def compare(x: A, y: A): Int = x compareTo y\r\n}\r\n```\r\n\r\nFor some reason the view bound in Scala 2.12 doesn't work, possibly because `A` is constrained to be the same type versus a super type as in Scala 2.13 and `LocalDateTime` actually implements `Comparable[ChronoLocalDateTime`.\r\n\r\nWe could potentially create a compatibility trait that would provide this instance but given that it is only used in this file I don't think it is really necessary.",
+        "createdAt" : "2020-01-06T18:22:14Z",
+        "updatedAt" : "2020-01-07T02:10:38Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "699ff6a4-4444-41c6-8a94-8a68cbbeaf91",
+        "parentId" : "e683193a-c371-4f72-b876-e3c34c7a99f2",
+        "authorId" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "body" : "Thanks - I guess it's a nice improvement for 2.13 :) \r\n\r\nI did find the 2.12 definition and guessed the reason it wasn't working was because the A type didn't line up. It looks like OffsetDateTime directly implements `compareTo` while LocalDateTime overrides `compareTo` on in `ChronoLocalDateTime`, but since `ChronoLocalDateTime` implements `compareTo` I would have thought it should still be considered a `Comparable`.\r\n\r\nI'll throw that type signature (`type AsWhatever[A] = A => Whatever[_ >: A]`)  in my bag of tricks - looks handy for these sort of circumstances!",
+        "createdAt" : "2020-01-07T02:31:03Z",
+        "updatedAt" : "2020-01-07T02:31:03Z",
+        "lastEditedBy" : "d75be8fa-2835-4186-80dc-40caf532bcef",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9992959703457d66a21ca008d5e36edfae68a315",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +12,16 @@\nobject GenSpec extends ZIOBaseSpec {\n  implicit val localDateTimeOrdering: Ordering[LocalDateTime] = _ compareTo _\n\n  def spec = suite(\"GenSpec\")("
+  },
+  {
+    "id" : "faf4fb05-0c30-4711-91d3-a21b5c7ed958",
+    "prId" : 2575,
+    "prUrl" : "https://github.com/zio/zio/pull/2575#pullrequestreview-338398974",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bfbbdc3c-9cfa-48cd-bda6-a5b146b794c8",
+        "parentId" : null,
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "I'm surprised this one is not `List(2, 5)` because I assumed the `List(3)` would be exhausted. Does `Gen.fromIterable` create an infinite `Gen` that cycles the given iterable?",
+        "createdAt" : "2020-01-05T11:44:26Z",
+        "updatedAt" : "2020-01-05T11:44:35Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3c8ea405-01d2-4267-a6cf-cb3427a324b7",
+        "parentId" : "bfbbdc3c-9cfa-48cd-bda6-a5b146b794c8",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "`zipWith` repeats pulling from the shorter stream if necessary until the longer stream is exhausted.  In this specific case if we're combining multiple generators we could just return a shorter list, but in general if we are combining `Gen[A]` and `Gen[B]` to produce `Gen[(A, B)]` we can't do that because we need both an `A` and a `B`.\r\n\r\nThis is important because we model random generators as generators of a single effectual value, so if we combine a random generator with a deterministic generator we want to return a new generator with the size of the original deterministic generator that pulls each value from the deterministic generator, pulling a value from the random generator each time.\r\n\r\nFor combining deterministic generators both approaches would work I think but this also ends up being fairly useful because you make sure that you sample the entire space of the generators you are combining.\r\n\r\nI tried to make this clear in the documentation, for example for `zipAll`, but let me know if there is something you would change.\r\n\r\n```\r\n  /**\r\n   * Zips the specified generators together pairwise. The new generator will\r\n   * generate elements as long as any generator is generating elements, running\r\n   * the other generators multiple times if necessary.\r\n   */\r\n```",
+        "createdAt" : "2020-01-05T12:41:14Z",
+        "updatedAt" : "2020-01-05T12:41:14Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "651fe3dd-584d-4407-bcb6-63a0a050e85a",
+        "parentId" : "bfbbdc3c-9cfa-48cd-bda6-a5b146b794c8",
+        "authorId" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "body" : "Ah interesting. That reasoning makes sense to me 👍 . Thanks for expanding on that.",
+        "createdAt" : "2020-01-05T12:56:59Z",
+        "updatedAt" : "2020-01-05T12:56:59Z",
+        "lastEditedBy" : "4f7a0777-ad97-4424-aa99-3fcea1de6a97",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a9e8337e50761e7893854ecdda903abed2d6a0c4",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +476,480 @@          List(\n            List(1, 3, 4),\n            List(2, 3, 5)\n          )\n        )"
+  },
+  {
+    "id" : "6a92608a-9191-4b4e-9224-1d272c91426f",
+    "prId" : 2480,
+    "prUrl" : "https://github.com/zio/zio/pull/2480#pullrequestreview-332716073",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e56ad956-be5a-459b-b907-64722a36f4be",
+        "parentId" : null,
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "I think we can keep this test but we need to change `zipWith` to `crossWith` and mark it as `scala2Only` due to #2232.",
+        "createdAt" : "2019-12-16T16:54:55Z",
+        "updatedAt" : "2019-12-16T23:10:59Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d38ab0eb13dae0b7bd11a8828f2525548e54dbbd",
+    "line" : 409,
+    "diffHunk" : "@@ -1,1 +408,412 @@      }\n    ),\n    testM(\"fromIterable constructs deterministic generators\") {\n      val expected   = (1 to 6).flatMap(x => (1 to 6).map(y => x + y))\n      val exhaustive = Gen.fromIterable(1 to 6)"
+  },
+  {
+    "id" : "152565d5-fed3-4588-927f-9c721d2cedad",
+    "prId" : 2229,
+    "prUrl" : "https://github.com/zio/zio/pull/2229#pullrequestreview-318565269",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "09bd956c-0dbc-44bf-9e0d-8f15bcbf79d5",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Not dotty?",
+        "createdAt" : "2019-11-18T19:09:44Z",
+        "updatedAt" : "2019-11-18T19:09:44Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d1933ef6-d90c-44c3-ac16-1cbf58926614",
+        "parentId" : "09bd956c-0dbc-44bf-9e0d-8f15bcbf79d5",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Blocked by: https://github.com/zio/zio/issues/2232.",
+        "createdAt" : "2019-11-18T19:13:49Z",
+        "updatedAt" : "2019-11-18T19:13:50Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "81158f7f982b9b7b540f0ac3a4c9f8c1c6705374",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +17,21 @@          } yield assert(left, startsWith(right))\n        }\n      } @@ scala2Only,\n      testM(\"right preservation\") {\n        checkM(deterministic, deterministic) { (a, b) =>"
+  },
+  {
+    "id" : "d9c68fc3-d77f-4dc8-b44d-2b0169430823",
+    "prId" : 2229,
+    "prUrl" : "https://github.com/zio/zio/pull/2229#pullrequestreview-318565313",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "aaa66876-809c-4a16-9e67-79b480c6b455",
+        "parentId" : null,
+        "authorId" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "body" : "Not dotty?",
+        "createdAt" : "2019-11-18T19:09:51Z",
+        "updatedAt" : "2019-11-18T19:09:51Z",
+        "lastEditedBy" : "fb116aef-1bf2-4605-9639-255437a2e564",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "44210e0a-70e2-4cce-b105-0a61619bd0aa",
+        "parentId" : "aaa66876-809c-4a16-9e67-79b480c6b455",
+        "authorId" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "body" : "Blocked by: https://github.com/zio/zio/issues/2232.",
+        "createdAt" : "2019-11-18T19:13:54Z",
+        "updatedAt" : "2019-11-18T19:13:54Z",
+        "lastEditedBy" : "e51a12a9-b5b7-4e30-a51d-293206825c6f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "81158f7f982b9b7b540f0ac3a4c9f8c1c6705374",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +25,29 @@          } yield assert(left, startsWith(right))\n        }\n      } @@ scala2Only,\n      testM(\"shrinking\") {\n        checkM(random, random) { (a, b) =>"
+  }
+]
