@@ -152,5 +152,71 @@
     "commit" : "1c5a0376dd93c38ffe71225cec9cea15fd9624f0",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +113,117 @@        index = indexes[0]\n        for other in indexes[1:]:\n            index = index.intersection(other)\n    else:\n        index = _union_indexes(indexes, sort=sort)"
+  },
+  {
+    "id" : "6d242594-c7ee-444b-acc1-96b6cfb40179",
+    "prId" : 35098,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/35098#pullrequestreview-444866749",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fe3217ec-88a2-43ec-978a-44aed113e4d9",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "really? why is this",
+        "createdAt" : "2020-07-07T13:24:34Z",
+        "updatedAt" : "2020-07-08T16:02:12Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f112cdd8-b430-4985-a5c8-f4e1024013ab",
+        "parentId" : "fe3217ec-88a2-43ec-978a-44aed113e4d9",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "IIRC sort is implemented for all union index types, or is it showing a warning?",
+        "createdAt" : "2020-07-07T13:24:54Z",
+        "updatedAt" : "2020-07-08T16:02:12Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ad11f4d-d2d6-4e91-9c9a-e6a45c5545d0",
+        "parentId" : "fe3217ec-88a2-43ec-978a-44aed113e4d9",
+        "authorId" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "body" : "@jreback \r\nPassing `sort=True` to `Index.union` throws an error:\r\n\r\n```python\r\n    def _validate_sort_keyword(self, sort):\r\n        if sort not in [None, False]:\r\n            raise ValueError(\r\n                \"The 'sort' keyword only takes the values of \"\r\n                f\"None or False; {sort} was passed.\"\r\n            )\r\n```\r\n\r\nFirst thing `Index.union` [does](https://github.com/pandas-dev/pandas/blob/031fb16835af1f92522649d0b1f53808c5d9338c/pandas/core/indexes/base.py#L2527) is:\r\n\r\n```python\r\nself._validate_sort_keyword(sort)\r\nself._assert_can_do_setop(other)\r\n```\r\n\r\nHave no idea why a boolean argument is handled this way, but it's explicitly stated in the docstring, so it was done consciously:\r\n<details>\r\n```\r\n        sort : bool or None, default None\r\n            Whether to sort the resulting Index.\r\n\r\n            * None : Sort the result, except when\r\n\r\n              1. `self` and `other` are equal.\r\n              2. `self` or `other` has length 0.\r\n              3. Some values in `self` or `other` cannot be compared.\r\n                 A RuntimeWarning is issued in this case.\r\n\r\n            * False : do not sort the result.\r\n\r\n            .. versionadded:: 0.24.0\r\n\r\n            .. versionchanged:: 0.24.1\r\n\r\n               Changed the default value from ``True`` to ``None``\r\n               (without change in behaviour).\r\n```\r\n</details>",
+        "createdAt" : "2020-07-07T13:40:25Z",
+        "updatedAt" : "2020-07-08T16:02:12Z",
+        "lastEditedBy" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3242c1be-03d5-4a39-beed-f87751bab290",
+        "parentId" : "fe3217ec-88a2-43ec-978a-44aed113e4d9",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "hmm IIRC we did this deliberartly as we don't support this, can you see if can add an existing issue reference here (in both places if possible). future us will be puzzzled otherwise.",
+        "createdAt" : "2020-07-08T12:54:30Z",
+        "updatedAt" : "2020-07-08T16:02:12Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fbf4793c-3c67-4046-8f9f-cf22ad1ca6cf",
+        "parentId" : "fe3217ec-88a2-43ec-978a-44aed113e4d9",
+        "authorId" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "body" : "@jreback \r\nDid a little digging. The API was changed in issue #24959. `sort` had been introduced to all the Index set-operations before, and then we discovered that the operations didn't guarantee sorting in edge cases. We decided to change the default to `sort=None` for set-ops to signify that and fix this in the future: ensure that `sort=True` always sorts for every set-op and then change the default to `sort=False` and deprecate `sort=None`. As far as I can tell, the last attempt to implement `sort=True` and deprecate `sort=None` was in #25980, and the PR went stale, so we never finished the job.\r\n\r\nWhile we can and do hit edge cases in `Index.union`, there is a crutch in `_get_combined_index` that saves us if `union` doesn't sort:\r\n\r\n```python\r\n    if sort:\r\n        try:\r\n            index = index.sort_values()\r\n        except TypeError:\r\n            pass\r\n```\r\n\r\nI've added a comment to this PR to clarify all this stuff. ",
+        "createdAt" : "2020-07-08T15:12:19Z",
+        "updatedAt" : "2020-07-08T16:02:12Z",
+        "lastEditedBy" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1c371bd884f290969be408166829f446d7c2c2f7",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +221,225 @@                if sort:\n                    sort = None\n                result = result.union(other, sort=sort)\n            return result\n    elif kind == \"array\":"
   }
 ]
