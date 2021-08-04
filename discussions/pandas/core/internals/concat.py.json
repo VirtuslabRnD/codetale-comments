@@ -130,5 +130,159 @@
     "commit" : "49a038cd0dd79d268638c5510be722d80168ca7e",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +444,448 @@    return (\n        # all blocks need to have the same type\n        all(isinstance(ju.block, type(join_units[0].block)) for ju in join_units)\n        and  # noqa\n        # no blocks that would get missing values (can lead to type upcasts)"
+  },
+  {
+    "id" : "0042ba6e-3fc7-4217-b582-eb5b92f7b9a9",
+    "prId" : 34339,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/34339#pullrequestreview-417278081",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3ec1b435-4613-4e4b-8945-b55302135061",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "this change is to ensure DatetimeBlock and DatetimeTZBlock don't incorrectly take this \"uniform join units\" code path",
+        "createdAt" : "2020-05-23T13:14:55Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "94fe89d66c1c5e86dcb84100ad3ce07c4075ac7f",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +453,457 @@    return (\n        # all blocks need to have the same type\n        all(type(ju.block) is type(join_units[0].block) for ju in join_units)\n        and  # noqa\n        # no blocks that would get missing values (can lead to type upcasts)"
+  },
+  {
+    "id" : "15ce24e1-12e4-4b35-8630-711f0fe3a321",
+    "prId" : 34339,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/34339#pullrequestreview-430640206",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "I find it odd that the logic is now split here and concat_compat. I would strongly encourage to put this logic there.",
+        "createdAt" : "2020-06-08T01:42:00Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d89a521-c856-42ec-baaa-e9f35822e8b9",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Having this here actually ensures a clear separation of concerns between `dtypes/concat.py` and `internals/concat.py`. \r\n\r\nThe `concat_compat` from `dtypes/concat.py` only needs to worry about concatting 1D arrays (for the case of ExtensionArrays, to be clear), and the code here in internals deals with ensuring the result is the proper dimension depending on how it is put in the BlockManager.\r\n\r\nThis keeps this BlockManager-related logic inside the internals, and ensures that `concat_compat` / `dtypes/concat.py` doesn't need to care about internals-specific details.",
+        "createdAt" : "2020-06-10T08:41:18Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "059fdb40-c0e8-4242-8a57-815b4da5a875",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "my point is you should have a concat_ea which you *call* here (right near concat_compat), otherwise the logic is scatttered. the *dispatching) logic is fine, the problem is the operational logic does not belong here. (alternative is to pass anotherr arg to concat_compat to do what you are doing here).",
+        "createdAt" : "2020-06-14T15:20:42Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c22e0c1e-08ec-4333-87cc-6e9de507870b",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "If there is a different `concat_ea`, then at each location where `concat_compat` is called, we would need to do a `if any_ea: concat_ea(..); else: concat_compat(...)`\r\n\r\nWhat do you mean exactly with the \"operational logic does not belong here\". What part of the code below is the \"operational\" logic?",
+        "createdAt" : "2020-06-14T15:39:02Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7bcbb90-5283-4de9-8a83-3e64787b554b",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "every bit you added is operational logic.\r\n\r\npls do something like this\r\n```\r\nelif any(isinstance(t, ExtensionArray) for t in to_concat):\r\n    values = concat_ea(...)\r\n```",
+        "createdAt" : "2020-06-14T15:54:37Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b564e46f-805f-44e9-942c-31728c05877f",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "`concat_compat` is called in 13 places in the code base. Do you want to add such `elif` case in all those places?",
+        "createdAt" : "2020-06-14T16:47:22Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ede4c75e-bf79-481a-b9e7-722db9d2fcd4",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this is moving L324-330. As I have said before you are mixing 2 types of logic here by adding this.",
+        "createdAt" : "2020-06-14T16:49:12Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "144ccac4-d1c9-466f-bf9a-a8ca2be85020",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "To make sure I understand you correctly. You want to see the following function be put in `dtypes/concat.py`:\r\n\r\n```python\r\ndef concat_ea_frame(to_concat):\r\n    to_concat = [t if isinstance(t, ExtensionArray) else t[0, :] for t in to_concat]\r\n    concat_values = concat_compat(to_concat, axis=concat_axis)\r\n    if not isinstance(concat_values, ExtensionArray):\r\n        # if the result of concat is not an EA but an ndarray, reshape to\r\n        # 2D to put it a non-EA Block\r\n        concat_values = np.atleast_2d(concat_values)\r\n    return concat_values\r\n```\r\n\r\nand called her. Is that correct?\r\n\r\nI can do that if it ends this discussion, but just to note: this would create a function in `dtypes/concat.py` with logic tied to the internals (reshaping to conform to block's dimenions is something only needs to be known to the internals code) and that would only be used in the internals (here, in `internals/concat.py`)",
+        "createdAt" : "2020-06-14T19:44:13Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bce4bbbb-4e03-40b2-8897-93cc71029cb0",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "yes this is exactly inline with concat_dateime and concat_compat. I am surprised that you think this should be anywhere else.",
+        "createdAt" : "2020-06-14T19:51:57Z",
+        "updatedAt" : "2020-06-18T13:26:52Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "50bf264d-e101-40a5-afb0-a63297e6fd1e",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "> with logic tied to the internals (reshaping to conform to block's dimenions is something only needs to be known to the internals code) and that would only be used in the internals\r\n\r\ni agree with Joris; internals-specific logic belongs in internals",
+        "createdAt" : "2020-06-14T20:48:10Z",
+        "updatedAt" : "2020-06-18T13:26:53Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0f12b55-9c23-47a2-a93b-08306ca754f7",
+        "parentId" : "65f03c0b-7e26-489a-a429-e505989ed341",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "i guess",
+        "createdAt" : "2020-06-15T13:25:23Z",
+        "updatedAt" : "2020-06-18T13:26:53Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "94fe89d66c1c5e86dcb84100ad3ce07c4075ac7f",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +321,325 @@                concat_values = concat_values.copy()\n    elif any(isinstance(t, ExtensionArray) for t in to_concat):\n        # concatting with at least one EA means we are concatting a single column\n        # the non-EA values are 2D arrays with shape (1, n)\n        to_concat = [t if isinstance(t, ExtensionArray) else t[0, :] for t in to_concat]"
   }
 ]

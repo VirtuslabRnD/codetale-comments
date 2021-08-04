@@ -86,5 +86,104 @@
     "commit" : "f376f121e20e25848a305e31c501500b8a205f2c",
     "line" : 49,
     "diffHunk" : "@@ -1,1 +998,1002 @@            enc->iterEnd(obj, &tc);\n            Buffer_AppendIndentNewlineUnchecked (enc);\n            Buffer_AppendIndentUnchecked (enc, enc->level);\n            Buffer_AppendCharUnchecked(enc, ']');\n            break;"
+  },
+  {
+    "id" : "00d32774-360c-4e6c-a839-c1d8f56931ff",
+    "prId" : 34473,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/34473#pullrequestreview-433308161",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "80a5ce79-c9e2-4f55-8e90-6f293463eaeb",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "The implementation here should be pretty similar to the UTF8 case but remove the `Buffer_AppendCharUnchecked(enc, '\\\"');` lines. You also don't need the `enc->forceASCII` check and can just do `1Buffer_EscapeStringUnvalidated`",
+        "createdAt" : "2020-06-03T16:39:52Z",
+        "updatedAt" : "2020-06-24T21:12:46Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5c86d056-6525-44e9-ad5c-c3e0c1bc4260",
+        "parentId" : "80a5ce79-c9e2-4f55-8e90-6f293463eaeb",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "I think you will also need to define a function pointer for a callback that converts the object to a string representation\r\n\r\nSee:\r\n\r\nhttps://github.com/pandas-dev/pandas/blob/e79487d8e50a03be87188608cd1379330a4fd224/pandas/_libs/src/ujson/python/objToJSON.c#L2116\r\n\r\nAnd \r\n\r\nhttps://github.com/pandas-dev/pandas/blob/e79487d8e50a03be87188608cd1379330a4fd224/pandas/_libs/src/ujson/python/objToJSON.c#L1659\r\n\r\nAs examples",
+        "createdAt" : "2020-06-03T16:53:04Z",
+        "updatedAt" : "2020-06-24T21:12:46Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b73ae9c-e71f-4cac-a22f-ef5fce71e00d",
+        "parentId" : "80a5ce79-c9e2-4f55-8e90-6f293463eaeb",
+        "authorId" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "body" : "So this works up to line 1112, in that\r\n``` C++\r\n value = enc->getBigNumStringValue(obj, &tc, &szlen);\r\n```\r\ngets the correct string (I checked with a print statement). But there's still a problem because we exit with an `OverflowError` via this line (checked with a print statement)\r\nhttps://github.com/pandas-dev/pandas/blob/5d69786af46291abe727b290a84aa9d2663cd50c/pandas/_libs/src/ujson/python/objToJSON.c#L2289\r\nI feel like this something to do with the buffer and the length of the string we're printing out somehow not being right...?",
+        "createdAt" : "2020-06-18T04:27:04Z",
+        "updatedAt" : "2020-06-24T21:12:46Z",
+        "lastEditedBy" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b744da8-9eb1-40fd-9dad-2c0c29bb7a11",
+        "parentId" : "80a5ce79-c9e2-4f55-8e90-6f293463eaeb",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "This goes back to L1636. CPython manages a global error and we never explicitly clear it on that line. You could all `PyErr_Clear()` but it actually would be better if you used `PyLong_AsLongLongAndOverflow` and checked for a non-zero overflow\r\n\r\nhttps://docs.python.org/3/c-api/long.html#c.PyLong_AsLongLongAndOverflow",
+        "createdAt" : "2020-06-18T04:44:40Z",
+        "updatedAt" : "2020-06-24T21:12:46Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3b8e1ad4-4bb0-445c-937e-831811d1e2ab",
+        "parentId" : "80a5ce79-c9e2-4f55-8e90-6f293463eaeb",
+        "authorId" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "body" : "Ok! I'll go with `PyLong_AsLongLongAndOverflow`.\r\n\r\nQuick question, though: when I do\r\n``` C++\r\n        int *_overflow = 0;\r\n        GET_TC(tc)->longValue = PyLong_AsLongLongAndOverflow(obj, _overflow);\r\n```\r\nI'm making a mistake (there's a segfault) - but not sure why",
+        "createdAt" : "2020-06-18T06:08:19Z",
+        "updatedAt" : "2020-06-24T21:12:46Z",
+        "lastEditedBy" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5a8e8ffc-0db2-4a60-9507-a5e048cbf822",
+        "parentId" : "80a5ce79-c9e2-4f55-8e90-6f293463eaeb",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "The way it is written you are telling the program to write the overflow result to memory location 0, which the program almost assuredly doesn't have access to (hence segfault)\r\n\r\nJust declare the int and use the address of operator\r\n\r\n```c\r\nint overflow;\r\nGET_TC(tc)->longValue = PyLong_AsLongLongAndOverflow(obj, &overflow);\r\n```",
+        "createdAt" : "2020-06-18T13:55:30Z",
+        "updatedAt" : "2020-06-24T21:12:46Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c96ae4b63b7df7833a2fa8cbdb84c92a4b969bc",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +1109,1113 @@        }\n\n        case JT_BIGNUM: {\n            value = enc->getBigNumStringValue(obj, &tc, &szlen);\n"
+  },
+  {
+    "id" : "d79b1853-a22f-41f8-8a31-3694ba317574",
+    "prId" : 34473,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/34473#pullrequestreview-433525329",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b492a499-5cfd-4df8-8261-a182cfbdd384",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "```suggestion\r\n            Buffer_Reserve(enc, szlen);\r\n```\r\n\r\nThis might be your outstanding issue. This macro reserves a much larger buffer than we know we need here",
+        "createdAt" : "2020-06-18T18:04:28Z",
+        "updatedAt" : "2020-06-24T21:12:46Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c96ae4b63b7df7833a2fa8cbdb84c92a4b969bc",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +1112,1116 @@            value = enc->getBigNumStringValue(obj, &tc, &szlen);\n\n            Buffer_Reserve(enc, RESERVE_STRING(szlen));\n            if (enc->errorMsg) {\n                enc->endTypeContext(obj, &tc);"
   }
 ]
