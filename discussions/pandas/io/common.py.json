@@ -295,5 +295,93 @@
     "commit" : "8d1deeee79e5520279dfb169acaeac371b0afbd9",
     "line" : 95,
     "diffHunk" : "@@ -1,1 +360,364 @@    path_or_buf,\n    mode: str,\n    encoding=None,\n    compression: Optional[Union[str, Dict[str, Any]]] = None,\n    memory_map: bool = False,"
+  },
+  {
+    "id" : "60ec8211-10ff-4df5-9bb2-9736022aacd8",
+    "prId" : 27598,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/27598#pullrequestreview-266984948",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "76442477-b315-4473-befe-3cde14af5988",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "When we drop 3.5 support do you think we can just do `isinstance(filepath_or_buffer, os.PathLike) here instead? ",
+        "createdAt" : "2019-07-26T04:19:31Z",
+        "updatedAt" : "2019-08-02T09:22:49Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "171b03a0fe23673bb778acbe8652e3b2047b7179",
+    "line" : 70,
+    "diffHunk" : "@@ -1,1 +152,156 @@    \"\"\"\n    if hasattr(filepath_or_buffer, \"__fspath__\"):\n        # https://github.com/python/mypy/issues/1424\n        return filepath_or_buffer.__fspath__()  # type: ignore\n    elif isinstance(filepath_or_buffer, pathlib.Path):"
+  },
+  {
+    "id" : "dfaa5a77-1f17-4ba9-b6dd-f300a5da0e29",
+    "prId" : 27598,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/27598#pullrequestreview-270296869",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2ac9c6c2-e458-410a-a0bc-a5765dd2b087",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "What does subscripting with `AnyStr` do here? Add to Union?",
+        "createdAt" : "2019-08-02T14:43:48Z",
+        "updatedAt" : "2019-08-02T14:44:05Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f1bef8a-e98e-4f4f-a7c4-1bc75473b7a2",
+        "parentId" : "2ac9c6c2-e458-410a-a0bc-a5765dd2b087",
+        "authorId" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "body" : "FilePathOrBuffer is a just a Union. FilePathOrBuffer[AnyStr] with subscription is effectively a TypeVar in IO. so IO[str] can't become IO[bytes].\r\n\r\ni think https://mypy.readthedocs.io/en/latest/generics.html#generic-type-aliases explains it. will send a different link if i come across a better explanation.",
+        "createdAt" : "2019-08-02T15:09:26Z",
+        "updatedAt" : "2019-08-02T15:09:26Z",
+        "lastEditedBy" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a94e25d-fbe4-4959-a105-c6b4e0526758",
+        "parentId" : "2ac9c6c2-e458-410a-a0bc-a5765dd2b087",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "That's pretty cool - thanks for sharing! Does this really change anything though? We already have `IO[AnyStr]` in `FilePathOrBuffer` so this just restates that (?)\r\n\r\nUnrelated note - `IO[AnyStr]` might itself be wrong as `AnyStr` is a TypeVar and I think we need to parametrize `IO` with the actual type. I find the Python docs rather confusing on that so maybe we remove `AnyStr` altogether but can level that as a separate exercise (unless it helps simplify annotation here)\r\n",
+        "createdAt" : "2019-08-02T16:13:35Z",
+        "updatedAt" : "2019-08-02T16:13:35Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09ec28ed-f946-4b69-b3be-425410755711",
+        "parentId" : "2ac9c6c2-e458-410a-a0bc-a5765dd2b087",
+        "authorId" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "body" : "> Unrelated note - `IO[AnyStr]` might itself be wrong as `AnyStr` is a TypeVar and I think we need to parametrize `IO` with the actual type.\r\n\r\nThe alias is a Union, the Union has one and only one Generic. so parametrising the alias is parametrising the only Generic in the Union, i.e. IO. \r\n\r\n\r\n> We already have `IO[AnyStr]` in `FilePathOrBuffer` so this just restates that (?)\r\n\r\nI don't think AnyStr is treated as a TypeVar inside the union when the alias is defined. so that's why it's needed in use\r\n\r\n\r\n> Does this really change anything though?\r\n\r\nyes. mypy will fail without it.\r\n\r\nin to_html etc only string buffers are supported. hence `Optional[FilePathOrBuffer[str]]` is used (note the parametrisation of FilePathOrBuffer here)  and the TypeVar then becomes necessary otherwise a bytes buffer could be returned.\r\n\r\n`buffer_put_lines(buf: IO[str], lines: List[str]) -> None` only supports string buffers. so mypy will raise if we don't use TypeVars to maintain the FilePathOrBuffer type in and out of the common functions.\r\n\r\n",
+        "createdAt" : "2019-08-02T16:59:19Z",
+        "updatedAt" : "2019-08-02T16:59:19Z",
+        "lastEditedBy" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22a926d8-1a63-492b-8f88-0a38e70d82c5",
+        "parentId" : "2ac9c6c2-e458-410a-a0bc-a5765dd2b087",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Right I think the std documentation isn't very clear but just defining `IO` creates a generic accepting a type of `AnyStr` which is str / bytes. This is in contrast to other generics that really accept type `T` (essentially anything). You can see this if you try to inject a non-str or bytes type\r\n\r\n```python\r\nfrom typing import IO\r\n\r\nfoo: IO[int]\r\n```\r\n\r\nyields\r\n\r\n```sh\r\nerror: Value of type variable \"AnyStr\" of \"IO\" cannot be \"int\"\r\n```\r\n\r\nSo I think an error to keep re-parametrizing IO with `AnyStr` in the _typing module and here. \r\n\r\nLet's leave to a follow up to clean up though",
+        "createdAt" : "2019-08-02T17:13:30Z",
+        "updatedAt" : "2019-08-02T17:13:30Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "171b03a0fe23673bb778acbe8652e3b2047b7179",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +98,102 @@\ndef _expand_user(\n    filepath_or_buffer: FilePathOrBuffer[AnyStr]\n) -> FilePathOrBuffer[AnyStr]:\n    \"\"\"Return the argument with an initial component of ~ or ~user"
   }
 ]
