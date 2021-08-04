@@ -64,5 +64,115 @@
     "commit" : "589a961100f6e2674dd6101a5e4cde8edf31fd03",
     "line" : 8,
     "diffHunk" : "@@ -1,1 +182,186 @@\n    if isna(a) and isna(b):\n        # TODO: Should require same-dtype NA?\n        # nan / None comparison\n        return True"
+  },
+  {
+    "id" : "d8be5801-e79f-4cf0-82ac-7b96901389d2",
+    "prId" : 30562,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30562#pullrequestreview-363087874",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5c91d2c0-6ed3-4f56-9c43-21c6514a07b3",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "is there a perf difference between this and np.allclose (or some other np func)?",
+        "createdAt" : "2020-01-21T16:52:12Z",
+        "updatedAt" : "2020-06-21T09:44:18Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1bb3fc7c-5d6a-4252-ac2f-7d4f5de8add2",
+        "parentId" : "5c91d2c0-6ed3-4f56-9c43-21c6514a07b3",
+        "authorId" : "6e82078b-0a97-4940-a41d-3b2a01e49b5d",
+        "body" : "My understanding is that `np.isclose` / `np.allclose` do other checks so as to deal with arrays, etc. This had been raised in #9457 also. After reading that issue, I got the impression that those checks performed by `assert_*_equals` in pandas are needed, and thus the change should be applied at the level of the actual comparison function.\r\n\r\nAlso, from the Python docs/[PEP 485](https://www.python.org/dev/peps/pep-0485/), the Python implementation was inspired by numpy's.\r\n\r\nIs it meaningful to do a perf test here? Can you provide some advice/guidance on how to do it?\r\n\r\nThanks",
+        "createdAt" : "2020-01-21T17:11:25Z",
+        "updatedAt" : "2020-06-21T09:44:18Z",
+        "lastEditedBy" : "6e82078b-0a97-4940-a41d-3b2a01e49b5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "980ef174-9bc3-4fd5-ad82-3b28059890b5",
+        "parentId" : "5c91d2c0-6ed3-4f56-9c43-21c6514a07b3",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "> Can you provide some advice/guidance on how to do it?\r\n\r\nUsually we would use ipython and `%timeit` with one or more example cases that go through the affected code.",
+        "createdAt" : "2020-02-07T00:09:47Z",
+        "updatedAt" : "2020-06-21T09:44:18Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76fdc030-e470-4e7e-b925-c640435a4047",
+        "parentId" : "5c91d2c0-6ed3-4f56-9c43-21c6514a07b3",
+        "authorId" : "6e82078b-0a97-4940-a41d-3b2a01e49b5d",
+        "body" : "Will try to find some time during the week to do this. Worst case scenario, I'll do it during the weekend.\r\n\r\nThanks for the suggestion.",
+        "createdAt" : "2020-02-10T21:57:14Z",
+        "updatedAt" : "2020-06-21T09:44:18Z",
+        "lastEditedBy" : "6e82078b-0a97-4940-a41d-3b2a01e49b5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1dafa48f-849b-4147-a1a7-abbb4743bf28",
+        "parentId" : "5c91d2c0-6ed3-4f56-9c43-21c6514a07b3",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "did you get a measurement here?",
+        "createdAt" : "2020-02-19T22:44:31Z",
+        "updatedAt" : "2020-06-21T09:44:18Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f6acbf54-354a-4c40-abdc-7f72ebde614a",
+        "parentId" : "5c91d2c0-6ed3-4f56-9c43-21c6514a07b3",
+        "authorId" : "6e82078b-0a97-4940-a41d-3b2a01e49b5d",
+        "body" : "Yes!\r\n\r\n```python\r\nimport math\r\nimport numpy as np\r\nfrom pandas import DataFrame\r\n\r\ndata = []\r\nfor a, b in [\r\n    (1e10, 1.00001e10),\r\n    (1e-7, 1e-8),\r\n    (1e10, 1.00001e10),\r\n    (1e-8, 1e-9),\r\n    (1e10, 1.0001e10),\r\n    (1e-8, 1e-9),\r\n\r\n]:\r\n    math_isclose = %timeit -q -o math.isclose(a, b)\r\n    np_isclose = %timeit -q -o np.isclose(a, b)\r\n    np_allclose = %timeit -q -o np.allclose(a, b)\r\n    data.append([math_isclose.average, np_isclose.average, np_allclose.average])\r\n\r\nDataFrame(data, columns=[\"math.isclose\", \"np.isclose\", \"np.allclose\"])\r\n   math.isclose  np.isclose  np.allclose\r\n0  1.271213e-07    0.000032     0.000039\r\n1  1.369607e-07    0.000034     0.000044\r\n2  1.300808e-07    0.000032     0.000039\r\n3  1.255904e-07    0.000033     0.000042\r\n4  1.274097e-07    0.000035     0.000041\r\n5  1.273559e-07    0.000032     0.000041\r\n```\r\n\r\n`math.isclose` seems to be consistently 2 orders of magnitude faster than `np.isclose`/`np.allclose`.\r\n\r\nI also tried comparing `pandas._libs.testing.assert_almost_equal` with `np.isclose`/`np.allclose`. This was a bit trickier because of the exception being raised:\r\n\r\n```python\r\ndef ignore_assertion(f, *args, **kwargs):\r\n    try:\r\n        f(*args, **kwargs)\r\n    except AssertionError:\r\n        pass\r\n\r\n%timeit np.allclose(df_a, df_b)\r\n# 74.2 µs ± 283 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)\r\n%timeit ignore_assertion(assert_almost_equal, df_a.values, df_b.values)\r\n# 1.87 ms ± 39.1 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)\r\n\r\n# To check the overhead of catching the assertion I also ran the following:\r\ndef raise_assert():\r\n    try:\r\n        assert False\r\n    except AssertionError:\r\n        pass\r\n\r\n%timeit ignore_assertion(raise_assert)\r\n400 ns ± 3.16 ns per loop (mean ± std. dev. of 7 runs, 1000000 loops each)\r\n```\r\n\r\nDoes this mean that this PR should be changed to make use of numpy's `np.allclose`? I guess the slower performance is due to the checks performed by `pandas._libs.testing.assert_almost_equal` :thinking: \r\n\r\nWDYT?\r\n\r\n(Perhaps that should be tackled in #9457 afterwards, because this diff is already quite large)",
+        "createdAt" : "2020-02-23T11:25:56Z",
+        "updatedAt" : "2020-06-21T09:44:18Z",
+        "lastEditedBy" : "6e82078b-0a97-4940-a41d-3b2a01e49b5d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d83880ccb7ebcb8796ee6a765e383362a6d1454a",
+    "line" : 114,
+    "diffHunk" : "@@ -1,1 +201,205 @@        fa, fb = a, b\n\n        if not math.isclose(fa, fb, rel_tol=rtol, abs_tol=atol):\n            assert False, (f\"expected {fb:.5f} but got {fa:.5f}, \"\n                           f\"with rtol={rtol}, atol={atol}\")"
+  },
+  {
+    "id" : "7a8afe9d-4795-46a8-9a09-eb981a95dadf",
+    "prId" : 30562,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30562#pullrequestreview-381897861",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8fde8014-4940-4344-bd25-6a1456f16580",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "I *think* that you need a blank line after the versionadded to avoid a docs error",
+        "createdAt" : "2020-03-26T00:57:00Z",
+        "updatedAt" : "2020-06-21T09:44:18Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "32b847ed-0a33-4e0f-972f-6224322d26bb",
+        "parentId" : "8fde8014-4940-4344-bd25-6a1456f16580",
+        "authorId" : "6e82078b-0a97-4940-a41d-3b2a01e49b5d",
+        "body" : "Hmmm I copied from other parts of the code, and tested it with Sphinx.\r\n\r\nJust ran `cd doc && python make.py html --num-jobs 4` and the docs look good :+1: ",
+        "createdAt" : "2020-03-26T10:57:56Z",
+        "updatedAt" : "2020-06-21T09:44:18Z",
+        "lastEditedBy" : "6e82078b-0a97-4940-a41d-3b2a01e49b5d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d83880ccb7ebcb8796ee6a765e383362a6d1454a",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +77,81 @@\n        .. versionadded:: 1.1.0\n    atol : float, default 1e-8\n        Absolute tolerance.\n"
   }
 ]
