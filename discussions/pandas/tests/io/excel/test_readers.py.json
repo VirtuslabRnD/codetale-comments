@@ -251,5 +251,137 @@
     "commit" : "06efa984ce37739d5f4a75c9ec0b6d27f7d52afb",
     "line" : 88,
     "diffHunk" : "@@ -1,1 +90,94 @@    autouse=True,\n    params=[\n        _transfer_marks(eng, ext)\n        for eng in engine_params\n        for ext in read_ext_params"
+  },
+  {
+    "id" : "4688b987-9f9d-4cf7-86cf-3591dedba5ce",
+    "prId" : 32544,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/32544#pullrequestreview-373244748",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "88977703-8efa-4261-9b81-c56a3d14a0a6",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Can you revert this? Not totally equivalent",
+        "createdAt" : "2020-03-09T01:17:38Z",
+        "updatedAt" : "2020-03-12T02:29:39Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4461fb6e-ed03-481e-907d-d72e75a87c7e",
+        "parentId" : "88977703-8efa-4261-9b81-c56a3d14a0a6",
+        "authorId" : "92af78be-4738-4bc6-b40e-4ef15a6e8b70",
+        "body" : "It is indeed not equivalent, but that is on purpose. The test is faulty. First you open a file and fail to close it, then you check for a file leak. This demonstrates in fact the issue we are having. Ownership of the file handle should be managed at the level it is created, unless you explicitly transfer ownership of the file handle to `ExcelFile`, but IMHO that is not what you would expect (and the reason for the ticket)",
+        "createdAt" : "2020-03-09T06:45:04Z",
+        "updatedAt" : "2020-03-12T02:29:39Z",
+        "lastEditedBy" : "92af78be-4738-4bc6-b40e-4ef15a6e8b70",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e901a198-d539-4262-94e8-ab336fd91938",
+        "parentId" : "88977703-8efa-4261-9b81-c56a3d14a0a6",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "@WillAyd do you know what the original intent of this test was? The blame history just points to a test reorganization.\r\n\r\nSeems like the disagreement is around whether `ExcelFile(obj).__exit__` should close the file when given an open file object.\r\n\r\n@roberthdevries can you check the behavior here on pandas 0.25.3 and 1.0.1? And the behavior on this branch is to not close the file when provided an open file?\r\n\r\nI don't think this changed test is adding much value. It's just testing the behavior of `open` now, which we can probably rely on being correct :)",
+        "createdAt" : "2020-03-10T14:03:51Z",
+        "updatedAt" : "2020-03-12T02:29:39Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "02e76043-5d74-454a-a46a-3549485e803e",
+        "parentId" : "88977703-8efa-4261-9b81-c56a3d14a0a6",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Yea I think this test strays a little bit from the OP, where a straight ExcelFile object is closing the handle. In this case the context manager is closing it, which maybe is OK. I can't speak to original history of this.\r\n\r\nSo @roberthdevries can you maybe summarize what you are proposing? Something like:\r\n\r\n 1. ExcelFile Context Manager + path: should manage open/close lifecycle\r\n 2. ExcelFile Context Manager + handle: should not manage open/close lifecycle\r\n 3. ExcelFile + path: should manage open, not close\r\n 4. ExcelFile + handle: should not manage open/close lifecycle\r\n\r\n? \r\n\r\nI think point 2 above is a little ambiguous; if there's a precedent for it elsewhere would be interested",
+        "createdAt" : "2020-03-10T15:52:53Z",
+        "updatedAt" : "2020-03-12T02:29:39Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "550c10c7-9181-4e0b-8df3-ca77dd035f86",
+        "parentId" : "88977703-8efa-4261-9b81-c56a3d14a0a6",
+        "authorId" : "92af78be-4738-4bc6-b40e-4ef15a6e8b70",
+        "body" : "I think the basic philosophy should be that a resource should be released at the same level where it was created. This is one of the main use cases of context managers.\r\nSo whenever a resource is released at **another** level, you violate this rule. (hence this ticket)\r\nThe original `ExcelFile` code closed a file it got from the outside, and this specific test relied on this (erroneous IMHO) behavior.\r\nSo a nested context manager should work as expected, in the sense that the outside context manager releases the outer resource and the inner context manager releases the inner resource.\r\n\r\nSo:\r\n```python\r\nwith open(\"foo.xlsx\") as f:\r\n    with ExcelFile(f) as xlsx:\r\n        # do stuff\r\n```\r\nIn this specific example the `ExcelFile` context manager should **not** close `f`, as that would be the responsibility of the `open` context manager.\r\n\r\nIn this example:\r\n```python\r\nf = open(\"foo.xlsx\")\r\nwith ExcelFile(f) as xlsx:\r\n    # do stuff\r\n```\r\nWe have a file leak caused by the programmer forgetting to close the file handle. This is a programmer error, and IMHO not something that needs to be fixed.\r\nHowever, whenever `f` goes out of scope, the `__del__` method will be called which will probably close the file anyway.\r\n\r\nFor use cases where `ExcelFile` is used in combination with path names the context manager case implies closing the file.\r\nIn this case:\r\n```python\r\nxlsx = ExcelFile(filename)\r\n```\r\nI would propose to have a `__del__` method which will close the file and the other `ExcelFile` resources.\r\n\r\nSo I agree with you on case 1 and 4.\r\nI also agree with case 2, there is no ambiguity for me. The `ExcelFile` context manager only should manage its own resources, not the file resource.\r\nFor case 3 there should be a nuance in the sense that the `__del__` method should close the resource.\r\nFor case 4, the `ExcelFile` should not touch the open/close lifecyle of the file handle, but the `ExcelFile` resource itself should be closed again in the `__del__` method.",
+        "createdAt" : "2020-03-10T19:22:22Z",
+        "updatedAt" : "2020-03-12T02:29:39Z",
+        "lastEditedBy" : "92af78be-4738-4bc6-b40e-4ef15a6e8b70",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "44ace61d-6e8e-41ab-9a04-625003923ecb",
+        "parentId" : "88977703-8efa-4261-9b81-c56a3d14a0a6",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Thanks for the insights. So agree with what you are saying but not sure that is clearly expressed in the implementation. Shouldn't we alternately just within the ExcelFile construct or `__enter__` keep track of whether or not the resource lifecycle is owned or borrowed? As is I don't think that's ever very clear",
+        "createdAt" : "2020-03-11T01:48:03Z",
+        "updatedAt" : "2020-03-12T02:29:39Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8bab7fb-851d-4106-99db-f2f7b2981180",
+        "parentId" : "88977703-8efa-4261-9b81-c56a3d14a0a6",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "> Shouldn't we alternately just within the ExcelFile constructor\r\n\r\nThat seems most sensible to me. Do we have a standard method for checking if something is a file-like object vs. a path?",
+        "createdAt" : "2020-03-11T12:27:08Z",
+        "updatedAt" : "2020-03-12T02:29:39Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01a71f07-7e99-4d97-ba7e-04c6164fb7d1",
+        "parentId" : "88977703-8efa-4261-9b81-c56a3d14a0a6",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "It ends up not being an issue here since ExcelFile doesn't open any files, just the engine.",
+        "createdAt" : "2020-03-12T02:40:31Z",
+        "updatedAt" : "2020-03-12T02:40:32Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a8ea7bbe38ee21bf685ef7a5cfc7a96817a56cc1",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +1032,1036 @@\n    def test_reader_closes_file(self, engine, read_ext):\n        with open(\"test1\" + read_ext, \"rb\") as f:\n            with pd.ExcelFile(f) as xlsx:\n                # parses okay"
+  },
+  {
+    "id" : "a64d3c13-7d96-41c0-8093-d13271712ccb",
+    "prId" : 32544,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/32544#pullrequestreview-372824435",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "20ec9221-c82f-491e-8694-88844453f31c",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Is there a way to construct this test without the `del` call? This test might not be doing anything, since `del` doesn't really mean `__del__` gets called",
+        "createdAt" : "2020-03-11T01:44:03Z",
+        "updatedAt" : "2020-03-12T02:29:39Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc0ca0c6-26b4-4737-9d37-5b0214380579",
+        "parentId" : "20ec9221-c82f-491e-8694-88844453f31c",
+        "authorId" : "92af78be-4738-4bc6-b40e-4ef15a6e8b70",
+        "body" : "`__del__` will get called in practice when the last reference is `del`eted. This is needed to trigger the erroneous behavior.\r\nThis is literally the code in the OP's issue. (except I replaced `ExcelFile` with `read_excel`, it seems)",
+        "createdAt" : "2020-03-11T14:50:40Z",
+        "updatedAt" : "2020-03-12T02:29:39Z",
+        "lastEditedBy" : "92af78be-4738-4bc6-b40e-4ef15a6e8b70",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a8ea7bbe38ee21bf685ef7a5cfc7a96817a56cc1",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +637,641 @@        with open(str_path, \"rb\") as f:\n            x = pd.read_excel(f, \"Sheet1\", index_col=0)\n            del x\n            # should not throw an exception because the passed file was closed\n            f.read()"
   }
 ]
