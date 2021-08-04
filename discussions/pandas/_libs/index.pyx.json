@@ -229,5 +229,148 @@
     "commit" : "a519cc4380470f5e3a67c28a84a47e8f33f77855",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +6,10 @@import numpy as np\ncimport numpy as cnp\nfrom numpy cimport (ndarray, intp_t,\n                    float64_t, float32_t,\n                    int64_t, int32_t, int16_t, int8_t,"
+  },
+  {
+    "id" : "8260f3c5-c352-4e1a-9542-1dd5cb09077a",
+    "prId" : 27157,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/27157#pullrequestreview-256582306",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "38f65e19-bd7d-4794-a547-dd529ff9019a",
+        "parentId" : null,
+        "authorId" : null,
+        "body" : "This is a real bug I think. `mid` is referenced in the return value if `len(values)=1` so that the main loop immediately falls through.",
+        "createdAt" : "2019-07-01T15:47:55Z",
+        "updatedAt" : "2019-07-01T22:05:19Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fcf2422b-6a61-42a3-8dd9-9bc1c52f010c",
+        "parentId" : "38f65e19-bd7d-4794-a547-dd529ff9019a",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "So this would fail if `len(values) == 0` right? Do you see a code sample to actually trigger that? ",
+        "createdAt" : "2019-07-01T16:36:32Z",
+        "updatedAt" : "2019-07-01T22:05:19Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a11a7cc4-f46d-430c-9152-bed8904f6342",
+        "parentId" : "38f65e19-bd7d-4794-a547-dd529ff9019a",
+        "authorId" : null,
+        "body" : "quite possibly this is meant to be \"caller checks\". But that's out of the compiler's view.",
+        "createdAt" : "2019-07-01T16:54:05Z",
+        "updatedAt" : "2019-07-01T22:05:19Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da6de74f-bf74-4e92-998e-68b9e68f8c4d",
+        "parentId" : "38f65e19-bd7d-4794-a547-dd529ff9019a",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Yea sure. Similar comment though - good to suppress compiler warning but if there's an actual error here (which I think would still happen without the warning) would be good to address",
+        "createdAt" : "2019-07-01T17:18:47Z",
+        "updatedAt" : "2019-07-01T22:05:19Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8b6ba6cf-6ff3-4ff3-ba66-cfa2315c4d63",
+        "parentId" : "38f65e19-bd7d-4794-a547-dd529ff9019a",
+        "authorId" : null,
+        "body" : "if `values` is empty, the loop falls through, `util.get_value_at(values, mid)` gets called, which calls `validate_indexer` which raises. I think it's ok.",
+        "createdAt" : "2019-07-01T18:30:27Z",
+        "updatedAt" : "2019-07-01T22:05:19Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "59de4a2d-d4c7-458e-8f6f-34fa7fb91f6e",
+        "parentId" : "38f65e19-bd7d-4794-a547-dd529ff9019a",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "> which raises\r\n\r\ncython code can have weird corner cases where exceptions get ignored.  Adding a test for this case seems worthwhile.",
+        "createdAt" : "2019-07-01T20:03:32Z",
+        "updatedAt" : "2019-07-01T22:05:19Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e83c506-6b80-4517-a491-f8c0d8985bf9",
+        "parentId" : "38f65e19-bd7d-4794-a547-dd529ff9019a",
+        "authorId" : null,
+        "body" : "interesting. example?",
+        "createdAt" : "2019-07-01T21:13:48Z",
+        "updatedAt" : "2019-07-01T22:05:19Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "386b28a0-882b-4e61-9431-b0a2b1fd5d78",
+        "parentId" : "38f65e19-bd7d-4794-a547-dd529ff9019a",
+        "authorId" : null,
+        "body" : "huh. I think you've nailed something here. So it's not exactly weird corner  cases, but cdef functions which return exception as if they were python functions.\r\nhttps://cython.readthedocs.io/en/latest/src/userguide/language_basics.html#error-return-values\r\n\r\n`validate_indexer` and `get_value_at` are both cdef. validate_indexer is tagged `except -1`, so any exception translates into a -1 retval. But the caller `get_value_at` doesn't check that and uses -1 to reference into the the array. in this case an empty one. but it doesn't have an except return value defines. So, I'm not sure what happens. \r\n\r\n```\r\nIf an exception is detected in such a function, a warning message is \r\nprinted and the exception is ignored.\r\n```\r\n\r\nOTOH, the index constructor refuses to create empty indexes, so an end-to-end test does not seem possible. and  `get_value_at`  is used all over the place.\r\n\r\nHmm. will have to think about this.\r\n\r\n",
+        "createdAt" : "2019-07-01T21:55:12Z",
+        "updatedAt" : "2019-07-01T22:05:19Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c176c32-d78c-4100-8dcb-1359ec947a21",
+        "parentId" : "38f65e19-bd7d-4794-a547-dd529ff9019a",
+        "authorId" : null,
+        "body" : "```python\r\nIn [18]: %%cython\r\n    ...: \r\n    ...: cdef int foo() except -1:\r\n    ...:     1/0\r\n    ...:     cdef:\r\n    ...:         int mid = 42\r\n    ...:     return mid\r\n    ...:     \r\n    ...: cdef int bar():\r\n    ...:     res = foo()\r\n    ...:     return res\r\n    ...:     \r\n    ...: def baz():\r\n    ...:     return bar()\r\n\r\nIn [19]: baz()\r\n---------------------------------------------------------------------------\r\nZeroDivisionError                         Traceback (most recent call last)\r\n_cython_magic_a591cd36cd8e49116d6e370949ee24c2.pyx in _cython_magic_a591cd36cd8e49116d6e370949ee24c2.foo()\r\n\r\nZeroDivisionError: float division\r\nException ignored in: '_cython_magic_a591cd36cd8e49116d6e370949ee24c2.bar'\r\nTraceback (most recent call last):\r\n  File \"_cython_magic_a591cd36cd8e49116d6e370949ee24c2.pyx\", line 3, in _cython_magic_a591cd36cd8e49116d6e370949ee24c2.foo\r\nZeroDivisionError: float division\r\nOut[19]: 0\r\n```\r\n\r\nvery interesting bug.",
+        "createdAt" : "2019-07-01T22:01:47Z",
+        "updatedAt" : "2019-07-01T22:05:19Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d8f3fa5b997ea78ff33e93a7f711cc5759cd0ce3",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +353,357 @@cdef Py_ssize_t _bin_search(ndarray values, object val) except -1:\n    cdef:\n        Py_ssize_t mid = 0, lo = 0, hi = len(values) - 1\n        object pval\n"
+  },
+  {
+    "id" : "f2840f4b-8411-4679-b6cc-a42b8534fc7b",
+    "prId" : 27157,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/27157#pullrequestreview-256614268",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1b2d97d0-e25a-4265-9439-28a5afda6eb8",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "is there any user code that hits this? e.g. is there some example that failed before and now works? or just an untested corner case?",
+        "createdAt" : "2019-07-01T22:26:59Z",
+        "updatedAt" : "2019-07-01T22:27:00Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b2b0b446-afa9-4cf4-91f2-bed3ea0b8c49",
+        "parentId" : "1b2d97d0-e25a-4265-9439-28a5afda6eb8",
+        "authorId" : null,
+        "body" : "the only caller is `IndexEngine.get_loc`, and `Index`'s constructor (I imagine other Indexes similarly) will refuse to create an empty index. So, this cannot be triggered. Reviewers pressed, so I responded.",
+        "createdAt" : "2019-07-02T00:10:43Z",
+        "updatedAt" : "2019-07-02T00:12:05Z",
+        "lastEditedBy" : null,
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d8f3fa5b997ea78ff33e93a7f711cc5759cd0ce3",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +356,360 @@        object pval\n\n    if hi == 0 or (hi > 0 and val > util.get_value_at(values, hi)):\n        return len(values)\n"
   }
 ]
