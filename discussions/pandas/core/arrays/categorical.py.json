@@ -119,5 +119,280 @@
     "commit" : "dc1f9606204e126723867024fbf35f953dcf31c7",
     "line" : 13,
     "diffHunk" : "@@ -1,1 +1611,1615 @@        filled : Categorical with NA/NaN filled\n        \"\"\"\n        value, method = validate_fillna_kwargs(\n            value, method, validate_scalar_dict_value=False\n        )"
+  },
+  {
+    "id" : "ad787adf-51f4-429f-92cd-e96bc4051240",
+    "prId" : 19909,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/19909#pullrequestreview-103059812",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Is there a reason this does `self.get_values().tolist()` instead of directly `self.tolist()` ?",
+        "createdAt" : "2018-03-01T22:59:27Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf1b60ce-879b-4209-b8ba-154b198e5f52",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "I think to avoid an infinite loop.\r\n\r\n`Categorical.tolist` calls `tolist` which calls `Categorical.__iter__`.\r\n\r\nNeed to do `get_values` break that cycle / extract the python scalar types.",
+        "createdAt" : "2018-03-02T12:45:27Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "349ab491-f2c9-443d-9aa5-72ed745bd510",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "It just feels that we are doing to much work. To iterate, we first create an array, iterate through it to create a list, and then iterate through the list ..",
+        "createdAt" : "2018-03-02T12:48:04Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "762f317c-6bce-4d50-b1e2-64ac8120e360",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "So get_values either returns a array or a Datetime(like)Index. For the array we can just iterate over it, but for the Datetime(like)Index I think as well . The tolist implementation there is `list(self.astype(object))`",
+        "createdAt" : "2018-03-02T12:52:08Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "82464f09-d0ce-424b-a0a5-3c08248d7ef6",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Sorry, that previous comment was of course wrong, as that is exactly checking the `get_values().tolist()`",
+        "createdAt" : "2018-03-02T12:55:02Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca02595b-2867-4610-839b-cae778c2e12d",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "I'm not sure if there's a strictly better way. If we want iter(Categorical) to not immediately do any work, then we do something like\r\n\r\n```python\r\n    def iter2(self):\r\n        for i in range(len(self)):\r\n            yield asscalar(self[i])\r\n```\r\n\r\nSo while `cat.iter2()` is instant, actually consuming the iterator is slow. 22 seconds for a length-2,000,000 array, vs. 11 ms for the same array with the current implementation.\r\n\r\nAm I missing another way, that doesn't rely on many calls to __getitem__?",
+        "createdAt" : "2018-03-02T13:05:47Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3efb0d5-3aa4-4ecb-879c-0c52e68204ad",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "More correct comment: I think we can leave out the `tolist`, and do `iter(self.get_values()`\r\n\r\nOr alternatively move the logic to `__iter__` (using `get_values`) and let `tolist` just call `list(iter)`?",
+        "createdAt" : "2018-03-02T13:07:11Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af3bc6fa-7521-43ec-b608-a0bcef2e7948",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "We need to call `tolist()` on the NumPy array from `.get_values()` so that the scalars are converted to Python types.\r\n\r\nBut yes, moving the logic sounds fine.",
+        "createdAt" : "2018-03-02T13:09:32Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "573b5df7-102d-4f9b-ac1f-26192bb79ba9",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Ah, yes, therefore we need the tolist. \r\nBut then moving the logic is maybe not best, as then `tolist` would consume an iterator coming from a list .. \r\n\r\nIt's all just complex with the different unboxing depending on the type :-)",
+        "createdAt" : "2018-03-02T13:25:16Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9836bf21-6712-411b-8905-9533db866802",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "Simplified slightly if you want to take one last look. Basically, we didn't have to worry about the different unboxing for different types, since `Categorical.get_values()` with datetimes returns a DatetimeIndex, and when we `.tolist()` on that we get the right unboxing.",
+        "createdAt" : "2018-03-02T14:22:59Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2dedc515-0964-45c3-b694-6485a009b0cf",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Looks good!",
+        "createdAt" : "2018-03-02T14:34:31Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce033a34-d782-4cb1-8850-6f2407b2daa8",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this is the whole ``.get_values()`` fiasco (which I created a while back :). I think should be addressed sooner rather than later.",
+        "createdAt" : "2018-03-07T13:49:47Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9278037d-5af4-4d83-8191-771bf24863e5",
+        "parentId" : "990333a4-b5da-4fbc-9aab-3d9c25e542b0",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "Any issues with the current implementation? Currently there's a tradeoff between how expensive `it = iter(Categorical)` is vs. `next(it)`.\r\n\r\nSomewhere, we have to go from numpy scalars to Python scalars. The fastest way to do that is with `tolist()`, but that has upfront memory overhead. We could avoid that by doing it in the `next`, but that has time overhead for\r\n\r\n1. converting to Python scalars elementwise\r\n2. An extra call to CategoricalIndex.categories.__getitem__ per element\r\n\r\nso that `next(it)` becomes *much* slower. I don't think there's much more to be done right now.\r\n",
+        "createdAt" : "2018-03-12T14:15:36Z",
+        "updatedAt" : "2018-03-15T11:33:25Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "05fced650bac03f122689ce6f8fd423f89bea3d6",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +1716,1720 @@    def __iter__(self):\n        \"\"\"Returns an Iterator over the values of this Categorical.\"\"\"\n        return iter(self.get_values().tolist())\n\n    def _tidy_repr(self, max_vals=10, footer=True):"
+  },
+  {
+    "id" : "23efcb34-e5ee-4701-9409-55fac197f4b7",
+    "prId" : 19938,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/19938#pullrequestreview-103670438",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7c1888d1-31f0-4f68-aa80-29104e31ea98",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "The interface we have to ``hashtable.get_labels()`` is very odd right now, IOW we have a ``check_null`` flag which then makes the caller *know* to substitute values to iNaT (for int64) and know which are the sentinels. This is breaking the abstrastion. Rather would either like to be able to pass in the actual sentinel (not the *output* sentinel, but that's another confusion). e.g . you would simply pass -1 here.\r\n\r\nI think its worth re-factoring this (maybe before this PR), though I suppose could be after. ",
+        "createdAt" : "2018-03-13T12:14:26Z",
+        "updatedAt" : "2018-03-14T11:29:35Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2fd8ce5-36c4-4cf7-adf8-22e2450a7951",
+        "parentId" : "7c1888d1-31f0-4f68-aa80-29104e31ea98",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "https://github.com/pandas-dev/pandas/issues/20328\r\n\r\nYes, that'd be nicer.",
+        "createdAt" : "2018-03-13T12:25:35Z",
+        "updatedAt" : "2018-03-14T11:29:35Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f1c70545-5e98-48cb-84cf-b96aac749977",
+        "parentId" : "7c1888d1-31f0-4f68-aa80-29104e31ea98",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "do we actually want this to be public?",
+        "createdAt" : "2018-03-13T23:16:29Z",
+        "updatedAt" : "2018-03-14T11:29:35Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "190764a1-a287-4027-bd0b-5770a24eda2d",
+        "parentId" : "7c1888d1-31f0-4f68-aa80-29104e31ea98",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "factorize in general? I don’t see why not. It’s present on series and index. ",
+        "createdAt" : "2018-03-13T23:36:00Z",
+        "updatedAt" : "2018-03-14T11:29:35Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a8966675-1c3e-4ce1-86a3-67a10e62df1e",
+        "parentId" : "7c1888d1-31f0-4f68-aa80-29104e31ea98",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "https://github.com/pandas-dev/pandas/pull/19938#issuecomment-372648259 was in reference to the API docs. We whitelist the methods on Categorical that are included in the API docs (just `__array__` and `from_codes` for now).",
+        "createdAt" : "2018-03-14T01:47:36Z",
+        "updatedAt" : "2018-03-14T11:29:35Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1e006d1a187b35941da3a548415f097160e5bb92",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +2118,2122 @@\n        codes = self.codes.astype('int64')\n        codes[codes == -1] = iNaT\n        # We set missing codes, normally -1, to iNaT so that the\n        # Int64HashTable treats them as missing values."
+  },
+  {
+    "id" : "56911269-dfb0-4672-aa94-2c2c5cc9757c",
+    "prId" : 19957,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/19957#pullrequestreview-100935057",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b5f4569b-9e5a-478f-b743-c4cc2c4c9b14",
+        "parentId" : null,
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "Not sure if this changes our opinion on `_values_for_argsort`, but the apparently Python2 has issues with passing through the arguments correctly to the `super()` call.\r\n\r\n```\r\n____________________ TestCategoricalSort.test_numpy_argsort ____________________\r\n\r\nself = <pandas.tests.categorical.test_sorting.TestCategoricalSort object at 0x7efcb391f950>\r\n\r\n    def test_numpy_argsort(self):\r\n        c = Categorical([5, 3, 1, 4, 2], ordered=True)\r\n    \r\n        expected = np.array([2, 4, 1, 3, 0])\r\n>       tm.assert_numpy_array_equal(np.argsort(c), expected,\r\n                                    check_dtype=False)\r\n\r\npandas/tests/categorical/test_sorting.py:26: \r\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \r\n../miniconda3/envs/pandas/lib/python2.7/site-packages/numpy/core/fromnumeric.py:886: in argsort\r\n    return argsort(axis, kind, order)\r\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \r\n\r\nself = [5, 3, 1, 4, 2]\r\nCategories (5, int64): [1 < 2 < 3 < 4 < 5]\r\nascending = -1, kind = 'quicksort', args = (None,), kwargs = {}\r\n\r\n    def argsort(self, ascending=True, kind='quicksort', *args, **kwargs):\r\n        \"\"\"\r\n            Returns the indices that would sort the Categorical instance if\r\n            'sort_values' was called. This function is implemented to provide\r\n            compatibility with numpy ndarray objects.\r\n    \r\n            While an ordering is applied to the category values, arg-sorting\r\n            in this context refers more to organizing and grouping together\r\n            based on matching category values. Thus, this function can be\r\n            called on an unordered Categorical instance unlike the functions\r\n            'Categorical.min' and 'Categorical.max'.\r\n    \r\n            Returns\r\n            -------\r\n            argsorted : numpy array\r\n    \r\n            See also\r\n            --------\r\n            numpy.ndarray.argsort\r\n            \"\"\"\r\n        # Keep the implementation here just for the docstring.\r\n        return super(Categorical, self).argsort(ascending=ascending, kind=kind,\r\n>                                               *args, **kwargs)\r\nE       TypeError: argsort() got multiple values for keyword argument 'ascending'\r\n```\r\n\r\nChanging the Categorical.argsort to accept just `*args, **kwargs` fixes things, since `ExtensionArray` does the argument validation, but it's a bit unfortunate.",
+        "createdAt" : "2018-03-02T22:33:37Z",
+        "updatedAt" : "2018-03-20T19:49:48Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "48852457373eff62847ff976bbdcced12923cc94",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +1382,1386 @@        return self._codes.copy()\n\n    def argsort(self, *args, **kwargs):\n        # TODO(PY2): use correct signature\n        # We have to do *args, **kwargs to avoid a a py2-only signature"
+  },
+  {
+    "id" : "5093cb23-28b3-4e29-ad9b-bfa6bdbfe565",
+    "prId" : 19957,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/19957#pullrequestreview-103674145",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "10029666-1b5b-4a31-beb5-eb77ed0bbe17",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "do these doc-strings meet the new standards? ",
+        "createdAt" : "2018-03-13T23:14:59Z",
+        "updatedAt" : "2018-03-20T19:49:48Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac436b75-6d5b-4ba9-b87d-d570c5cac0fc",
+        "parentId" : "10029666-1b5b-4a31-beb5-eb77ed0bbe17",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "7bbe796 does, aside from examples which isn't really possible.",
+        "createdAt" : "2018-03-14T02:19:00Z",
+        "updatedAt" : "2018-03-20T19:49:48Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "48852457373eff62847ff976bbdcced12923cc94",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +1389,1393 @@\n        Parameters\n        ----------\n        ascending : bool, default True\n            Whether the indices should result in an ascending"
   }
 ]
