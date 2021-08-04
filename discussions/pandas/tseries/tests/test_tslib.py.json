@@ -20,5 +20,137 @@
     "commit" : "c2ea0d4d1f7333dfb5f35d0795267d8894a37d83",
     "line" : 86,
     "diffHunk" : "@@ -1,1 +504,508 @@        for date_str, expected in compat.iteritems(cases):\n            result1, _, _ = tools.parse_time_string(date_str)\n            result2 = to_datetime(date_str)\n            result3 = to_datetime([date_str])\n            result4 = to_datetime(np.array([date_str], dtype=object))"
+  },
+  {
+    "id" : "76a13d0a-dfb3-4d24-aa28-3b65c0672737",
+    "prId" : 8832,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "hah...you took out the tests? are they just not legit/undefined? (its ok, just trying to see)\n",
+        "createdAt" : "2014-11-16T14:37:05Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25f95923-6989-401c-82f9-103dab49d0e3",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "body" : "Yes indeed since checking ISO 8601 and RFC 3339 I don't think `...Z0` `...Z00` are actually legit\n",
+        "createdAt" : "2014-11-16T14:42:53Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e15ebed6-f70f-44c1-a0ed-68a496fa8f05",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "ok, then they should raise, yes? so maybe the parsing actually needs to be a bit more strict, e.g. if you see a Z, then it must be the end of the string OR have a full-format offset.\n",
+        "createdAt" : "2014-11-16T14:45:13Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a172ee92-6c99-48b6-b76b-ecc9cdfd5ac8",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "body" : "Totally agree and as I understand it this is exactly the behavior of the parser in np_datetime_strings.c _but_ there is currently a fallback (dateutil's parser) if anything goes wrong and this is what we are actually testing with `...Z0` and `...Z00`. I think this fallback is there for a reason so I did not want to mess with it\n",
+        "createdAt" : "2014-11-16T14:50:08Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7344524-8df0-41ca-bc5f-281b0ca781f4",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "ahh, so the fallback was producing an incorrect result (e.g. dateutil). not surprised. Ok so that we KNOW that these 2 cases are not legit. Is it easy to catch these 2 cases? (eg. either you have Z then end-of-string, or Z legit value?) (maybe just easy to simply test if 0/00 are present after Z and raise).\n",
+        "createdAt" : "2014-11-16T14:53:04Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fdf022a8-25d9-42a6-97e3-ad81b4d106c5",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "body" : "The parser in np_datetime_strings.c checks Z is followed by end of string and raises otherwise. In tslib.pyx, function convert_ts_tsobject(), any ValueError is catched and then the fallback external parser is called:\n\n``` python\n if util.is_string_object(ts):\n        if ts in _nat_strings:\n            ts = NaT\n        else:\n            try:\n                _string_to_dts(ts, &obj.dts, &out_local, &out_tzoffset)\n                obj.value = pandas_datetimestruct_to_datetime(PANDAS_FR_ns, &obj.dts)\n                _check_dts_bounds(&obj.dts)\n                if out_local == 1:\n                    obj.tzinfo = pytz.FixedOffset(out_tzoffset)\n                    obj.value = tz_convert_single(obj.value, obj.tzinfo, 'UTC')\n                    if tz is None:\n                        _check_dts_bounds(&obj.dts)\n                        return obj\n                    else:\n                        # Keep the converter same as PyDateTime's\n                        ts = Timestamp(obj.value, tz=obj.tzinfo)\n                else:\n                    ts = obj.value\n                    if tz is not None:\n                        # shift for _localize_tso\n                        ts = tz_convert_single(ts, tz, 'UTC')\n            except ValueError:\n                try:\n                    ts = parse_datetime_string(ts)\n                except Exception:\n                    raise ValueError\n```\n\nSo I am not sure how to handle the 2 cases discussed without changing the current mechanism?\n",
+        "createdAt" : "2014-11-16T15:03:47Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56137b0b-7ab2-4ee8-afbd-b80498ada9a5",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "after line 800 where the sublen is 1 you are done (e.g. you got a Z only). Otherwise it passes thru. I would then check the next 1 and then 2 characters (or if you can't its an error ) if they are 0 then its an error, otherwise pass thru.\n",
+        "createdAt" : "2014-11-16T15:19:03Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "981ff5b0-d6ea-40cd-bca3-151144311585",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "body" : "No it does not pass thru, check line 880, there is a goto parse_error if anything remains after Z is encountered. parse_error raises a PyExc_ValueError but this ValueError is catched in tslib.pyx/convert_to_tsobject(), hence the problem\n",
+        "createdAt" : "2014-11-16T15:29:15Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b952455-e31a-4326-aa6f-93492f12201e",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "ok, so check there. These are cases that should be cause then as errors.\n",
+        "createdAt" : "2014-11-16T15:59:04Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3b068be0-0b5f-423f-ac77-772042dbe213",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "body" : "You mean adding checks in convert_to_tsobject? Sorry if I am a bit nitpicky\nhere but I think all those checks should be the responsibility of the\nparser only and should not be spread across modules. That's why I am a bit\nreluctant to do it. I think the cleanest way to do it currently is to allow\nthe _internal_ parser to somehow bypass the fallback and be able to raise\nerrors of its own: if I am correct currently the internal parser raises the\nsame kind of exception (ValueError) for two different things: legit but\nunsupported (not implemented) iso 8601 strings on one side and real ill\nformed datetime strings on the other.\n\nLe dimanche 16 novembre 2014, jreback notifications@github.com a écrit :\n\n> In pandas/tseries/tests/test_tslib.py:\n> \n> > @@ -298,6 +298,9 @@ def test_barely_oob_dts(self):\n> >          # One us more than the maximum is an error\n> >          self.assertRaises(ValueError, Timestamp, max_ts_us + one_us)\n> > -    def test_utc_z_designator(self):\n> > -        self.assertEqual(get_timezone(Timestamp('2014-11-02 01:00Z').tzinfo), 'UTC')\n> \n> ok, so check there. These are cases that should be cause then as errors.\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/pydata/pandas/pull/8832/files#r20410546.\n\n## \n\nBenoît.\n",
+        "createdAt" : "2014-11-16T21:21:35Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "6c9e6b66-3c6f-45f8-abae-a016a97856af",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bb3b06f6-676c-4d5a-b102-d896fb17f0e2",
+        "parentId" : "ff760da1-6b18-4a74-ba10-ba1f9930ef5e",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "not sure where you got the idea that I was suggesting you modify `convert_to_tsobject`. That's very complicated and not warranted. I suggest that you make a simple modification in the _same_ file you are currently working, `np_datetime_strings.c` to handle the case of reading 1 and 2 characters past the Z.  \n\nI would maybe make `out_local==-1` an error, then in the except block, if out_local is -1 you can simply re-raise the ValueError (in `convert_to_tsobject`)\n\nor you can put a specific message in the `ValueError` which is checked in `convert_to_tsobject`. You are right, the problem is a `ValueError` actually means 2 things here. Need to disambiguate them (or allow your change, and simply disregard the 'error' cases that we had before).\n",
+        "createdAt" : "2014-11-17T00:29:28Z",
+        "updatedAt" : "2014-11-27T16:38:26Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1e5d25a262e563828fa13bd7f682479cacb26c65",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +300,304 @@\n    def test_utc_z_designator(self):\n        self.assertEqual(get_timezone(Timestamp('2014-11-02 01:00Z').tzinfo), 'UTC')\n\n"
   }
 ]
