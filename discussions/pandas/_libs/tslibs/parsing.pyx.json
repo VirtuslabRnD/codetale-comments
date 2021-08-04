@@ -504,5 +504,148 @@
     "commit" : "5dda33c5469bb9024db468638fb96101beafb5da",
     "line" : 67,
     "diffHunk" : "@@ -1,1 +329,333 @@    whether given string is a datetime\n    \"\"\"\n    cdef:\n        const char *buf\n        char *endptr = NULL"
+  },
+  {
+    "id" : "66e4ac46-e5d6-4cbd-8b3c-e00a18985238",
+    "prId" : 25922,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/25922#pullrequestreview-220821792",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27ea8a23-5c2c-4b8d-b9b8-c8ae33bbce98",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "is this really more performant than `int(s)`?  It looks like this is only used if we already know `s` is 4 characters.  I guess we don't know that it is all digits?",
+        "createdAt" : "2019-03-29T18:48:09Z",
+        "updatedAt" : "2019-04-19T06:17:49Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "773042ad-497a-4f50-be89-95019f019689",
+        "parentId" : "27ea8a23-5c2c-4b8d-b9b8-c8ae33bbce98",
+        "authorId" : "be492700-7f0c-4e3f-b2b1-1392960f38a9",
+        "body" : "If you want microbenchmarks I can try to make those, or you can just take my word on it - `int(s)` is _very_ slow for non-integer strings because it uses Python mechanism of raising and catching exceptions, which itself costs at least 10x more than parsing the integer (because Python has to allocate memory, format error message and walk a list of frames to construct the traceback - everything which would be just thrown away here, because the only fact that we care here is \"if it isn't an integer - return `None`\").",
+        "createdAt" : "2019-03-30T13:22:31Z",
+        "updatedAt" : "2019-04-19T06:17:49Z",
+        "lastEditedBy" : "be492700-7f0c-4e3f-b2b1-1392960f38a9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8fda65ea-6ae9-4804-ae79-016b797ed266",
+        "parentId" : "27ea8a23-5c2c-4b8d-b9b8-c8ae33bbce98",
+        "authorId" : "be492700-7f0c-4e3f-b2b1-1392960f38a9",
+        "body" : "So a quick measurement shows this (figures are from the benchmark presented in this PR):\r\n\r\nsample date| _parse_4digit | int| parse/int ratio\r\n-|-|-|-\r\n03/2010|45.4 ms|54.6 ms|0.83\r\n01/02/2019|17.4 ms|21.8 ms|0.80\r\n\r\nSample implementation:\r\n```cython\r\ncdef inline object parse_delimited_date(object date_string, bint dayfirst,\r\n                                        object tzinfo):\r\n    cdef:\r\n        int day = 1, month = 1, year\r\n        int length = len(date_string)\r\n\r\n    if length == 10:\r\n        if date_string[2] not in ' /-\\\\' or date_string[5] not in ' /-\\\\':\r\n            return None, None\r\n        try:\r\n            day = int(date_string[:2], 10)\r\n            month = int(date_string[3:5], 10)\r\n            year = int(date_string[6:], 10)\r\n        except ValueError:\r\n            return None, None\r\n        reso = 'day'\r\n    elif length == 7:\r\n        if date_string[2] not in ' /-\\\\':\r\n            return None, None\r\n        try:\r\n            month = int(date_string[:2], 10)\r\n            year = int(date_string[3:], 10)\r\n        except ValueError:\r\n            return None, None\r\n        reso = 'month'\r\n    else:\r\n        return None, None\r\n\r\n    if 1 <= month <= MAX_DAYS_IN_MONTH and 1 <= day <= MAX_DAYS_IN_MONTH \\\r\n            and (month <= MAX_MONTH or day <= MAX_MONTH):\r\n        if month > MAX_MONTH or (day < MAX_MONTH and dayfirst):\r\n            day, month = month, day\r\n        return PyDateTimeAPI.DateTime_FromDateAndTime(year, month, day,\r\n                0, 0, 0, 0, tzinfo, PyDateTimeAPI.DateTimeType), reso\r\n\r\n    raise DateParseError(\"Invalid date specified (%d/%d)\" %\r\n                            (month, day))\r\n```\r\n\r\nI won't say it's much easier, but it's at least 20% slower.\r\n",
+        "createdAt" : "2019-03-30T13:54:19Z",
+        "updatedAt" : "2019-04-19T06:17:49Z",
+        "lastEditedBy" : "be492700-7f0c-4e3f-b2b1-1392960f38a9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2cd971af704fe952fc221bb1d254524c2acd795a",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +66,70 @@\n\ncdef inline int _parse_4digit(const char* s):\n    cdef int result = 0\n    result += getdigit_ascii(s[0], -10) * 1000"
+  },
+  {
+    "id" : "62ceaa04-a8d9-4b5a-a026-142797bb47e4",
+    "prId" : 25922,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/25922#pullrequestreview-223195334",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0877bde2-fd3f-41f3-af5d-bcf86483df0d",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "these should already be in ccalendar no?",
+        "createdAt" : "2019-04-04T12:21:56Z",
+        "updatedAt" : "2019-04-19T06:17:49Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0b521c0a-99a7-4454-b7e2-c3c9ef8c3108",
+        "parentId" : "0877bde2-fd3f-41f3-af5d-bcf86483df0d",
+        "authorId" : "ac925cd1-7327-4d2a-a9fc-55fc5f720f67",
+        "body" : "These variables are not there. Also if they are will be transferred into ccalendar, then extra overhead of pointer dereference will be appeared.",
+        "createdAt" : "2019-04-05T10:09:40Z",
+        "updatedAt" : "2019-04-19T06:17:49Z",
+        "lastEditedBy" : "ac925cd1-7327-4d2a-a9fc-55fc5f720f67",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2cd971af704fe952fc221bb1d254524c2acd795a",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +52,56 @@cdef:\n    const char* delimiters = \" /-.\"\n    int MAX_DAYS_IN_MONTH = 31, MAX_MONTH = 12\n\n"
+  },
+  {
+    "id" : "24b8352a-f825-4f25-be4f-8b4ca4bd27ae",
+    "prId" : 25922,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/25922#pullrequestreview-223192698",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d6882b1a-d412-460d-8ea3-19f7c6106d1d",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can you add some more comments to this code",
+        "createdAt" : "2019-04-04T12:22:37Z",
+        "updatedAt" : "2019-04-19T06:17:49Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e069ae11-c99d-49e1-bd33-b6fb556ec24d",
+        "parentId" : "d6882b1a-d412-460d-8ea3-19f7c6106d1d",
+        "authorId" : "ac925cd1-7327-4d2a-a9fc-55fc5f720f67",
+        "body" : "Added",
+        "createdAt" : "2019-04-05T10:03:20Z",
+        "updatedAt" : "2019-04-19T06:17:49Z",
+        "lastEditedBy" : "ac925cd1-7327-4d2a-a9fc-55fc5f720f67",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2cd971af704fe952fc221bb1d254524c2acd795a",
+    "line" : 84,
+    "diffHunk" : "@@ -1,1 +106,110 @@\n    buf = get_c_string_buf_and_size(date_string, &length)\n    if length == 10:\n        # parsing MM?DD?YYYY and DD?MM?YYYY dates\n        if _is_not_delimiter(buf[2]) or _is_not_delimiter(buf[5]):"
+  },
+  {
+    "id" : "9e7fe6ec-e4fb-4aa5-b481-b8c14b0fa754",
+    "prId" : 25922,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/25922#pullrequestreview-223192867",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0e224b13-6295-4378-babc-e6295e619527",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "pls use a proper numpy-doc style doc-string",
+        "createdAt" : "2019-04-04T12:22:50Z",
+        "updatedAt" : "2019-04-19T06:17:49Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "507ea8ef-21eb-46de-8ebc-39a850b1d422",
+        "parentId" : "0e224b13-6295-4378-babc-e6295e619527",
+        "authorId" : "ac925cd1-7327-4d2a-a9fc-55fc5f720f67",
+        "body" : "fixed this",
+        "createdAt" : "2019-04-05T10:03:43Z",
+        "updatedAt" : "2019-04-19T06:17:49Z",
+        "lastEditedBy" : "ac925cd1-7327-4d2a-a9fc-55fc5f720f67",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2cd971af704fe952fc221bb1d254524c2acd795a",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +94,98 @@    date_string : str\n    dayfirst : bint\n\n    Returns:\n    --------"
   }
 ]
