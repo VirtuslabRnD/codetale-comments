@@ -185,5 +185,93 @@
     "commit" : "f2dc7590817cb928d28d5391fe6e6ff7d0308997",
     "line" : 23,
     "diffHunk" : "@@ -1,1 +146,150 @@                        # note that len(deltas) = len(vals) - 1 and deltas[i] is to be\n                        # used in conjunction with vals[i+1]\n                        old_wt *= old_wt_factor ** deltas[start + j - 1]\n                        if is_observation:\n"
+  },
+  {
+    "id" : "063cde7e-447e-4893-9bd0-d05da89e6737",
+    "prId" : 42273,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/42273#pullrequestreview-694589215",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27c49636-ec57-475c-9f33-1c7b30233e53",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "any way you can share the other ewma code here (the numba ewma code for single)",
+        "createdAt" : "2021-06-28T13:25:45Z",
+        "updatedAt" : "2021-06-28T13:26:05Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8cdd38ff-8d4a-4c1a-be7f-92315ce2b6ae",
+        "parentId" : "27c49636-ec57-475c-9f33-1c7b30233e53",
+        "authorId" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "body" : "I might try this in a follow up. I think it will require refactoring some of the downstream code that all expect 1D outputs",
+        "createdAt" : "2021-06-29T04:54:53Z",
+        "updatedAt" : "2021-06-29T04:54:53Z",
+        "lastEditedBy" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b14ea969420f184459630508dea1cb100cb2b492",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +300,304 @@        result[0] = np.where(nobs >= minimum_periods, weighted_avg, np.nan)\n\n        for i in range(1, len(values)):\n            cur = values[i]\n            is_observations = ~np.isnan(cur)"
+  },
+  {
+    "id" : "4b63f56a-2d8a-44f0-a4bc-8846222a54df",
+    "prId" : 42273,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/42273#pullrequestreview-697944455",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "add0498a-4c3e-4bef-b8dc-0467abe15919",
+        "parentId" : null,
+        "authorId" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "body" : "@stuartarchibald if you have time, could you review if this function looks if I have any bad practices in this function. Some context:\r\n\r\n1. Generally this is run with `@numba.jit(nopython=True, nogil=False, parallel=False)`\r\n2. This function has variables from a global scope `com`, `adjust`, `ignore_na`, `deltas`\r\n3. I cache this function in a dictionary this first time it runs (in `NUMBA_FUNC_CACHE`) and later calls will return the cached fuction.\r\n\r\nWhen using this function, sometimes I get a segfault:\r\n\r\n```\r\n(pandas-dev) matthewroeschke@x86_64-apple-darwin13 pandas-mroeschke % ipython\r\nPython 3.8.6 | packaged by conda-forge | (default, Dec 26 2020, 04:50:20)\r\nType 'copyright', 'credits' or 'license' for more information\r\nIPython 7.25.0 -- An enhanced Interactive Python. Type '?' for help.\r\n\r\nIn [1]: df = DataFrame(np.random.rand(3, 30))\r\n\r\nIn [2]: ewm = df.ewm(com=1, method=\"table\")\r\n\r\nIn [3]: ewm.mean(engine=\"numba\")\r\nOut[3]:\r\n         0         1         2         3         4   ...        25        26        27        28        29\r\n0  0.770949  0.396205  0.728331  0.417464  0.715142  ...  0.237903  0.383182  0.021471  0.837933  0.590543\r\n1  0.417231  0.369916  0.793127  0.961175  0.531131  ...  0.145222  0.152615  0.714216  0.515145  0.238283\r\n2  0.441215  0.220925  0.868065  0.736689  0.858115  ...  0.165413  0.977209  0.549496  0.472534  0.555430\r\n\r\n[3 rows x 30 columns]\r\n\r\nIn [4]: ewm.mean(engine=\"numba\")\r\nOut[4]:\r\n         0         1         2         3         4   ...        25        26        27        28        29\r\n0  0.770949  0.396205  0.728331  0.417464  0.715142  ...  0.237903  0.383182  0.021471  0.837933  0.590543\r\n1  0.417231  0.369916  0.793127  0.417464  0.531131  ...  0.145222  0.152615  0.714216  0.515145  0.238283\r\n2  0.441215  0.220925  0.868065  0.417464  0.858115  ...  0.165413  0.977209  0.549496  0.472534  0.555430\r\n\r\n[3 rows x 30 columns]\r\n\r\nIn [5]: ewm.mean(engine=\"numba\")\r\nOut[5]:\r\n         0         1         2         3         4   ...        25        26        27        28        29\r\n0  0.770949  0.396205  0.728331  0.417464  0.715142  ...  0.237903  0.383182  0.021471  0.837933  0.590543\r\n1  0.417231  0.369916  0.793127  0.961175  0.531131  ...  0.145222  0.152615  0.714216  0.515145  0.238283\r\n2  0.441215  0.220925  0.868065  0.736689  0.858115  ...  0.165413  0.977209  0.549496  0.472534  0.555430\r\n\r\n[3 rows x 30 columns]\r\n\r\nIn [6]: ewm.mean(engine=\"numba\")\r\npython(3345,0x111f53dc0) malloc: Incorrect checksum for freed object 0x7fd3255c55a8: probably modified after being freed.\r\nCorrupt value: 0x3ff0000000000000\r\npython(3345,0x111f53dc0) malloc: *** set a breakpoint in malloc_error_break to debug\r\nzsh: abort      ipython\r\n```",
+        "createdAt" : "2021-07-01T06:02:49Z",
+        "updatedAt" : "2021-07-01T06:02:49Z",
+        "lastEditedBy" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3732222e-ba85-44d7-94e8-0f60f9db7164",
+        "parentId" : "add0498a-4c3e-4bef-b8dc-0467abe15919",
+        "authorId" : "404dd6dc-70fe-4b06-95dd-0cb9f3611c53",
+        "body" : "@mroeschke I'll take a look. Did you already try running it a) without the `@jit` decorator and b) with `@jit(boundscheck=True)` ?",
+        "createdAt" : "2021-07-01T16:27:40Z",
+        "updatedAt" : "2021-07-01T16:27:40Z",
+        "lastEditedBy" : "404dd6dc-70fe-4b06-95dd-0cb9f3611c53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "993f743a-f270-4eae-8b3f-fc0e9799ad0d",
+        "parentId" : "add0498a-4c3e-4bef-b8dc-0467abe15919",
+        "authorId" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "body" : "Sorry for the noise @stuartarchibald. I found a bug in my algorithm. I should have tested without the `@jit` decorator first. ",
+        "createdAt" : "2021-07-02T04:57:55Z",
+        "updatedAt" : "2021-07-02T04:57:55Z",
+        "lastEditedBy" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e56b8623-eb97-4f5d-97c8-5275f148ccea",
+        "parentId" : "add0498a-4c3e-4bef-b8dc-0467abe15919",
+        "authorId" : "404dd6dc-70fe-4b06-95dd-0cb9f3611c53",
+        "body" : "@mroeschke no worries. Numba also has this environment variable to switch off JIT compilation without needing to modify code: https://numba.readthedocs.io/en/stable/reference/envvars.html#envvar-NUMBA_DISABLE_JIT, it might be useful for helping with development/testing.",
+        "createdAt" : "2021-07-02T08:21:58Z",
+        "updatedAt" : "2021-07-02T08:21:58Z",
+        "lastEditedBy" : "404dd6dc-70fe-4b06-95dd-0cb9f3611c53",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b14ea969420f184459630508dea1cb100cb2b492",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +284,288 @@\n    @numba.jit(nopython=nopython, nogil=nogil, parallel=parallel)\n    def ewma_table(\n        values: np.ndarray,\n        begin: np.ndarray,"
   }
 ]
