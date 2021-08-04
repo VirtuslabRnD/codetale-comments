@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "995114ef-8b96-43f8-b748-b5367a760ef7",
+    "prId" : 37920,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/37920#pullrequestreview-534920123",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "420a5346-844d-4bea-8e18-5b9548728e94",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "can you add a comment about why the int32 version can be reused verbatim for the uint32 case",
+        "createdAt" : "2020-11-19T16:57:10Z",
+        "updatedAt" : "2020-11-20T22:17:15Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e4db40d-3dab-4616-b62b-5cdef3524acb",
+        "parentId" : "420a5346-844d-4bea-8e18-5b9548728e94",
+        "authorId" : "6eb079e0-c034-4a01-ba36-2456ab252d59",
+        "body" : "Actually, it is another way around: a comment is needed why int32-version uses verbatim the uint32 case:) `khint32_t` is an unsigned int: https://github.com/pandas-dev/pandas/blob/4cfa97a1808f31c8235d513a7aded32f87f8ae89/pandas/_libs/src/klib/khash.h#L119 so it only naturally to use it for uint32-version\r\n\r\nThe trick for int32 is that the conversion from signed int to unsigned int is well defined by the standard (see e.g. https://stackoverflow.com/a/50632), thus we can safely pass an int as key (and we don't have something like \"get_key\", thus it is never casted back to signed int32, which would be implementation defined behavior (and thus not the original value).\r\n\r\nWhy it is done this way? For example, pandas has tried to improve the situation for int64: https://github.com/pandas-dev/pandas/blob/4cfa97a1808f31c8235d513a7aded32f87f8ae89/pandas/_libs/src/klib/khash.h#L125-L126\r\n\r\nThe problem now is, that for signed int64 there is implementation defined behavior (>>) and undefined behavior (<<) for negative or \"sufficiently large\" keys in the hash function: https://github.com/pandas-dev/pandas/blob/4cfa97a1808f31c8235d513a7aded32f87f8ae89/pandas/_libs/src/klib/khash.h#L411\r\n\r\nas `key` is now a signed int (see e.g. https://stackoverflow.com/a/4009922). \r\n\r\nI would be surprised to see a (sane) compiler which wouldn't do \"the right thing\" on x86/x86_64, but still...\r\n\r\nThe hash-function should be probably be\r\n\r\n```\r\n#define kh_int64_hash_func(key) (khint32_t)(((khint64_t)(key))>>33^((khint64_t)(key))^((khint64_t)(key))<<11)\r\n```\r\n\r\njust to be safe.",
+        "createdAt" : "2020-11-19T20:53:55Z",
+        "updatedAt" : "2020-11-20T22:17:15Z",
+        "lastEditedBy" : "6eb079e0-c034-4a01-ba36-2456ab252d59",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b8743b56-5165-4bb0-bc6f-3d27b9d09486",
+        "parentId" : "420a5346-844d-4bea-8e18-5b9548728e94",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "> Actually, it is another way around: a comment is needed why int32-version uses verbatim the uint32 case:)\r\n\r\nfine by me as long as its clear to the next reader",
+        "createdAt" : "2020-11-19T22:46:40Z",
+        "updatedAt" : "2020-11-20T22:17:15Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3a4c2bcff2de207b3d993b3d5ec5dd7d2da291df",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +608,612 @@\tKHASH_INIT(name, khint32_t, khval_t, 1, kh_int_hash_func, kh_int_hash_equal)\n\n#define KHASH_MAP_INIT_UINT(name, khval_t)\t\t\t\t\t\t\t\t\\\n\tKHASH_INIT(name, khint32_t, khval_t, 1, kh_int_hash_func, kh_int_hash_equal)\n"
+  }
+]

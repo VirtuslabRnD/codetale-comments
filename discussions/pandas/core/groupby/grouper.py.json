@@ -581,5 +581,137 @@
     "commit" : "bde6dacb40da849962ab53943b7986213fe64cf4",
     "line" : 7,
     "diffHunk" : "@@ -1,1 +571,575 @@            group_idx = self.group_index\n            assert isinstance(group_idx, CategoricalIndex)  # set in __init__\n            return recode_from_groupby(self.all_grouper, self.sort, group_idx)\n        return self.group_index\n"
+  },
+  {
+    "id" : "9c140f04-5c21-43e3-b842-f1fd41ed124d",
+    "prId" : 37905,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/37905#pullrequestreview-533873896",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2b7cb66-2f5a-4a0f-95ea-60aa3fc6f64a",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "why are you setting `self._indexer` itself?  this is *only* defined above (and not in the Grouper at all).",
+        "createdAt" : "2020-11-17T13:05:17Z",
+        "updatedAt" : "2020-12-21T05:42:42Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d780790-a3f6-4ed7-a855-8bddf2494237",
+        "parentId" : "e2b7cb66-2f5a-4a0f-95ea-60aa3fc6f64a",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "if anything you should be setting `self.indexer`",
+        "createdAt" : "2020-11-17T13:07:06Z",
+        "updatedAt" : "2020-12-21T05:42:42Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8807319-0feb-467d-9401-3af2e61e4d5e",
+        "parentId" : "e2b7cb66-2f5a-4a0f-95ea-60aa3fc6f64a",
+        "authorId" : "d7e820c0-0f3a-462f-8dc3-20edee007793",
+        "body" : "This is kind of complicated and not so easy to explain without actually showing you the code running through a debugger but it's for the exact same reason that self._grouper is set which is something that was already in the code before me.  I'll try to refer to the test I wrote to make it a little more concrete.  \r\n\r\nhttps://github.com/pandas-dev/pandas/blob/34e00be56ac0580bfcd18111858c447c16d3e21c/pandas/tests/resample/test_resampler_grouper.py#L396\r\n\r\nThe self.grouper object will initially become a DatetimeIndex which contains all 8 of the dates from the date column in the dataframe.  But then later as the code gets to the lines in question its in order to compute things specifically for cat_1 and cat2.  When it computes things for cat_1 the self.grouper object would get changed to being only the 5 entries from cat_1 and the rest of the 8 dates would be lost if they weren't saved in self._grouper instead.  It's the same issue with self.indexer.  It ends up being reset below in line 388 to correspond to only a subset of the dataframe that belongs to cat_1 so if I don't save it as self._indexer the rest of the information will be lost.\r\n\r\nLet me know if you need more explanation on this.  I know my explanation is kind of convoluted but it's not easy to make it clear without actually showing you the code running and being able to answer your questions in real time.",
+        "createdAt" : "2020-11-17T15:00:06Z",
+        "updatedAt" : "2020-12-21T05:42:42Z",
+        "lastEditedBy" : "d7e820c0-0f3a-462f-8dc3-20edee007793",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e401d833-9c18-49bc-bc2d-cd5236c702a3",
+        "parentId" : "e2b7cb66-2f5a-4a0f-95ea-60aa3fc6f64a",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can you see if you can find a better condition, this whole _group,er, grouper bizness (which is my fault originally :-<) is kind of smelly and would like to avoid repeating this.\r\n\r\nI think you might be able to add a property to a grouper to figure this out. \r\n\r\nsomething is mutating grouper state.\r\n\r\ni like the remedy, but looking to make it more understand / less complex.",
+        "createdAt" : "2020-11-18T13:28:52Z",
+        "updatedAt" : "2020-12-21T05:42:42Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1d39123b-b1f7-4d46-b518-df132ba725e6",
+        "parentId" : "e2b7cb66-2f5a-4a0f-95ea-60aa3fc6f64a",
+        "authorId" : "d7e820c0-0f3a-462f-8dc3-20edee007793",
+        "body" : "@jreback I've added grouper_resorted attribute on the TimeGrouper that defaults to False upon creation.  When TimeGrouper.grouper is sorted I then set that attribute to True and now I'm using that as the condition to check whether to undo the sorting rather checking if self.indexer is None.  I do still have to save self._indexer otherwise the information on how to undo the sorting will be lost but I think the new condition makes the code a little more understandable.  Let me know if this was what you had in mind.",
+        "createdAt" : "2020-11-18T20:49:36Z",
+        "updatedAt" : "2020-12-21T05:42:42Z",
+        "lastEditedBy" : "d7e820c0-0f3a-462f-8dc3-20edee007793",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a67a5a4-241e-41df-ab01-72c1fedccbe2",
+        "parentId" : "e2b7cb66-2f5a-4a0f-95ea-60aa3fc6f64a",
+        "authorId" : "d7e820c0-0f3a-462f-8dc3-20edee007793",
+        "body" : "I also set self._indexer = None right below where self._grouper = None is set in Grouper.__init__ to make things a little more transparent.",
+        "createdAt" : "2020-11-18T21:03:35Z",
+        "updatedAt" : "2020-12-21T05:42:42Z",
+        "lastEditedBy" : "d7e820c0-0f3a-462f-8dc3-20edee007793",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7c2bf5d5c43966db8f5fafb7dc8745a900e1e3e2",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +357,361 @@                if self._indexer is not None:\n                    reverse_indexer = self._indexer.argsort()\n                    unsorted_ax = self._grouper.take(reverse_indexer)\n                    ax = unsorted_ax.take(obj.index)\n                else:"
+  },
+  {
+    "id" : "4764894c-04c2-4a06-a083-361299fdf94f",
+    "prId" : 37905,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/37905#pullrequestreview-540536314",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "862f74fa-baf7-4ce4-b9f8-1d2706122012",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can you track down *exactly* how this happens, this is a real problem, somthing is keeping state and now we are undoing it. Your fix is pretty clean, but this makes reasoning very about this very hard.",
+        "createdAt" : "2020-11-25T23:43:46Z",
+        "updatedAt" : "2020-12-21T05:42:42Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "063e2c1f-1d48-4f32-9232-b22d96d1a2d9",
+        "parentId" : "862f74fa-baf7-4ce4-b9f8-1d2706122012",
+        "authorId" : "d7e820c0-0f3a-462f-8dc3-20edee007793",
+        "body" : "It’s very complicated and you have to dig through a stack trace that is 18 method calls deep to understand it but I believe it’s because self._grouper which is meant to be the TimeGrouper though in this case is actually just a sorted DatetimeIndex is always sorted and obj if you go up the stack trace you’ll see that it is coming from a SeriesGroupby._selected_obj which I’m guessing just doesn’t get sorted when it’s created.  The case where self._grouper has not been resorted I believe only happens when the dates were already in order and don’t need to be resorted.",
+        "createdAt" : "2020-11-29T23:44:28Z",
+        "updatedAt" : "2020-12-21T05:42:42Z",
+        "lastEditedBy" : "d7e820c0-0f3a-462f-8dc3-20edee007793",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7c2bf5d5c43966db8f5fafb7dc8745a900e1e3e2",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +350,354 @@            # The 'on' is already defined\n            if getattr(self.grouper, \"name\", None) == key and isinstance(obj, Series):\n                # Sometimes self._grouper will have been resorted while\n                # obj has not. In this case there is a mismatch when we\n                # call self._grouper.take(obj.index) so we need to undo the sorting"
+  },
+  {
+    "id" : "38a3d387-c69d-4257-9f01-04990b93db78",
+    "prId" : 37965,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/37965#pullrequestreview-538915518",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d7dc260-46ce-4481-a8a3-7116a8fad6c8",
+        "parentId" : null,
+        "authorId" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "body" : "I am not really familiar with the history of NaTs with respect to resample. I would have assumed NaT would/should have been dropped by this point since we just exclude them from the result https://github.com/pandas-dev/pandas/pull/13164. \r\n\r\nI'm okay with this solution as a stop gap solution.",
+        "createdAt" : "2020-11-26T00:12:34Z",
+        "updatedAt" : "2020-12-02T14:51:32Z",
+        "lastEditedBy" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2a475363d8a8bf93f77e72aed9f114f8970ec8c2",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +375,379 @@        if (self.sort or sort) and not ax.is_monotonic:\n            # use stable sort to support first, last, nth\n            # TODO: why does putting na_position=\"first\" fix datetimelike cases?\n            indexer = self.indexer = ax.array.argsort(\n                kind=\"mergesort\", na_position=\"first\""
   }
 ]

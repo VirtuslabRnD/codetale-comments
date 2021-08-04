@@ -911,5 +911,104 @@
     "commit" : "4f1fad83f29ac6dd0055221678a9b727050efa81",
     "line" : 174,
     "diffHunk" : "@@ -1,1 +470,474 @@    \"\"\"\n    # Infer compression\n    if compression in (\"infer\", None):\n        # Convert all path types (e.g. pathlib.Path) to strings\n        filepath_or_buffer = stringify_path(filepath_or_buffer)"
+  },
+  {
+    "id" : "a9ed5f19-33d0-490f-8af1-b062e9040744",
+    "prId" : 37966,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/37966#pullrequestreview-551672233",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3bd4087e-e1b4-45e2-9614-18523c8143ff",
+        "parentId" : null,
+        "authorId" : "42aa2e10-a5f0-418e-8919-5ec1443b7f2b",
+        "body" : "are there more (important) keyword arguments that `Request` takes? If yes, it might be more future-proof to do:\r\n`urllib.request.Request(filepath_or_buffer, **storage_options)`",
+        "createdAt" : "2020-12-12T23:09:02Z",
+        "updatedAt" : "2020-12-13T23:17:52Z",
+        "lastEditedBy" : "42aa2e10-a5f0-418e-8919-5ec1443b7f2b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0f0c386-5307-4590-b784-1ca84b5038ae",
+        "parentId" : "3bd4087e-e1b4-45e2-9614-18523c8143ff",
+        "authorId" : "2eb9916b-3a00-4c47-87a5-76ca592eebf3",
+        "body" : "I like that thought, though from reviewing the options I don't think there's much to be gained by exposing the other keyword arguments.  It looks like the other kwargs are there mainly to post data to a url, but that doesn't look to be possible inside the ``_get_filepath_or_buffer`` function due to what is available when that function is called.  Here's the documentation link in case anyone has a different take: [https://docs.python.org/3/library/urllib.request.html#urllib.request.Request](url)\r\n\r\nAnother less restrictive option might be to change it so that ``storage_options = {\"headers\": {\"User-Agent\": \"pandas\"}}`` leading to ``urllib.request.Request(filepath_or_buffer, headers=storage_options[\"headers\"])``.  This means the options could be used for other functions in ``_get_filepath_or_buffer``.\r\n\r\nBoth may be a little cumbersome on the user, since I see little benefit in this function in the http(s) case, but it may provide some flexibility that would be nice elsewhere.  Easy enough to do either option and change the docs, or leave it as is.  Got any particular preference among those options?  Thanks!",
+        "createdAt" : "2020-12-13T05:21:12Z",
+        "updatedAt" : "2020-12-13T23:17:52Z",
+        "lastEditedBy" : "2eb9916b-3a00-4c47-87a5-76ca592eebf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8533a848-425c-453f-9913-3d46fe721fa6",
+        "parentId" : "3bd4087e-e1b4-45e2-9614-18523c8143ff",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "is it possible to construc storage_options that has other keys that are not accepted in headers? e.g. I think it IS worthile to be strict here (IOW to pass thru keywords that are only valid ones).",
+        "createdAt" : "2020-12-14T13:58:20Z",
+        "updatedAt" : "2020-12-14T14:00:47Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1717456b-fb59-42e5-ae3c-cb90c544e6f2",
+        "parentId" : "3bd4087e-e1b4-45e2-9614-18523c8143ff",
+        "authorId" : "42aa2e10-a5f0-418e-8919-5ec1443b7f2b",
+        "body" : "`is_url` strings that are not `is_fsspec_url`, did not use any storage_options before this PR. All options could go into the header/to urllib.request.Request.\r\nIf we do something like `Request(filepath_or_buffer, headers=storage_options[\"headers\"])` then we could have other options that are not used but we don't raise about them (or urllib doesn't complain about the provided arguments).",
+        "createdAt" : "2020-12-14T15:10:37Z",
+        "updatedAt" : "2020-12-14T15:10:37Z",
+        "lastEditedBy" : "42aa2e10-a5f0-418e-8919-5ec1443b7f2b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fab294ac-c6c0-4c3f-bdb1-f169001cf936",
+        "parentId" : "3bd4087e-e1b4-45e2-9614-18523c8143ff",
+        "authorId" : "2eb9916b-3a00-4c47-87a5-76ca592eebf3",
+        "body" : "As far as I know, there are common uses for some header keys but there's also not really a limit on what header keys can be used (ie. I think all keys are accepted in headers).  To back this up the ``urllib.request.Request`` documentation says that it will call the ``urllib.request.Request.add_header`` method on each key value pair, and from looking at that method and the ``__init__`` method, I don't see any restriction on keys allowed in the header dictionary either.\r\n\r\nI think once I am free later tonight I will go ahead and change it so that the usage and documentation lines up with ``Request(filepath_or_buffer, headers=storage_options[\"headers\"])``",
+        "createdAt" : "2020-12-14T17:26:54Z",
+        "updatedAt" : "2020-12-14T17:26:54Z",
+        "lastEditedBy" : "2eb9916b-3a00-4c47-87a5-76ca592eebf3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7025abbd682b17fdb51af838a9a77695526a32c8",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +287,291 @@\n        # assuming storage_options is to be interpretted as headers\n        req_info = urllib.request.Request(filepath_or_buffer, headers=storage_options)\n        req = urlopen(req_info)\n        content_encoding = req.headers.get(\"Content-Encoding\", None)"
+  },
+  {
+    "id" : "e2ead5ba-8039-447d-8b9b-62f4d9935b46",
+    "prId" : 37966,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/37966#pullrequestreview-551455972",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "071e3aa8-d12b-40e2-8ceb-95b4b424143a",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "hmm not sure why we do this anymore, I guess somethings were nto available in some older versions, it think we can move these to top-level imports (ok to leave here), pls open an issue for followup.\r\n\r\ncc @twoertwein ",
+        "createdAt" : "2020-12-14T13:57:00Z",
+        "updatedAt" : "2020-12-14T14:00:47Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0bb93806-9826-4b8c-a20e-c96bd57a6ea9",
+        "parentId" : "071e3aa8-d12b-40e2-8ceb-95b4b424143a",
+        "authorId" : "42aa2e10-a5f0-418e-8919-5ec1443b7f2b",
+        "body" : "the other libraries that are imported in `_get_filehandle_or_buffer` are optional dependencies (fsspec and botocore). urllib is a standard library that should be available in all python versions supported by pandas 1.2. Would make sense to move it to the top.",
+        "createdAt" : "2020-12-14T15:04:29Z",
+        "updatedAt" : "2020-12-14T15:04:29Z",
+        "lastEditedBy" : "42aa2e10-a5f0-418e-8919-5ec1443b7f2b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7025abbd682b17fdb51af838a9a77695526a32c8",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +284,288 @@        # waiting until now for importing to match intended lazy logic of\n        # urlopen function defined elsewhere in this module\n        import urllib.request\n\n        # assuming storage_options is to be interpretted as headers"
   }
 ]
