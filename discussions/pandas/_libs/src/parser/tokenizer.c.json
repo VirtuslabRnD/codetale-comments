@@ -229,5 +229,126 @@
     "commit" : "d8f3fa5b997ea78ff33e93a7f711cc5759cd0ce3",
     "line" : 29,
     "diffHunk" : "@@ -1,1 +1441,1445 @@\n    tmp = malloc(bufsize);\n    snprintf(tmp,  length0, \"%s\", item);\n    uppercase(tmp);\n"
+  },
+  {
+    "id" : "df63138d-10c5-41d1-993a-d09064b5563f",
+    "prId" : 30369,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30369#pullrequestreview-336251437",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f22d30dc-e753-4539-8a14-474fc8129fef",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this is likely *very* expensive.",
+        "createdAt" : "2019-12-20T15:16:08Z",
+        "updatedAt" : "2020-01-02T00:04:16Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8fe2e6f-9cd8-408c-9ded-41f6e9445683",
+        "parentId" : "f22d30dc-e753-4539-8a14-474fc8129fef",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "is this what cython code actually generates with a nogil?",
+        "createdAt" : "2019-12-24T16:13:05Z",
+        "updatedAt" : "2020-01-02T00:04:16Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "585bec85-e3ae-4caa-a900-c37efac08ddf",
+        "parentId" : "f22d30dc-e753-4539-8a14-474fc8129fef",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "This code ensures The GIL, `nogil` by contrast would release it.\r\n\r\nBelow is what master generates for the nogil funcs:\r\n\r\n```c\r\n    /* \"pandas/_libs/parsers.pyx\":1667\r\n *     na_fset = kset_float64_from_list(na_flist)\r\n *     if parser.double_converter_nogil != NULL:  # if it can run without the GIL\r\n *         with nogil:             # <<<<<<<<<<<<<<\r\n *             error = _try_double_nogil(parser, parser.double_converter_nogil,\r\n *                                       col, line_start, line_end,\r\n */\r\n    {\r\n        #ifdef WITH_THREAD\r\n        PyThreadState *_save;\r\n        Py_UNBLOCK_THREADS\r\n        __Pyx_FastGIL_Remember();\r\n        #endif\r\n        /*try:*/ {\r\n\r\n          /* \"pandas/_libs/parsers.pyx\":1668\r\n *     if parser.double_converter_nogil != NULL:  # if it can run without the GIL\r\n *         with nogil:\r\n *             error = _try_double_nogil(parser, parser.double_converter_nogil,             # <<<<<<<<<<<<<<\r\n *                                       col, line_start, line_end,\r\n *                                       na_filter, na_hashset, use_na_flist,\r\n */\r\n          __pyx_v_error = __pyx_f_6pandas_5_libs_7parsers__try_double_nogil(__pyx_v_parser, __pyx_v_parser->double_converter_nogil, __pyx_v_col, __pyx_v_line_start, __pyx_v_line_end, __pyx_v_na_filter, __pyx_v_na_hashset, __pyx_v_use_na_flist, __pyx_v_na_fset, __pyx_v_NA, __pyx_v_data, (&__pyx_v_na_count));\r\n        }\r\n```\r\n\r\nFor simplicity this stays in that block but just ensures The GIL before actually doing anything.\r\n\r\nSo I see your point. An alternate strategy here is to provide a flag within this function if its safe to release The GIL rather than releasing then reacquiring. Let me see what that looks like",
+        "createdAt" : "2019-12-24T16:23:41Z",
+        "updatedAt" : "2020-01-02T00:04:16Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c0e7576-8d55-49c0-b253-5b40d39a9ca3",
+        "parentId" : "f22d30dc-e753-4539-8a14-474fc8129fef",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "hmmm that's not what i mean. why don't we just mark this function as nogil? seems a lot simpler",
+        "createdAt" : "2019-12-24T17:16:47Z",
+        "updatedAt" : "2020-01-02T00:04:16Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4735fa6-de54-415b-b7de-2a66282dd28a",
+        "parentId" : "f22d30dc-e753-4539-8a14-474fc8129fef",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Ah...well the function actually interacts with Python objects so it does require the GIL",
+        "createdAt" : "2019-12-24T17:23:07Z",
+        "updatedAt" : "2020-01-02T00:04:16Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d099874a-e5b1-4d52-a32a-8883b9addbd1",
+        "parentId" : "f22d30dc-e753-4539-8a14-474fc8129fef",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Though could maybe refactor to not use Python objects (really the Exception handling items are the Python objects) if that is preferable",
+        "createdAt" : "2019-12-24T17:25:07Z",
+        "updatedAt" : "2020-01-02T00:04:16Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a8b1e5f3-c916-47a7-949c-84880654e885",
+        "parentId" : "f22d30dc-e753-4539-8a14-474fc8129fef",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Ref original issue #15140",
+        "createdAt" : "2019-12-24T17:33:01Z",
+        "updatedAt" : "2020-01-02T00:04:16Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c8dea4af8a4d8f555a953ddd8e9b989a836b05e",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +1777,1781 @@    // This is called from a nogil block in parsers.pyx\n    // so need to explicitly get GIL before Python calls\n    PyGILState_STATE gstate;\n    gstate = PyGILState_Ensure();\n"
+  },
+  {
+    "id" : "4bf92e1f-2d40-4f36-a92f-df0d739bce35",
+    "prId" : 30369,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30369#pullrequestreview-337511632",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8f697fb5-cac1-4ea6-bfca-2dee3b8766ee",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "oh i realize what you are doing here, you are actually turning *on* the gil because this is called in a nogil context. Can you add a comment to that effect.",
+        "createdAt" : "2020-01-01T03:32:29Z",
+        "updatedAt" : "2020-01-02T00:04:16Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d84c608b-98ce-4239-acaf-a2cf3e9bf118",
+        "parentId" : "8f697fb5-cac1-4ea6-bfca-2dee3b8766ee",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Added",
+        "createdAt" : "2020-01-02T00:23:19Z",
+        "updatedAt" : "2020-01-02T00:23:19Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c8dea4af8a4d8f555a953ddd8e9b989a836b05e",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +1777,1781 @@    // This is called from a nogil block in parsers.pyx\n    // so need to explicitly get GIL before Python calls\n    PyGILState_STATE gstate;\n    gstate = PyGILState_Ensure();\n"
   }
 ]
