@@ -1406,5 +1406,137 @@
     "commit" : "feb1703fd17e7dfda50b01d337c4b0abd62e4ab8",
     "line" : 24,
     "diffHunk" : "@@ -1,1 +385,389 @@                        #  obj.axes[-1].equals(self.items)\n                        if obj.ndim == 1:\n                            kwargs[k] = obj.iloc[b.mgr_locs.indexer]._values\n                        else:\n                            kwargs[k] = obj.iloc[:, b.mgr_locs.indexer]._values"
+  },
+  {
+    "id" : "ff1aaca4-b7c0-4750-abb2-881e3dcc3764",
+    "prId" : 33857,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/33857#pullrequestreview-404621436",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d2706177-056f-454a-abdd-eeaa27d38eb3",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Suggestion: pass through this `na_value` to `_interleave`, and then when looping over the blocks, you can check for ExtensionBlocks and then call `to_numpy` with the appropriate dtype and na_value. \r\n\r\nThe lines above will need to be kept for non-EAs, but I think for EAs, we want to use their `to_numpy` implemenation, as this can potentially be more efficient in depending on the dtype/na_value combination",
+        "createdAt" : "2020-05-01T20:50:48Z",
+        "updatedAt" : "2020-05-12T19:12:41Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f4fe456-f22a-443a-ae69-fe22220dc05b",
+        "parentId" : "d2706177-056f-454a-abdd-eeaa27d38eb3",
+        "authorId" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "body" : "Pushed a change to make this update. In the single extension block case we're still doing a conversion to object (got several odd failures when I tried making the associated edit there) but I'm thinking this is already going to be a pretty inexpensive case anyways",
+        "createdAt" : "2020-05-02T02:01:26Z",
+        "updatedAt" : "2020-05-12T19:12:41Z",
+        "lastEditedBy" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3c0f1ea2-badc-40d0-867e-4c635ea7d65c",
+        "parentId" : "d2706177-056f-454a-abdd-eeaa27d38eb3",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "> In the single extension block case we're still doing a conversion to object \r\n\r\nI think in the above `is self._is_single_block` checks, you can add an additional case for single ExtensionBlock (like there is already a check for single datetimetz block)",
+        "createdAt" : "2020-05-02T15:18:34Z",
+        "updatedAt" : "2020-05-12T19:12:41Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6cd4a6f8-761e-412a-90da-f6e2c22e1634",
+        "parentId" : "d2706177-056f-454a-abdd-eeaa27d38eb3",
+        "authorId" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "body" : "Got mixed up by the \"blocks are transposed\" thing and was missing a reshape, should be working now 🤞 ",
+        "createdAt" : "2020-05-03T13:57:26Z",
+        "updatedAt" : "2020-05-12T19:12:41Z",
+        "lastEditedBy" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c2228bf83bf63370fad463420c06649e80c07b13",
+    "line" : 65,
+    "diffHunk" : "@@ -1,1 +837,841 @@\n        if na_value is not lib.no_default:\n            arr[isna(arr)] = na_value\n\n        return arr.transpose() if transpose else arr"
+  },
+  {
+    "id" : "cb4b0ec0-24f9-47ba-9131-b60260dc202e",
+    "prId" : 33857,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/33857#pullrequestreview-405789578",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "99a6902a-6861-4686-a6b3-c5cfb8a883b2",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "When `interleave` is called, that will always be already a copy, so it would be nice to avoid a second copy there as well\r\n\r\nMaybe the above if/else can be reorganized slightly, like:\r\n\r\n```\r\nif self._is_single_block or not self.is_mixed_type:\r\n  if self.blocks[0].is_datetimetz:\r\n    ...\r\n  elif self.blocks[0].is_extension:\r\n    ...\r\n  else:\r\n    ....\r\n  if copy or na_value is not lib.no_default:\r\n    arr = arr.copy()\r\nelse:\r\n  arr = self._interleave(dtype=dtype, na_value=na_value)\r\n```\r\n\r\n\r\n\r\n",
+        "createdAt" : "2020-05-05T06:42:09Z",
+        "updatedAt" : "2020-05-12T19:12:41Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0d98c048-d5c7-4aa6-a4dd-23b24c7de761",
+        "parentId" : "99a6902a-6861-4686-a6b3-c5cfb8a883b2",
+        "authorId" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "body" : "Good idea. Not sure if it's \"bad style\" but is another option simply to create a \"should_copy\" variable and update it for the interleave case? Might be a bit more explicit what we're thinking and helps avoid nested conditionals.",
+        "createdAt" : "2020-05-05T13:18:13Z",
+        "updatedAt" : "2020-05-12T19:12:41Z",
+        "lastEditedBy" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3f56f54d-49aa-4713-9cc9-9c43c0adba19",
+        "parentId" : "99a6902a-6861-4686-a6b3-c5cfb8a883b2",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Such a variable is also fine, whatever is easiest to implement / you prefer",
+        "createdAt" : "2020-05-05T13:31:16Z",
+        "updatedAt" : "2020-05-12T19:12:41Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c2228bf83bf63370fad463420c06649e80c07b13",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +834,838 @@\n        if copy:\n            arr = arr.copy()\n\n        if na_value is not lib.no_default:"
+  },
+  {
+    "id" : "17450b24-533b-4036-89ed-e8b5e2f3f941",
+    "prId" : 33857,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/33857#pullrequestreview-408679176",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f118d952-908b-402e-a644-642260967f92",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "is this tested / hit at all? (the dtype part)",
+        "createdAt" : "2020-05-09T19:31:13Z",
+        "updatedAt" : "2020-05-12T19:12:41Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8dd53864-9008-4af8-9d28-08fbbbc12ec2",
+        "parentId" : "f118d952-908b-402e-a644-642260967f92",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "The added `test_to_numpy_dataframe_single_block` should cover this line I think",
+        "createdAt" : "2020-05-09T19:44:06Z",
+        "updatedAt" : "2020-05-12T19:12:41Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c2228bf83bf63370fad463420c06649e80c07b13",
+    "line" : 54,
+    "diffHunk" : "@@ -1,1 +827,831 @@            arr = np.asarray(self.blocks[0].get_values())\n            if dtype:\n                arr = arr.astype(dtype, copy=False)\n        else:\n            arr = self._interleave(dtype=dtype, na_value=na_value)"
   }
 ]
