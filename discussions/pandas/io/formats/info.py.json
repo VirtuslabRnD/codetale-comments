@@ -196,5 +196,214 @@
     "commit" : "f87bc22781f3f7e943696daca0e05f71aaca1d56",
     "line" : 161,
     "diffHunk" : "@@ -1,1 +83,87 @@        null_counts: Optional[bool] = None,\n    ):\n        if buf is None:  # pragma: no cover\n            buf = sys.stdout\n        if memory_usage is None:"
+  },
+  {
+    "id" : "8f8c74f1-cfea-43db-a4df-e77e55a3d432",
+    "prId" : 36752,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/36752#pullrequestreview-501601023",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2d70c332-8088-48d9-a9b8-23fe97047676",
+        "parentId" : null,
+        "authorId" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "body" : ":thinking: not sure if `FrameOrSeries` is correct here, as the comment near it says\r\n```\r\n# FrameOrSeriesUnion  means either a DataFrame or a Series. E.g.\r\n# `def func(a: FrameOrSeriesUnion) -> FrameOrSeriesUnion: ...` means that if a Series\r\n# is passed in, either a Series or DataFrame is returned, and if a DataFrame is passed\r\n# in, either a DataFrame or a Series is returned.\r\n```\r\n, while `__init__` doesn't return anything. However, `FrameOrSeriesUnion` also talks about either a Series or a DataFrame being returned, so I'm not sure how to type this if nothing is returned... @topper-123 any suggestions?",
+        "createdAt" : "2020-10-01T06:17:11Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "229fdab5-ffd5-4f3f-9bb4-99771f487d14",
+        "parentId" : "2d70c332-8088-48d9-a9b8-23fe97047676",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "Looking at the documentation, I guess ``FrameOrSeries`` means the following.\r\nConsider ``x: FrameOrSeries``.\r\nFunction ``f(x) -> FrameOrSeries``.\r\nLet us say, that now ``x`` is a dataframe, then ``f(x)`` must return ``DataFrame``, but not ``Series``.\r\nMeanwhile ``FrameOrSeriesUnion`` allows that ``f(x)`` returns different type.",
+        "createdAt" : "2020-10-03T14:58:36Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb007aae-80f7-4b24-8224-040257494769",
+        "parentId" : "2d70c332-8088-48d9-a9b8-23fe97047676",
+        "authorId" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "body" : "Yes, that's my understanding too, although technically `__init__` doesn't return anything, so...just `Union[Series, DataFrame]`?",
+        "createdAt" : "2020-10-03T15:08:18Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0706986-15ae-4c1b-9a80-61f59f5aa54e",
+        "parentId" : "2d70c332-8088-48d9-a9b8-23fe97047676",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "``FrameOrSeriesUnion = Union[\"DataFrame\", \"Series\"]``, I can use it.\r\n\r\nIt we use ``FrameOrSeries``, then it does not mean that we must return.\r\nIt just means that **if** we return, we **must** return the same type.\r\n\r\nIt is not like I object against changes.\r\nI only mean that these are not required.\r\nmypy would raise issues if any.",
+        "createdAt" : "2020-10-03T15:29:58Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7dea00f0-4a74-49d1-a344-5c3f20dbda93",
+        "parentId" : "2d70c332-8088-48d9-a9b8-23fe97047676",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "I tried ``FrameOrSeriesUnion`` and it leads to mypy complains.\r\n\r\n```\r\npandas/io/formats/info.py:140: error: Incompatible return value type (got \"Union[Any, ExtensionDtype]\", expected \"Series\")  [return-value]\r\npandas/io/formats/info.py:201: error: Incompatible return value type (got \"Union[Any, ExtensionDtype]\", expected \"Series\")  [return-value]\r\n```\r\n\r\nSo, I leave it as it is for now.",
+        "createdAt" : "2020-10-03T15:37:34Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fc31d682-b208-40b6-80fd-c0d5f8fe1253",
+        "parentId" : "2d70c332-8088-48d9-a9b8-23fe97047676",
+        "authorId" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "body" : "I think you're right, e.g. `pandas/io/pytables.py` contains:\r\n```python\r\ndef to_hdf(\r\n    path_or_buf,\r\n    key: str,\r\n    value: FrameOrSeries,\r\n    mode: str = \"a\",\r\n    complevel: Optional[int] = None,\r\n    complib: Optional[str] = None,\r\n    append: bool = False,\r\n    format: Optional[str] = None,\r\n    index: bool = True,\r\n    min_itemsize: Optional[Union[int, Dict[str, int]]] = None,\r\n    nan_rep=None,\r\n    dropna: Optional[bool] = None,\r\n    data_columns: Optional[Union[bool, List[str]]] = None,\r\n    errors: str = \"strict\",\r\n    encoding: str = \"UTF-8\",\r\n):\r\n```\r\n\r\nLet's keep as is then, thanks for explaining!",
+        "createdAt" : "2020-10-04T08:19:02Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70c6e22e1fc748ff1b018b0a23a15e976c235d0a",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +98,102 @@    def __init__(\n        self,\n        data: FrameOrSeries,\n        memory_usage: Optional[Union[bool, str]] = None,\n    ):"
+  },
+  {
+    "id" : "7407596b-29f7-49e5-8c88-5dd550e73b72",
+    "prId" : 36752,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/36752#pullrequestreview-500910591",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5919345a-244a-4e26-9880-f208afa68a1f",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Hmm at first glance I think this delegation pattern is a little confusing but maybe I am overlooking something. What is the advantage to calling `DataFrameInfo.to_buffer` from `.info` instead of calling `InfoPrinter.to_buffer` instead?",
+        "createdAt" : "2020-10-01T17:40:31Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "81584854-7931-43b6-a2c3-4d9013f41138",
+        "parentId" : "5919345a-244a-4e26-9880-f208afa68a1f",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "I call ``DataFrameInfo.to_buffer`` from ``DataFrame`` because of the following reasons.\r\n1. Mainly did not want to mess with the docstring (which is defined in ``DataFrameInfo.to_buffer``)\r\n2. I wanted to avoid import of ``InfoPrinter`` into ``pandas/core/frame.py``\r\n3. Probably it is a good idea to make public API function as disconnected from the internal API as possible. Right now changes inside ``pandas/io/formats/io.py`` will have slight effect on ``DataFrame`` class, since the info printing functionality is encapsulated inside ``DataFrameInfo``. If, however, we call ``InfoPrinter.to_buffer`` from ``DataFrame.info()``, then we would need to ensure that all the possible changes made inside ``InfoPrinter`` and ``DataFrameInfo`` are properly communicated to ``DataFrame.info``. I hope it makes sense.\r\n\r\nBut I do not strongly object against having ``InfoPrinter.to_buffer`` called from ``DataFrame.info()``.",
+        "createdAt" : "2020-10-02T07:25:52Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70c6e22e1fc748ff1b018b0a23a15e976c235d0a",
+    "line" : 228,
+    "diffHunk" : "@@ -1,1 +267,271 @@        %(examples_sub)s\n        \"\"\"\n        printer = InfoPrinter(\n            info=self,\n            max_cols=max_cols,"
+  },
+  {
+    "id" : "33903bb8-d7d1-4071-9805-4426ce0f311f",
+    "prId" : 36752,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/36752#pullrequestreview-505839402",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "86b499c7-1ac5-45b3-a1ce-199d7685cbcb",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can you reduce the builder abstraction a bit. this is too java-esque. you can just pass parameterize / use partial functions. I find this style too different from the rest of pandas. let's make this simpler. ",
+        "createdAt" : "2020-10-07T02:54:35Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43e2c076-53d3-403e-93ad-6d7d987319bb",
+        "parentId" : "86b499c7-1ac5-45b3-a1ce-199d7685cbcb",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "As you requested, I dropped ``DataFrameTableBuilderVerboseNoCounts`` and ``DataFrameTableBuilderVerboseWithCounts``.\r\nInstead, I parametrized ``DataFrameTableBuilderVerbose`` (with_counts = True/False). I personally prefer the original implementation, but this one is also OK. My concerns with the new implementation are rather minor. Two if statements checking for ``with_counts`` in two separate functions (fragile), and presence of ``_gen_non_null_counts``, which is required for the table with counts and is irrelevant for table without counts.\r\n\r\nI leave ``TableBuilderAbstract`` as @MarcoGorelli is working on series info, thus it will be reasonable for the builders to have the same interface.",
+        "createdAt" : "2020-10-07T07:18:51Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fef25b63-b104-49df-8329-a3ed2eeadd5c",
+        "parentId" : "86b499c7-1ac5-45b3-a1ce-199d7685cbcb",
+        "authorId" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "body" : "Regarding Series.info - if you want to work on it I'm happy for you to take it over (else I'll go back to it once this PR is in)",
+        "createdAt" : "2020-10-07T16:18:04Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2dc72e9f-ca89-4b21-a827-ba80a551ac41",
+        "parentId" : "86b499c7-1ac5-45b3-a1ce-199d7685cbcb",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "@MarcoGorelli, I can work on Series.info from the code point of view. Since you already have documentation and tests, it seems to be quite manageable for me.",
+        "createdAt" : "2020-10-07T16:29:54Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5c49a57-79db-42ae-af8e-f002e1ceadd7",
+        "parentId" : "86b499c7-1ac5-45b3-a1ce-199d7685cbcb",
+        "authorId" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "body" : "Cool, I'll close that PR then! If for whatever reason you change your mind, please ping me and I'll take it up again",
+        "createdAt" : "2020-10-07T16:38:59Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "888173f2-4a00-44f2-b380-bc6a5ca76385",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd98c4db-9835-404e-bf0e-2e7a43bf4af4",
+        "parentId" : "86b499c7-1ac5-45b3-a1ce-199d7685cbcb",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "Good. I will start working on series info once this PR is merged.",
+        "createdAt" : "2020-10-09T16:49:36Z",
+        "updatedAt" : "2020-10-20T12:33:53Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70c6e22e1fc748ff1b018b0a23a15e976c235d0a",
+    "line" : 424,
+    "diffHunk" : "@@ -1,1 +383,387 @@\n\nclass DataFrameTableBuilder(TableBuilderAbstract):\n    \"\"\"Abstract builder for dataframe info table.\"\"\"\n"
+  },
+  {
+    "id" : "4610f148-6e7d-4556-ba07-70a05065477b",
+    "prId" : 36766,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/36766#pullrequestreview-501518533",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a93c951b-2257-4df6-8989-f06ac5405c6e",
+        "parentId" : null,
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "Note that this was starting playing role only when number of columns was over 1000. Because below 1000 ``max_id < len_id``. Therefore below 1000 columns there were no issues.",
+        "createdAt" : "2020-10-03T03:58:44Z",
+        "updatedAt" : "2020-10-07T09:32:18Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "489bcd47479ab2bee619aa45468364032e3981a0",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +293,297 @@        # in front of the number\n        # this allows maintain two spaces gap between columns\n        max_id = len(pprint_thing(col_count)) + 1\n        len_id = len(pprint_thing(id_head))\n        space_num = max(max_id, len_id) + col_space"
   }
 ]
