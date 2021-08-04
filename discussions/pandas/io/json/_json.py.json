@@ -471,5 +471,104 @@
     "commit" : "6b58d2f0f0982e80692fd1b4e6cc55314f98f3c3",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +263,267 @@        # NotImplemented on a column MultiIndex\n        if obj.ndim == 2 and isinstance(obj.columns, MultiIndex):\n            raise NotImplementedError(\n                \"orient='table' is not supported for MultiIndex columns\"\n            )"
+  },
+  {
+    "id" : "460c3ee0-ec4b-41fb-b230-84a5bbb44ec6",
+    "prId" : 36218,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/36218#pullrequestreview-512408849",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d5469fd4-8c27-42af-8a23-b38321a81d2d",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "should this be FrameOrSeries?",
+        "createdAt" : "2020-10-07T21:42:48Z",
+        "updatedAt" : "2020-10-20T07:33:38Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25b7a398-7965-4c75-b4d1-9159a875f7d2",
+        "parentId" : "d5469fd4-8c27-42af-8a23-b38321a81d2d",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "The problem with ``FrameOrSeries`` is that it does not allow changing the type of return value.\r\nInside the function ``to_json`` there is a statement, which changes object from series to frame, which is not allowed.\r\n```\r\n    if orient == \"table\" and isinstance(obj, Series):\r\n        obj = obj.to_frame(name=obj.name or \"values\")\r\n```\r\n\r\nmypy error:\r\n```\r\npandas/io/json/_json.py:78: error: Incompatible types in assignment (expression has type \"DataFrame\", variable has type \"FrameOrSeries\")  [assignment]\r\n```\r\n\r\nI tried to use ``FrameOrSeriesUnion``, which allows changing type from series to frame, but I get another mypy error.\r\nApparently for ``NDFrame`` only ``FrameOrSeries`` is a correct casting.\r\n\r\n```\r\npandas/core/generic.py:2159: error: The erased type of self \"Union[pandas.core.frame.DataFrame, pandas.core.series.Series]\" is not a supertype of its class \"pandas.core.generic.NDFrame\"  [misc]\r\n```\r\n\r\nSo, I have no clue how to deal with typing here.",
+        "createdAt" : "2020-10-08T05:48:40Z",
+        "updatedAt" : "2020-10-20T07:33:38Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af648fd0-3908-4615-a199-92d9439eddb5",
+        "parentId" : "d5469fd4-8c27-42af-8a23-b38321a81d2d",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "@willayd i expected FrameOrSeriesUnion would work for this, am i missing something?",
+        "createdAt" : "2020-10-18T00:15:40Z",
+        "updatedAt" : "2020-10-20T07:33:38Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e3c62158-e10d-4b5c-b481-74f0f7fefe8a",
+        "parentId" : "d5469fd4-8c27-42af-8a23-b38321a81d2d",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "@ivanovmg can you merge master and update the error message here? I don't think that line number is reflective of the latest code base\r\n\r\nI think the error message is stemming from a mixture of using a Union and a TypeVar (the latter being somewhere in generic). Ideally should be cleaned up but I don't think needs to hold up this PR",
+        "createdAt" : "2020-10-19T21:21:58Z",
+        "updatedAt" : "2020-10-20T07:33:38Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a8517a4a-d3ba-4bec-acd8-4bc5f4c02723",
+        "parentId" : "d5469fd4-8c27-42af-8a23-b38321a81d2d",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "Here we go.\r\nI merged master, then modified ``pandas/core/generic.py``.\r\n\r\nline 2164:\r\n```\r\n    def to_json(\r\n        self: FrameOrSeriesUnion,\r\n        path_or_buf: Optional[FilePathOrBuffer] = None,\r\n```\r\n\r\nAnd replaced ``NDFrame`` with ``FrameOrSeriesUnion`` in ``_json.py``.\r\n\r\nThe error would be:\r\n```\r\npandas/core/generic.py:2164: error: The erased type of self \"Union[pandas.core.frame.DataFrame, pandas.core.series.Series]\" is not a supertype of its class \"pandas.core.generic.NDFrame\"  [misc]\r\n```\r\n\r\nHowever, if I do not touch ``generic.py``, then the following error with be thrown.\r\n```\r\npandas/core/generic.py:2437: error: Argument \"obj\" to \"to_json\" has incompatible type \"NDFrame\"; expected \"Union[DataFrame, Series]\"  [arg-type]\r\n```",
+        "createdAt" : "2020-10-20T07:32:18Z",
+        "updatedAt" : "2020-10-20T07:33:38Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2e3a3b4ad22e01e36b0eaec8285fe32d2b8ed2d",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +41,45 @@def to_json(\n    path_or_buf,\n    obj: NDFrame,\n    orient: Optional[str] = None,\n    date_format: str = \"epoch\","
+  },
+  {
+    "id" : "70fe45c4-58c1-4f9c-a3ce-a3723914de93",
+    "prId" : 36218,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/36218#pullrequestreview-504452922",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ef98f99c-65d2-46c7-9f9a-30fd8687d597",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "can you explicitly `pass` here\r\n\r\nare the keys in the Dict necessarily str, or can they be any Index entries?",
+        "createdAt" : "2020-10-07T21:43:52Z",
+        "updatedAt" : "2020-10-20T07:33:38Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e85c4dcf-ce1e-485c-bff0-643834f36d1d",
+        "parentId" : "ef98f99c-65d2-46c7-9f9a-30fd8687d597",
+        "authorId" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "body" : "Oh yes, actually the keys in the dictionary can be of ``IndexLabel`` type.\r\nIn ``FrameWriter`` the resulting dictionary keys can be tuples of strings in case of multicolumns.\r\nIn other cases the keys seem to be only strings.",
+        "createdAt" : "2020-10-08T06:07:43Z",
+        "updatedAt" : "2020-10-20T07:33:38Z",
+        "lastEditedBy" : "6401b20f-26b1-4a7c-8433-dc789c15b9e1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2e3a3b4ad22e01e36b0eaec8285fe32d2b8ed2d",
+    "line" : 100,
+    "diffHunk" : "@@ -1,1 +171,175 @@        \"\"\"Object to write in JSON format.\"\"\"\n        pass\n\n\nclass SeriesWriter(Writer):"
   }
 ]
