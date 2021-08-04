@@ -75,5 +75,93 @@
     "commit" : "3c82ef3791cebe6576433b65f2e3067ef29fde12",
     "line" : 19,
     "diffHunk" : "@@ -1,1 +553,557 @@        tm.assert_numpy_array_equal(actual, expected)\n\n    # Make consistent with test_interval_new.py (see #16316, #16386)\n    @pytest.mark.parametrize('item', [\n        [3], np.arange(1, 5), [Interval(1, 4)], interval_range(1, 4)])"
+  },
+  {
+    "id" : "722d1376-0bd5-49f0-bfa1-e426f124446a",
+    "prId" : 23538,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/23538#pullrequestreview-190550226",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c96a584d-018c-4a88-9a68-9276e31dee8f",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "why is this different?",
+        "createdAt" : "2019-01-02T00:07:40Z",
+        "updatedAt" : "2019-05-21T00:53:26Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3746bcef-d711-4ed3-bd2e-d7eecc5fb9e2",
+        "parentId" : "c96a584d-018c-4a88-9a68-9276e31dee8f",
+        "authorId" : "e6997dda-cb4e-47c5-b0f9-6ed953879858",
+        "body" : "This is due to the changes to the behavior of performing set operations with an interval index and an incompatible type. These operations should no longer raise an error.",
+        "createdAt" : "2019-01-02T02:33:42Z",
+        "updatedAt" : "2019-05-21T00:53:26Z",
+        "lastEditedBy" : "e6997dda-cb4e-47c5-b0f9-6ed953879858",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61dc45b1-45a8-4f02-82dd-46fba2eb1d3a",
+        "parentId" : "c96a584d-018c-4a88-9a68-9276e31dee8f",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "right as I commented above, i find it strange that *only* difference is an issue here.",
+        "createdAt" : "2019-01-02T02:48:45Z",
+        "updatedAt" : "2019-05-21T00:53:26Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "47f4d072-f631-464e-bb3b-f595e9b9f3a5",
+        "parentId" : "c96a584d-018c-4a88-9a68-9276e31dee8f",
+        "authorId" : "e6997dda-cb4e-47c5-b0f9-6ed953879858",
+        "body" : "This is due to the fact that difference operations behave a bit differently in that difference with mismatching types returns the original dtype, which was the case before and discussed in this comment.\r\n\r\nhttps://github.com/pandas-dev/pandas/pull/23538#discussion_r232905638",
+        "createdAt" : "2019-01-03T02:51:00Z",
+        "updatedAt" : "2019-05-21T00:53:26Z",
+        "lastEditedBy" : "e6997dda-cb4e-47c5-b0f9-6ed953879858",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb777119-4f9f-465f-b5b8-e36bd91b5b16",
+        "parentId" : "c96a584d-018c-4a88-9a68-9276e31dee8f",
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "> i find it strange that _only_ difference is an issue here.\r\n\r\niirc it's not so much that `difference` is the only one for which there's an issue, but more so that it's the only one that's handled consistently throughout the codebase in terms of the return type, so it's the only one being special cased here (I could be misremembering).\r\n\r\nFor some examples with `intersection` (in principle this _could_ always return the same type as the calling index):\r\n```python\r\nIn [2]: fidx = pd.Float64Index([0, 1, 1.1, 2.2])\r\n\r\nIn [3]: iidx = pd.Int64Index([0, 1, 2, 3])\r\n\r\nIn [4]: dti = pd.date_range('2019-01-01', periods=3)\r\n\r\nIn [5]: fidx.intersection(iidx)\r\nOut[5]: Int64Index([0, 1], dtype='int64')\r\n\r\nIn [6]: iidx.intersection(fidx)\r\nOut[6]: Float64Index([0.0, 1.0], dtype='float64')\r\n\r\nIn [7]: fidx.intersection(dti)\r\nOut[7]: Index([], dtype='object')\r\n\r\nIn [8]: dti.intersection(fidx)\r\nOut[8]: DatetimeIndex([], dtype='datetime64[ns]', freq=None)\r\n```\r\n`Float64Index` and `Int64Index` seems to be returning the type of `other`.  `DatetimeIndex` looks to always be returning it's own type when it's the caller, but when it's being called by a `Float64Index` or `Int64Index` an `object` dtype `Index` is returned.\r\n\r\nStrangely, a `FutureWarning` is given when trying to intersect `DatetimeIndex` and `TimedeltaIndex` saying that a `TypeError` will be raised in the future:\r\n```python-traceback\r\nIn [11]: dti.intersection(pd.timedelta_range('0 days', periods=3))\r\npandas\\core\\indexes\\datetimelike.py:152: FutureWarning: Passing timedelta64-dtype data is deprecated, will raise a TypeError in a future version\r\npandas\\core\\indexes\\datetimes.py:628: FutureWarning: Passing timedelta64-dtype data is deprecated, will raise a TypeError in a future version\r\n  other = DatetimeIndex(other)\r\nOut[11]: DatetimeIndex([], dtype='datetime64[ns]', freq=None)\r\n```\r\n",
+        "createdAt" : "2019-01-03T21:01:59Z",
+        "updatedAt" : "2019-05-21T00:53:26Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd69158d-05a9-4af2-801d-2fa964f6f369",
+        "parentId" : "c96a584d-018c-4a88-9a68-9276e31dee8f",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "ok that makes sense. @ArtinSarraf can you add a TODO mentioned this (in both the test and here in the code).",
+        "createdAt" : "2019-01-03T22:58:08Z",
+        "updatedAt" : "2019-05-21T00:53:26Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4bce20c5-935f-4760-8d0a-40728566ccea",
+        "parentId" : "c96a584d-018c-4a88-9a68-9276e31dee8f",
+        "authorId" : "e6997dda-cb4e-47c5-b0f9-6ed953879858",
+        "body" : "done",
+        "createdAt" : "2019-01-09T02:11:43Z",
+        "updatedAt" : "2019-05-21T00:53:26Z",
+        "lastEditedBy" : "e6997dda-cb4e-47c5-b0f9-6ed953879858",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b840f49f2f520b4f5676f50029365cdf89bc2209",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +908,912 @@        # TODO: standardize return type of non-union setops type(self vs other)\n        # non-IntervalIndex\n        if op_name == 'difference':\n            expected = index\n        else:"
   }
 ]
