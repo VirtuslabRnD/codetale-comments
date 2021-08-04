@@ -218,5 +218,115 @@
     "commit" : "f5860a1748c4034b67cf5a52b4fb56d9281b4bab",
     "line" : 153,
     "diffHunk" : "@@ -1,1 +151,155 @@            mdata = dict((k, v[mask]) for k, v in compat.iteritems(mdata))\n\n    return DataFrame(mdata, columns=id_cols + pivot_cols)\n\n"
+  },
+  {
+    "id" : "ec097af0-a011-4e08-9c3e-685209775047",
+    "prId" : 23575,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/23575#pullrequestreview-174976233",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "14ca2e80-9432-4e0e-b86d-d642822defdf",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can you do this check just once?",
+        "createdAt" : "2018-11-14T14:22:37Z",
+        "updatedAt" : "2018-11-21T16:01:27Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0f592903-6e02-4779-861a-d2fe8da6b9a0",
+        "parentId" : "14ca2e80-9432-4e0e-b86d-d642822defdf",
+        "authorId" : "bb3a4eba-ed7e-454e-961a-a05a96110abd",
+        "body" : "This is a bit tricky since there are other checks on `id_vars` and `value_vars` independently, like these\r\nhttps://github.com/pandas-dev/pandas/blob/c75ab23bdf237a9966a28f0b6941dea3ea5e0398/pandas/core/reshape/melt.py#L33\r\nhttps://github.com/pandas-dev/pandas/blob/c75ab23bdf237a9966a28f0b6941dea3ea5e0398/pandas/core/reshape/melt.py#L51\r\nSo checking that all columns are present before these individual checks (like at L27) fails the test that addresses the above check.\r\n\r\nTrying to check the columns after these checks (like at L64) works, but throws this warning:\r\n`Passing list-likes to .loc or [] with any missing label will raise\r\nKeyError in the future, you can use .reindex() as an alternative.`\r\n\r\nBecause of this line:\r\nhttps://github.com/pandas-dev/pandas/blob/c75ab23bdf237a9966a28f0b6941dea3ea5e0398/pandas/core/reshape/melt.py#L61\r\n\r\nWhich is what I'm trying to avoid. \r\n\r\nSince the check needs to happen before L61 (to prevent the warning) and after the Multiindex checks (L33 and 51) I think doing them separately may be the easiest.\r\n",
+        "createdAt" : "2018-11-14T15:27:40Z",
+        "updatedAt" : "2018-11-21T16:01:27Z",
+        "lastEditedBy" : "bb3a4eba-ed7e-454e-961a-a05a96110abd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "273dfa68-2678-4ec1-b842-1a0dbf2499f2",
+        "parentId" : "14ca2e80-9432-4e0e-b86d-d642822defdf",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "ok that's fine. something failing, so merge master and ping on green.",
+        "createdAt" : "2018-11-14T17:10:13Z",
+        "updatedAt" : "2018-11-21T16:01:27Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0db8838e26f74caec9fef7e604ab530437cd9fcc",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +61,65 @@            # Check that `value_vars` are in frame\n            missing = Index(np.ravel(value_vars)).difference(cols)\n            if not missing.empty:\n                raise KeyError(\"The following 'value_vars' are not present in\"\n                               \" the DataFrame: {missing}\""
+  },
+  {
+    "id" : "526932e5-00c3-46fe-99ec-9b3073c03254",
+    "prId" : 23575,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/23575#pullrequestreview-176476387",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4cdcf158-40f9-43fc-b249-47f0f161de7e",
+        "parentId" : null,
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "I'm not especially familiar with melt and multi-index columns, but I don't think this is quite right.\r\n\r\nIt seems like you need to specify `col_level` when you have a MI in the columns, so you should probably just be checks against `frame.columns.levels[col_level]` when you have a MI.\r\n\r\nHowever, it doesn't quite seem that a `col_level` is *required* when there's a MI in the columns. The default of `pd.melt(df)` seems to work, but any time I specified an `id_vars` or `value_vars` without col_level I get an uninformative error message. I'm not sure what's going on.",
+        "createdAt" : "2018-11-16T19:59:49Z",
+        "updatedAt" : "2018-11-21T16:01:27Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eff2731d-076b-4377-a16b-aab2ecb15fd1",
+        "parentId" : "4cdcf158-40f9-43fc-b249-47f0f161de7e",
+        "authorId" : "bb3a4eba-ed7e-454e-961a-a05a96110abd",
+        "body" : "I think you need to provide `col_level` for MI when only melting on one level like this example from the docstring (that I added a new test for):\r\n\r\n`pd.melt(df, col_level=0, id_vars=['A'], value_vars=['B'])`\r\n\r\nBut you don't need to specify `col_level` when using all levels of MI:\r\n`pd.melt(df, id_vars=[('A', 'D')], value_vars=[('B', 'E')])`",
+        "createdAt" : "2018-11-16T20:05:44Z",
+        "updatedAt" : "2018-11-21T16:01:27Z",
+        "lastEditedBy" : "bb3a4eba-ed7e-454e-961a-a05a96110abd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e1d604e7-a70b-4dd9-9b16-f087832e3d47",
+        "parentId" : "4cdcf158-40f9-43fc-b249-47f0f161de7e",
+        "authorId" : "bb3a4eba-ed7e-454e-961a-a05a96110abd",
+        "body" : "All I am doing at L28 is gathering column names from all levels. There are other checks to make sure that melting is performed properly, this will just check to make sure that whatever you pass, it is in your df",
+        "createdAt" : "2018-11-16T20:07:16Z",
+        "updatedAt" : "2018-11-21T16:01:27Z",
+        "lastEditedBy" : "bb3a4eba-ed7e-454e-961a-a05a96110abd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5b503223-1848-4f0b-af61-7eaa056ef7d9",
+        "parentId" : "4cdcf158-40f9-43fc-b249-47f0f161de7e",
+        "authorId" : "bb3a4eba-ed7e-454e-961a-a05a96110abd",
+        "body" : "Thoughts?",
+        "createdAt" : "2018-11-19T19:33:13Z",
+        "updatedAt" : "2018-11-21T16:01:27Z",
+        "lastEditedBy" : "bb3a4eba-ed7e-454e-961a-a05a96110abd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cace44ca-9274-4911-b024-bdd8e82bfb72",
+        "parentId" : "4cdcf158-40f9-43fc-b249-47f0f161de7e",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "yeah i think this is ok, can you provdie a comment on what is going on.",
+        "createdAt" : "2018-11-19T20:29:47Z",
+        "updatedAt" : "2018-11-21T16:01:27Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0db8838e26f74caec9fef7e604ab530437cd9fcc",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +28,32 @@    # If multiindex, gather names of columns on all level for checking presence\n    # of `id_vars` and `value_vars`\n    if isinstance(frame.columns, ABCMultiIndex):\n        cols = [x for c in frame.columns for x in c]\n    else:"
   }
 ]
