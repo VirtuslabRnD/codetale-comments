@@ -262,5 +262,137 @@
     "commit" : "0ef759f2d9a55eba8099467665dd689d57f95c36",
     "line" : 43,
     "diffHunk" : "@@ -1,1 +104,108 @@        return result\n\n    unit = get_datetime64_unit(arr.flat[0])\n    for i in range(n):\n        if ivalues[i] != NPY_NAT:"
+  },
+  {
+    "id" : "b760c8b5-f4c5-4d62-9512-d9c3ec7c81f9",
+    "prId" : 18602,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/18602#pullrequestreview-80714855",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "I've been kinda curious how this works namespace-wise.  Why isn't this a recursion error?",
+        "createdAt" : "2017-12-02T23:38:32Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "02070577-b05e-447f-b5b5-f08ee398531c",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "Yeah, now that you mention it, this does seem a bit strange, even the way it was originally written with the legacy syntax.  I tried creating similar classes in plain Python and they all raised.\r\n\r\nThat aside, looking further into the code, it doesn't seem like `value` be a property? Or should at least have a setter?  Maybe I'm missing something obvious (not super familiar with this part of the codebase or Cython in general), but it looks like there are places where `value` is being set, e.g.\r\n\r\nhttps://github.com/pandas-dev/pandas/blob/0e168188811677f9de72a6a5b97253e551b6b04a/pandas/_libs/tslibs/conversion.pyx#L250-L256\r\n\r\n(and many other examples further below that)\r\n\r\nTrying something similar on `master` raises, albeit in plain Python:\r\n```python\r\nIn [1]: from pandas._libs.tslibs.conversion import _TSObject\r\n\r\nIn [2]: obj = _TSObject()\r\n\r\nIn [3]: obj.value = 10\r\n---------------------------------------------------------------------------\r\nAttributeError: attribute 'value' of 'pandas._libs.tslibs.conversion._TSObject' objects is not writable\r\n```\r\n\r\nSo I'm a little confused as to how this working in the snippet I posted from the codebase, but again, could just be my relative inexperience with Cython speaking.",
+        "createdAt" : "2017-12-03T03:14:25Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "304ba28f-6c04-429e-8352-dcef7b921fb5",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "51189123-86a2-400a-9762-6816882b6f12",
+        "body" : "Are the test failures related to the change in this discussion?",
+        "createdAt" : "2017-12-03T08:47:39Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "51189123-86a2-400a-9762-6816882b6f12",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a60d60b-8a71-4069-b1b2-b468bdff6790",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "@gfyoung :  I believe so, but I'm not 100% sure.\r\n\r\nThe test failure reads:\r\n```python\r\n  File \"pandas/_libs/tslibs/conversion.pyx\", line 268, in pandas._libs.tslibs.conversion.convert_to_tsobject (pandas/_libs/tslibs/conversion.c:3771)\r\n    obj.value = ts\r\nAttributeError: can't set attribute\r\n```\r\nwhich is just a few lines below the snipped from `conversion.pyx` I posted.",
+        "createdAt" : "2017-12-03T17:16:47Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d73d7da-7b99-432f-ab7d-62c6a292d217",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "hmm, maybe it needs a setter as well. I though this was a problem as was trying to access a c-attribute from  a non-cdef, but that's not the case.",
+        "createdAt" : "2017-12-03T18:06:56Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f175127-b8f7-4111-8a79-5531fd4c500f",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "Okay, so I tried adding a setter, but it still caused a few failures, this time with `TypeError: 'property' object is not callable`.  Looking into it further, it only appears to fail for older Cython versions, specifically 0.23.  Searching around a bit, apparently `@property` syntax wasn't fully supported for older versions like 0.23 (see [here](https://groups.google.com/forum/#!topic/cython-users/eYZDaXdTiis) and [here](https://stackoverflow.com/q/41289669/3339965)).\r\n\r\nI've tried a few things, but couldn't get this working without using some type of property syntax.   Would it be best to just revert this to the legacy syntax, possibly with a TODO note to change once we bump the Cython version?  Or is there a non-property way of getting this to work that I've overlooked?",
+        "createdAt" : "2017-12-03T21:20:04Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b68b7cb7-35bd-43b7-9bc1-96aa1b204246",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "51189123-86a2-400a-9762-6816882b6f12",
+        "body" : "Why don't you revert your changes to this `property` syntax so that you have a clean commit that passes all tests.  Then you can mess around with this problematic instance in a separate commit if need be.",
+        "createdAt" : "2017-12-03T21:24:30Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "51189123-86a2-400a-9762-6816882b6f12",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a195a7c-68e3-405a-ad1f-be58b92916e7",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "what version of cython supports this?\r\nnot averse to bumping it",
+        "createdAt" : "2017-12-03T21:28:22Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8dcd8827-d840-4d36-aedf-82b4c62b55c8",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "Looks like 0.24.0.  Was able to reproduce the error locally using 0.23.x, then get it working on 0.24.0.",
+        "createdAt" : "2017-12-03T21:37:35Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c04aff34-aa69-4798-a67e-aa771e393cfc",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "ok would take this as an update then to 0.24\r\nneed to update setup.py, some ci files, install.rst and add a more in  whatsnew",
+        "createdAt" : "2017-12-03T21:39:14Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ebc4aaad-0888-43ff-ad9a-f89af6ce33f8",
+        "parentId" : "848883ea-793c-4442-a662-9ebb1df80631",
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "Sounds good. Will open an issue to have something to reference in the whatsnew, and give this more visibility on the off chance that someone has an objection to the bump.  And here I was thinking that this PR would be an easy and straightforward way to start getting into to the Cython part of the codebase!",
+        "createdAt" : "2017-12-03T21:56:26Z",
+        "updatedAt" : "2017-12-04T20:21:33Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6b136cf3c8011b4c740cbb36fa262df4f0b6b719",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +206,210 @@    @property\n    def value(self):\n        return self.value\n\n"
   }
 ]
