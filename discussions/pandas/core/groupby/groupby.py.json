@@ -2275,5 +2275,214 @@
     "commit" : "f57568729cd7b1cca8321552bee43be0c324a816",
     "line" : 19,
     "diffHunk" : "@@ -1,1 +1549,1553 @@            )\n\n        return self._reindex_output(result, fill_value=0)\n\n    @doc(_groupby_agg_method_template, fname=\"prod\", no=True, mc=0)"
+  },
+  {
+    "id" : "6c48d072-79a3-4535-947d-c0d187ff0db6",
+    "prId" : 35751,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/35751#pullrequestreview-487311490",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "42a7dd49-e66a-4651-b2de-e998d2a0ec99",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this is really hard to understand why you are doing this. \r\n\r\n`.dropna` should modify the `.result_index` on the Grouper object no?",
+        "createdAt" : "2020-09-13T12:58:14Z",
+        "updatedAt" : "2020-12-19T01:07:59Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "94031bcd-6067-400f-a69b-3f71fe89f55a",
+        "parentId" : "42a7dd49-e66a-4651-b2de-e998d2a0ec99",
+        "authorId" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "body" : "you mean the if condition or what we're doing inside the if? \r\n\r\nwe have the if because AFAIK `result` has a simple index when `_set_result_index_ordered` is initally called and we need to restore the original index  if it's non-standard or a mulitiindex\r\n\r\nIf no rows were dropped `set_axis` does the job, but `set_axis` throws in case of shape mismatch between `result.index` and original index \r\n\r\nsince `result.index` is a standard index we can get labels of the dropped object by using `result.index` to slice the original index. In the OP it's amounts to doing:\r\n```\r\nIn [24]: df.index   # original index                                                                                                                                                                                         \r\nOut[24]: Index(['a', 'b', 'c', 'd'], dtype='object')\r\n\r\nIn [26]: df.index = df.index[[0, 1, 3]]    # index of dropped object                                                                                                                                                                \r\n    ...: df.index                                                                                                                                                                                                 \r\nOut[29]: Index(['a', 'b', 'd'], dtype='object') \r\n```\r\n`self.axis` does not propagate correctly rn so checking that does nothing atm",
+        "createdAt" : "2020-09-13T14:20:14Z",
+        "updatedAt" : "2020-12-19T01:07:59Z",
+        "lastEditedBy" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1ea9d297d6c15f4666333e95d49871b93fab61b5",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +750,754 @@            result.index = self._selected_obj.index[sorted_indexer]\n        else:\n            result.set_axis(self.obj._get_axis(self.axis), axis=self.axis, inplace=True)\n\n        return result"
+  },
+  {
+    "id" : "d4108c23-3188-43ee-9ae9-63d13f50b718",
+    "prId" : 35751,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/35751#pullrequestreview-526925887",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "074801f6-2f06-4c67-87af-5211e6db5b0d",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can we just *always* use this formulation? e.g. just use the if clause regardless here?",
+        "createdAt" : "2020-11-07T23:49:02Z",
+        "updatedAt" : "2020-12-19T01:07:59Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b467aa39-d75a-45ee-b349-53d30cc016fd",
+        "parentId" : "074801f6-2f06-4c67-87af-5211e6db5b0d",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "well I mean for axis==0; also I think this is incorrect for axis==1 (though it likley won't trigger the if clause).\r\n\r\ncan you refactor to do this?",
+        "createdAt" : "2020-11-07T23:49:45Z",
+        "updatedAt" : "2020-12-19T01:07:59Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e871bc58-bf7e-479b-95b5-e1c2609a82b0",
+        "parentId" : "074801f6-2f06-4c67-87af-5211e6db5b0d",
+        "authorId" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "body" : "> can we just _always_ use this formulation? e.g. just use the if clause regardless here?\r\n\r\nWe can but the slice will drop some attributes (for example frequency for a datetime index - we have testcase which won't quite roundtrip if we do this). Will change as long as you're ok with that\r\n",
+        "createdAt" : "2020-11-08T01:38:54Z",
+        "updatedAt" : "2020-12-19T01:07:59Z",
+        "lastEditedBy" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37d7cae4-3a0d-41d5-8a21-214fd93a5303",
+        "parentId" : "074801f6-2f06-4c67-87af-5211e6db5b0d",
+        "authorId" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "body" : "> well I mean for axis==0; also I think this is incorrect for axis==1 (though it likley won't trigger the if clause).\r\n\r\nRight because for `axis=1` we don't drop rows.\r\n\r\nFTR we don't fully support/test the `axis=1` case atm. I'll do that in a follow-on once this is in",
+        "createdAt" : "2020-11-08T01:40:51Z",
+        "updatedAt" : "2020-12-19T01:07:59Z",
+        "lastEditedBy" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9158b3e1-fabf-4577-820f-9cf9a19239c4",
+        "parentId" : "074801f6-2f06-4c67-87af-5211e6db5b0d",
+        "authorId" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "body" : "> well I mean for axis==0; also I think this is incorrect for axis==1 (though it likley won't trigger the if clause).\r\n> \r\n> can you refactor to do this?\r\n\r\nOn second thought I don't think we can \r\n\r\nAFAIK if we don't drop rows then we keep the original index which isn't an indexer into the original object's index. When we drop rows we reindex with an integer index (and that's a valid argument to `__getitem__`). So the case of no rows dropped doesn't fall through the slice and I think we do have to treat those two cases separately here",
+        "createdAt" : "2020-11-10T07:38:23Z",
+        "updatedAt" : "2020-12-19T01:07:59Z",
+        "lastEditedBy" : "8a5d728c-e241-4a19-b667-385656e4fd50",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1ea9d297d6c15f4666333e95d49871b93fab61b5",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +747,751 @@            # get index by slicing original index according to original positions\n            # slice drops attrs => use set_axis when no rows were dropped\n            sorted_indexer = result.index\n            result.index = self._selected_obj.index[sorted_indexer]\n        else:"
+  },
+  {
+    "id" : "f51f908b-478e-4ee5-879c-95a36ec386aa",
+    "prId" : 35759,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/35759#pullrequestreview-470718120",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e11a563a-567d-48cd-91dd-60e6929ae458",
+        "parentId" : null,
+        "authorId" : "99f74c82-c3ba-477d-8b70-f12c41bd8ded",
+        "body" : "Can't this be moved into the else?",
+        "createdAt" : "2020-08-17T10:10:20Z",
+        "updatedAt" : "2020-08-21T23:15:39Z",
+        "lastEditedBy" : "99f74c82-c3ba-477d-8b70-f12c41bd8ded",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf83a117-18b3-420f-bf40-427817784295",
+        "parentId" : "e11a563a-567d-48cd-91dd-60e6929ae458",
+        "authorId" : "99f74c82-c3ba-477d-8b70-f12c41bd8ded",
+        "body" : "Should you check that the cache is being used property lin a test?",
+        "createdAt" : "2020-08-17T10:16:29Z",
+        "updatedAt" : "2020-08-21T23:15:39Z",
+        "lastEditedBy" : "99f74c82-c3ba-477d-8b70-f12c41bd8ded",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a63d1d40-d19e-4ebe-973f-521a53104976",
+        "parentId" : "e11a563a-567d-48cd-91dd-60e6929ae458",
+        "authorId" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "body" : "I was thinking to evaluate the function first with all arguments first before putting the function in the cache so we're not caching a function that may fail.\r\n\r\nI have existing tests that check for the presence of the function in the cache here:\r\nhttps://github.com/pandas-dev/pandas/blob/97ec062714c13a33985801b0929ff991d7d2fe07/pandas/tests/groupby/aggregate/test_numba.py#L104\r\n",
+        "createdAt" : "2020-08-19T04:38:10Z",
+        "updatedAt" : "2020-08-21T23:15:39Z",
+        "lastEditedBy" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6db6fa0e-aabf-42c5-82b9-f3970e132150",
+        "parentId" : "e11a563a-567d-48cd-91dd-60e6929ae458",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "yeah would want to move this all to groupby/numba_.py rather than here (you can certainly cache afer, but ideally all of the caching is not exposed here; I think we did this elsewhere IIRC)",
+        "createdAt" : "2020-08-19T18:12:13Z",
+        "updatedAt" : "2020-08-21T23:15:39Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5282f1622da9366bed697c6ea22ef83e592ce589",
+    "line" : 66,
+    "diffHunk" : "@@ -1,1 +1081,1085 @@        )\n        if cache_key not in NUMBA_FUNC_CACHE:\n            NUMBA_FUNC_CACHE[cache_key] = numba_agg_func\n\n        if self.grouper.nkeys > 1:"
+  },
+  {
+    "id" : "6ee3356c-81e5-45d5-a2b9-60523a4686cf",
+    "prId" : 35759,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/35759#pullrequestreview-470718120",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d1a31d3b-efab-4b64-8250-a94ed9313e30",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can you add a doc-string a and type as much as possible",
+        "createdAt" : "2020-08-19T18:10:21Z",
+        "updatedAt" : "2020-08-21T23:15:39Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5282f1622da9366bed697c6ea22ef83e592ce589",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +1063,1067 @@        data and indices into a Numba jitted function.\n        \"\"\"\n        group_keys = self.grouper._get_group_keys()\n        labels, _, n_groups = self.grouper.group_info\n        sorted_index = get_group_index_sorter(labels, n_groups)"
+  },
+  {
+    "id" : "f9420e3f-82b3-4636-a208-74332553eed2",
+    "prId" : 35759,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/35759#pullrequestreview-471252769",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3925f3f-c0b7-4846-99e1-c3e0fa4c8b82",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "is this consistent with other functions, e.g. transform and rolling and such (the cache keys)?",
+        "createdAt" : "2020-08-19T18:11:04Z",
+        "updatedAt" : "2020-08-21T23:15:39Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b853d9c-1026-4a95-aa67-6fe209b540ec",
+        "parentId" : "b3925f3f-c0b7-4846-99e1-c3e0fa4c8b82",
+        "authorId" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "body" : "Yeah these keys are all formatted similarly (function, \"string of the operation\")",
+        "createdAt" : "2020-08-20T05:15:37Z",
+        "updatedAt" : "2020-08-21T23:15:39Z",
+        "lastEditedBy" : "eb0b5a98-1084-4e61-8414-5fb19728b91f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5282f1622da9366bed697c6ea22ef83e592ce589",
+    "line" : 54,
+    "diffHunk" : "@@ -1,1 +1069,1073 @@        sorted_data = data.take(sorted_index, axis=self.axis).to_numpy()\n        starts, ends = lib.generate_slices(sorted_labels, n_groups)\n        cache_key = (func, \"groupby_agg\")\n        if cache_key in NUMBA_FUNC_CACHE:\n            # Return an already compiled version of roll_apply if available"
   }
 ]
