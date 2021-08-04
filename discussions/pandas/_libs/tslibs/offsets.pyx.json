@@ -1406,5 +1406,104 @@
     "commit" : "0f705901fea09c176fa682033dc660b190275c51",
     "line" : 7,
     "diffHunk" : "@@ -1,1 +795,799 @@    # for Python 3, because we've redefined __eq__.\n    def __hash__(self) -> int:\n        return hash(self._params)\n\n    # --------------------------------------------------------------------"
+  },
+  {
+    "id" : "8489f80a-4583-43d2-9c24-fc944ae831a1",
+    "prId" : 41488,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/41488#pullrequestreview-660367078",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7ff9959d-6892-49fa-b017-10c29a95a0a0",
+        "parentId" : null,
+        "authorId" : "8da43294-51d2-4127-80e8-6d8c13eafa5d",
+        "body" : "Changing from `n=self.n` to `n=1` does not have any effect on the functionality. I just thought having n=1 is 1) more consistent with `MonthBegin(n=1)` and `MonthEnd(n=1)` below; and 2) slightly more indicative of the role of `CustomBusinessDay`, which is simply to apply a 1-day rollforward/rollback. ",
+        "createdAt" : "2021-05-15T15:26:01Z",
+        "updatedAt" : "2021-05-15T15:26:43Z",
+        "lastEditedBy" : "8da43294-51d2-4127-80e8-6d8c13eafa5d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "05c8ee89140949f746e07502c400f8e6cbfa4fd4",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +3374,3378 @@        cbday_kwds['offset'] = timedelta(0)\n\n        cbday = CustomBusinessDay(n=1, normalize=False, **cbday_kwds)\n\n        if self._prefix.endswith(\"S\"):"
+  },
+  {
+    "id" : "cfe19dbc-e60e-4d97-999d-59c8172813eb",
+    "prId" : 41488,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/41488#pullrequestreview-667386851",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4915b3c7-eac0-48fa-ae5d-f00f6a9c9141",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can you not just pass kwds & offset here?",
+        "createdAt" : "2021-05-17T15:12:27Z",
+        "updatedAt" : "2021-05-17T15:12:30Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd93e70b-192f-4e09-945b-7683f930c876",
+        "parentId" : "4915b3c7-eac0-48fa-ae5d-f00f6a9c9141",
+        "authorId" : "8da43294-51d2-4127-80e8-6d8c13eafa5d",
+        "body" : "Likely I didn't fully understanding your suggestion here. Do you by any chance mean passing `**self.kwds` as before? So the idea here is that if _self.offset is not timedelta(0)_, then we always use `CustomBusinessDay(n=1, normalize=False, offset=timedelta(0), ...)` to roll to a business day first, and then separately add the self.offset afterwards. \r\n\r\nThe reason is that `.rollforward` (and `.rollback`) only calls `.apply` when if `.is_on_offset(dt)` returns `False` (code [here](https://github.com/pandas-dev/pandas/blob/master/pandas/_libs/tslibs/offsets.pyx#L590-L616) and [here](https://github.com/pandas-dev/pandas/blob/master/pandas/_libs/tslibs/offsets.pyx#L3227-L3255)), which I think can be illustrated well with the following example:\r\n\r\n```python\r\nIn[33]: import pandas as pd\r\n   ...: print(pd.__version__)\r\n1.3.0.dev0+1628.g32ce31be89\r\nIn[34]: cbday_plus_5d = pd.offsets.CustomBusinessDay(n=1, offset=timedelta(days=5))\r\n   ...: # define a CBDay with an extra offset of 5 days\r\nIn[35]: print(cbday_plus_5d.rollforward(pd.Timestamp('2021-05-02')))  # expected 2021-05-08\r\n   ...: # 2021-05-02 not a business day, so 'rollforward' makes it 2021-05-03 + extra 5 days\r\n2021-05-08 00:00:00\r\nIn[36]: print(cbday_plus_5d.rollforward(pd.Timestamp('2021-05-03')))  # expected 2021-05-08\r\n   ...: # 2021-05-03 is ALREADY a business day, so it doesn't get rolled at all.\r\n2021-05-03 00:00:00\r\n```\r\n\r\nSo instead, we enforce `offset=timedelta(0)` while constructing `CustomBusinessDay` as follows, which is why I am first modifying the 'offset' parameter:\r\n\r\n```python\r\nIn[42]: cbday_no_offset = pd.offsets.CustomBusinessDay(n=1, offset=timedelta(0))\r\nIn[43]: print(cbday_no_offset.rollforward(pd.Timestamp('2021-05-03')) + timedelta(days=5))  # expected 2021-05-08\r\n2021-05-08 00:00:00\r\n```\r\n\r\nPlease let me know if I completely missed your question. Would love to hear your thoughts. Thanks!\r\n",
+        "createdAt" : "2021-05-17T21:19:52Z",
+        "updatedAt" : "2021-05-17T21:27:38Z",
+        "lastEditedBy" : "8da43294-51d2-4127-80e8-6d8c13eafa5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26dbaa38-be01-4566-ab80-f1f1c2043f4a",
+        "parentId" : "4915b3c7-eac0-48fa-ae5d-f00f6a9c9141",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "I think what jreback is suggesting is:\r\n\r\n```\r\nif self.offset:\r\n    cbday_kwds = self.kwds.copy()\r\n    cbday_kwds['offset'] = timedelta(0)\r\nelse:\r\n    cbday_kwds = self.kwds\r\n```\r\n\r\nshould instead just be:\r\n\r\n```\r\ncbday_kwds = self.kwds.copy()\r\ncbday_kwds['offset'] = timedelta(0)\r\n```",
+        "createdAt" : "2021-05-18T19:41:44Z",
+        "updatedAt" : "2021-05-18T19:41:44Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "624695f5-34ee-4e14-ba8c-5ec7ad4f0aa2",
+        "parentId" : "4915b3c7-eac0-48fa-ae5d-f00f6a9c9141",
+        "authorId" : "8da43294-51d2-4127-80e8-6d8c13eafa5d",
+        "body" : "Ah, I see. I added the check here to prevent unnecessary data copying, because I am guessing `offset=timedelta(0)` is the more common use case and works as expected. What do you think? Definitely happy to change it accordingly.  ",
+        "createdAt" : "2021-05-18T19:51:46Z",
+        "updatedAt" : "2021-05-18T19:51:46Z",
+        "lastEditedBy" : "8da43294-51d2-4127-80e8-6d8c13eafa5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2fe95799-bc04-4cef-92be-4964fea525d7",
+        "parentId" : "4915b3c7-eac0-48fa-ae5d-f00f6a9c9141",
+        "authorId" : "8da43294-51d2-4127-80e8-6d8c13eafa5d",
+        "body" : "Bumping this thread. Let me know what you think about 1) always making a new copy `cbday_kwds = self.kwds.copy()` vs. 2) only copying when `self.offset` is not `timedelta(0)`. I will make changes accordingly. :)\r\n\r\nAs a refresher for your convenience, the idea is that we want to first use `CustomBusinessDay(n=1, normalize=False, offset=timedelta(0), ...)` (instead of any non-zero offset) to roll to a business day first, and then separately apply the `self.offset` afterwards in `.apply`.",
+        "createdAt" : "2021-05-24T20:36:33Z",
+        "updatedAt" : "2021-05-24T20:37:26Z",
+        "lastEditedBy" : "8da43294-51d2-4127-80e8-6d8c13eafa5d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e1ebbb68-e18b-4094-a93a-16a8aada42f4",
+        "parentId" : "4915b3c7-eac0-48fa-ae5d-f00f6a9c9141",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "im fine with this either way",
+        "createdAt" : "2021-05-25T04:52:07Z",
+        "updatedAt" : "2021-05-25T04:52:07Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "05c8ee89140949f746e07502c400f8e6cbfa4fd4",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +3374,3378 @@        cbday_kwds['offset'] = timedelta(0)\n\n        cbday = CustomBusinessDay(n=1, normalize=False, **cbday_kwds)\n\n        if self._prefix.endswith(\"S\"):"
   }
 ]
