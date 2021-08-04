@@ -1263,5 +1263,60 @@
     "commit" : "d5c70bbd5a2b3f9c4f5a8421297afe9659b78636",
     "line" : 45,
     "diffHunk" : "@@ -1,1 +692,696 @@@cython.boundscheck(False)\n@cython.wraparound(False)\ndef generate_bins_dt64(ndarray[int64_t] values, const int64_t[:] binner,\n                       object closed='left', bint hasnans=False):\n    \"\"\""
+  },
+  {
+    "id" : "f0048bdf-ea58-49a0-b195-02e1aaadd755",
+    "prId" : 33749,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/33749#pullrequestreview-400336013",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3d4d80f-74af-480d-b9f3-4e4e33e636c0",
+        "parentId" : null,
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "It looks like this forces conversion of `target` to `DatetimeIndex` in `get_indexer` (via `DatetimeIndex._maybe_promote`) which will cause issues with out of bounds `date` objects.\r\n\r\nOn this branch:\r\n```python\r\nIn [1]: from datetime import date; import pandas as pd; pd.__version__\r\nOut[1]: '1.1.0.dev0+1352.g30ad99623'\r\n\r\nIn [2]: values = pd.DatetimeIndex([pd.Timestamp(\"2020-01-01\"), pd.Timestamp(\"2020-01-02\")])\r\n\r\nIn [3]: values.get_indexer([pd.Timestamp(\"2020-01-01\"), date(9999, 12, 31)])\r\n---------------------------------------------------------------------------\r\nOutOfBoundsDatetime: Out of bounds nanosecond timestamp: 9999-12-31 00:00:00\r\n```\r\n\r\nThis works `master` albeit probably because the bug happens to return the right answer in this case:\r\n```python\r\nIn [1]: from datetime import date; import pandas as pd; pd.__version__\r\nOut[1]: '1.1.0.dev0+1346.g3db460cbb'\r\n\r\nIn [2]: values = pd.DatetimeIndex([pd.Timestamp(\"2020-01-01\"), pd.Timestamp(\"2020-01-02\")])\r\n\r\nIn [3]: values.get_indexer([pd.Timestamp(\"2020-01-01\"), date(9999, 12, 31)])\r\nOut[3]: array([ 0, -1])\r\n```",
+        "createdAt" : "2020-04-23T23:36:11Z",
+        "updatedAt" : "2020-05-31T22:53:26Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db7ff95d-43af-4f03-9fe7-6db9e84e0241",
+        "parentId" : "b3d4d80f-74af-480d-b9f3-4e4e33e636c0",
+        "authorId" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "body" : "@jschendel Hmm, on master we also get the OutOfBoundsDatetime error if we interchange the order of the list elements (I think as you showed it's only avoiding the error by accident). Would this be in issue in _maybe_promote rather than the dtype inference itself? I imagine it only needs to not promote if it encounters a situation like this.",
+        "createdAt" : "2020-04-24T00:53:40Z",
+        "updatedAt" : "2020-05-31T22:53:26Z",
+        "lastEditedBy" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf2b443e-7e05-4bea-8862-beb994f55c48",
+        "parentId" : "b3d4d80f-74af-480d-b9f3-4e4e33e636c0",
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "> Would this be in issue in _maybe_promote rather than the dtype inference itself?\r\n\r\nI suspect so, but I'm not super well-versed in what we expect to be inferred as `'date'`.\r\n\r\n>  I imagine it only needs to not promote if it encounters a situation like this.\r\n\r\nI think this would miss the case where we have a mixture of `Timestamp`,  and both in and out of bounds `datetime.date` objects, e.g. `values = [pd.Timestamp(\"2020-01-01\"), date(2020, 1, 2), date(9999, 12, 31)]`, as that would fall back to the buggy behavior for `date(2020, 1, 2)`.\r\n\r\nNot sure how to resolve this off the top of my head though.  Definitely seems like a rare corner case, and what's been done already is an improvement, so I don't want it to be a blocker if a fix isn't apparent.  Could maybe open a new issue for it and write an xfailing test here if there's no immediate solution.  I'm also a bit rusty so it's quite possible there's an obvious solution I'm overlooking.",
+        "createdAt" : "2020-04-24T23:59:54Z",
+        "updatedAt" : "2020-05-31T22:53:26Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a3afa194-4108-42de-b3c5-b5e0dcc307b8",
+        "parentId" : "b3d4d80f-74af-480d-b9f3-4e4e33e636c0",
+        "authorId" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "body" : "Ah, yeah I hadn't thought of that case and that would still give incorrect output",
+        "createdAt" : "2020-04-25T00:34:35Z",
+        "updatedAt" : "2020-05-31T22:53:26Z",
+        "lastEditedBy" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0bfd6c47efbe08638c70eed07cdf982bbc7b1e1e",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +1384,1388 @@            return \"datetime\"\n        elif is_date_array(values, skipna=skipna):\n            return \"date\"\n\n    elif PyDate_Check(val):"
   }
 ]
