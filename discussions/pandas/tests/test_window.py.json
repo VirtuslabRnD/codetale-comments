@@ -31,5 +31,82 @@
     "commit" : "a5582ec85b365d64d16b9a75a0f1e27dab3d5e0e",
     "line" : 11,
     "diffHunk" : "@@ -1,1 +3841,3845 @@        ss = pd.Series(np.arange(len(idx)), index=idx)\n\n        result = ss.rolling('2h').cov()\n        expected = pd.Series([np.nan] + [0.5 for _ in range(len(idx) - 1)],\n                             index=idx)"
+  },
+  {
+    "id" : "032f83fb-e4ed-4441-8c44-43ca8e3edff5",
+    "prId" : 20584,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/20584#pullrequestreview-108778404",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1ec21ad5-524b-4597-8850-ad698e10ea82",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "if anyone is interested to see why this doesn't work, would be hepful, @WillAyd (you have some xp in this area)",
+        "createdAt" : "2018-04-02T14:09:50Z",
+        "updatedAt" : "2018-04-16T13:09:00Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "91808a77-14c0-4b84-8bc6-787407925ca4",
+        "parentId" : "1ec21ad5-524b-4597-8850-ad698e10ea82",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "It looks like rows [20:39] of the series in use here contains NA values. `preserve_nan` is assuming that those will still be NA after the function application, but isn't it by design with expanding functions that the NA values do not get preserved?  Ex:\r\n\r\n```python\r\n>>> ser = pd.Series(range(5))\r\n>>> ser[2] = np.nan\r\n>>> ser.expanding().sum()\r\n0    0.0\r\n1    1.0\r\n2    1.0\r\n3    4.0\r\n4    8.0\r\ndtype: float64\r\n```\r\n\r\nSo I think this keyword is necessary by design of the expanding function",
+        "createdAt" : "2018-04-02T15:46:58Z",
+        "updatedAt" : "2018-04-16T13:09:00Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7561262d-7a5b-4a11-909e-195e69c398e6",
+        "parentId" : "1ec21ad5-524b-4597-8850-ad698e10ea82",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "yeah exactly - so wondering if the current impl (eg master) is actually wrong",
+        "createdAt" : "2018-04-02T22:10:51Z",
+        "updatedAt" : "2018-04-16T13:09:00Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8329f722-e343-4ad8-adcb-091379c54331",
+        "parentId" : "1ec21ad5-524b-4597-8850-ad698e10ea82",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "I haven't looked at the implementation in detail but I'm assuming this ties back to the default argument of `min_periods=1` that the Expanding class uses - I think that would make it almost impossible for NA data to appear while expanding. \r\n\r\nI'd buy the argument that the default here should match the Rolling impl (i.e. 0) and Expanding should deal with \"expected\" NAs (i.e. forward looking values in the window that just haven't been reached yet) vs \"unexpected\" NA (data from a previous entry in the window) in  a more robust fashion. \r\n\r\nIt would be a breaking change; happy to open the ticket if you agree",
+        "createdAt" : "2018-04-02T23:15:43Z",
+        "updatedAt" : "2018-04-16T13:09:00Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ac24e49-e3be-444f-bee8-39e456660ab3",
+        "parentId" : "1ec21ad5-524b-4597-8850-ad698e10ea82",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "yeah this might be a bit of an unexplored corner\r\n\r\nyeah if i can show a simple example would be great to open an issue\r\n\r\nafter all expanding is just rolling with the window len of the len of the obj",
+        "createdAt" : "2018-04-02T23:18:46Z",
+        "updatedAt" : "2018-04-16T13:09:00Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "63b85e3f-ad75-4bfb-8ada-8a593a69cd47",
+        "parentId" : "1ec21ad5-524b-4597-8850-ad698e10ea82",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Maybe it shouldn't be though? I.e. should the window size of expanding be `i for i in range(N)` instead of `N for i in range(N)`? The difference can be illustrated looking at the third element below (elements 4 and 5 are expected to differ from window size)\r\n\r\n```python\r\n>>> ser = pd.Series([0, np.nan, 2, 3, 4])\r\nIn [127]: ser.rolling(window=2, min_periods=2).sum()\r\nOut[127]: \r\n0    NaN\r\n1    NaN\r\n2    NaN  # Doesn't populate here; there aren't 2 non-NA entries at this point\r\n3    5.0\r\n4    7.0\r\ndtype: float64\r\n\r\nIn [128]: ser.rolling(window=len(ser), min_periods=2).sum()\r\nOut[128]: \r\n0    NaN\r\n1    NaN\r\n2    2.0  # Populates here, even though this is the first non-NA record and min_periods is 2\r\n3    5.0\r\n4    9.0\r\ndtype: float64\r\n```\r\n",
+        "createdAt" : "2018-04-02T23:52:18Z",
+        "updatedAt" : "2018-04-16T13:09:00Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ab46058dc6b32d7da1533527f89e49dd043094f4",
+    "line" : 928,
+    "diffHunk" : "@@ -1,1 +2890,2894 @@            return result\n\n        # TODO(jreback), needed to add preserve_nan=False\n        # here to make this pass\n        self._check_expanding(expanding_mean, np.mean, preserve_nan=False)"
   }
 ]
