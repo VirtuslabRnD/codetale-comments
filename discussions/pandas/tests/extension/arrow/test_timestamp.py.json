@@ -1,0 +1,178 @@
+[
+  {
+    "id" : "1c8e0b03-042f-4bc2-9ab8-41b3b8c02ae8",
+    "prId" : 34987,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/34987#pullrequestreview-505776241",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "48e19f6b-a2cd-4306-ac4f-a2385b90487f",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "should be xfailed?",
+        "createdAt" : "2020-06-26T01:46:16Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0835864d-eef8-44fa-9546-8932530e6bfd",
+        "parentId" : "48e19f6b-a2cd-4306-ac4f-a2385b90487f",
+        "authorId" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "body" : "I can xfail this, so this can be merged. I would prefer to fix this myself though.",
+        "createdAt" : "2020-06-29T09:46:31Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56c5bbc1-fa51-4ff1-a045-3bdb040df910",
+        "parentId" : "48e19f6b-a2cd-4306-ac4f-a2385b90487f",
+        "authorId" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "body" : "I just need a pointer at which code section I should apply a fix. Should I change the order in `pandas/pandas/core/internals/blocks.py` so that we only create a `DatetimeTZBlock` for pandas-provided datetime-based ExtensionArrays or shouldn't `is_datetime64tz_dtype` return `True` for my `ExtensionDtype`? ",
+        "createdAt" : "2020-06-29T09:48:21Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eead8327-8c57-4b96-8aca-922d4c2a4b11",
+        "parentId" : "48e19f6b-a2cd-4306-ac4f-a2385b90487f",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "> I would prefer to fix this myself though.\r\n\r\nSounds good.  Is this a use case you have a need to get working near-term, or more of a Principle Of The Thing?  I ask because...\r\n\r\n> I just need a pointer at which code section I should apply a fix.\r\n\r\nThis is pretty daunting, as I expect this is scattered across the code.  There are lots of places where we either a) implicitly assume nanoseconds or b) check `dtype.kind in [\"M\", \"m\"]` (much more performant than the `is_foo_dtype` checks)\r\n\r\n> Should I change the order in pandas/pandas/core/internals/blocks.py so that we only create a DatetimeTZBlock for pandas-provided datetime-based ExtensionArrays\r\n\r\nThat will probably be part of a solution.\r\n\r\n> or shouldn't is_datetime64tz_dtype return True for my ExtensionDtype?\r\n\r\nI'd be very reticent to make that change, since I think a lot of code expects that to imply its getting our Datetime64TZDtype.  Maybe a `is_3rd_party_ea_dtype` that we would check for before checking for any 1st-party dtypes?  That runs into the \"ideally we should treat 3rd party EAs symmetrically with 1st-party\" problems.\r\n\r\nSo getting back to the motivation: how high a priority is this?\r\n\r\nOne thing I can unambiguously encourage is more tests, even if xfailed: \r\n- what happens if you pass one of these to the DatetimeIndex constructor?  vice-versa?\r\n- what happens if i do DatetimeIndex.astype(this_new_ea_dtype)\r\n- addition/subtraction with the gamut of datetime/timedelta scalars/arrays we already support?\r\n- How does this behave if you stuff it inside a Categorical/CategoricalIndex?\r\n",
+        "createdAt" : "2020-06-29T18:36:11Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90bc7fea-980c-4a16-a607-669eda9666a6",
+        "parentId" : "48e19f6b-a2cd-4306-ac4f-a2385b90487f",
+        "authorId" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "body" : "> > I would prefer to fix this myself though.\r\n> \r\n> Sounds good. Is this a use case you have a need to get working near-term, or more of a Principle Of The Thing? I ask because...\r\n\r\nMore in the next 6 months range, thus I'm definitely going to add an `xfail` here as the points below indicate that we should rather think more than \"fix quick\".\r\n\r\nI would love to have a nullable, non-nanosecond timestamp (actually I desparately need it but e.g. having a performant string is more important to me) but there are several other places that either assume that all timestamps are nanoseconds or backed by a numpy-array, so this is going to be a major effort. \r\n\r\n> > or shouldn't is_datetime64tz_dtype return True for my ExtensionDtype?\r\n> \r\n> I'd be very reticent to make that change, since I think a lot of code expects that to imply its getting our Datetime64TZDtype. Maybe a `is_3rd_party_ea_dtype` that we would check for before checking for any 1st-party dtypes? That runs into the \"ideally we should treat 3rd party EAs symmetrically with 1st-party\" problems.\r\n> \r\n> So getting back to the motivation: how high a priority is this?\r\n\r\nAs already pointed out: Less than other things I want to contribute to `pandas`, so `xfail`ing and adding more (possibly) xfailing tests is the way to go.\r\n\r\n",
+        "createdAt" : "2020-07-01T05:45:43Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01bf44df-e136-444c-adc4-1cfba368ddba",
+        "parentId" : "48e19f6b-a2cd-4306-ac4f-a2385b90487f",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "> so xfailing and adding more (possibly) xfailing tests is the way to go.\r\n\r\nSounds good.\r\n\r\n> actually I desparately need  [...] that either assume that all timestamps are nanoseconds or backed by a numpy-array\r\n\r\nWould your need be solved if we get numpy-backed non-nano in place?  There's a reasonable chance of that happening in the next 6 months.\r\n",
+        "createdAt" : "2020-07-02T16:47:58Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f5343c2-c6fb-4f66-ba15-64d3872c5659",
+        "parentId" : "48e19f6b-a2cd-4306-ac4f-a2385b90487f",
+        "authorId" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "body" : "> Would your need be solved if we get numpy-backed non-nano in place? There's a reasonable chance of that happening in the next 6 months.\r\n\r\nFor now: Yes.",
+        "createdAt" : "2020-07-02T16:49:30Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a074f50-0685-4a3f-acc8-f6c775aa71ef",
+        "parentId" : "48e19f6b-a2cd-4306-ac4f-a2385b90487f",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "> For now: Yes.\r\n\r\nI'm slowly tackling this from the cython side of the code.  The parallelizable step is to comb through the rest of the code to find all the places where we implicitly/explicitly assume nanos.  I'd start with pandas/plotting and pandas/io.",
+        "createdAt" : "2020-07-08T17:29:34Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d3655b36-e7a7-457b-9e09-2878f7c1c77a",
+        "parentId" : "48e19f6b-a2cd-4306-ac4f-a2385b90487f",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "lets see if we can at least get this one working.\r\n\r\ni think we'll need to edit the dtype.kind check in is_datetime64tz_dtype, and possible the `issubclass(vtype, np.datetime64)` check in internals.blocks.get_block_type",
+        "createdAt" : "2020-10-09T15:25:06Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "64dd1d70bd2d7bf4b7e444ef29857afaa224e01e",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +44,48 @@\n\ndef test_constructor_extensionblock():\n    # GH 34986\n    pd.DataFrame("
+  },
+  {
+    "id" : "2404ab62-5a8b-4c2c-983d-002b9d6c4c04",
+    "prId" : 34987,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/34987#pullrequestreview-528534832",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5f20ae98-753c-4a78-a50f-7457bc0d2e25",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "i thought pyarrow used pa.NA, is that distinct from pa.NULL?",
+        "createdAt" : "2020-11-11T21:02:37Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b65e67c4-6609-4074-ae0e-266e76c43fb1",
+        "parentId" : "5f20ae98-753c-4a78-a50f-7457bc0d2e25",
+        "authorId" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "body" : "They are both the same:\r\n\r\n```\r\nIn [2]: pyarrow.NULL is pyarrow.NA\r\nOut[2]: True\r\n```",
+        "createdAt" : "2020-11-11T21:06:57Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb1eefba-38b4-4896-b990-8d64bcabd801",
+        "parentId" : "5f20ae98-753c-4a78-a50f-7457bc0d2e25",
+        "authorId" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "body" : "`NULL` has been there since ages, `NA` is probably a bit newer.",
+        "createdAt" : "2020-11-11T21:07:16Z",
+        "updatedAt" : "2021-01-14T13:50:43Z",
+        "lastEditedBy" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "64dd1d70bd2d7bf4b7e444ef29857afaa224e01e",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +20,24 @@    kind = \"M\"\n    name = \"arrow_timestamp_us\"\n    na_value = pa.NULL\n\n    @classmethod"
+  },
+  {
+    "id" : "6a300c4b-b34e-4b33-b516-b22bd8ce8a0b",
+    "prId" : 34987,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/34987#pullrequestreview-568357848",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "aed42717-c97a-440e-ba24-90deb10ef0eb",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this could technicaly be later but ok for now",
+        "createdAt" : "2021-01-14T15:40:28Z",
+        "updatedAt" : "2021-01-14T15:40:28Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "64dd1d70bd2d7bf4b7e444ef29857afaa224e01e",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +7,11 @@from pandas.api.extensions import ExtensionDtype, register_extension_dtype\n\npytest.importorskip(\"pyarrow\", minversion=\"0.13.0\")\n\nimport pyarrow as pa  # isort:skip"
+  }
+]
