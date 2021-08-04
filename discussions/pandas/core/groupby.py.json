@@ -911,5 +911,49 @@
     "commit" : "39451075320b18d7d06ff1da3b687cfc57d59dde",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +2705,2709 @@    # a passed-in Grouper, directly convert\n    if isinstance(key, Grouper):\n        binner, grouper, obj = key._get_grouper(obj, validate=False)\n        if key.key is None:\n            return grouper, [], obj"
+  },
+  {
+    "id" : "0a5391f4-180a-4c03-8117-9db62ec6d757",
+    "prId" : 19481,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/19481#pullrequestreview-94930816",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bf1cd8f0-fea3-4580-b3da-5d86f31f2e0a",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "we should prob have a better way of doing this :<",
+        "createdAt" : "2018-02-07T12:39:25Z",
+        "updatedAt" : "2018-02-09T18:37:11Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66031b72-e2ae-46d9-8930-b9460b6d22f0",
+        "parentId" : "bf1cd8f0-fea3-4580-b3da-5d86f31f2e0a",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "The catch I see here is that unlike other groupby transformations (where the dtype of the `result` object typically matches the dtype of the groups' values and gets cast as necessary after transformation) the dtype of the result object for rank needs to be a float prior to calling any `group_rank` operation. Otherwise, things like TIEBREAK_AVERAGE will not work when ranking say a group full of ints.\r\n\r\nThe generic calls to `algos` have it a little bit easier because they don't pass an object in to be modified, using instead the return value which `algos` builds internally as a like-sized array of floats. Unless there's something basic I don't understand with Cython, I don't think there's a way to upcast the dtype of the `return` object that gets passed into `group_rank` from say an int to a float, so the only option I can think of there would be to break out `group_rank` from other transformations and have `group_rank` return a new `result` object instead of modifying the provided one in place.\r\n\r\nI'd argue the effort and maintainability of doing that would far outweigh any benefit from cleaning up this conditional, but curious if you have other thoughts",
+        "createdAt" : "2018-02-07T18:52:34Z",
+        "updatedAt" : "2018-02-09T18:37:11Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "890941b4-51ae-4953-8989-3b70784fdb97",
+        "parentId" : "bf1cd8f0-fea3-4580-b3da-5d86f31f2e0a",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this is similar in a way to the pre-transformations we do for datetimelikes. What I meant is that the registry of _cython_functions should have this logic itself (which is already based on the function name). \r\n\r\ne.g. maybe in _cython_functions you get back a tuple rather than a scalar / lamba function, which includes the required dtype (or None).  Or _cython_functions actually should be a class which is dispatched to, to call the functions themselves. IOW something like\r\n\r\n```\r\nclass CythonTransformFunction:\r\n    def __init__(self, obj):\r\n        self.obj = obj\r\n\r\n    def cummax(self):\r\n         return group_cummax(self.obj.values)\r\n\r\n    def rank(self):\r\n        return group_cummax(self.obj.values.astype('floatt64'))\r\n```\r\n\r\n(and really should have more logic pushed to this class, e.g. pre-and post-convert dtype things. And should have a Transformation and an Aggregation version. This would all of the specific logic to be pushed here, rather than lookup in dicts and such. Further we could prob move this code out of the main groupby.py class into a sub-module.\r\n\r\ndon't have to do this here, but groupby for sure needs cleanup like this.",
+        "createdAt" : "2018-02-08T01:25:32Z",
+        "updatedAt" : "2018-02-09T18:37:11Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aa4578d78e5d4feaf6a8a3caac51acf7d2ebc112",
+    "line" : 99,
+    "diffHunk" : "@@ -1,1 +2361,2365 @@                raise\n\n        if how == 'rank':\n            out_dtype = 'float'\n        else:"
   }
 ]

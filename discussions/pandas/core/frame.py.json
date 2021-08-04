@@ -1956,5 +1956,159 @@
     "commit" : "7872f332794b082ae70e6b937697b0e7e3abb86d",
     "line" : 2,
     "diffHunk" : "@@ -1,1 +61,65 @@    is_named_tuple)\nfrom pandas.core.dtypes.missing import isna, notna\n\n\nfrom pandas.core.generic import NDFrame, _shared_docs"
+  },
+  {
+    "id" : "283036d0-e69b-4c10-8922-65e7cbd3fd38",
+    "prId" : 19520,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/19520#pullrequestreview-93766309",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e91146d9-a791-4d88-82b7-47c6be4292e2",
+        "parentId" : null,
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "This is an unfortunate intermediate stage where some of our internal extension types (sparse, datetime w/ tz) are not yet actual extension array types. We'll be able to clean this up this eventually.",
+        "createdAt" : "2018-02-02T21:46:41Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ea5562b99d55062b2bb0a5b359bd5375adb3a46e",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +2852,2856 @@\n        # return internal types directly\n        if is_extension_type(value) or is_extension_array_dtype(value):\n            return value\n"
+  },
+  {
+    "id" : "40d12b58-81cf-4e15-a2a2-395a32bafc19",
+    "prId" : 19520,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/19520#pullrequestreview-97306708",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "349d3c31-c655-4122-a257-9f957e8cdeac",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "What happens if the dtype is an extension dtype? (like the check above for categorical) \r\nBut certainly fine with not supporting it for now.\r\n\r\nSimilar for Series, we need to either define what `pd.Series(values, dtype=SomeExtensionDtype())` does, or either error on it.",
+        "createdAt" : "2018-02-16T13:28:27Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f579fc4-a50e-4a9b-836e-e21f62a2ae4c",
+        "parentId" : "349d3c31-c655-4122-a257-9f957e8cdeac",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "```python\r\nIn [7]: pd.Series([0, 1, 2], dtype=cyberpandas.IPType())\r\n---------------------------------------------------------------------------\r\nTypeError                                 Traceback (most recent call last)\r\n<ipython-input-7-7fc01964da1d> in <module>()\r\n----> 1 pd.Series([0, 1, 2], dtype=cyberpandas.IPType())\r\n\r\n~/sandbox/pandas-ip/pandas/pandas/core/series.py in __init__(self, data, index, dtype, name, copy, fastpath)\r\n    246             else:\r\n    247                 data = _sanitize_array(data, index, dtype, copy,\r\n--> 248                                        raise_cast_failure=True)\r\n    249\r\n    250                 data = SingleBlockManager(data, index, fastpath=True)\r\n\r\n~/sandbox/pandas-ip/pandas/pandas/core/series.py in _sanitize_array(data, index, dtype, copy, raise_cast_failure)\r\n   3214         if dtype is not None:\r\n   3215             try:\r\n-> 3216                 subarr = _try_cast(data, False)\r\n   3217             except Exception:\r\n   3218                 if raise_cast_failure:  # pragma: no cover\r\n\r\n~/sandbox/pandas-ip/pandas/pandas/core/series.py in _try_cast(arr, take_fast_path)\r\n   3168             subarr = maybe_cast_to_datetime(arr, dtype)\r\n   3169             if not is_extension_type(subarr):\r\n-> 3170                 subarr = np.array(subarr, dtype=dtype, copy=copy)\r\n   3171         except (ValueError, TypeError):\r\n   3172             if is_categorical_dtype(dtype):\r\n\r\nTypeError: data type not understood\r\n```\r\n\r\nHow should we handle this? I'm fine with raising with a better error message. We don't know how to cast from `(arbitrary array, extension_dtype) -> extension array`.\r\n\r\nAlthough... maybe we could support `Series(extension_array, dtype=extension_dtype)`.\r\n\r\nOh hey, that \"works\" \r\n\r\n```python\r\nIn [10]: pd.Series(cyberpandas.IPArray([0, 1, 2]), dtype=cyberpandas.IPType())\r\nOut[10]:\r\n0    0.0.0.0\r\n1    0.0.0.1\r\n2    0.0.0.2\r\ndtype: ip\r\n\r\n```\r\n\r\nBut it only works since we ignore the dtype entirely :)\r\n\r\nI will raise if `data.dtype` is not dtype equal with `dtype` I think.",
+        "createdAt" : "2018-02-16T15:17:23Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "12762b54-4e19-467b-9ca2-156d53b28237",
+        "parentId" : "349d3c31-c655-4122-a257-9f957e8cdeac",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "also for things like `astype(SomeExtensionDtype)` we will need an informative error message",
+        "createdAt" : "2018-02-16T15:41:37Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "abcb0325-58cb-47ac-84dc-23ec63f25f30",
+        "parentId" : "349d3c31-c655-4122-a257-9f957e8cdeac",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "isn't a dateimetz an extension type now? why can't you remove the first part of the clauase?",
+        "createdAt" : "2018-02-16T17:40:19Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57073950-2008-4f41-9711-3b9ecd984117",
+        "parentId" : "349d3c31-c655-4122-a257-9f957e8cdeac",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "Nope, not yet. Just `Categorical` so far. I have `Interval` and `Period` started, but no PRs yet.",
+        "createdAt" : "2018-02-16T20:27:17Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ea5562b99d55062b2bb0a5b359bd5375adb3a46e",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +513,517 @@            return _arrays_to_mgr([values], columns, index, columns,\n                                  dtype=dtype)\n        elif (is_datetimetz(values) or is_extension_array_dtype(values)):\n            # GH19157\n            if columns is None:"
+  },
+  {
+    "id" : "e2c7b5e5-7497-4f6a-baff-f921da4491b8",
+    "prId" : 19520,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/19520#pullrequestreview-97307592",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f180a4b6-c7e0-4bbd-a7f7-b657deabe522",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Can you put a small comment here what the intent of the function is?",
+        "createdAt" : "2018-02-16T13:46:30Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3e03f73e-9cd1-4b8f-befa-62d3dbfce49a",
+        "parentId" : "f180a4b6-c7e0-4bbd-a7f7-b657deabe522",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "hmm I'm not really sure :) It also seems to just be used in one place, so this seems like an opportunity for cleanup.\r\n\r\nThis change is possible because `PeriodIndex.values / _values` is just `.astype(object).values`, and `DatetimeIndex._values` is `self` with a TZ.",
+        "createdAt" : "2018-02-16T20:30:51Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ea5562b99d55062b2bb0a5b359bd5375adb3a46e",
+    "line" : 54,
+    "diffHunk" : "@@ -1,1 +3389,3393 @@\n        def _maybe_casted_values(index, labels=None):\n            values = index._values\n            if not isinstance(index, (PeriodIndex, DatetimeIndex)):\n                if values.dtype == np.object_:"
+  },
+  {
+    "id" : "2b7e3b51-5d8b-4a2c-b9f1-6f98dc93e5ab",
+    "prId" : 19520,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/19520#pullrequestreview-97363772",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bb004f60-5abc-4dd6-a6bc-b84b8c5b1b06",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "what are you trying to do here?",
+        "createdAt" : "2018-02-16T17:41:54Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22c27d92-4192-46f9-9bfb-20ab3c869d6a",
+        "parentId" : "bb004f60-5abc-4dd6-a6bc-b84b8c5b1b06",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "This is identical to what happened before in the `else` branch. Seems like it's doing some type inference / coercion.",
+        "createdAt" : "2018-02-17T03:25:40Z",
+        "updatedAt" : "2018-02-22T16:31:34Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ea5562b99d55062b2bb0a5b359bd5375adb3a46e",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +3390,3394 @@        def _maybe_casted_values(index, labels=None):\n            values = index._values\n            if not isinstance(index, (PeriodIndex, DatetimeIndex)):\n                if values.dtype == np.object_:\n                    values = lib.maybe_convert_objects(values)"
   }
 ]
