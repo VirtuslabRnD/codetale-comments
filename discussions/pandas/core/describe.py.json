@@ -141,5 +141,60 @@
     "commit" : "7097dd3d09f62f30a61dfa2c3a52d87d7b42f80f",
     "line" : 176,
     "diffHunk" : "@@ -1,1 +141,145 @@        obj: \"DataFrame\",\n        *,\n        include: Optional[Union[str, Sequence[str]]],\n        exclude: Optional[Union[str, Sequence[str]]],\n        datetime_is_numeric: bool,"
+  },
+  {
+    "id" : "c25036d2-fa5c-459c-bb11-976dd8c6b033",
+    "prId" : 42389,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/42389#pullrequestreview-700807005",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cda2e146-5184-4c52-9a80-7b78fcf39160",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "doesn't Sequence[float] cover the ndarray cases that we actually want?  i.e. once it is supported, something like `np.ndarray[float, ndim=1] | None` would be what we really want? ",
+        "createdAt" : "2021-07-06T16:33:28Z",
+        "updatedAt" : "2021-07-06T16:33:28Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d87310e-2c4d-4d09-bedc-a75a08d3b253",
+        "parentId" : "cda2e146-5184-4c52-9a80-7b78fcf39160",
+        "authorId" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "body" : "The return type of refine_percentiles is a numpy array and we pass this onto the other functions, so we need to add np.ndarray to the acceptable types.\r\n\r\n> doesn't Sequence[float] cover the ndarray cases that we actually want?\r\n\r\nhttps://github.com/numpy/numpy/issues/2776, issue has been opened a while, doesn't look like a fix in the pipeline\r\n\r\n> something like `np.ndarray[float, ndim=1] | None` would be what we really want?\r\n\r\nprobably not `float`, since `int` is also allowed. but if we narrow using `float`\r\n\r\n```\r\nfrom __future__ import annotations\r\n\r\nimport numpy as np\r\nfrom typing import Sequence, Any\r\n\r\narr = np.array([0.25, 0.5])\r\nreveal_type(arr)\r\narr2: np.ndarray[Any, np.dtype[np.float64]] = np.array([0.25, 0.5])\r\nreveal_type(arr2)\r\narr3: np.ndarray[Any, np.dtype[np.float32]] = np.array([0.25, 0.5], dtype=\"float64\")\r\nreveal_type(arr3)\r\narr4: np.ndarray[Any, np.dtype[np.int_]] = np.array([0.25, 0.5], dtype=\"float64\")\r\nreveal_type(arr4)\r\narr5: np.ndarray[Any, np.dtype[np.int_]] = np.array([1, 2, 3])\r\nreveal_type(arr5)\r\n\r\n\r\ndef test(a: Sequence[float]):\r\n    pass\r\n\r\n\r\ntest(arr)\r\ntest(arr2)\r\ntest(arr3)\r\ntest(arr4)\r\ntest(arr5)\r\n\r\n\r\ndef test2(a: Sequence[float] | np.ndarray[Any, np.dtype[np.float_]]):\r\n    reveal_type(a)\r\n\r\n\r\ntest2(arr)\r\ntest2(arr2)\r\ntest2(arr3)\r\ntest2(arr4)\r\ntest2(arr5)\r\n```\r\n```\r\n/home/simon/t1.py:7: note: Revealed type is \"numpy.ndarray[Any, Any]\"\r\n/home/simon/t1.py:9: note: Revealed type is \"numpy.ndarray[Any, numpy.dtype[numpy.floating[numpy.typing._64Bit]]]\"\r\n/home/simon/t1.py:11: note: Revealed type is \"numpy.ndarray[Any, numpy.dtype[numpy.floating[numpy.typing._32Bit]]]\"\r\n/home/simon/t1.py:13: note: Revealed type is \"numpy.ndarray[Any, numpy.dtype[numpy.signedinteger[Any]]]\"\r\n/home/simon/t1.py:15: note: Revealed type is \"numpy.ndarray[Any, numpy.dtype[numpy.signedinteger[Any]]]\"\r\n/home/simon/t1.py:22: error: Argument 1 to \"test\" has incompatible type \"ndarray[Any, Any]\"; expected \"Sequence[float]\"  [arg-type]\r\n/home/simon/t1.py:23: error: Argument 1 to \"test\" has incompatible type \"ndarray[Any, dtype[floating[_64Bit]]]\"; expected \"Sequence[float]\"  [arg-type]\r\n/home/simon/t1.py:24: error: Argument 1 to \"test\" has incompatible type \"ndarray[Any, dtype[floating[_32Bit]]]\"; expected \"Sequence[float]\"  [arg-type]\r\n/home/simon/t1.py:25: error: Argument 1 to \"test\" has incompatible type \"ndarray[Any, dtype[signedinteger[Any]]]\"; expected \"Sequence[float]\"  [arg-type]\r\n/home/simon/t1.py:26: error: Argument 1 to \"test\" has incompatible type \"ndarray[Any, dtype[signedinteger[Any]]]\"; expected \"Sequence[float]\"  [arg-type]\r\n/home/simon/t1.py:30: note: Revealed type is \"Union[typing.Sequence[builtins.float], numpy.ndarray[Any, numpy.dtype[numpy.floating[Any]]]]\"\r\n/home/simon/t1.py:36: error: Argument 1 to \"test2\" has incompatible type \"ndarray[Any, dtype[signedinteger[Any]]]\"; expected \"Union[Sequence[float], ndarray[Any, dtype[floating[Any]]]]\"  [arg-type]\r\n/home/simon/t1.py:37: error: Argument 1 to \"test2\" has incompatible type \"ndarray[Any, dtype[signedinteger[Any]]]\"; expected \"Union[Sequence[float], ndarray[Any, dtype[floating[Any]]]]\"  [arg-type]\r\nFound 7 errors in 1 file (checked 1 source file)\r\n```\r\n\r\nI've added the dtype bound to the return type of refine_percentiles since for return types we should be as precise as possible.\r\n\r\nFor the arguments of `describe` we want to be as permissible as possible, so maybe best not to narrow till the numpy inference works properly to avoid false positives for end users, `describe` is public.\r\n\r\n'int' is duck type compatible with `float`, see https://mypy.readthedocs.io/en/stable/duck_type_compatibility.html#duck-type-compatibility, so having `Sequence[float]` is equivalent to `Sequence[float | int]`\r\n\r\non master\r\n\r\n```\r\nimport numpy as np\r\nimport pandas as pd\r\n\r\nprint(pd.DataFrame(pd.Series([1, 2, 3])).describe([0, 1]))\r\nprint(pd.DataFrame(pd.Series([1, 2, 3])).describe([0.5]))\r\nprint(pd.DataFrame(pd.Series([1, 2, 3])).describe(np.array([0, 1])))\r\nprint(pd.DataFrame(pd.Series([1, 2, 3])).describe(np.array([0.5])))\r\n```\r\n\r\ngives\r\n\r\n```\r\n         0\r\ncount  3.0\r\nmean   2.0\r\nstd    1.0\r\nmin    1.0\r\n0%     1.0\r\n50%    2.0\r\n100%   3.0\r\nmax    3.0\r\n         0\r\ncount  3.0\r\nmean   2.0\r\nstd    1.0\r\nmin    1.0\r\n50%    2.0\r\nmax    3.0\r\n         0\r\ncount  3.0\r\nmean   2.0\r\nstd    1.0\r\nmin    1.0\r\n0%     1.0\r\n50%    2.0\r\n100%   3.0\r\nmax    3.0\r\n         0\r\ncount  3.0\r\nmean   2.0\r\nstd    1.0\r\nmin    1.0\r\n50%    2.0\r\nmax    3.0\r\n```\r\n\r\nbut on master, users don't see false positives since the `percentiles` parameter of `DataFrame.describe` is not yet typed\r\n\r\nto type that, we need to pass the user passed argument onto the lower level functions, and these therefore need to be typed in a such a way to avoid false positives, so we can't wait for downstream fixes and imo best not to narrow types for numpy arrays till it's more mature.",
+        "createdAt" : "2021-07-06T18:05:43Z",
+        "updatedAt" : "2021-07-06T18:06:30Z",
+        "lastEditedBy" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74e0dc70-2dbe-4c59-8833-a13455ac3404",
+        "parentId" : "cda2e146-5184-4c52-9a80-7b78fcf39160",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "makes sense, thanks for walking me through that",
+        "createdAt" : "2021-07-06T21:59:34Z",
+        "updatedAt" : "2021-07-06T21:59:34Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "451c589e-0c31-4910-babf-a3a510a26e4d",
+        "parentId" : "cda2e146-5184-4c52-9a80-7b78fcf39160",
+        "authorId" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "body" : "of course, passing integers `0` and `1` is redundant anyway.\r\n\r\n> imo best not to narrow types for numpy arrays till it's more mature.\r\n\r\nand for the internal functions, using the type parameters for np.ndarray is probably also fine. it's only the public api where we may want to be more cautious.\r\n\r\nto be clear, while the constructors don't specialize and the dtype type parameter of np.ndarray is `Any`, then they will be type compatible with any specializations we do add. If we get these wrong, then there could be a batch of errors that need to be resolved when we get a future numpy release.\r\n\r\nin numpy 1.21 (we use for type checking)...\r\n```\r\ndef array(\r\n    object: object,\r\n    dtype: DTypeLike = ...,\r\n    *,\r\n    copy: bool = ...,\r\n    order: _OrderKACF = ...,\r\n    subok: bool = ...,\r\n    ndmin: int = ...,\r\n    like: ArrayLike = ...,\r\n) -> ndarray: ...\r\n```\r\n\r\nso all arrays created with `np.array` will have an inferred type `numpy.ndarray[Any, Any]`",
+        "createdAt" : "2021-07-07T09:52:24Z",
+        "updatedAt" : "2021-07-07T09:52:24Z",
+        "lastEditedBy" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3e664e89950ef5936810eec17ad5f8de2e47f64c",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +52,56 @@    exclude: str | Sequence[str] | None,\n    datetime_is_numeric: bool,\n    percentiles: Sequence[float] | np.ndarray | None,\n) -> FrameOrSeries:\n    \"\"\"Describe series or dataframe."
   }
 ]
