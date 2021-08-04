@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "78d8fca0-280b-4720-955c-1f3379c724fc",
+    "prId" : 41046,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/41046#pullrequestreview-641812503",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "177c068a-dfd6-410d-8832-3617ed0efc4b",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "This should not be needed, as we can ensure internally to always pass a numpy dtype object. I see there is one occurrence in `PeriodDtype` where we pass a string type -> you can update that case to pass `np.dtype(\"int64\")` instead.",
+        "createdAt" : "2021-04-20T12:19:49Z",
+        "updatedAt" : "2021-04-26T13:05:16Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53749b8d-33bd-4cc0-af28-afe79c7bf9b0",
+        "parentId" : "177c068a-dfd6-410d-8832-3617ed0efc4b",
+        "authorId" : "08c7f720-1224-462f-b768-37cb83a7bf08",
+        "body" : "Yes, that was exactly the reason I added the line. I changed `PeriodDtype` the way you suggested.\r\n\r\nUnfortunately some other tests break when I remove the line. IIUC pyarrow is using the function as well.\r\n\r\n```shell\r\n______________________________________________ test_arrow_sliced ________________________________________\r\n\r\n    @td.skip_if_no(\"pyarrow\", min_version=\"0.16.0\")\r\n    def test_arrow_sliced():\r\n        # https://github.com/pandas-dev/pandas/issues/38525\r\n        import pyarrow as pa\r\n    \r\n        df = pd.DataFrame({\"a\": pd.array([0, None, 2, 3, None], dtype=\"Int64\")})\r\n        table = pa.table(df)\r\n>       result = table.slice(2, None).to_pandas()\r\n\r\npandas/tests/arrays/masked/test_arrow_compat.py:65: \r\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _\r\npyarrow/array.pxi:751: in pyarrow.lib._PandasConvertible.to_pandas\r\n    ???\r\npyarrow/table.pxi:1668: in pyarrow.lib.Table._to_pandas\r\n    ???\r\n/opt/conda/lib/python3.8/site-packages/pyarrow/pandas_compat.py:792: in table_to_blockmanager\r\n    blocks = _table_to_blocks(options, table, categories, ext_columns_dtypes)\r\n/opt/conda/lib/python3.8/site-packages/pyarrow/pandas_compat.py:1133: in _table_to_blocks\r\n    return [_reconstruct_block(item, columns, extension_columns)\r\n/opt/conda/lib/python3.8/site-packages/pyarrow/pandas_compat.py:1133: in <listcomp>\r\n    return [_reconstruct_block(item, columns, extension_columns)\r\n/opt/conda/lib/python3.8/site-packages/pyarrow/pandas_compat.py:751: in _reconstruct_block\r\n    pd_ext_arr = pandas_dtype.__from_arrow__(arr)\r\npandas/core/arrays/numeric.py:65: in __from_arrow__\r\n    data, mask = pyarrow_array_to_numpy_and_mask(arr, dtype=self.type)\r\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _\r\n\r\narr = <pyarrow.lib.Int64Array object at 0x7f77e8678820>\r\n[\r\n  2,\r\n  3,\r\n  null\r\n], dtype = <class 'numpy.int64'>\r\n\r\n    def pyarrow_array_to_numpy_and_mask(arr, dtype):\r\n        \"\"\"\r\n        Convert a primitive pyarrow.Array to a numpy array and boolean mask based\r\n        on the buffers of the Array.\r\n    \r\n        At the moment pyarrow.BooleanArray is not supported.\r\n    \r\n        Parameters\r\n        ----------\r\n        arr : pyarrow.Array\r\n        dtype : numpy.dtype\r\n    \r\n        Returns\r\n        -------\r\n        (data, mask)\r\n            Tuple of two numpy arrays with the raw data (with specified dtype) and\r\n            a boolean mask (validity mask, so False means missing)\r\n        \"\"\"\r\n        # dtype = np.dtype(dtype)\r\n        buflist = arr.buffers()\r\n        # Since Arrow buffers might contain padding and the data might be offset,\r\n        # the buffer gets sliced here before handing it to numpy.\r\n        # See also https://github.com/pandas-dev/pandas/issues/40896\r\n>       offset = arr.offset * dtype.itemsize\r\nE       TypeError: unsupported operand type(s) for *: 'int' and 'getset_descriptor'\r\n\r\npandas/core/arrays/_arrow_utils.py:35: TypeError\r\n```",
+        "createdAt" : "2021-04-20T15:26:50Z",
+        "updatedAt" : "2021-04-26T13:05:16Z",
+        "lastEditedBy" : "08c7f720-1224-462f-b768-37cb83a7bf08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e65053e2-9964-4ddf-8c75-4235f608a03a",
+        "parentId" : "177c068a-dfd6-410d-8832-3617ed0efc4b",
+        "authorId" : "08c7f720-1224-462f-b768-37cb83a7bf08",
+        "body" : "> This should not be needed, as we can ensure internally to always pass a numpy dtype object. I see there is one occurrence in `PeriodDtype` where we pass a string type -> you can update that case to pass `np.dtype(\"int64\")` instead.\r\n\r\nThe change form `\"int64\"` to `np.dtype(\"int64\")` caused some trouble with timezone conversion on Windows. Revertig it lets the tests pass.\r\n```shell\r\nTraceback (most recent call last):\r\n  File \"pandas\\_libs\\tslibs\\tzconversion.pyx\", line 385, in pandas._libs.tslibs.tzconversion.tz_convert_utc_to_tzlocal\r\n    return _tz_convert_tzlocal_utc(utc_val, tz, to_utc=False, fold=fold)\r\n  File \"pandas\\_libs\\tslibs\\tzconversion.pyx\", line 596, in pandas._libs.tslibs.tzconversion._tz_convert_tzlocal_utc\r\n    delta = _tzlocal_get_offset_components(val, tz, to_utc, fold)\r\n  File \"pandas\\_libs\\tslibs\\tzconversion.pyx\", line 556, in pandas._libs.tslibs.tzconversion._tzlocal_get_offset_components\r\n    dt = dt.astimezone(tz)\r\n  File \"C:\\Miniconda\\envs\\pandas-dev\\lib\\site-packages\\dateutil\\tz\\_common.py\", line 144, in fromutc\r\n    return f(self, dt)\r\n  File \"C:\\Miniconda\\envs\\pandas-dev\\lib\\site-packages\\dateutil\\tz\\_common.py\", line 261, in fromutc\r\n    _fold = self._fold_status(dt, dt_wall)\r\n  File \"C:\\Miniconda\\envs\\pandas-dev\\lib\\site-packages\\dateutil\\tz\\_common.py\", line 196, in _fold_status\r\n    if self.is_ambiguous(dt_wall):\r\n  File \"C:\\Miniconda\\envs\\pandas-dev\\lib\\site-packages\\dateutil\\tz\\tz.py\", line 254, in is_ambiguous\r\n    naive_dst = self._naive_is_dst(dt)\r\n  File \"C:\\Miniconda\\envs\\pandas-dev\\lib\\site-packages\\dateutil\\tz\\tz.py\", line 260, in _naive_is_dst\r\n    return time.localtime(timestamp + time.timezone).tm_isdst\r\nOSError: [Errno 22] Invalid argument\r\n```",
+        "createdAt" : "2021-04-21T08:15:09Z",
+        "updatedAt" : "2021-04-26T13:05:16Z",
+        "lastEditedBy" : "08c7f720-1224-462f-b768-37cb83a7bf08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "82816e39-524c-4012-9c0c-8626b7c6b023",
+        "parentId" : "177c068a-dfd6-410d-8832-3617ed0efc4b",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "OK, that's a good reason to keep it then!",
+        "createdAt" : "2021-04-22T06:19:04Z",
+        "updatedAt" : "2021-04-26T13:05:16Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b86f9fc4b1e346a5dc66d7957e8c8b5aea39f070",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +28,32 @@        a boolean mask (validity mask, so False means missing)\n    \"\"\"\n    dtype = np.dtype(dtype)\n\n    buflist = arr.buffers()"
+  }
+]

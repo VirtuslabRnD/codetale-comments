@@ -1230,5 +1230,104 @@
     "commit" : "4df4ee69e6e8be4dae60eca710b1273f0af73e82",
     "line" : 4,
     "diffHunk" : "@@ -1,1 +258,262 @@    # The value used to fill '_data' to avoid upcasting\n    _internal_fill_value = False\n    _TRUE_VALUES = {\"True\", \"TRUE\", \"true\", \"1\", \"1.0\"}\n    _FALSE_VALUES = {\"False\", \"FALSE\", \"false\", \"0\", \"0.0\"}\n"
+  },
+  {
+    "id" : "7568f1fe-182f-4de5-8aa6-1f4840c7f48d",
+    "prId" : 41051,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/41051#pullrequestreview-639855312",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "77d9aecc-5392-4744-9f0f-c40290dd157d",
+        "parentId" : null,
+        "authorId" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "body" : "related to https://github.com/pandas-dev/pandas/pull/41018#discussion_r616441156\r\n\r\nif we do pass an incompatible type we now get a less helpful message\r\n\r\n```\r\n>>> import pandas as pd\r\n>>> from pandas.core.arrays.string_arrow import ArrowStringDtype\r\n>>> \r\n>>> s2 = pd.Series([\"a\", None, \"1\"], dtype=\"arrow_string\")\r\n>>> \r\n>>> arr = s2.values._data\r\n>>> \r\n>>> arr\r\n<pyarrow.lib.ChunkedArray object at 0x7f50a262ba90>\r\n[\r\n  [\r\n    \"a\",\r\n    null,\r\n    \"1\"\r\n  ]\r\n]\r\n>>> \r\n>>> pd.BooleanDtype().__from_arrow__(arr)\r\nTraceback (most recent call last):\r\n  File \"<stdin>\", line 1, in <module>\r\n  File \"/home/simon/pandas/pandas/core/arrays/boolean.py\", line 126, in __from_arrow__\r\n    data = pyarrow.BooleanArray.from_buffers(\r\n  File \"pyarrow/array.pxi\", line 947, in pyarrow.lib.Array.from_buffers\r\nValueError: Type's expected number of buffers (3) did not match the passed number (2).\r\n```\r\n\r\non master\r\n\r\n```\r\nTypeError: Need to pass bool-like values\r\n```",
+        "createdAt" : "2021-04-20T11:39:19Z",
+        "updatedAt" : "2021-04-21T13:32:29Z",
+        "lastEditedBy" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67116312-3d4a-4e1d-916c-707632fbc7da",
+        "parentId" : "77d9aecc-5392-4744-9f0f-c40290dd157d",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "> if we do pass an incompatible type we now get a less helpful message\r\n\r\nGenerally we should never do that ourselves, though. \r\nIt's possible to get that in a conversion of arrow -> pandas if you have outdated metadata:\r\n\r\n```python\r\n>>> df = pd.DataFrame({'a': pd.array([True, False])})\r\n>>> table = pa.table(df)\r\n>>> new_table = table.cast(pa.schema([('a', pa.int8())], metadata=table.schema.metadata))\r\n>>> new_table.to_pandas()\r\n...\r\n~/scipy/repos/pandas-build-arrow/pandas/core/arrays/boolean.py in __from_arrow__(self, array)\r\n    135                 mask = np.zeros(len(arr), dtype=bool)\r\n    136 \r\n--> 137             bool_arr = BooleanArray(data, mask)\r\n    138             results.append(bool_arr)\r\n    139 \r\n\r\n~/scipy/repos/pandas-build-arrow/pandas/core/arrays/boolean.py in __init__(self, values, mask, copy)\r\n    289     def __init__(self, values: np.ndarray, mask: np.ndarray, copy: bool = False):\r\n    290         if not (isinstance(values, np.ndarray) and values.dtype == np.bool_):\r\n--> 291             raise TypeError(\r\n    292                 \"values should be boolean numpy array. Use \"\r\n    293                 \"the 'pd.array' function instead\"\r\n\r\nTypeError: values should be boolean numpy array. Use the 'pd.array' function instead\r\n\r\n>>> new_table = table.cast(pa.schema([('a', pa.string())], metadata=table.schema.metadata))\r\n>>> new_table.to_pandas()\r\n...\r\n~/scipy/repos/pandas-build-arrow/pandas/core/arrays/boolean.py in __from_arrow__(self, array)\r\n    124         for arr in chunks:\r\n    125             buflist = arr.buffers()\r\n--> 126             data = pyarrow.BooleanArray.from_buffers(\r\n    127                 arr.type, len(arr), [None, buflist[1]], offset=arr.offset\r\n    128             ).to_numpy(zero_copy_only=False)\r\n\r\n~/scipy/repos/arrow/python/pyarrow/array.pxi in pyarrow.lib.Array.from_buffers()\r\n\r\nValueError: Type's expected number of buffers (3) did not match the passed number (2).\r\n```\r\n\r\nAnd I think this is maybe something to fix on the pyarrow side (it should ignore the metadata on error).\r\n\r\nNow, it's also easy to add a `arr.type` check to ensure it is boolean arrow type, so will do that.",
+        "createdAt" : "2021-04-20T11:57:26Z",
+        "updatedAt" : "2021-04-21T13:32:29Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6c17271a9cde7dfe0194c53e102f7ca1cdf04733",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +129,133 @@            data = pyarrow.BooleanArray.from_buffers(\n                arr.type, len(arr), [None, buflist[1]], offset=arr.offset\n            ).to_numpy(zero_copy_only=False)\n            if arr.null_count != 0:\n                mask = pyarrow.BooleanArray.from_buffers("
+  },
+  {
+    "id" : "c641fe27-2c1e-465b-b75a-285c5120531f",
+    "prId" : 41052,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/41052#pullrequestreview-641461049",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a657cb8a-e7ba-4eb2-835f-bfa5acf28868",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "```suggestion\r\n        if len(results) == 0:\r\n```\r\n\r\n? (I find that more explicit / readable)",
+        "createdAt" : "2021-04-21T13:38:27Z",
+        "updatedAt" : "2021-04-21T14:17:42Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3f58468-b55f-41e4-b45b-30e5f08f30dc",
+        "parentId" : "a657cb8a-e7ba-4eb2-835f-bfa5acf28868",
+        "authorId" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "body" : "I can simply revert https://github.com/pandas-dev/pandas/pull/41052/commits/f4a2c8c90b5e8c0218869c5eff30354603b3bca5 (did do that commit as @phofl suggested)",
+        "createdAt" : "2021-04-21T13:45:01Z",
+        "updatedAt" : "2021-04-21T14:17:42Z",
+        "lastEditedBy" : "6bfa1922-c427-4971-9e7f-6e6257a1d5bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9cc33f34-8f54-44b1-90d7-e6615759a9ef",
+        "parentId" : "a657cb8a-e7ba-4eb2-835f-bfa5acf28868",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Whoops, missed that comment. Sorry for the contradicting feedback ;)\r\n\r\n(let's leave it for now then, something to discuss / agree on as pandas team)\r\n\r\n",
+        "createdAt" : "2021-04-21T13:47:31Z",
+        "updatedAt" : "2021-04-21T14:17:42Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8413b125-5cf8-4efb-8f28-f0195bf4fbdc",
+        "parentId" : "a657cb8a-e7ba-4eb2-835f-bfa5acf28868",
+        "authorId" : "f3e7d5fe-a112-47db-9178-8be42b4a8eab",
+        "body" : "Saw this on a few prs in the past that either not was used or it was recommended to use not, hence my feedback, sorry if I misinterpreted this",
+        "createdAt" : "2021-04-21T14:15:14Z",
+        "updatedAt" : "2021-04-21T14:17:42Z",
+        "lastEditedBy" : "f3e7d5fe-a112-47db-9178-8be42b4a8eab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2c8d99c-aa4d-48fb-bc97-30eb4c2234d8",
+        "parentId" : "a657cb8a-e7ba-4eb2-835f-bfa5acf28868",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "> sorry if I misinterpreted this\r\n\r\nNo, no, nothing to be sorry about! I know that others prefer that and give that feedback, I personally just don't agree with it being a better style ;)",
+        "createdAt" : "2021-04-21T19:42:51Z",
+        "updatedAt" : "2021-04-21T19:42:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5ce19cf1b3c121a6c3f1e2cfe828627051241704",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +127,131 @@            results.append(bool_arr)\n\n        if not results:\n            return BooleanArray(\n                np.array([], dtype=np.bool_), np.array([], dtype=np.bool_)"
   }
 ]
