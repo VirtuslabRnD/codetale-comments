@@ -526,5 +526,71 @@
     "commit" : "1375bad8bcf7967c2aed0a3aad3a7343554cdaec",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +830,834 @@\n    @td.skip_if_no(\"pyarrow\", min_version=\"0.16\")\n    def test_use_nullable_dtypes(self, pa):\n        import pyarrow.parquet as pq\n"
+  },
+  {
+    "id" : "694caf6b-cfa9-4edd-9d6a-2399665ffd9c",
+    "prId" : 33361,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/33361#pullrequestreview-390295186",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d8e7d326-e90b-4574-b50f-04c338de02ea",
+        "parentId" : null,
+        "authorId" : "b0c8ea7f-389d-4305-8e0a-a1a394b9fcc2",
+        "body" : "Looks like you're repeating the same twice for `pyarrow` and `fastparquet` (which makes sense). But it'd probably be worth to just implement things once, and parametrize (with pytest).\r\n\r\nYou can search for `@pytest.mark.parametrize`, and you'll find lots of examples of parametrized tests. The idea is that the test will receive a set of variables for each of `pyarrow` and `fastparquet`, and pytest will execute it twice with each set of variables.",
+        "createdAt" : "2020-04-08T11:52:21Z",
+        "updatedAt" : "2020-04-08T14:38:21Z",
+        "lastEditedBy" : "b0c8ea7f-389d-4305-8e0a-a1a394b9fcc2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cdbd1651-da4a-41e4-b857-821f2a9c72d7",
+        "parentId" : "d8e7d326-e90b-4574-b50f-04c338de02ea",
+        "authorId" : "88c77245-99d2-4050-ae96-470fd174b91f",
+        "body" : "Yeah, I thought about parametrizing, but in this case it's tricky: the error message will only ever show up if _both_ pyarrow _and_ fastparquet are inadequately installed (i.e. not installed, or bad version installed). This is embodied in the conditional:\r\n```\r\nif not have_usable_pa and not have_usable_fp:\r\n```\r\nThe `and`'ed conditions can't be decoupled. So we'd still need both the lines of code you highlight above. \r\n\r\nThe only thing that could be de-duplicated with parametrization, is the contents of the `if` block. But even that doesn't feel quite right; it's just two aspects of the same situation. \r\n\r\nMaybe the best thing to do if we want to be absolutely strict, is to take all the boolean flagging that is currently in these two sections\r\n```\r\n    # Do we have engines installed, but a bad version of them?\r\n[...]\r\n    # Do we have usable engines installed?\r\n```\r\nand move it outside of the test function, to module level. And use `pytest.mark.skipif` (or one of those wacky fixtures that inject `pytest.mark.skip`) to only run the test when we expect an error message. \r\n\r\nAt this point, I'm going to ask: how important is it that we do it this way? Because I'm slowly running out of steam for this.\r\n\r\n",
+        "createdAt" : "2020-04-08T14:23:33Z",
+        "updatedAt" : "2020-04-08T20:06:42Z",
+        "lastEditedBy" : "88c77245-99d2-4050-ae96-470fd174b91f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "874ffb83-86e0-4601-9c30-84442c2c67c5",
+        "parentId" : "d8e7d326-e90b-4574-b50f-04c338de02ea",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this test is kind of overkill , but ok.",
+        "createdAt" : "2020-04-08T16:45:31Z",
+        "updatedAt" : "2020-04-08T16:45:31Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe861a47-47cd-4181-a931-63b4bc113677",
+        "parentId" : "d8e7d326-e90b-4574-b50f-04c338de02ea",
+        "authorId" : "b0c8ea7f-389d-4305-8e0a-a1a394b9fcc2",
+        "body" : "I see, didn't realize you need to know about both versions at the same time.\r\n\r\nI think you could write this in a very compact way, if we create the `_HAVE_USABLE_PYARROW`... variables at the beginning of the file, like `_HAVE_PYARROW`. Then the parametrization would be trivial. But not that important.\r\n\r\nThanks for the work on this!",
+        "createdAt" : "2020-04-08T16:47:33Z",
+        "updatedAt" : "2020-04-08T16:47:33Z",
+        "lastEditedBy" : "b0c8ea7f-389d-4305-8e0a-a1a394b9fcc2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "590b40cb-8123-4dae-8005-7ebbad6a52d8",
+        "parentId" : "d8e7d326-e90b-4574-b50f-04c338de02ea",
+        "authorId" : "88c77245-99d2-4050-ae96-470fd174b91f",
+        "body" : "Cool. I'm happy to come back to it later if someone sees this as adding value. Though I tend to agree with @jreback that we're bordering overkill. Anyhoo, I'm glad to have this closed before everything drops out of mental cache over Easter. \r\nCheers all for the good input!!",
+        "createdAt" : "2020-04-08T20:10:58Z",
+        "updatedAt" : "2020-04-08T20:10:58Z",
+        "lastEditedBy" : "88c77245-99d2-4050-ae96-470fd174b91f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7d58483f73b4084c718ab796a0642ec934302a79",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +232,236 @@    # Do we have engines installed, but a bad version of them?\n    pa_min_ver = VERSIONS.get(\"pyarrow\")\n    fp_min_ver = VERSIONS.get(\"fastparquet\")\n    have_pa_bad_version = (\n        False"
   }
 ]
