@@ -2055,5 +2055,60 @@
     "commit" : "801df5c965f1c468fb7503b81a50f14db6ec0575",
     "line" : 9,
     "diffHunk" : "@@ -1,1 +958,962 @@                    # select everything except for the last level, which is the one\n                    # containing the name of the function(s), see GH 32040\n                    result.columns = result.columns.rename(\n                        [self._selected_obj.columns.name] * result.columns.nlevels\n                    ).droplevel(-1)"
+  },
+  {
+    "id" : "e6ab05c6-92e0-495b-9b64-f400a5bf22dc",
+    "prId" : 32223,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/32223#pullrequestreview-365244375",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2105d803-d013-42f7-877c-050a71e74a88",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Can you share the traceback for this? @jbrockmendel did a lot of cleanup of Exception catching in groupby and in the spirit of being explicit I'm a little hesitant to add more back in. The error *might* even be that a TypeError is getting thrown instead of a ValueError",
+        "createdAt" : "2020-02-25T01:40:14Z",
+        "updatedAt" : "2020-03-11T20:55:39Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3db4eb7-835c-49da-86e7-210acd69570b",
+        "parentId" : "2105d803-d013-42f7-877c-050a71e74a88",
+        "authorId" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "body" : "Here's the full traceback:\r\n\r\n```python\r\nIn [1]: import pandas as pd                                                                                                                                            \r\n\r\nIn [2]: df = pd.DataFrame({\"a\": [1, 1, 2, 2], \"b\": [1, 2, 1, 2]}, dtype=\"Int64\")                                                                                       \r\n\r\nIn [3]: df.groupby(\"a\").mean()                                                                                                                                         \r\n---------------------------------------------------------------------------\r\nTypeError                                 Traceback (most recent call last)\r\n~/pandas/pandas/core/arrays/integer.py in safe_cast(values, dtype, copy)\r\n    155     try:\r\n--> 156         return values.astype(dtype, casting=\"safe\", copy=copy)\r\n    157     except TypeError:\r\n\r\nTypeError: Cannot cast array from dtype('float64') to dtype('int64') according to the rule 'safe'\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nTypeError                                 Traceback (most recent call last)\r\n<ipython-input-3-f32730bc62ca> in <module>\r\n----> 1 df.groupby(\"a\").mean()\r\n\r\n~/pandas/pandas/core/groupby/groupby.py in mean(self, numeric_only)\r\n   1224             \"mean\",\r\n   1225             alt=lambda x, axis: Series(x).mean(numeric_only=numeric_only),\r\n-> 1226             numeric_only=numeric_only,\r\n   1227         )\r\n   1228 \r\n\r\n~/pandas/pandas/core/groupby/generic.py in _cython_agg_general(self, how, alt, numeric_only, min_count)\r\n    993     ) -> DataFrame:\r\n    994         agg_blocks, agg_items = self._cython_agg_blocks(\r\n--> 995             how, alt=alt, numeric_only=numeric_only, min_count=min_count\r\n    996         )\r\n    997         return self._wrap_agged_blocks(agg_blocks, items=agg_items)\r\n\r\n~/pandas/pandas/core/groupby/generic.py in _cython_agg_blocks(self, how, alt, numeric_only, min_count)\r\n   1082                         # Cast back if feasible\r\n   1083                         result = type(block.values)._from_sequence(\r\n-> 1084                             result.ravel(), dtype=block.values.dtype\r\n   1085                         )\r\n   1086                     except ValueError:\r\n\r\n~/pandas/pandas/core/arrays/integer.py in _from_sequence(cls, scalars, dtype, copy)\r\n    356     @classmethod\r\n    357     def _from_sequence(cls, scalars, dtype=None, copy: bool = False) -> \"IntegerArray\":\r\n--> 358         return integer_array(scalars, dtype=dtype, copy=copy)\r\n    359 \r\n    360     @classmethod\r\n\r\n~/pandas/pandas/core/arrays/integer.py in integer_array(values, dtype, copy)\r\n    142     TypeError if incompatible types\r\n    143     \"\"\"\r\n--> 144     values, mask = coerce_to_array(values, dtype=dtype, copy=copy)\r\n    145     return IntegerArray(values, mask)\r\n    146 \r\n\r\n~/pandas/pandas/core/arrays/integer.py in coerce_to_array(values, dtype, mask, copy)\r\n    259         values = safe_cast(values, dtype, copy=False)\r\n    260     else:\r\n--> 261         values = safe_cast(values, dtype, copy=False)\r\n    262 \r\n    263     return values, mask\r\n\r\n~/pandas/pandas/core/arrays/integer.py in safe_cast(values, dtype, copy)\r\n    162 \r\n    163         raise TypeError(\r\n--> 164             f\"cannot safely cast non-equivalent {values.dtype} to {np.dtype(dtype)}\"\r\n    165         )\r\n    166 \r\n\r\nTypeError: cannot safely cast non-equivalent float64 to int64\r\n```\r\n\r\nTo be honest I'm not sure if this should be a `TypeError` or `ValueError`. `numpy` doesn't even seem consistent about this kind of thing:\r\n\r\n```python\r\nIn [8]: np.array([\"a\", \"b\"]).astype(int)                                                                                     \r\n---------------------------------------------------------------------------\r\nValueError                                Traceback (most recent call last)\r\n<ipython-input-8-5f3d565c8777> in <module>\r\n----> 1 np.array([\"a\", \"b\"]).astype(int)\r\n\r\nValueError: invalid literal for int() with base 10: 'a'\r\n\r\nIn [9]: np.array([\"a\", \"b\"]).astype(int, casting=\"safe\")                                                                     \r\n---------------------------------------------------------------------------\r\nTypeError                                 Traceback (most recent call last)\r\n<ipython-input-9-0a3ea49fa702> in <module>\r\n----> 1 np.array([\"a\", \"b\"]).astype(int, casting=\"safe\")\r\n\r\nTypeError: Cannot cast array from dtype('<U1') to dtype('int64') according to the rule 'safe'\r\n```",
+        "createdAt" : "2020-02-25T02:14:05Z",
+        "updatedAt" : "2020-03-11T20:55:39Z",
+        "lastEditedBy" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7760dab5-b34a-454f-9d5e-6971d87f3dda",
+        "parentId" : "2105d803-d013-42f7-877c-050a71e74a88",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "hmm, what do we raise `ValueError` on in construction of an EA?",
+        "createdAt" : "2020-02-26T12:47:07Z",
+        "updatedAt" : "2020-03-11T20:55:39Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74cb3c9b-62c6-45de-94b6-6a8436e1a643",
+        "parentId" : "2105d803-d013-42f7-877c-050a71e74a88",
+        "authorId" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "body" : "I think a case could be made that this \"should\" be a `ValueError`. It's `safe_cast` that actually raises but it evidently raises because of the _value_ and not the type:\r\n\r\n```python\r\nIn [9]: safe_cast(np.array([1.0], dtype=float), dtype=\"int\", copy=False)                                                                                               \r\nOut[9]: array([1])\r\n\r\nIn [10]: safe_cast(np.array([1.5], dtype=float), dtype=\"int\", copy=False)                                                                                              \r\n---------------------------------------------------------------------------\r\nTypeError                                 Traceback (most recent call last)\r\n~/pandas/pandas/core/arrays/integer.py in safe_cast(values, dtype, copy)\r\n    155     try:\r\n--> 156         return values.astype(dtype, casting=\"safe\", copy=copy)\r\n    157     except TypeError:\r\n\r\nTypeError: Cannot cast array from dtype('float64') to dtype('int64') according to the rule 'safe'\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nTypeError                                 Traceback (most recent call last)\r\n<ipython-input-10-c8293cc0cca1> in <module>\r\n----> 1 safe_cast(np.array([1.5], dtype=float), dtype=\"int\", copy=False)\r\n\r\n~/pandas/pandas/core/arrays/integer.py in safe_cast(values, dtype, copy)\r\n    162 \r\n    163         raise TypeError(\r\n--> 164             f\"cannot safely cast non-equivalent {values.dtype} to {np.dtype(dtype)}\"\r\n    165         )\r\n    166 \r\n\r\nTypeError: cannot safely cast non-equivalent float64 to int64\r\n```\r\n\r\nI could try switching it to a `ValueError` and see if anything breaks as a result?",
+        "createdAt" : "2020-02-26T21:10:35Z",
+        "updatedAt" : "2020-03-11T20:55:39Z",
+        "lastEditedBy" : "c450dd54-d24d-43a8-b896-c2c9af46ca18",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3dadd53cfef28bebc52300c017fe218edeb0c70d",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +1084,1088 @@                            result.ravel(), dtype=block.values.dtype\n                        )\n                    except (ValueError, TypeError):\n                        # reshape to be valid for non-Extension Block\n                        result = result.reshape(1, -1)"
   }
 ]
