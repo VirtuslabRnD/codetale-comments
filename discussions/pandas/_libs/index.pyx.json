@@ -141,5 +141,60 @@
     "commit" : "003babfa4ea299f4e46d380a2e1bf16948b44fca",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +11,15 @@from numpy cimport (ndarray, float64_t, int32_t,\n                    int64_t, uint8_t, uint64_t, intp_t,\n                    # Note: NPY_DATETIME, NPY_TIMEDELTA are only available\n                    # for cimport in cython>=0.27.3\n                    NPY_DATETIME, NPY_TIMEDELTA)"
+  },
+  {
+    "id" : "d4e82db2-f49b-43da-8d35-d7facc1124f1",
+    "prId" : 22826,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/22826#pullrequestreview-160057998",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d41ea464-bbbc-45ca-ba3f-7fe9eca85e5b",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "what if you drop the ``len(stargets) < 5`` and just use it if its monotonic_increasing? does the small case actually make any difference here?",
+        "createdAt" : "2018-09-25T12:06:26Z",
+        "updatedAt" : "2018-09-26T20:23:42Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "255ede05-86a2-48ba-a2ec-734aa2004281",
+        "parentId" : "d41ea464-bbbc-45ca-ba3f-7fe9eca85e5b",
+        "authorId" : "c029ae91-41d9-4044-92c3-e06a2617bdf1",
+        "body" : "If you drop the `len(stargets) < 5`, then we'd be running a binary search against the index for each item in a potentially large set of targets -- runtime should be `O(m log n)` where `m` is the number of items in the set and `n` is the length of the index. Presumably, this would be slower when `m` is large enough compared to the current behavior which is to run through each item in the index and check if it is in the set of targets, which should be `O(n)` assuming constant time checks for whether an item is in the set of targets. Thoughts?",
+        "createdAt" : "2018-09-26T20:40:49Z",
+        "updatedAt" : "2018-09-26T20:40:49Z",
+        "lastEditedBy" : "c029ae91-41d9-4044-92c3-e06a2617bdf1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f50fb707-7205-4ee3-bb40-8193ed590669",
+        "parentId" : "d41ea464-bbbc-45ca-ba3f-7fe9eca85e5b",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can you add a case where this is true in the asv's and compare?",
+        "createdAt" : "2018-09-28T11:34:36Z",
+        "updatedAt" : "2018-09-28T11:34:36Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c36221c4-2c1b-4991-8f3b-1bac542b2f68",
+        "parentId" : "d41ea464-bbbc-45ca-ba3f-7fe9eca85e5b",
+        "authorId" : "c029ae91-41d9-4044-92c3-e06a2617bdf1",
+        "body" : "yes, in each of the following asv's `stargets` is either length one or length two\r\n\r\n> ```\r\n>      [ab9dbd64]       [b704c5bb]\r\n>      <master>         <loc-enhancements>\r\n> -         383±4ms          211±3ms     0.55  indexing.NonNumericSeriesIndexing.time_getitem_list_like('datetime', 'nonunique_monotonic_inc')\r\n> -        59.0±2ms         11.9±1ms     0.20  indexing.CategoricalIndexIndexing.time_get_indexer_list('monotonic_incr')\r\n> -      69.4±0.6ms          445±3μs     0.01  indexing.NumericSeriesIndexing.time_getitem_list_like(<class 'pandas.core.indexes.numeric.Int64Index'>, 'nonunique_monotonic_inc')\r\n> -      66.3±0.3ms          423±1μs     0.01  indexing.NumericSeriesIndexing.time_getitem_list_like(<class 'pandas.core.indexes.numeric.Float64Index'>, 'nonunique_monotonic_inc')\r\n> -      66.1±0.6ms          320±2μs     0.00  indexing.NumericSeriesIndexing.time_ix_list_like(<class 'pandas.core.indexes.numeric.Float64Index'>, 'nonunique_monotonic_inc')\r\n> -      69.2±0.4ms          330±3μs     0.00  indexing.NumericSeriesIndexing.time_ix_list_like(<class 'pandas.core.indexes.numeric.Int64Index'>, 'nonunique_monotonic_inc')\r\n> -      65.7±0.3ms          286±3μs     0.00  indexing.NumericSeriesIndexing.time_loc_list_like(<class 'pandas.core.indexes.numeric.Float64Index'>, 'nonunique_monotonic_inc')\r\n> -      69.3±0.5ms          295±2μs     0.00  indexing.NumericSeriesIndexing.time_loc_list_like(<class 'pandas.core.indexes.numeric.Int64Index'>, 'nonunique_monotonic_inc')\r\n> \r\n> SOME BENCHMARKS HAVE CHANGED SIGNIFICANTLY.\r\n> ```\r\n\r\n",
+        "createdAt" : "2018-09-29T00:40:17Z",
+        "updatedAt" : "2018-09-29T00:40:17Z",
+        "lastEditedBy" : "c029ae91-41d9-4044-92c3-e06a2617bdf1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4ad3006b7fa6b41a0c4d32c05272bb8cde786597",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +295,299 @@        missing = np.empty(n_t, dtype=np.int64)\n\n        # map each starget to its position in the index\n        if stargets and len(stargets) < 5 and self.is_monotonic_increasing:\n            # if there are few enough stargets and the index is monotonically"
   }
 ]
