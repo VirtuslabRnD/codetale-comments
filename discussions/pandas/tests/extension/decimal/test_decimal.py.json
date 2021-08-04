@@ -493,5 +493,60 @@
     "commit" : "263e31a2ce6cf332ad10698c9bd7aae1f3191768",
     "line" : 10,
     "diffHunk" : "@@ -1,1 +485,489 @@    # Ensure that indexing operations do not materialize (convert to a numpy\n    # array) the ExtensionArray unnecessary\n\n    def DecimalArray__array__(self, dtype=None):\n        raise Exception(\"tried to convert a DecimalArray to a numpy array\")"
+  },
+  {
+    "id" : "488b7aa6-6400-4099-b667-2b06fd4f0908",
+    "prId" : 38939,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/38939#pullrequestreview-610877110",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "839f33ae-e26a-4e36-9bb3-b4fbe10cad08",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "@jorisvandenbossche any idea why this might happen?",
+        "createdAt" : "2021-02-13T23:08:55Z",
+        "updatedAt" : "2021-03-30T22:56:58Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09bd728f-1972-4eb3-8d63-1b47e20e824b",
+        "parentId" : "839f33ae-e26a-4e36-9bb3-b4fbe10cad08",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Debugged a bit, and turns out that it is the constructor in concat that looses it, and that's because you now copy EAs in the constructor, and so it's DecimalArray.copy() that looses the context  .. ;)\r\n\r\n```\r\nIn [11]: data.astype(DecimalDtype(ctx)).dtype\r\nOut[11]: DecimalDtype(context=Context(prec=5, rounding=ROUND_HALF_EVEN, Emin=-999999, Emax=999999, capitals=1, clamp=0, flags=[], traps=[InvalidOperation, DivisionByZero, Overflow]))\r\n\r\nIn [12]: data.astype(DecimalDtype(ctx)).copy().dtype\r\nOut[12]: DecimalDtype(context=Context(prec=28, rounding=ROUND_HALF_EVEN, Emin=-999999, Emax=999999, capitals=1, clamp=0, flags=[], traps=[InvalidOperation, DivisionByZero, Overflow]))\r\n```\r\n\r\nPassing throughself.dtype` here should fix it I think:\r\n\r\nhttps://github.com/pandas-dev/pandas/blob/6c0f95225426a3e06f30a5b279bf9c7a650dce57/pandas/tests/extension/decimal/array.py#L149-L150",
+        "createdAt" : "2021-03-05T16:27:11Z",
+        "updatedAt" : "2021-03-30T22:56:58Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc04d8b2-4e07-407b-a3fd-68d556190dff",
+        "parentId" : "839f33ae-e26a-4e36-9bb3-b4fbe10cad08",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "> Passing throughself.dtype` here should fix it I think:\r\n\r\ntried this and no dice",
+        "createdAt" : "2021-03-08T22:03:15Z",
+        "updatedAt" : "2021-03-30T22:56:58Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20eff6d8-3b42-4c92-88f8-f20d2714f2ed",
+        "parentId" : "839f33ae-e26a-4e36-9bb3-b4fbe10cad08",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "It's apparently the `context` that needs to be specified, and not the ``dtype``(something that should maybe be fixed though (separately)):\r\n\r\n```diff\r\n     def copy(self):\r\n-        return type(self)(self._data.copy())\r\n+        return type(self)(self._data.copy(), context=self.dtype.context)\r\n```",
+        "createdAt" : "2021-03-12T15:09:30Z",
+        "updatedAt" : "2021-03-30T22:56:58Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "98b6dff1f6a51f1a621b4d99e75dd4aaf32e6d1b",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +268,272 @@            True,\n            marks=pytest.mark.xfail(\n                reason=\"pd.concat call inside NDFrame.astype reverts the dtype\"\n            ),\n        ),"
   }
 ]
