@@ -185,5 +185,82 @@
     "commit" : "2ed1745f8319c545cfb2b2649960308a8a7c2f87",
     "line" : 12,
     "diffHunk" : "@@ -1,1 +281,285 @@                return cls.construct_from_string(dtype) is not None\n            except TypeError:\n                return False\n        return False\n"
+  },
+  {
+    "id" : "e6e0d94d-98c7-42c1-943b-1254fe58265a",
+    "prId" : 30619,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30619#pullrequestreview-337755362",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8984178a-65cb-4885-b258-146b51a45732",
+        "parentId" : null,
+        "authorId" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "body" : "assertion needed for mypy.\r\n\r\nbase class uses `@property` for abstract class attribute `name`, however, PeriodDType and DatetimeTZDtype do not override this with class attribute for name, but instead create a name using instance properties. These ExtensionDtype subclass cannot use this method and must override it.",
+        "createdAt" : "2020-01-02T15:57:19Z",
+        "updatedAt" : "2020-01-02T16:11:33Z",
+        "lastEditedBy" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ba8eb9d-3a4d-4ec1-bddf-70bbfcd7867d",
+        "parentId" : "8984178a-65cb-4885-b258-146b51a45732",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Is the second expression supposed to be `isinstance` as well?",
+        "createdAt" : "2020-01-02T16:45:51Z",
+        "updatedAt" : "2020-01-02T16:46:52Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3245069d-80f4-44a0-9f6b-88ba8ca14068",
+        "parentId" : "8984178a-65cb-4885-b258-146b51a45732",
+        "authorId" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "body" : "On master BooleanDtype.construct_from_string and StringDtype.construct_from_string both call super. `string != cls.name` is always True since cls.name is a property object. without the changes here would need an ignore.\r\n\r\n\r\n> Is the second expression\r\n\r\ni assume you mean `(cls, type(cls.name))`. that's the error message to identify the classes that call this method when cls.name is not a string",
+        "createdAt" : "2020-01-02T17:01:13Z",
+        "updatedAt" : "2020-01-02T17:01:13Z",
+        "lastEditedBy" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "264256e1d61ddd9fc9309388b821a60450af2b5e",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +240,244 @@        # error: Non-overlapping equality check (left operand type: \"str\", right\n        #  operand type: \"Callable[[ExtensionDtype], str]\")  [comparison-overlap]\n        assert isinstance(cls.name, str), (cls, type(cls.name))\n        if string != cls.name:\n            raise TypeError(f\"Cannot construct a '{cls.__name__}' from '{string}'\")"
+  },
+  {
+    "id" : "bfa1c1bf-6497-46f8-a6a9-f91b31e3938f",
+    "prId" : 30619,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30619#pullrequestreview-338002452",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "13bcf074-456c-40ac-afcb-9a64c32743b8",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can this use the self._ensure_type ?",
+        "createdAt" : "2020-01-03T01:22:37Z",
+        "updatedAt" : "2020-01-03T01:23:31Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c727c5f-5b31-4a5e-86fd-ceceef0c0553",
+        "parentId" : "13bcf074-456c-40ac-afcb-9a64c32743b8",
+        "authorId" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "body" : "i don't think that's applicable here.\r\n\r\nthe assert is to avoid an ignore on the following line (the comparison).\r\n\r\nthe comparison would still fail strict_equality even if all subclasses override this method/override name attribute. This is because the type checker is checking this method using the name attribute in the base class. i.e. checking the base class isolation.\r\n\r\nI think this is related to \"Python language's lack of notation for abstract class attributes\" see https://github.com/python/mypy/issues/7760\r\n\r\nso without the assert an ignore would be required here.\r\n\r\nHowever, the assert prevents creating subclasses that call this method when not using a class attribute for name. \r\n\r\nThis could instead be enforced by mypy instead of the assert and i believe the implementation of name in the base class should be...\r\n```diff\r\ndiff --git a/pandas/core/dtypes/base.py b/pandas/core/dtypes/base.py\r\nindex 1b4e7062b..5235aac91 100644\r\n--- a/pandas/core/dtypes/base.py\r\n+++ b/pandas/core/dtypes/base.py\r\n@@ -1,6 +1,6 @@\r\n \"\"\"Extend pandas with custom array types\"\"\"\r\n from typing import Any, List, Optional, Tuple, Type\r\n-\r\n+import abc\r\n import numpy as np\r\n \r\n from pandas.errors import AbstractMethodError\r\n@@ -8,7 +8,7 @@ from pandas.errors import AbstractMethodError\r\n from pandas.core.dtypes.generic import ABCDataFrame, ABCIndexClass, ABCSeries\r\n \r\n \r\n-class ExtensionDtype:\r\n+class ExtensionDtype(metaclass=abc.ABCMeta):\r\n     \"\"\"\r\n     A custom data type, to be paired with an ExtensionArray.\r\n \r\n@@ -162,13 +162,15 @@ class ExtensionDtype:\r\n         return \"O\"\r\n \r\n     @property\r\n-    def name(self) -> str:\r\n+    @classmethod\r\n+    @abc.abstractmethod\r\n+    def name(cls) -> str:\r\n         \"\"\"\r\n         A string identifying the data type.\r\n \r\n         Will be used for display in, e.g. ``Series.dtype``\r\n         \"\"\"\r\n-        raise AbstractMethodError(self)\r\n+        pass\r\n \r\n     @property\r\n     def names(self) -> Optional[List[str]]:\r\n``` \r\n\r\nHowever, mypy would give the following errors...\r\n\r\npandas\\core\\dtypes\\base.py:241: error: Non-overlapping equality check (left operand type: \"str\", right operand type: \"Callable[[], str]\")\r\npandas\\core\\dtypes\\dtypes.py:754: error: Signature of \"name\" incompatible with supertype \"ExtensionDtype\"\r\npandas\\core\\dtypes\\dtypes.py:895: error: Signature of \"name\" incompatible with supertype \"ExtensionDtype\"\r\npandas\\tests\\extension\\test_common.py:44: error: Cannot instantiate abstract class 'DummyDtype' with abstract attribute 'name'\r\n\r\nthe first is due to https://github.com/python/mypy/issues/7760, the next two are because PeriodDType.name and DatetimeTZDtype.name are not implemented using class attributes",
+        "createdAt" : "2020-01-03T09:34:02Z",
+        "updatedAt" : "2020-01-03T09:34:03Z",
+        "lastEditedBy" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "264256e1d61ddd9fc9309388b821a60450af2b5e",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +239,243 @@\n        # error: Non-overlapping equality check (left operand type: \"str\", right\n        #  operand type: \"Callable[[ExtensionDtype], str]\")  [comparison-overlap]\n        assert isinstance(cls.name, str), (cls, type(cls.name))\n        if string != cls.name:"
   }
 ]

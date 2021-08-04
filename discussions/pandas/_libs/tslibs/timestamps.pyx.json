@@ -636,5 +636,82 @@
     "commit" : "8ebc05d3dc68d6383c66648c9c1e36c9ba1c64a8",
     "line" : 70,
     "diffHunk" : "@@ -1,1 +667,671 @@\n    @property\n    def quarter(self) -> int:\n        \"\"\"\n        Return the quarter of the year."
+  },
+  {
+    "id" : "38fd308b-436a-4d0d-9ed5-9de4be522e94",
+    "prId" : 30676,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30676#pullrequestreview-346133856",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f6e51736-7530-45c4-b851-a0ee3478c2f2",
+        "parentId" : null,
+        "authorId" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "body" : "@jbrockmendel This appears the way to go if we need maximum performance.\r\nWe do lose a bit of speed (between 10 and 20 percent) because we implement the shortcut after errorchecks and `_date_attributes`.\r\nIs this fine or should we hoist it after (or before) `_date_attributes = [year, month, day, hour, minute, second, microsecond, nanosecond]`? I think the current way is tidier, but it's a tradeoff.\r\n",
+        "createdAt" : "2020-01-16T07:24:54Z",
+        "updatedAt" : "2020-01-24T09:24:11Z",
+        "lastEditedBy" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29ef8788-755a-4f25-91ab-12880c7588d1",
+        "parentId" : "f6e51736-7530-45c4-b851-a0ee3478c2f2",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "I'm not sure all of these extra checks are worth adding to improve perf when passing a Timestamp to a Timestamp constructor - @AlexKirko how often are you expecting that to actually happen?",
+        "createdAt" : "2020-01-16T20:32:57Z",
+        "updatedAt" : "2020-01-24T09:24:11Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b6f0dcf3-5b9b-4701-a2f1-b0b9bb129137",
+        "parentId" : "f6e51736-7530-45c4-b851-a0ee3478c2f2",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : ">  how often are you expecting that to actually happen?\r\n\r\nFor internal usage there are a lot of places where we do:\r\n\r\n```\r\nif isinstance(obj, (datetime, np.datetime64)):\r\n    obj = Timestamp(obj)\r\n```\r\n\r\nThat's not exactly the usage being checked here, but could benefit in the same way from an optimized no-other-arguments-passed check.",
+        "createdAt" : "2020-01-16T23:14:50Z",
+        "updatedAt" : "2020-01-24T09:24:11Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53faeb14-9312-4e42-bf3f-9d7c3516c969",
+        "parentId" : "f6e51736-7530-45c4-b851-a0ee3478c2f2",
+        "authorId" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "body" : "Admittedly, I don't know the library well enough to comment on internal usage, but @jbrockmendel has already done that.\r\n\r\nHowever, what I've done repeatedly in my own projects when on a deadline is take a `Dataframe` column or a `list` and just cast the elements into the type I need, trusting that if it already is that class, the performance loss won't be noticeable in the larger program (I do lots of ad-hoc data science modeling). I don't think it's as much of a problem in production-quality code, but a lot of people I work with use `pandas` to quickly preprocess data for `sklearn`.\r\n\r\nYou tend to rely on being able to cut corners when working with a well-supported package, and, currently, calling Timestamp on a Timestamp is more than 10 000 times slower than the proposed shortcut, which can be a nasty shock for someone expecting to just blitz through type conversions during data wrangling.\r\n\r\n@WillAyd We could make the code a bit more compact with what was proposed in `4c9eb70`, which you can look up above, but this incurs about a 25% performance loss. I believe that if we do the shortcut, might as well add extra two lines. It's a bit grating but the gain is worth it, I think.\r\n",
+        "createdAt" : "2020-01-17T06:11:53Z",
+        "updatedAt" : "2020-01-24T09:24:11Z",
+        "lastEditedBy" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e92ed008-0cdc-4a0b-b136-e1ff77e72128",
+        "parentId" : "f6e51736-7530-45c4-b851-a0ee3478c2f2",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "can you add a comment to the effect of \"we do this verbose thing because cython wont optimize a list comprehension (as of cython 0.29.x)\"",
+        "createdAt" : "2020-01-20T01:08:12Z",
+        "updatedAt" : "2020-01-24T09:24:11Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c033a583-fddc-48f6-b0e3-92d1ea2da4fc",
+        "parentId" : "f6e51736-7530-45c4-b851-a0ee3478c2f2",
+        "authorId" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "body" : "@jbrockmendel Added the comment you requested.",
+        "createdAt" : "2020-01-21T19:28:59Z",
+        "updatedAt" : "2020-01-24T09:24:11Z",
+        "lastEditedBy" : "e496530e-9aa4-46e2-8b9b-b0ec14a6093d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ba19e26ab76258e11afecaee6573cf533ea9e834",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +401,405 @@                minute is None and second is None and\n                microsecond is None and nanosecond is None and\n                tzinfo is None):\n            return ts_input\n        elif isinstance(ts_input, str):"
   }
 ]
