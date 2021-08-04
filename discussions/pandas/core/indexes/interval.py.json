@@ -1670,5 +1670,71 @@
     "commit" : "cc6a6b4945c8845c2424f982bb1a54b8fd6f000d",
     "line" : 4,
     "diffHunk" : "@@ -1,1 +260,264 @@            Ignored.\n        \"\"\"\n        assert isinstance(array, IntervalArray), type(array)\n\n        result = IntervalMixin.__new__(cls)"
+  },
+  {
+    "id" : "5b59da82-c519-4bc5-bd45-56acaeab1f0a",
+    "prId" : 31406,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/31406#pullrequestreview-351909743",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fbc34297-2b61-4ad8-90b6-765338f5d46f",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this is ok, but doesn't follow the other patterns of inference, where we use infer_dtype. but for known dtypes this is (sligthly) cheaper.",
+        "createdAt" : "2020-01-31T03:31:09Z",
+        "updatedAt" : "2020-02-01T23:39:03Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25924aac-40e7-469f-afa7-5dc26bde7f26",
+        "parentId" : "fbc34297-2b61-4ad8-90b6-765338f5d46f",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "see holds_integer in the indexes/base.py",
+        "createdAt" : "2020-01-31T03:33:08Z",
+        "updatedAt" : "2020-02-01T23:39:03Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "de8b2d24-9935-4a05-9b55-96c1b0464cd6",
+        "parentId" : "fbc34297-2b61-4ad8-90b6-765338f5d46f",
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "Another other option would be to defer to `self.left` or `self.right`, e.g.\r\n```python\r\ndef holds_integer(self):\r\n    return self.left.holds_integer()\r\n```\r\n\r\nThere is a slight difference here, in that `Float64Index` returns `False` for `holds_integer`.  The main difference this would cause is with `at` based indexing.  For example, on this branch we have:\r\n\r\n```python\r\nIn [2]: s_ii = pd.Series(list('abc'), index=pd.interval_range(0.0, periods=3, freq=2))\r\n\r\nIn [3]: s_fi = pd.Series(list('abc'), index=[0.0, 1.0, 2.0])\r\n\r\nIn [4]: s_ii\r\nOut[4]: \r\n(0.0, 2.0]    a\r\n(2.0, 4.0]    b\r\n(4.0, 6.0]    c\r\ndtype: object\r\n\r\nIn [5]: s_fi\r\nOut[5]: \r\n0.0    a\r\n1.0    b\r\n2.0    c\r\ndtype: object\r\n\r\nIn [6]: s_ii.at[1]\r\nOut[6]: 'a'\r\n\r\nIn [7]: s_fi.at[1]\r\n---------------------------------------------------------------------------\r\nValueError: At based indexing on an non-integer index can only have non-integer indexers\r\n```\r\n\r\nDo we want `In [6]` to produce the same `ValueError` as `In [7]`?  Changing `holds_integer` to delegate to `self.left` would achieve this.  I'm not sure what the correct answer here is though, and would be fine with either.",
+        "createdAt" : "2020-01-31T03:53:50Z",
+        "updatedAt" : "2020-02-01T23:39:03Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e6b3898-fd50-49a1-a8e4-7d58b6b59035",
+        "parentId" : "fbc34297-2b61-4ad8-90b6-765338f5d46f",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "@jschendel the Float64Index behavior was changed in #31329 so s_fi.at[1] returns \"b\".  This was done to make .at behavior match .loc behavior.\r\n\r\nDeferring to self.left or self.right seems reasonable, but we may need something other than holds_integer.  Most of the places where it is used are de-facto used like it is here, but that doesn't match the docstring description.",
+        "createdAt" : "2020-01-31T16:33:12Z",
+        "updatedAt" : "2020-02-01T23:39:03Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a8d7de54-089c-4917-b689-b2b3294b2f16",
+        "parentId" : "fbc34297-2b61-4ad8-90b6-765338f5d46f",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this seems fine for now, @jbrockmendel if you can make a note to re-visit later",
+        "createdAt" : "2020-02-01T23:19:02Z",
+        "updatedAt" : "2020-02-01T23:39:03Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2f38085b7fa4fe016c6b1cdc0b95e392048bfae2",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +525,529 @@\n    def holds_integer(self):\n        return self.dtype.subtype.kind not in [\"m\", \"M\"]\n        # TODO: There must already exist something for this?\n"
   }
 ]
