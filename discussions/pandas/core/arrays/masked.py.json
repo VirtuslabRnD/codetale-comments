@@ -185,5 +185,192 @@
     "commit" : "554ddc0f2de492d41ec2cdec09d413a1420245c8",
     "line" : 86,
     "diffHunk" : "@@ -1,1 +187,191 @@\n    def take(\n        self: BaseMaskedArrayT,\n        indexer,\n        allow_fill: bool = False,"
+  },
+  {
+    "id" : "ec342c60-0511-426e-ab44-a3742044d6aa",
+    "prId" : 33064,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/33064#pullrequestreview-387578493",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "I get a \"pandas/core/arrays/masked.py:229: error: \"ExtensionDtype\" has no attribute \"numpy_dtype\"\" mypy failure\r\n\r\ncc @simonjayhawkins @WillAyd how can I solve / silence this? The `numpy_dtype` attribute is commong for Int/BoolDtype (so I can safely use it), but not for general ExtensionDtype.",
+        "createdAt" : "2020-04-03T19:46:05Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0b7f04ca-7830-4ab9-be2b-8981a7c9a724",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Hmm yea so I guess complaining because as far as this class is defined, the return type of `self.dtype` is an ExtensionDtype (as defined in `ExtensionArray`)\r\n\r\nI guess it comes back to the class design; if we have something else that inherits from BaseMaskedArray it could fail at runtime without if it isn't constructed to return a dtype from `self.dtype` that has a `numpy_dtype` attribute, which is a little hefty on the implicitness I guess",
+        "createdAt" : "2020-04-03T20:14:33Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "256e011b-90dc-4739-a827-615fdd720385",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "So the subclasses IntegerArray and BooleanArray have a correctly typed `dtype` property. But this method above is defined in their parent class ..\r\n\r\nIn principle I could add a `dtype` property\r\n\r\n```\r\n@property\r\ndef dtype(self) -> Union[\"IntegerDtype\", \"BooleanDtype\"]:\r\n    pass\r\n ```\r\n\r\nin the BaseMaskedArray class to solve this, I suppose? \r\nBut that is also kind of ugly, as the parent class shouldn't really know about its subclasses ..\r\n\r\n",
+        "createdAt" : "2020-04-03T20:27:17Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37869774-51e0-4ed4-8465-5eb373c68ea4",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Right; I think it's going to be tough to make this work with mypy if we implicitly enforce that subclasses make `dtype.numpy_dtype` available\r\n\r\nWhat does the comment directly preceding it refer to? Perhaps there is a way to do this without breaking the currently implied subclass requirements?",
+        "createdAt" : "2020-04-03T20:31:15Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23af2a4f-8826-4e8b-bfe1-a9946848d121",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "Can you override the type signature of IntegerArray.dtype to be `IntegerDtype` and BolleanArray.dtype to be BooleanDtype?",
+        "createdAt" : "2020-04-03T20:34:39Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eef1e435-51b4-4b4f-beba-2b2c2a779edb",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "Oh that's already the case... How about a `MaskedArrayDtype` that subclasses ExtensionDtype but has a `numpy_dtype` property?\r\n\r\nand then BooleanDtype and IntegerDtype inherit from that rather than ExtensionDtype.",
+        "createdAt" : "2020-04-03T20:36:07Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "89771669-896b-44e5-a1c3-a94b5c309ee4",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Is there a way to just disable mypy on this line?\r\n\r\n> What does the comment directly preceding it refer to? Perhaps there is a way to do this without breaking the currently implied subclass requirements?\r\n\r\nThe hashtable is only implemented for int64. So if you have an int32 array, the unique values coming out of `_factorize_array` are int64, and need to be casted back to int32 (as the uniques returned from this method should be using the original dtype). So for this casting, I need to have access to the dtype's equivalent numpy dtype, which is avalaible as the `numpy_dtype` attribute. \r\n\r\nI could do this differently by eg building up a mapping of EADtypes -> numpy dtypes and looking it up from there instead of using the attribute, but that would just be introducing more complex workarounds to just to satisfy mypy. ",
+        "createdAt" : "2020-04-03T20:38:30Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "96cdc487-3f52-4f76-96af-6e0309a4ae87",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "> How about a MaskedArrayDtype that subclasses ExtensionDtype but has a numpy_dtype property?\r\n\r\nYes, that's probably the cleanest solution architecturally",
+        "createdAt" : "2020-04-03T20:39:33Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "36a55349-92f2-4650-96a5-a239b42b2210",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "> How about a MaskedArrayDtype that subclasses ExtensionDtype but has a numpy_dtype property?\r\n\r\nYes, that's probably the cleanest solution architecturally. \r\nBut the `dtype` attribute on BaseMaskedArray would still only be a dummy property just to provide typing, since it is overwritten in both subclasses.",
+        "createdAt" : "2020-04-03T20:41:05Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "939781d4-5002-4761-a650-805bdb3ca9d6",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "> But the dtype attribute on BaseMaskedArray would still only be a dummy property just to provide typing\r\n\r\nI don't think you'll need to change anything on the array side. The dtypes will inherit from MaskedExtensionDtype, so mypy should know that `integer_array.dtype.numpy_type` is valid.\r\n\r\nOr we add `numpy_dtype` to the `ExtensionDtype` API :)",
+        "createdAt" : "2020-04-03T20:56:45Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bebda484-4248-4083-83a9-08e5b57a8108",
+        "parentId" : "8265d08d-e95a-46cf-a3ab-aceb2814f757",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "> I don't think you'll need to change anything on the array side. The dtypes will inherit from MaskedExtensionDtype, so mypy should know that integer_array.dtype.numpy_type is valid.\r\n\r\nNo, since mypy thinks `self.dtype` is an ExtensionDtype, so having IntegerDtype/BooleanDtype inherit from a MaskedDtype that defines this attribute will no help.\r\n\r\nSo either we would indeed need to add `numpy_dtype` to the ExtensionDtype API, or I need to add a dummy `dtype` property on BaseMaskedArray to be able to type it as MaskedDtype.",
+        "createdAt" : "2020-04-03T21:02:31Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1f7e99419bfddf060f6ffa4c70dc7a7607408026",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +256,260 @@\n        # the hashtables don't handle all different types of bits\n        uniques = uniques.astype(self.dtype.numpy_dtype, copy=False)\n        uniques = type(self)(uniques, np.zeros(len(uniques), dtype=bool))\n        return codes, uniques"
+  },
+  {
+    "id" : "b5ceb2e1-aa2f-4466-b15c-45a01653cf46",
+    "prId" : 33064,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/33064#pullrequestreview-388824721",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bad80231-4c1c-4197-904c-02680077f7e6",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "is there a reason you want to call a private routine like this directly? shouldn't factorize just handle this directly? (isn't that the point of _values_for_factorize).",
+        "createdAt" : "2020-04-05T20:26:44Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34ee53bf-e361-414f-95ed-ec818b930b86",
+        "parentId" : "bad80231-4c1c-4197-904c-02680077f7e6",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "This is the way we also do it in the base EA `factorize` method. \r\nThe reason we are using this, and not `pd.factorize` directly, is because the public factorize does not support the additional `na_value` and `mask` keywords. \r\n\r\nThe point of `_values_for_factorize` is indeed to avoid that EA authors have to call this private `_factorize_array` method themselves (and to make it easier to implement `EA.factorize`), but here, I explicitly do not use the general `_values_for_factorize` path to be able to customize/optimize the `IntegerArray/BooleaArray.factorize()` method specifically for those dtypes.",
+        "createdAt" : "2020-04-06T07:53:39Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "033cdcba-26ec-429b-af74-8553ae4e9a1b",
+        "parentId" : "bad80231-4c1c-4197-904c-02680077f7e6",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this is really polluting the interface, I would much rather just add they keywords. It seems we are special casing EA to no end. This needs to stop.\r\n\r\n> The reason we are using this, and not pd.factorize directly, is because the public factorize does not support the additional na_value and mask keywords.",
+        "createdAt" : "2020-04-06T22:21:35Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b65fe32a-4e01-475b-b769-e7b8e53a2a29",
+        "parentId" : "bad80231-4c1c-4197-904c-02680077f7e6",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "Expanding the public interface of `factorize` is out of scope for this PR, IMO. The implementation I put here above is *exactly* how we already do it for 2 years (we *are already* using `_factorize_array` in our other EAs) . If you want to do a proposal to change this, please open an issue to discuss.",
+        "createdAt" : "2020-04-07T06:43:57Z",
+        "updatedAt" : "2020-05-09T10:54:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1f7e99419bfddf060f6ffa4c70dc7a7607408026",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +253,257 @@        mask = self._mask\n\n        codes, uniques = _factorize_array(arr, na_sentinel=na_sentinel, mask=mask)\n\n        # the hashtables don't handle all different types of bits"
   }
 ]
