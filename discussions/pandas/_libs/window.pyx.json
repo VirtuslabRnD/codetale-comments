@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "eb9c8d88-286c-4cfd-9d86-1fde3a8caa88",
+    "prId" : 16247,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/16247#pullrequestreview-37181994",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d9ae81e2-6777-4920-b61a-f6b8378fd74c",
+        "parentId" : null,
+        "authorId" : "dba5a4d5-8dc3-4549-9886-8ed279bce369",
+        "body" : "Hadn't realized this before: `skiplist.get` is an O(log win) operation which we now have to perform twice. We also do a `skiplist.insert` and a `skiplist.remove`, which are also O(log win), and probably more expensive than `skiplist.get`, but a pessimistic estimation says the performance of this function will go down by 25%.\r\n\r\nI think there are two things to do here:\r\n\r\n 1. quantify that slow down by running a couple of benchmarks with and without this PR, and leave a record of the results for further reference.\r\n 2. if the slowdown is significant, we could gain the speed back by doing some changes to the skiplist internals: when the first index is fetched, getting the next one is trivially simple and cheap, so we could add a `.get_two()` method to `IndexableSkiplist` and use it here. I think that would be work for another PR, but creating an issue for tracking based on the results of the benchmarks should be part of merging this.",
+        "createdAt" : "2017-05-09T09:01:49Z",
+        "updatedAt" : "2017-07-07T16:19:20Z",
+        "lastEditedBy" : "dba5a4d5-8dc3-4549-9886-8ed279bce369",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9fb3fbd3-4500-4d17-aacc-cb9d7a6fe106",
+        "parentId" : "d9ae81e2-6777-4920-b61a-f6b8378fd74c",
+        "authorId" : "a849772d-dc25-4b0b-95b1-218052276e07",
+        "body" : "I ran some very simple performance tests. The new version is indeed 25% slower.\r\n\r\n*New*\r\n\r\n```python\r\nIn [1]: import pandas\r\nIn [2]: pandas.__version__\r\nOut[2]: '0.20.0+19.g36db9bdaf'\r\nIn [3]: import numpy as np\r\nIn [4]: df = pandas.DataFrame({'a': np.random.random(1000000)})\r\nIn [5]: %timeit df.a.rolling(10).quantile(0.5)\r\n1 loop, best of 3: 1.78 s per loop\r\nIn [6]: %timeit df.a.rolling(10).median()\r\n1 loop, best of 3: 460 ms per loop\r\n```\r\n*Old*\r\n\r\n```python\r\nIn [1]: import pandas\r\nIn [2]: pandas.__version__\r\nOut[2]: '0.20.1'\r\nIn [3]: import numpy as np\r\nIn [4]: df = pandas.DataFrame({'a': np.random.random(1000000)})\r\nIn [5]: %timeit df.a.rolling(10).quantile(0.5)\r\n1 loop, best of 3: 1.4 s per loop\r\nIn [6]: %timeit df.a.rolling(10).median()\r\n1 loop, best of 3: 451 ms per loop\r\n```\r\nYMMV, of course.",
+        "createdAt" : "2017-05-09T15:41:26Z",
+        "updatedAt" : "2017-07-07T16:19:20Z",
+        "lastEditedBy" : "a849772d-dc25-4b0b-95b1-218052276e07",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e9f0edbe-ecd1-4f6c-b7d3-2949d181a410",
+        "parentId" : "d9ae81e2-6777-4920-b61a-f6b8378fd74c",
+        "authorId" : "dba5a4d5-8dc3-4549-9886-8ed279bce369",
+        "body" : "Thanks for doing this! Seeing this, there is a more obvious approach to speeding this in a future PR: use the C implemented skiplist that median uses, instead of the Cython `IndexableSkiplist` used by quantile. But that's clearly a different PR.",
+        "createdAt" : "2017-05-09T20:49:04Z",
+        "updatedAt" : "2017-07-07T16:19:20Z",
+        "lastEditedBy" : "dba5a4d5-8dc3-4549-9886-8ed279bce369",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f60eb3bd-35c6-4e9c-b1fb-bfa916f50649",
+        "parentId" : "d9ae81e2-6777-4920-b61a-f6b8378fd74c",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "@jaimefrio the issue is that for median you are only doing a single calculation. when doing *many* calculations (like here) a skip list is far faster. The actual impl of the skiplist could be improved a lot though (it has python objects inside it).",
+        "createdAt" : "2017-05-09T23:39:00Z",
+        "updatedAt" : "2017-07-07T16:19:20Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4080942107c217aef2ad54defd09928f6469f7fc",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +1401,1405 @@            else:\n                vlow = skiplist.get(idx)\n                vhigh = skiplist.get(idx + 1)\n                output[i] = (vlow + (vhigh - vlow) *\n                                 (quantile * (nobs - 1) - idx))"
+  }
+]
