@@ -526,5 +526,159 @@
     "commit" : "74b6ee907a09d9e77024bb0a1ab68bb3e1a0c624",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +53,57 @@\n# Don't populate hash tables in monotonic indexes larger than this\n_SIZE_CUTOFF = 1_000_000\n\n"
+  },
+  {
+    "id" : "ee17b776-dc1b-4ac2-832a-0797ed521411",
+    "prId" : 30766,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30766#pullrequestreview-360840351",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f1bcdc5b-99cb-49fe-9c22-27da140ec39a",
+        "parentId" : null,
+        "authorId" : "6abd9a80-6299-4d68-abce-f7c35c958f83",
+        "body" : "example of how this code works:\r\n\r\nif `values` is\r\n```\r\n[\r\n    (1, 1),\r\n    (1, 3),\r\n    (2, 1),\r\n    (2, 3),\r\n]\r\n```\r\n\r\nand `target_values` (i.e. `target.values`, sorted) is:\r\n```\r\n[\r\n   (0, 1),\r\n   (1, 0),\r\n   (1, 3),\r\n   (2, 2),\r\n   (2, 5),\r\n]\r\n```\r\n\r\nthen, if you merged these into a sorted list of (unique) values, you would get (including index values here, and an X indicates membership):\r\n```\r\n          values  target_values\r\n\r\n0: (0, 1)               X\r\n1: (1, 0)               X\r\n2: (1, 1)    X\r\n3: (1, 3)    X          X\r\n4: (2, 1)    X\r\n5: (2, 2)               X\r\n6: (2, 3)    X\r\n7: (2, 5)               X\r\n```\r\nand so we can think of this as a factorization of the merged and sorted list of tuples.  the (ordered) subset of this belonging to `values`, which becomes `new_codes`, is:\r\n```\r\n[2, 3, 4, 6]\r\n```\r\nand the equivalent value for `target_values`, which becomes `new_target_codes`, is:\r\n```\r\n[0, 1, 3, 5, 7]\r\n```\r\n\r\nthus, if we are getting a backfilled indexer of `target_values` into `values`, we can simply backfill `new_target_codes` into `new_codes`, ge\r\ntting us:\r\n```\r\n[0, 0, 1, 3, -1]\r\n```\r\nsimilarly, for padding, we can simply call `algos.pad(new_codes, new_target_codes)`, getting us:\r\n```\r\n[-1, -1, 1, 2, 3]\r\n```\r\nwhich can be seen to be correct",
+        "createdAt" : "2020-02-19T04:48:10Z",
+        "updatedAt" : "2020-04-08T05:16:56Z",
+        "lastEditedBy" : "6abd9a80-6299-4d68-abce-f7c35c958f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7836cc90767ba0f652065b65a5d6d26440f2d384",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +691,695 @@        # merger of the index values, where `new_codes` and `new_target_codes`\n        # are the subset of the factors which appear in `values` and `target`,\n        # respectively\n        i, j, next_code = 0, 0, 0\n        while i < num_values and j < num_target_values:"
+  },
+  {
+    "id" : "fb40d5ce-2b5e-4f26-9bc0-65f509167f75",
+    "prId" : 30766,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30766#pullrequestreview-365382989",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b43570e7-b9f3-4fb9-9159-b3fd5f7b4e4e",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "why are you changing this api? can't you rather just call a helper function if you see method / limit?",
+        "createdAt" : "2020-02-26T02:23:46Z",
+        "updatedAt" : "2020-04-08T05:16:56Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57a751bb-52d7-4575-b95c-af699ee0a413",
+        "parentId" : "b43570e7-b9f3-4fb9-9159-b3fd5f7b4e4e",
+        "authorId" : "6abd9a80-6299-4d68-abce-f7c35c958f83",
+        "body" : "rationale is that in order to do reindexing with filling (not necessary when not filling though), without using \"carrying\" logic, it's necessary to know the full set of tuples, meaning we have a few options, as far as I can tell:\r\n\r\n(1) pass the tuples in from the `MultiIndex` class.  The current implementation uses this; but I separated it for w/ and w/o filling to avoid adding new arguments to `get_indexer()`.\r\n\r\n(2) since the MultiIndex's `_engine` knows only of the levels and the int representation of the codes, we could reconstruct the tuples from this, after doing appropriate place-value logic (i.e. inverting `self._codes_to_ints()`, which is possible but a bit non-trivial), and then proceed with the algorithm in `get_indexer_and_fill()`\r\n\r\n(3) have the MultiIndex's engine store a reference to the tuples as well, but I thought a change like that might be inappropriate for this PR.  Happy to do whatever you prefer here!\r\n\r\nUpdate:\r\nsome tinkering suggests (2) can be accomplished with something like\r\n```\r\nnp.array([\r\n    [\r\n        (int_code if i == 0 else (int_code % (np.uint64(1) << self.offsets[i - 1]))) >> offset\r\n        for i, offset in enumerate(offsets)\r\n    ]\r\n    for int_code in self.vgetter()\r\n]) - 1\r\n```\r\nwhich, if used, would remove the need to pass in the tuples and thus change the interface of `get_indexer()` here in some way",
+        "createdAt" : "2020-02-27T02:46:26Z",
+        "updatedAt" : "2020-04-08T05:16:56Z",
+        "lastEditedBy" : "6abd9a80-6299-4d68-abce-f7c35c958f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7836cc90767ba0f652065b65a5d6d26440f2d384",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +614,618 @@\n    def get_indexer_no_fill(self, object target) -> np.ndarray:\n        \"\"\"\n        Returns an array giving the positions of each value of `target` in\n        `self.values`, where -1 represents a value in `target` which does not"
+  },
+  {
+    "id" : "0506a63e-ec58-4b13-afdd-9607a2013610",
+    "prId" : 30766,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30766#pullrequestreview-364584568",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5e60422a-5b64-493c-ba37-032c489369a3",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "can you put a blank line before comments",
+        "createdAt" : "2020-02-26T02:25:15Z",
+        "updatedAt" : "2020-04-08T05:16:56Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7836cc90767ba0f652065b65a5d6d26440f2d384",
+    "line" : 110,
+    "diffHunk" : "@@ -1,1 +703,707 @@            next_code += 1\n\n        # at this point, at least one should have reached the end\n        # the remaining values of the other should be added to the end\n        assert i == num_values or j == num_target_values"
+  },
+  {
+    "id" : "147e128b-4aa8-4009-95b1-83d9483f2e13",
+    "prId" : 30766,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30766#pullrequestreview-366830676",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2106b7b8-70ac-4cce-a0b9-d1fc3881f229",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "in python-space a while loop is slower than a for loop.  no idea if it matters in cython",
+        "createdAt" : "2020-02-28T02:39:14Z",
+        "updatedAt" : "2020-04-08T05:16:56Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1979b7d5-19a9-4fb5-adf8-0223b6da15fb",
+        "parentId" : "2106b7b8-70ac-4cce-a0b9-d1fc3881f229",
+        "authorId" : "6abd9a80-6299-4d68-abce-f7c35c958f83",
+        "body" : "As far as I can tell, it's just a question of how it compiles.  I'd guess that a for-loop with `break` statements would compile similarly, and that the only difference here would be the location of the `jne` statements.  If you'd like, though, I can either profile it and/or send you a diff of the relevant `objdump` snippets?",
+        "createdAt" : "2020-03-01T02:17:53Z",
+        "updatedAt" : "2020-04-08T05:16:56Z",
+        "lastEditedBy" : "6abd9a80-6299-4d68-abce-f7c35c958f83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7836cc90767ba0f652065b65a5d6d26440f2d384",
+    "line" : 100,
+    "diffHunk" : "@@ -1,1 +693,697 @@        # respectively\n        i, j, next_code = 0, 0, 0\n        while i < num_values and j < num_target_values:\n            val, target_val = values[i], target_values[j]\n            if val <= target_val:"
+  },
+  {
+    "id" : "8bd59f77-7fd6-4cee-93b4-fc7e4c1ff3ab",
+    "prId" : 30766,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30766#pullrequestreview-366810476",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f26267a2-8561-4cdb-a026-f9d314b15ca0",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "is there a compelling reason to do the algos call here rather than in the calling function?  theres no real perf benefit, and it looks like we could avoid needing method/limit kwargs here",
+        "createdAt" : "2020-02-28T02:43:58Z",
+        "updatedAt" : "2020-04-08T05:16:56Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c72dc5f4-751c-4987-a626-a8d30cb6ed8d",
+        "parentId" : "f26267a2-8561-4cdb-a026-f9d314b15ca0",
+        "authorId" : "6abd9a80-6299-4d68-abce-f7c35c958f83",
+        "body" : "I did this to preserve the existing abstractions (i.e. MultiIndex defers to its engine on the implementation for `get_indexer()`), but if you'd prefer, I can definitely just change this to return the codes which will be the inputs to `algos.(pad|backfill)`",
+        "createdAt" : "2020-02-28T18:42:03Z",
+        "updatedAt" : "2020-04-08T05:16:56Z",
+        "lastEditedBy" : "6abd9a80-6299-4d68-abce-f7c35c958f83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c35d3c9-65d9-4745-819e-9c63578d98a7",
+        "parentId" : "f26267a2-8561-4cdb-a026-f9d314b15ca0",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "not a strong preference",
+        "createdAt" : "2020-02-29T17:49:29Z",
+        "updatedAt" : "2020-04-08T05:16:56Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7836cc90767ba0f652065b65a5d6d26440f2d384",
+    "line" : 125,
+    "diffHunk" : "@@ -1,1 +718,722 @@        sorted_indexer = (\n            algos.backfill if method == \"backfill\" else algos.pad\n        )(new_codes, new_target_codes, limit=limit).astype('int64')\n        return sorted_indexer[np.argsort(target_order)]\n"
   }
 ]
