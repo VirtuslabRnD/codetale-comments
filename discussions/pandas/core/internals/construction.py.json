@@ -460,5 +460,71 @@
     "commit" : "0d194f1047984df534382b7a7b66885fe784ae3b",
     "line" : 15,
     "diffHunk" : "@@ -1,1 +539,543 @@    \"\"\"Convert list of dicts to numpy arrays\n\n    if `columns` is not passed, column names are inferred from the records\n    - for OrderedDict and (on Python>=3.6) dicts, the column names match\n      the key insertion-order from the first record to the last."
+  },
+  {
+    "id" : "022922a8-cbf9-4088-8344-e4faf000552a",
+    "prId" : 30171,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30171#pullrequestreview-329526767",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2e642f5f-8f37-4402-8a23-215e83bebb17",
+        "parentId" : null,
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "It seems like some care is needed here in respect to dtypes.  Specifically if the `range` contains values only supported by `uint64`, or values only supported by Python integers.\r\n\r\nFor example, the following works on `master`:\r\n```python\r\nIn [2]: pd.DataFrame(range(2**63, 2**63 + 4))\r\nOut[2]: \r\n                     0\r\n0  9223372036854775808\r\n1  9223372036854775809\r\n2  9223372036854775810\r\n3  9223372036854775811\r\n\r\nIn [3]: _.dtypes\r\nOut[3]: \r\n0    uint64\r\ndtype: object\r\n\r\nIn [4]: pd.DataFrame(range(2**73, 2**73 + 4))\r\nOut[4]: \r\n                        0\r\n0  9444732965739290427392\r\n1  9444732965739290427393\r\n2  9444732965739290427394\r\n3  9444732965739290427395\r\n\r\nIn [5]: _.dtypes\r\nOut[5]: \r\n0    object\r\ndtype: object\r\n```\r\nBut both fail with the changes in this PR:\r\n```python\r\nIn [2]: pd.DataFrame(range(2**63, 2**63 + 4))\r\n---------------------------------------------------------------------------\r\nOverflowError: Python int too large to convert to C long\r\n\r\nIn [3]: pd.DataFrame(range(2**73, 2**73 + 4))\r\n---------------------------------------------------------------------------\r\nOverflowError: Python int too large to convert to C long\r\n```\r\n\r\nAdmittedly, this is a bit of a corner case.  It also looks like the issue isn't limited to the PR, as the `Series` equivalent of the above fails on `master`.",
+        "createdAt" : "2019-12-10T00:29:45Z",
+        "updatedAt" : "2019-12-10T14:25:07Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c6d33b0-9799-490f-9d4f-66b046b58819",
+        "parentId" : "2e642f5f-8f37-4402-8a23-215e83bebb17",
+        "authorId" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "body" : "xref #30173 for the failing `Series` example on `master`; I'd expect that both issues could be solved in a similar way.",
+        "createdAt" : "2019-12-10T00:42:22Z",
+        "updatedAt" : "2019-12-10T14:25:07Z",
+        "lastEditedBy" : "7545b4d7-157f-47c4-b7f8-18bf358d429c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b0a3e94e9a2c97d7983941c399b191693779582b",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +252,256 @@            return np.empty((0, 0), dtype=object)\n        elif isinstance(values, range):\n            arr = np.arange(values.start, values.stop, values.step, dtype=\"int64\")\n            return arr[..., np.newaxis]\n"
+  },
+  {
+    "id" : "96614069-42b1-4a47-a95b-240c359c2daa",
+    "prId" : 30284,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30284#pullrequestreview-332860702",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "445435ff-fd81-43fb-b171-b4dface9613f",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "I'm not super well versed in this area but do you know what was actually throwing the error? Just wondering if there's a more generic fix to be made",
+        "createdAt" : "2019-12-16T20:51:49Z",
+        "updatedAt" : "2019-12-16T20:51:55Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "946c5bdb-87ad-4beb-9d12-ffd00cd9c1c9",
+        "parentId" : "445435ff-fd81-43fb-b171-b4dface9613f",
+        "authorId" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "body" : "This fix is consistent with the handling of Categorical in the preceding condition. ",
+        "createdAt" : "2019-12-16T20:57:35Z",
+        "updatedAt" : "2019-12-16T20:57:35Z",
+        "lastEditedBy" : "554ba0f6-6e6a-40c3-98e0-1a6cc4a8e1c6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "88170707fd7dca54bd2b0af687f718dee51ae772",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +151,155 @@        index, columns = _get_axes(len(values), 1, index, columns)\n        return arrays_to_mgr([values], columns, index, columns, dtype=dtype)\n    elif is_extension_array_dtype(values) or is_extension_array_dtype(dtype):\n        # GH#19157\n        if columns is None:"
   }
 ]

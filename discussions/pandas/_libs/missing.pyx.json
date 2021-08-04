@@ -339,5 +339,225 @@
     "commit" : "589a961100f6e2674dd6101a5e4cde8edf31fd03",
     "line" : 148,
     "diffHunk" : "@@ -1,1 +407,411 @@    def __xor__(self, other):\n        if other is False or other is True or other is C_NA:\n            return NA\n        return NotImplemented\n"
+  },
+  {
+    "id" : "107d2de6-59d5-4a11-a2c1-f9c2e1eb6a7f",
+    "prId" : 30245,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30245#pullrequestreview-338412320",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7c0a0752-2af1-479c-96e0-55edb00abb25",
+        "parentId" : null,
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "This seems a bit strange, but I suppose it is to follow numpy behaviour of 0-dim arrays returning scalars from comparison operations? (if so, maybe add a comment about that)",
+        "createdAt" : "2019-12-18T12:50:11Z",
+        "updatedAt" : "2020-01-05T19:57:50Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "667bf649-45f1-4c20-ac9b-e750b15aeadf",
+        "parentId" : "7c0a0752-2af1-479c-96e0-55edb00abb25",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "> to follow numpy behaviour of 0-dim arrays returning scalars from comparison operations?\r\n\r\nIt's to NumPy scalars. Without this, we'd have\r\n\r\n```python\r\nnp.int64(1) == pd.NA\r\n```\r\n\r\nraise with\r\n\r\n```pytb\r\n>   out[:] = NA\r\nE   IndexError: too many indices for array\r\n```\r\n",
+        "createdAt" : "2019-12-20T12:37:24Z",
+        "updatedAt" : "2020-01-05T19:57:50Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b5c15ba9-e40b-4b2e-9984-40f8c11c6738",
+        "parentId" : "7c0a0752-2af1-479c-96e0-55edb00abb25",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "A numpy scalar (which is different from a 0-dim array) is not a ndarray, so wouldn't pass the `isinstance(other, np.ndarray)` test. So I don't fully understand how that example is related.",
+        "createdAt" : "2019-12-21T09:50:51Z",
+        "updatedAt" : "2020-01-05T19:57:50Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76005ca4-c5ea-42df-b927-cca4ae359373",
+        "parentId" : "7c0a0752-2af1-479c-96e0-55edb00abb25",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "could call lib.item_from_zerodim at the top?",
+        "createdAt" : "2019-12-31T20:20:58Z",
+        "updatedAt" : "2020-01-05T19:57:51Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f81d502b-e67e-4c83-883e-8ab9ec152986",
+        "parentId" : "7c0a0752-2af1-479c-96e0-55edb00abb25",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "@TomAugspurger can you check this thread? I still don't understand how this relates to scalars, as they shouldn't pass the `isinstance(other, np.ndarray)` check. So not sure the below comment is correct.",
+        "createdAt" : "2020-01-01T20:26:05Z",
+        "updatedAt" : "2020-01-05T19:57:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d7e632f-b146-41e9-ad46-c5848c88c48c",
+        "parentId" : "7c0a0752-2af1-479c-96e0-55edb00abb25",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "With this\r\n\r\n```diff\r\ndiff --git a/pandas/_libs/missing.pyx b/pandas/_libs/missing.pyx\r\nindex 8d4d2c5568..e2bb6448cd 100644\r\n--- a/pandas/_libs/missing.pyx\r\n+++ b/pandas/_libs/missing.pyx\r\n@@ -295,8 +295,7 @@ def _create_binary_propagating_op(name, is_divmod=False):\r\n \r\n     def method(self, other):\r\n         if (other is C_NA or isinstance(other, str)\r\n-                or isinstance(other, (numbers.Number, np.bool_))\r\n-                or isinstance(other, np.ndarray) and not other.shape):\r\n+                or isinstance(other, (numbers.Number, np.bool_))):\r\n             # Need the other.shape clause to handle NumPy scalars,\r\n             # since we do a setitem on `out` below, which\r\n             # won't work for NumPy scalars.\r\n```\r\n\r\nI have\r\n\r\n```pytb\r\nIn [3]: np.int64(1) == pd.NA\r\n/Users/taugspurger/.virtualenvs/pandas-dev/bin/ipython:1: DeprecationWarning: elementwise comparison failed; this will raise an error in the future.\r\n  #!/Users/taugspurger/Envs/pandas-dev/bin/python\r\n---------------------------------------------------------------------------\r\nIndexError                                Traceback (most recent call last)\r\n<ipython-input-3-209227154583> in <module>\r\n----> 1 np.int64(1) == pd.NA\r\n\r\n~/sandbox/pandas/pandas/_libs/missing.pyx in pandas._libs.missing._create_binary_propagating_op.method()\r\n    307         elif isinstance(other, np.ndarray):\r\n    308             out = np.empty(other.shape, dtype=object)\r\n--> 309             out[:] = NA\r\n    310\r\n    311             if is_divmod:\r\n\r\nIndexError: too many indices for array\r\n```\r\n\r\nSo when we get there, it really does seem like `np.int64(1)` is an ndarray. Is cython doing something?",
+        "createdAt" : "2020-01-02T13:21:59Z",
+        "updatedAt" : "2020-01-05T19:57:51Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b59b8bf-4019-4a92-b3c3-3e53b51730b5",
+        "parentId" : "7c0a0752-2af1-479c-96e0-55edb00abb25",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "> So when we get there, it really does seem like np.int64(1) is an ndarray. Is cython doing something?\r\n\r\nPossibly, no idea. But I trust you this is indeed needed to get it working ",
+        "createdAt" : "2020-01-05T17:31:23Z",
+        "updatedAt" : "2020-01-05T19:57:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4c30bb47d969d2b778cc55c4b210e85938ce4e67",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +297,301 @@        if (other is C_NA or isinstance(other, str)\n                or isinstance(other, (numbers.Number, np.bool_))\n                or isinstance(other, np.ndarray) and not other.shape):\n            # Need the other.shape clause to handle NumPy scalars,\n            # since we do a setitem on `out` below, which"
+  },
+  {
+    "id" : "05717629-01fc-4912-a190-23393622b99f",
+    "prId" : 30245,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30245#pullrequestreview-336012889",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d24009a-170f-4f72-8118-03041463bc85",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "util.is_bool_object for the second one of these.  Is numbers.Number something like Union[float, int, complex] that we could use the optimizied funcs for?\r\n\r\nutil.is_array for the isinstance(other, np.ndarray) check.  Even though it is syntactically OK without extra parens, can you put a pair around the isinstance+shape check",
+        "createdAt" : "2019-12-21T19:48:33Z",
+        "updatedAt" : "2020-01-05T19:57:50Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04e3e189-feb7-4590-9597-8830dcdfacd9",
+        "parentId" : "7d24009a-170f-4f72-8118-03041463bc85",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "Numbers is appropriate since it’s an ABC others can register on. ",
+        "createdAt" : "2019-12-22T16:32:47Z",
+        "updatedAt" : "2020-01-05T19:57:50Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "72ab861e-5f90-4735-888f-63cbe9cb41ef",
+        "parentId" : "7d24009a-170f-4f72-8118-03041463bc85",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "I personally prefer the explicit `isinstance` checks here. It is already complex to fully oversee what types are handled, and using those helper methods only makes it more opaque.",
+        "createdAt" : "2019-12-22T16:47:07Z",
+        "updatedAt" : "2020-01-05T19:57:50Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ad55fc3e-ee47-4395-b29a-f0b2fbd0e4d8",
+        "parentId" : "7d24009a-170f-4f72-8118-03041463bc85",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "in general i agree, but in the cython code we generally lean towards optimizing harder.  no strong opinion.",
+        "createdAt" : "2019-12-23T20:41:03Z",
+        "updatedAt" : "2020-01-05T19:57:51Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "934589bc-c067-43bb-94d5-329b4af9e1ac",
+        "parentId" : "7d24009a-170f-4f72-8118-03041463bc85",
+        "authorId" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "body" : "That's also a good point (cython does not optimize those automatically like that I suppose?). But note that this is not the most performance sensitive code (it's not in the inner loop of a vectorized operation or so)",
+        "createdAt" : "2019-12-23T21:17:32Z",
+        "updatedAt" : "2020-01-05T19:57:51Z",
+        "lastEditedBy" : "cc7022b2-2831-4c63-a4da-d18b0d342508",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4c30bb47d969d2b778cc55c4b210e85938ce4e67",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +296,300 @@    def method(self, other):\n        if (other is C_NA or isinstance(other, str)\n                or isinstance(other, (numbers.Number, np.bool_))\n                or isinstance(other, np.ndarray) and not other.shape):\n            # Need the other.shape clause to handle NumPy scalars,"
+  },
+  {
+    "id" : "545036f1-6085-4c5c-948e-cf5ae44336fb",
+    "prId" : 30245,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30245#pullrequestreview-335659266",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "372564dd-e7bf-4473-915f-ff1e804e0947",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "can `divmod` be changed to `is_divmod`?  dont want to overlap with built-in names",
+        "createdAt" : "2019-12-21T19:49:33Z",
+        "updatedAt" : "2020-01-05T19:57:50Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5eb5984d-62ef-4d82-8dae-8d89a542285d",
+        "parentId" : "372564dd-e7bf-4473-915f-ff1e804e0947",
+        "authorId" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "body" : "Did I define that here or is it called that on master?",
+        "createdAt" : "2019-12-22T16:34:20Z",
+        "updatedAt" : "2020-01-05T19:57:50Z",
+        "lastEditedBy" : "21b82015-4bfc-4f74-bfca-586973dad2cd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5702557b-98a4-4a18-b178-8dff1145105f",
+        "parentId" : "372564dd-e7bf-4473-915f-ff1e804e0947",
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "its like that on master too, still should be changed.  OK for separate PR if thats a hassle",
+        "createdAt" : "2019-12-22T16:37:44Z",
+        "updatedAt" : "2020-01-05T19:57:50Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4c30bb47d969d2b778cc55c4b210e85938ce4e67",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +293,297 @@\ndef _create_binary_propagating_op(name, is_divmod=False):\n\n    def method(self, other):\n        if (other is C_NA or isinstance(other, str)"
+  },
+  {
+    "id" : "599d3f9c-fb1b-4bfb-8375-7a8d2ea37449",
+    "prId" : 30245,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/30245#pullrequestreview-337496833",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "aee704f8-c503-4ac4-a714-1341d3c50211",
+        "parentId" : null,
+        "authorId" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "body" : "looks like we should have 482 or 483 but not both?",
+        "createdAt" : "2020-01-01T17:05:24Z",
+        "updatedAt" : "2020-01-05T19:57:51Z",
+        "lastEditedBy" : "adf621f1-4745-479a-a1fc-dc14046a3f4b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4c30bb47d969d2b778cc55c4b210e85938ce4e67",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +480,484 @@                result = result.item()\n            if ufunc.nout > 1:\n                result = (NA,) * ufunc.nout\n\n        return result"
   }
 ]
