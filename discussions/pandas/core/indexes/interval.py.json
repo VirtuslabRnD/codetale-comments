@@ -1758,5 +1758,159 @@
     "commit" : "f0e63277f06ef7d19ec89bc7bb69aaf0382c011e",
     "line" : 14,
     "diffHunk" : "@@ -1,1 +1013,1017 @@            return True\n\n        # if we can coerce to an IntervalIndex then we can compare\n        if not isinstance(other, IntervalIndex):\n            if not is_interval_dtype(other):"
+  },
+  {
+    "id" : "e41237f8-a9d5-470e-9192-4625bbbe28fc",
+    "prId" : 35966,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/35966#pullrequestreview-483177898",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "parentId" : null,
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "hmm what if you do this in the return key_i8 (e.g. inside `infer_dtype_from_scalar`), I *think* we do with for Timestamp/Timedelta?",
+        "createdAt" : "2020-09-01T23:43:20Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f98def2d-cb88-4378-bb70-11197b230d22",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "body" : "Yeah, that's how it was before. I didn't realize that we return key_i8 for Timestamp/Timedelta, so thanks for pointing that out.\r\n\r\nIMO, it makes a lot more sense for the `val` returned from `infer_dtype_from_scalar` to be have the dtype of the returned `dtype` (ie returning `Period(2020-01), 'period[M]'` as opposed to `600, 'period[M]'`, since 600 is an int, not 'period[M]'). But I'm willing to do it either way\r\n\r\n",
+        "createdAt" : "2020-09-02T14:41:37Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "772d7b94-bef4-411f-891c-2372c78fc3ab",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "body" : "Despite my opinion above, I think we have two options (using example of `infer_dtype_from_scalar(Period('2020-01'))`):\r\n\r\n1. Returning `val=Period('2020-01')`, in which case we need to convert `key` to `key.ordinal` in this Interval code\r\n2. Returning `val=600`, in which case we'd need to convert the ordinal value back to a Period in the `sanitize_array` function\r\n\r\nWhat would you prefer @jreback? If you prefer 2, how would I convert from an ordinal value back to a Period?",
+        "createdAt" : "2020-09-02T14:48:29Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70d5d00f-d98e-4978-b3cd-f74f419feea7",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "body" : "@jreback What do you think here?",
+        "createdAt" : "2020-09-04T19:45:54Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bfee9944-87a6-4e14-875a-339d182b8624",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "yes I think restore the code in pandas/core/dtypes/cast.py and remove the added code here and it should just work",
+        "createdAt" : "2020-09-04T22:03:47Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "60daf00b-a32e-401c-83be-740b97ae26a9",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "body" : "Doing that would break the [sanitize_array function](https://github.com/pandas-dev/pandas/pull/35966/files#diff-65590f3c100517411c1217385d9c68f6R471) as it is expecting the returned value of `infer_dtype_from_scalar` to be the Period, not the Period.ordinal value.\r\n\r\nBut if, in the `sanitize_array` function, I convert the ordinal value back into a Period then everything should work. This would be essentially the opposite of the logic above:\r\n```python\r\nif lib.is_period(key):\r\n    key = ordinal_to_period(ordinal)\r\n```\r\n\r\n@jreback I'm fine doing this, but idk a way to do that `ordinal_to_period`, do you?",
+        "createdAt" : "2020-09-04T23:00:50Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "92901ed3-ac94-4a7e-bba7-54f75f5d99cf",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "this won't break sanitize_array as it feeds back to construct_1d_arraylike_from_scalar which can take a Period (or *should* be able to).\r\n\r\nwe don't want to convert back and forth.",
+        "createdAt" : "2020-09-05T02:55:54Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bafcf398-547b-4738-a8cb-d551c0d50e6e",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "body" : "@jreback do you want me to make this change? If so, how do i convert from ordinal to period?",
+        "createdAt" : "2020-09-06T19:53:49Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "327f2525-b542-42a5-8e57-b8ac3fc4cfa7",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "no we do not want to covert back\nrather it shouldn't convert to ordinal in the first place (which is what the original code was doing)",
+        "createdAt" : "2020-09-06T20:40:43Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ddba7bc-fbd9-402e-a72c-32138c93a486",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "body" : "Correct, the original code in `sanitize_array` called\r\n```python\r\ndtype, value = infer_dtype_from_scalar(value)\r\n```\r\nWhich does not convert a Period to it's ordinal value, but it also would return `dtype=\"object\"` which is the why Period columns would be typed as \"object\" instead of \"Period\". To correct this error, I changed that code to\r\n```python\r\ndtype, value = infer_dtype_from_scalar(value, pandas_dtype=True)\r\n```\r\nWhich does (at least in the original version) convert the Period to it's ordinal value\r\n\r\n@jreback Are you suggesting that `infer_dtype_from_scalar(..., pandas_dtype=True)` shouldn't convert to ordinal in the first place or that I shouldn't add `pandas_dtype=True` in the first place?",
+        "createdAt" : "2020-09-06T21:55:52Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e03f3f28-0de3-4b23-92a4-b0bfdcf60bbd",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "body" : "> Are you suggesting that infer_dtype_from_scalar(..., pandas_dtype=True) shouldn't convert to ordinal in the first place\n\nyes",
+        "createdAt" : "2020-09-06T22:15:00Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "7086d5c0-382b-4c41-b70d-144a07643f71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dba7c5c5-9611-4b2b-b54d-61744c2487a8",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "body" : "Haha, @jreback I wasn't expecting you to pick that one and made changes in the opposite direction (I will revert though).\r\n\r\nI totally agree that `infer_dtype_from_scalar(..., pandas_dtype=True)` shouldn't convert to ordinal in the first place, but if that's the case, then\r\n```python\r\nif lib.is_period(key):\r\n    key_i8 = key.ordinal\r\n```\r\nin `pandas/core/indexes/interval.py` is still necessary",
+        "createdAt" : "2020-09-06T22:23:04Z",
+        "updatedAt" : "2020-09-06T22:33:09Z",
+        "lastEditedBy" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7cb5a71a-bbc3-43db-b966-7995ce416d80",
+        "parentId" : "5ea1c02a-a75e-49a2-aeee-f1334ced25e8",
+        "authorId" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "body" : "Reverted, are we good then? Or are you still looking for something else in this PR?",
+        "createdAt" : "2020-09-06T22:39:52Z",
+        "updatedAt" : "2020-09-06T22:39:52Z",
+        "lastEditedBy" : "d17a0f86-ff19-4f3c-9e85-22a616d73a7b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "320e8d3ce5baac0d212f3980eba7c429e44cc297",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +614,618 @@            key_dtype, key_i8 = infer_dtype_from_scalar(key, pandas_dtype=True)\n            if lib.is_period(key):\n                key_i8 = key.ordinal\n        else:\n            # DatetimeIndex/TimedeltaIndex"
   }
 ]
