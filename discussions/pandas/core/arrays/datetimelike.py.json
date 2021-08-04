@@ -1417,5 +1417,115 @@
     "commit" : "739bcab3316918638afc19392204f37cf35bb477",
     "line" : 28,
     "diffHunk" : "@@ -1,1 +463,467 @@            self,\n            key,    # type: Union[int, Sequence[int], Sequence[bool], slice]\n            value,  # type: Union[NaTType, Any, Sequence[Any]]\n    ):\n        # type: (...) -> None"
+  },
+  {
+    "id" : "75933af7-59fc-4e4e-93e9-7e36c494ad83",
+    "prId" : 26071,
+    "prUrl" : "https://github.com/pandas-dev/pandas/pull/26071#pullrequestreview-229298401",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "842c43f2-25cd-4e03-b6b9-b8ee96af5237",
+        "parentId" : null,
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Per discussions with @jreback we'd like to avoid the use of `cast` almost entirely. Would be preferable if you could just assign to a new variable within this branch",
+        "createdAt" : "2019-04-22T15:17:26Z",
+        "updatedAt" : "2019-04-29T18:59:59Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1fef3aa7-352c-43ee-bb3c-32fa3af8ec37",
+        "parentId" : "842c43f2-25cd-4e03-b6b9-b8ee96af5237",
+        "authorId" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "body" : "> almost entirely\r\n\r\nAre there instances in this PR where you'd like to keep `cast`? Otherwise, I'll work around it the handful of places it appears.",
+        "createdAt" : "2019-04-22T16:05:06Z",
+        "updatedAt" : "2019-04-29T18:59:59Z",
+        "lastEditedBy" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fbba0bc9-0e08-406c-8df7-61e0b2135936",
+        "parentId" : "842c43f2-25cd-4e03-b6b9-b8ee96af5237",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "If you can work around where it appears might be the most readable",
+        "createdAt" : "2019-04-22T16:34:31Z",
+        "updatedAt" : "2019-04-29T18:59:59Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "821c0569-cefc-4d87-8b4e-6a942f77536c",
+        "parentId" : "842c43f2-25cd-4e03-b6b9-b8ee96af5237",
+        "authorId" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "body" : "In this case, are you imagining a solution like this?\r\n```py\r\nif not is_slice:\r\n    key_sequence = key\r\n    if (len(key_sequence) != len(value)\r\n            and not com.is_bool_indexer(key_sequence)):\r\n        msg = (\"shape mismatch: value array of length '{}' does \"\r\n                \"not match indexing result of length '{}'.\")\r\n        raise ValueError(msg.format(\r\n            len(key_sequence), len(value)))\r\n    if len(key_sequence) == 0:\r\n        return\r\n```\r\nThat's how I read your comment above.\r\n\r\nJust assigning a new variable leaves us with the same incompatible-type errors when calling `len()` that we started with. Using `key_sequence = key  # type: Sequence` gives us the error `Incompatible types in assignment (expression has type \"Union[int, Sequence[int], Sequence[bool], slice]\", variable has type \"Sequence[Any]\")`. The fundamental problem is that assigning to a new variable doesn't provide any new type information.\r\n\r\nI haven't been able to think of a way to do this without at least one `cast` or a handful of ignores. As currently written, the single `cast` with the reassignment to `key` is about as unobtrusive as it gets. I think this is exactly what `cast` is for.\r\n\r\nWhat's the reasoning for trying to avoid a construction like this?\r\n```py\r\nif not is_slice:\r\n    key = cast(Sequence, key)\r\n...\r\n```\r\nI'm sensitive to the idea that casting adds some cognitive overhead for authors and maintainers, but it's minimal in this case.",
+        "createdAt" : "2019-04-22T16:34:35Z",
+        "updatedAt" : "2019-04-29T18:59:59Z",
+        "lastEditedBy" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "00c4369c-61b1-447a-b39d-0d14008ee78a",
+        "parentId" : "842c43f2-25cd-4e03-b6b9-b8ee96af5237",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "Would doing something like `key_sequence = key # type: Sequence[bool]` work in the above? It sounds like the new error is the result of implicitly casting from a more refined `Sequence[bool]` (or int) in the union to a generic `Sequence` ",
+        "createdAt" : "2019-04-22T16:36:37Z",
+        "updatedAt" : "2019-04-29T18:59:59Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f578e0c-c646-4fb6-b48d-45e0d4b0eafc",
+        "parentId" : "842c43f2-25cd-4e03-b6b9-b8ee96af5237",
+        "authorId" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "body" : "No, if the error message is put another away, the right side the equal sign is typed as `Union[int, Sequence[int], Sequence[bool], slice]` because that's what we told mypy `key` is in the `__setitem__` signature.\r\n\r\nIf we use something like `key_sequence = key # type: Sequence[bool]`, we're only telling mypy that `key_sequence` expects `Sequence[bool]`. We're not telling it anything about `key`, only `key_sequence`. That type comment doesn't narrow down `key`.\r\n\r\n`cast(Sequence, key)`, on the other hand, explicitly tells mypy \"key is a Sequence right here\".",
+        "createdAt" : "2019-04-22T16:42:34Z",
+        "updatedAt" : "2019-04-29T18:59:59Z",
+        "lastEditedBy" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90624116-ffa0-4c75-b3b9-d1d526529957",
+        "parentId" : "842c43f2-25cd-4e03-b6b9-b8ee96af5237",
+        "authorId" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "body" : "The underlying error message, `Argument 1 to \"len\" has incompatible type \"Union[int, Sequence[int], Sequence[bool], slice]\"; expected \"Sized\"`, is really complaining because we're calling `len` on a variable that might be `int` or `slice`, neither of which support `len`. It's not really important for that error message what's inside the Sequence, only that the variable is definitely of a type that can respond to `len`.",
+        "createdAt" : "2019-04-22T16:45:54Z",
+        "updatedAt" : "2019-04-29T18:59:59Z",
+        "lastEditedBy" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23414e39-8720-4a60-b496-ef63a355c62b",
+        "parentId" : "842c43f2-25cd-4e03-b6b9-b8ee96af5237",
+        "authorId" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "body" : "@gwrome is your last comment in reference to the static analysis or actual possible code paths?",
+        "createdAt" : "2019-04-22T22:48:19Z",
+        "updatedAt" : "2019-04-29T18:59:59Z",
+        "lastEditedBy" : "5e8c5ef2-940b-436e-9c5f-98ae5460128c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be9150f5-ba1d-46a6-a36c-a9781ea545b4",
+        "parentId" : "842c43f2-25cd-4e03-b6b9-b8ee96af5237",
+        "authorId" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "body" : "Static analysis. At that point in the actual execution, `slice` and `int` have already been handled. Mypy just isn't sophisticated enough to realize that.",
+        "createdAt" : "2019-04-22T23:51:42Z",
+        "updatedAt" : "2019-04-29T18:59:59Z",
+        "lastEditedBy" : "729b5bd5-29e4-4ff9-b28d-9ac2dcb7df19",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5f840e9da2ed3898dd78baace69b49e6db1048c6",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +481,485 @@\n            if not is_slice:\n                key = cast(Sequence, key)\n                if (len(key) != len(value)\n                        and not com.is_bool_indexer(key)):"
   }
 ]
