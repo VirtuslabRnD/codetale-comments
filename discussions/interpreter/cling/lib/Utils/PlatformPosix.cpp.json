@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "a778de0f-5d1d-4501-89c8-36d3dece776b",
+    "prId" : 4136,
+    "prUrl" : "https://github.com/root-project/root/pull/4136#pullrequestreview-272373654",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e601a930-dab9-45a2-ab0f-db24f20c0a9b",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "Was this patch checked with valid/invalid pointers to make sure that the current behavior is preserved? This line now causes ROOT to crash, since `msync()` never sets `errno` to `EFAULT`. The `assert` should have been converted to a regular `if` and updated to check for `ENOMEM`. It probably makes sense to also check `errno` for the other possibilities when `msync()` returns `-1`, since in some cases it won't mean that the pointer is invalid (e.g. when it sets `errno` to `EBUSY`).\r\n```\r\n$ root\r\n   ------------------------------------------------------------\r\n  | Welcome to ROOT 6.19/01                  https://root.cern |\r\n  |                               (c) 1995-2019, The ROOT Team |\r\n  | Built for linuxx8664gcc on Aug 07 2019, 07:00:58           |\r\n  | From heads/build-system@v6-19-01-667-gb1a8248eaf           |\r\n  | Try '.help', '.demo', '.license', '.credits', '.quit'/'.q' |\r\n   ------------------------------------------------------------\r\n\r\nroot [0] ptr = (int*)0x7f24d942d010; // an invalid memory address\r\nroot [1] *ptr\r\nroot.exe: interpreter/cling/lib/Utils/PlatformPosix.cpp:74: bool cling::utils::platform::{anonymous}::PointerCheck::operator()(const void*): Assertion `errno == EFAULT && \"unexpected write error at address\"' failed.\r\n```",
+        "createdAt" : "2019-08-07T07:52:43Z",
+        "updatedAt" : "2019-08-07T08:35:13Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c202b0d-4bae-47d9-b2ad-c51e5287929c",
+        "parentId" : "e601a930-dab9-45a2-ab0f-db24f20c0a9b",
+        "authorId" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "body" : "We have coverage in clingtest which is not being run as part of the PRs. So merging and waiting cling testsuite to catch it has been the workflow since some time.\r\n\r\nThe assert we should have caught if we had ROOT + asserts builds as part of the PRs because I am pretty sure we have a test in roottest checking for null derefs.",
+        "createdAt" : "2019-08-07T18:49:59Z",
+        "updatedAt" : "2019-08-07T18:49:59Z",
+        "lastEditedBy" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e60780c-658e-41f0-a2b8-2b7873c71800",
+        "parentId" : "e601a930-dab9-45a2-ab0f-db24f20c0a9b",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "This is not a null deref, but an invalid pointer different than null. I added tests for both cases in ROOT just in case.",
+        "createdAt" : "2019-08-08T06:56:41Z",
+        "updatedAt" : "2019-08-08T06:56:41Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "105ddf3291e3282d797ea221bd0d73bd985fabb2",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +72,76 @@      void *base = (void *)((((const size_t)P) / page_size) * page_size);\n      if (::msync(base, page_size, 0) != 0) {\n        assert(errno == EFAULT && \"unexpected write error at address\");\n        return false;\n      }"
+  },
+  {
+    "id" : "6311b11e-6d74-4ca9-b614-f5a3918cb7c4",
+    "prId" : 4136,
+    "prUrl" : "https://github.com/root-project/root/pull/4136#pullrequestreview-271785095",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "138763f1-baae-4f96-9242-c5bda010be55",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "Setting `flags` to `0` here seems wrong according to the documentation. From `man 2 msync` on Linux (emphasis mine):\r\n\r\n> According to POSIX, either `MS_SYNC` or `MS_ASYNC` **must**  be  specified  in\r\n> flags,  and  indeed  **failure  to include one of these flags will cause\r\n> `msync()` to fail on some systems**.  However, Linux  permits  a  call  to\r\n> `msync()` that specifies neither of these flags, with semantics that are\r\n> (currently) equivalent to specifying `MS_ASYNC`.  (Since  Linux  2.6.19,\r\n>  `MS_ASYNC`  is  in  fact a no-op, since the kernel properly tracks dirty\r\n>  pages and flushes them to storage as necessary.)  Notwithstanding  the\r\n>  Linux behavior, portable, future-proof applications should ensure that\r\n>  they specify either `MS_SYNC` or `MS_ASYNC` in flags.",
+        "createdAt" : "2019-08-07T07:59:06Z",
+        "updatedAt" : "2019-08-07T08:35:13Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "105ddf3291e3282d797ea221bd0d73bd985fabb2",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +71,75 @@      // can be accessed for reading.\n      void *base = (void *)((((const size_t)P) / page_size) * page_size);\n      if (::msync(base, page_size, 0) != 0) {\n        assert(errno == EFAULT && \"unexpected write error at address\");\n        return false;"
+  },
+  {
+    "id" : "d3ec51a7-474a-4491-a4e1-4a748b5a907f",
+    "prId" : 4136,
+    "prUrl" : "https://github.com/root-project/root/pull/4136#pullrequestreview-271785095",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dd656edd-faac-4a93-80aa-0f4046b1366f",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "Given that this is very sensitive for performance, I think that here it can be safely assumed that `page_size` is a power of 2, so that we can eliminate the division and replace it with a simpler expression, like the one below.\r\n```\r\nvoid *base = (void*)(((const size_t)P) & ~(page_size - 1));\r\n```\r\nhttps://stackoverflow.com/questions/40518454/is-it-safe-to-assume-memory-page-size-is-a-power-of-two",
+        "createdAt" : "2019-08-07T08:24:16Z",
+        "updatedAt" : "2019-08-07T09:10:59Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "105ddf3291e3282d797ea221bd0d73bd985fabb2",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +70,74 @@      // There is a POSIX way of finding whether an address\n      // can be accessed for reading.\n      void *base = (void *)((((const size_t)P) / page_size) * page_size);\n      if (::msync(base, page_size, 0) != 0) {\n        assert(errno == EFAULT && \"unexpected write error at address\");"
+  },
+  {
+    "id" : "00fb25b1-dec9-4e41-89fd-63059e113833",
+    "prId" : 4159,
+    "prUrl" : "https://github.com/root-project/root/pull/4159#pullrequestreview-272631822",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8b5f82c2-8104-483f-9dee-3f275837000e",
+        "parentId" : null,
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "Should we add an assert verifying the assumption?",
+        "createdAt" : "2019-08-07T16:25:09Z",
+        "updatedAt" : "2019-08-07T16:25:09Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b5b7e5b-918d-4e96-9eb5-61918df91be6",
+        "parentId" : "8b5f82c2-8104-483f-9dee-3f275837000e",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "Sure, this is usually a property of the hardware, and all known platforms use power of 2. It makes no sense to use something else, since the caches would suffer if pages were not a power of 2.",
+        "createdAt" : "2019-08-08T06:53:53Z",
+        "updatedAt" : "2019-08-08T06:53:53Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2adcc9e2-643f-4da3-9a69-b4da1af538e5",
+        "parentId" : "8b5f82c2-8104-483f-9dee-3f275837000e",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "I created PR #4165 for this. Will merge it after merging #4162 and rebasing on top.",
+        "createdAt" : "2019-08-08T14:55:42Z",
+        "updatedAt" : "2019-08-08T14:55:42Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "35bb351083b35ce64aae43cb29e09f3b8bce0262",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +68,72 @@        return true;\n\n      // Address of page containing P, assuming page_size is a power of 2\n      void *base = (void *)(((const size_t)P) & ~(page_size - 1));\n"
+  }
+]
