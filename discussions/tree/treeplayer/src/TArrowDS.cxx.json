@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "2fdbf0d0-2436-4d48-8d04-c5f17f937216",
+    "prId" : 1712,
+    "prUrl" : "https://github.com/root-project/root/pull/1712#pullrequestreview-106111897",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fa1fb8bf-66f4-4cd1-881b-dbd889306acb",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "Maybe it would be better to use free functions (declared `static` so they are local to the file) rather than creating all these lambdas every time an arrow-based `TDataFrame` is created.",
+        "createdAt" : "2018-03-13T15:25:26Z",
+        "updatedAt" : "2018-03-28T15:06:33Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "13f81f41-4908-4b4b-bae6-553c7a0b9415",
+        "parentId" : "fa1fb8bf-66f4-4cd1-881b-dbd889306acb",
+        "authorId" : "c2785bef-1def-4666-9391-8b42c0eb1216",
+        "body" : "I think this is a matter of taste, no? The advantage of using lambdas is that you can hide implementation details from the inner loop, making it a bit cleaner.\r\n\r\n```C++\r\n   filterWantedColumns();\r\n   resetGetterIndex();\r\n   auto nRecords = getRecordsFirstColumn();\r\n   for (auto &columnName : fColumnNames) {\r\n      auto columnIdx = fTable->schema()->GetFieldIndex(columnName);\r\n      addColumnToGetterIndex(columnIdx);\r\n\r\n      auto column = fTable->column(columnIdx);\r\n      verifyColumnSize(column, nRecords);\r\n      verifyColumnType(column);\r\n   }\r\n   SetNSlots(fNSlots);\r\n```\r\n\r\nwould become:\r\n\r\n```C++\r\n   filterWantedColumns(fColumns, fTable);\r\n   resetGetterIndex(fGetterIndex);\r\n   auto nRecords = getRecordsFirstColumn(fColumnNames, fTable);\r\n   for (auto &columnName : fColumnNames) {\r\n      auto columnIdx = fTable->schema()->GetFieldIndex(columnName);\r\n      addColumnToGetterIndex(columnIdx, fGetterIndex);\r\n\r\n      auto column = fTable->column(columnIdx);\r\n      verifyColumnSize(column, nRecords, fTable);\r\n      verifyColumnType(column);\r\n   }\r\n   SetNSlots(fNSlots);\r\n```\r\n\r\nI could use private methods, but then I would be polluting the class declaration and I would lose control on what fields are actually used by each private method.\r\n\r\nUsing lambdas allows me to keep the class declaration clean, have a fairly self explanatory implementation for the inner loop and avoid exposing all the private members to all the helper functions. Given this happens at initialisation, I think it's a good trade-off. Unless there is some strong objection to this I like my implementation better that the suggested one and I'd rather keep it.",
+        "createdAt" : "2018-03-22T13:19:54Z",
+        "updatedAt" : "2018-03-28T15:06:33Z",
+        "lastEditedBy" : "c2785bef-1def-4666-9391-8b42c0eb1216",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4746888eb2d68fd3b84f81903f2b2c82450c4706",
+    "line" : 194,
+    "diffHunk" : "@@ -1,1 +192,196 @@      verifyColumnSize(column, nRecords);\n      verifyColumnType(column);\n   }\n   SetNSlots(fNSlots);\n}"
+  },
+  {
+    "id" : "197fd251-105d-4050-88a0-7f2fafafb4ba",
+    "prId" : 1712,
+    "prUrl" : "https://github.com/root-project/root/pull/1712#pullrequestreview-106113061",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "58ec88f0-5c22-4a64-82ba-02fcd47df05d",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "Is destroying the value in `fEntryRanges` really intended here?",
+        "createdAt" : "2018-03-13T15:30:11Z",
+        "updatedAt" : "2018-03-28T15:06:33Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16266dda-84b2-488e-be28-30b9779c6b7c",
+        "parentId" : "58ec88f0-5c22-4a64-82ba-02fcd47df05d",
+        "authorId" : "c2785bef-1def-4666-9391-8b42c0eb1216",
+        "body" : "I assume so, given it's also done in `TCsvDS` including the same comment. Not sure what is the rationale, but I aligned to it.",
+        "createdAt" : "2018-03-22T13:23:00Z",
+        "updatedAt" : "2018-03-28T15:06:33Z",
+        "lastEditedBy" : "c2785bef-1def-4666-9391-8b42c0eb1216",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4746888eb2d68fd3b84f81903f2b2c82450c4706",
+    "line" : 212,
+    "diffHunk" : "@@ -1,1 +210,214 @@{\n   auto entryRanges(std::move(fEntryRanges)); // empty fEntryRanges\n   return entryRanges;\n}\n"
+  },
+  {
+    "id" : "ec08bda6-46f1-4fc2-b21a-190ebddf4a69",
+    "prId" : 1712,
+    "prUrl" : "https://github.com/root-project/root/pull/1712#pullrequestreview-106121077",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f340161b-e6fa-4126-8667-0d0e6ea7355c",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "`return field != nullptr;`?",
+        "createdAt" : "2018-03-13T15:31:39Z",
+        "updatedAt" : "2018-03-28T15:06:33Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b44d8a5-bef2-482b-a752-7957dc19b86a",
+        "parentId" : "f340161b-e6fa-4126-8667-0d0e6ea7355c",
+        "authorId" : "c2785bef-1def-4666-9391-8b42c0eb1216",
+        "body" : "Why expose the fact that `field` is a `std::shared_ptr`? This would work even in the case the API changed. I can change it, but again I think it's a matter of taste.",
+        "createdAt" : "2018-03-22T13:29:47Z",
+        "updatedAt" : "2018-03-28T15:06:33Z",
+        "lastEditedBy" : "c2785bef-1def-4666-9391-8b42c0eb1216",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43e31e1a-10ae-4afc-8935-c58d6b1f45de",
+        "parentId" : "f340161b-e6fa-4126-8667-0d0e6ea7355c",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "It's only acknowledging that field is a pointer type, and that it should not be null, but you could also use `return !!field;` to avoid the if (which was the intent of my first comment) without exposing the type of `field`.",
+        "createdAt" : "2018-03-22T13:43:28Z",
+        "updatedAt" : "2018-03-28T15:06:33Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4746888eb2d68fd3b84f81903f2b2c82450c4706",
+    "line" : 239,
+    "diffHunk" : "@@ -1,1 +237,241 @@      return false;\n   }\n   return true;\n}\n"
+  },
+  {
+    "id" : "71c7de6e-db13-42ef-8060-44070210b650",
+    "prId" : 1712,
+    "prUrl" : "https://github.com/root-project/root/pull/1712#pullrequestreview-106118529",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "da0e7359-82db-4d6a-9b0d-5bcda685aac1",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "Why use a lambda here if it's only called once below?",
+        "createdAt" : "2018-03-13T15:58:49Z",
+        "updatedAt" : "2018-03-28T15:06:33Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fcd18e64-b0c7-4a7d-af0c-c453a1bd2e06",
+        "parentId" : "da0e7359-82db-4d6a-9b0d-5bcda685aac1",
+        "authorId" : "c2785bef-1def-4666-9391-8b42c0eb1216",
+        "body" : "Because it makes the purpose of the code below clearer:\r\n\r\n```C++\r\nconst int columnIdx = fTable->schema()->GetFieldIndex(std::string(colName));\r\nconst int getterIdx = findGetterIndex(columnIdx);\r\nassert(getterIdx != -1);\r\nassert(getterIdx < fValueGetters.size());\r\nreturn fValueGetters[getterIdx].slotPtrs();\r\n```",
+        "createdAt" : "2018-03-22T13:37:06Z",
+        "updatedAt" : "2018-03-28T15:06:33Z",
+        "lastEditedBy" : "c2785bef-1def-4666-9391-8b42c0eb1216",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4746888eb2d68fd3b84f81903f2b2c82450c4706",
+    "line" : 317,
+    "diffHunk" : "@@ -1,1 +315,319 @@      }\n      throw std::runtime_error(\"No column found at index \" + std::to_string(column));\n   };\n\n   const int columnIdx = fTable->schema()->GetFieldIndex(std::string(colName));"
+  }
+]
