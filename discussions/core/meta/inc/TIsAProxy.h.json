@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "6b5e19b6-0493-4227-9ac2-d7d608ee0c84",
+    "prId" : 7286,
+    "prUrl" : "https://github.com/root-project/root/pull/7286#pullrequestreview-601601651",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "39f495c2-e503-445c-9cdf-c09914ca17d5",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "This is probably something that will vary depending on what kind of hardware you are running on, so while it's fine hard-coding 8 here, I'm not sure it will be optimal in other scenarios. In particular, it should be noted that 8 is the biggest number of `void*`s that fit in one cache line of 64 bytes on x86_64, but on ARM things may be different.",
+        "createdAt" : "2021-03-01T12:52:17Z",
+        "updatedAt" : "2021-03-02T22:50:28Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b70ea467-7bdf-4f57-b41d-cf80ac1a0305",
+        "parentId" : "39f495c2-e503-445c-9cdf-c09914ca17d5",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "The bottleneck is not (as far as I can tell) the load of the atomic but rather \"simply\" whether the value needs to be recalculated or not (i.e. the calculation requires taking either a localized read/write lock or the global read/write lock but of which even if only the read lock is taken are reducing parallelism (the bottleneck was the increment of the count of the number of outstanding reader).  ",
+        "createdAt" : "2021-03-01T16:49:20Z",
+        "updatedAt" : "2021-03-02T22:50:28Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43c4fec5-1002-43f8-8dda-221a612bd33d",
+        "parentId" : "39f495c2-e503-445c-9cdf-c09914ca17d5",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "I just mean that this can cause false sharing if the slots are frequently read and updated, which would degrade performance. It's something that `perf c2c` can help to clarify or rule out if needed.",
+        "createdAt" : "2021-03-02T09:25:28Z",
+        "updatedAt" : "2021-03-02T22:50:28Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42f6af2ad3d5063d76a91b41221663a6f815ac92",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +34,38 @@   // serialization induced by and/or the cost of executed `++fSubTypesReaders is slow\n   // down (noticeably) the streaming of branches with polymorphic containers.\n   static constexpr UInt_t fgMaxLastSlot = 8;\n\n   const std::type_info     *fType;        //Actual typeid of the proxy"
+  },
+  {
+    "id" : "a83a1c49-d841-4585-ac4e-ac027d0924f4",
+    "prId" : 7286,
+    "prUrl" : "https://github.com/root-project/root/pull/7286#pullrequestreview-601608683",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "45f132c1-ad4e-47c4-9dbf-44c271ca0ba2",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "Storing atomic pointers right next to each other in the same cache line is probably not a good idea if multiple threads will try to access these slots in parallel (which I assume to be the case, as you'd probably not need to make it atomic otherwise).",
+        "createdAt" : "2021-03-01T12:57:20Z",
+        "updatedAt" : "2021-03-02T22:50:28Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34b93dcb-10df-4495-8e4e-4f8bc672f617",
+        "parentId" : "45f132c1-ad4e-47c4-9dbf-44c271ca0ba2",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "Do you have an alternative?",
+        "createdAt" : "2021-03-01T16:46:58Z",
+        "updatedAt" : "2021-03-02T22:50:28Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9cbc9c52-fad0-4f91-8e79-bb1cee4b2e21",
+        "parentId" : "45f132c1-ad4e-47c4-9dbf-44c271ca0ba2",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "To avoid false sharing, you can try storing each pointer far enough apart that they'd fall into different cache lines. This can be either done with padding, or by combining more fields into each slot, like making the slot store a full pair, not just the pointer to it. I don't know if this is accessed frequently enough to be a big issue, though, just noticing that this is very similar to the false sharing that happens in `RDataFrame` filters, which are indeed a big performance problem there.",
+        "createdAt" : "2021-03-02T09:32:34Z",
+        "updatedAt" : "2021-03-02T22:50:28Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42f6af2ad3d5063d76a91b41221663a6f815ac92",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +38,42 @@   const std::type_info     *fType;        //Actual typeid of the proxy\n   TClass                   *fClass;       //Actual TClass\n   Atomic_t<void*>           fLasts[fgMaxLastSlot];   // points into fSubTypes map for last used values\n   Char_t                    fSubTypes[72];           //map of known sub-types\n   mutable Atomic_t<UInt_t>  fSubTypesReaders;        //number of readers of fSubTypes"
+  }
+]
