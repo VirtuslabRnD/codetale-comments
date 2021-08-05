@@ -262,5 +262,148 @@
     "commit" : "2cef2d16bf119cd491865dd54d5004345fc5d5e3",
     "line" : 45,
     "diffHunk" : "@@ -1,1 +287,291 @@// 513-entries LUT for int16 cases, 512 for the 9-bit indexing and 1 extra entry\n// to interpolate the last value.\ntemplate <typename LutInT>\nconstexpr int lut_size() {\n  static_assert(std::is_same<LutInT, int8_t>::value ||"
+  },
+  {
+    "id" : "01699f54-6369-4fd6-8ca5-01fa11082c97",
+    "prId" : 45342,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/45342#pullrequestreview-666512062",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b3985483-02b0-4566-8ff2-e9107f14b7ef",
+        "parentId" : null,
+        "authorId" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "body" : "Is there a way to perform some check to ensure that \"LUT must have 513 values\"?",
+        "createdAt" : "2021-05-14T17:58:43Z",
+        "updatedAt" : "2021-05-14T18:09:45Z",
+        "lastEditedBy" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7406ce96-6adb-41ac-8712-1b3c76ad6429",
+        "parentId" : "b3985483-02b0-4566-8ff2-e9107f14b7ef",
+        "authorId" : "5449a69d-7f99-4886-9908-47affbac272a",
+        "body" : "The structures in [types.h](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/kernels/internal/types.h) use simple pointers for tables, we can't deduce the size from these . We could either use something similar to to `std::span`/`absl::Span` but the first requires C++20 and the second Abseil (which from my understanding isn't part of the TFLite dependencies).\r\n\r\nNote that `generic_int16_table_lookup` didn't check either (neither does any other accesses on pointer types in [types.h](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/kernels/internal/types.h)) but we can eventually check to improve that.",
+        "createdAt" : "2021-05-17T16:09:45Z",
+        "updatedAt" : "2021-05-17T16:09:46Z",
+        "lastEditedBy" : "5449a69d-7f99-4886-9908-47affbac272a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67e0eca7-aac3-4117-b1ea-74eb564adfa8",
+        "parentId" : "b3985483-02b0-4566-8ff2-e9107f14b7ef",
+        "authorId" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "body" : "Thanks. Understand we cannot check size on a pointer. I was thinking if there is any method to check the size in the caller but the current logic should be fine.",
+        "createdAt" : "2021-05-20T16:46:51Z",
+        "updatedAt" : "2021-05-20T16:46:51Z",
+        "lastEditedBy" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e41316f-720f-45ec-aaaa-66338014f202",
+        "parentId" : "b3985483-02b0-4566-8ff2-e9107f14b7ef",
+        "authorId" : "5449a69d-7f99-4886-9908-47affbac272a",
+        "body" : "We check the size of the table tensor in Table::Prepare. We can eventually double-check again in Table::Eval though it may be a bit overzealous.",
+        "createdAt" : "2021-05-24T08:27:24Z",
+        "updatedAt" : "2021-05-24T08:27:25Z",
+        "lastEditedBy" : "5449a69d-7f99-4886-9908-47affbac272a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2cef2d16bf119cd491865dd54d5004345fc5d5e3",
+    "line" : 177,
+    "diffHunk" : "@@ -1,1 +381,385 @@\n// int16_t -> int16_t table lookup with interpolation\n// LUT must have 513 values\ninline int16_t lut_lookup(int16_t value, const int16_t* lut) {\n  return lut_lookup_with_interpolation(value, lut);"
+  },
+  {
+    "id" : "4d712c2b-97e8-48d1-84fb-e73adfa445f9",
+    "prId" : 45342,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/45342#pullrequestreview-664616798",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e64a208a-6b61-4c06-80d3-d9cce5db03db",
+        "parentId" : null,
+        "authorId" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "body" : "Nit: maybe LutOutT should just be LutT? Usually when we see a \"output\" type, we expect something on the \"input\".",
+        "createdAt" : "2021-05-14T18:02:15Z",
+        "updatedAt" : "2021-05-14T18:09:45Z",
+        "lastEditedBy" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "409f82f7-5574-4c5b-84cc-c2d6d4188f9b",
+        "parentId" : "e64a208a-6b61-4c06-80d3-d9cce5db03db",
+        "authorId" : "5449a69d-7f99-4886-9908-47affbac272a",
+        "body" : "The `LutOutT` in `lut_lookup_with_interpolation` and `LutInT` in `lut_size` are related to the ones used in `gen_lut`. I used these instead of just `LutT` to avoid any confusion on which one should be used for these functions.\r\n\r\nI can eventually extend the comment in `gen_lut` to better explain the `LutInT`/`LutOutT` concept.",
+        "createdAt" : "2021-05-17T16:15:31Z",
+        "updatedAt" : "2021-05-17T16:15:31Z",
+        "lastEditedBy" : "5449a69d-7f99-4886-9908-47affbac272a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d642325e-d2da-4d0d-9b02-72224ac7c95c",
+        "parentId" : "e64a208a-6b61-4c06-80d3-d9cce5db03db",
+        "authorId" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "body" : "Thanks. Make sense.",
+        "createdAt" : "2021-05-20T16:39:02Z",
+        "updatedAt" : "2021-05-20T16:39:03Z",
+        "lastEditedBy" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2cef2d16bf119cd491865dd54d5004345fc5d5e3",
+    "line" : 145,
+    "diffHunk" : "@@ -1,1 +357,361 @@\n// LUT must have 513 values\ntemplate <typename LutOutT>\ninline LutOutT lut_lookup_with_interpolation(int16_t value,\n                                             const LutOutT* lut) {"
+  },
+  {
+    "id" : "0b2c9392-044c-4730-ac3f-74719ff30317",
+    "prId" : 45342,
+    "prUrl" : "https://github.com/tensorflow/tensorflow/pull/45342#pullrequestreview-664616529",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d6cfb71-8c41-4631-80ad-917240b7e56f",
+        "parentId" : null,
+        "authorId" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "body" : "Nit: can we rename the LutInT to just LutT? I feel the concept of input and output for a LUT is a bit blury.",
+        "createdAt" : "2021-05-14T18:05:24Z",
+        "updatedAt" : "2021-05-14T18:09:45Z",
+        "lastEditedBy" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ed3d7f2e-7093-4cdd-b5ed-c7f0a144df93",
+        "parentId" : "7d6cfb71-8c41-4631-80ad-917240b7e56f",
+        "authorId" : "5449a69d-7f99-4886-9908-47affbac272a",
+        "body" : "See comment on `lut_lookup_with_interpolation`.",
+        "createdAt" : "2021-05-17T16:20:24Z",
+        "updatedAt" : "2021-05-17T16:20:24Z",
+        "lastEditedBy" : "5449a69d-7f99-4886-9908-47affbac272a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "93589264-3fc6-442a-81be-ea3aa173d82d",
+        "parentId" : "7d6cfb71-8c41-4631-80ad-917240b7e56f",
+        "authorId" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "body" : "Thanks.",
+        "createdAt" : "2021-05-20T16:38:44Z",
+        "updatedAt" : "2021-05-20T16:38:44Z",
+        "lastEditedBy" : "c14be44a-1748-4d93-a075-2bb17587c151",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2cef2d16bf119cd491865dd54d5004345fc5d5e3",
+    "line" : 45,
+    "diffHunk" : "@@ -1,1 +287,291 @@// 513-entries LUT for int16 cases, 512 for the 9-bit indexing and 1 extra entry\n// to interpolate the last value.\ntemplate <typename LutInT>\nconstexpr int lut_size() {\n  static_assert(std::is_same<LutInT, int8_t>::value ||"
   }
 ]
