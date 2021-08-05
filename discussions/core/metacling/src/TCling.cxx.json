@@ -614,5 +614,137 @@
     "commit" : "950d8234cc86a79e48bbe0e3c7d508f1f5ecc425",
     "line" : 359,
     "diffHunk" : "@@ -1,1 +1659,1663 @@   R__InitStreamerInfoFactory();\n\n   TDirectory::TContext ctxt;\n   llvm::SaveAndRestore<Int_t> SaveGDebug(gDebug);\n   if (gDebug > 5) {"
+  },
+  {
+    "id" : "94c0257e-b021-43fc-9c56-658176133dd0",
+    "prId" : 4005,
+    "prUrl" : "https://github.com/root-project/root/pull/4005#pullrequestreview-263570474",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a3a2e50a-baed-46fc-9ca5-26429ffa52bf",
+        "parentId" : null,
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "What about the symbols of libraries that `lib` depends on? Shouldn't this function recurse over dependencies?",
+        "createdAt" : "2019-07-15T22:35:25Z",
+        "updatedAt" : "2019-07-18T07:29:46Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "65b66f66-a128-47ed-acff-a2422f1fe7e0",
+        "parentId" : "a3a2e50a-baed-46fc-9ca5-26429ffa52bf",
+        "authorId" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "body" : "It seems impossible to recurse in the generic case. Maybe if the library had explicit linking we could iterate through, but if that was the case we won't have to resolve the symbol, it'd have been resolved by the dynamic linker already.",
+        "createdAt" : "2019-07-16T10:29:26Z",
+        "updatedAt" : "2019-07-18T07:29:46Z",
+        "lastEditedBy" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8002b71c-0dcf-463e-9ae0-f4a6af86f0c9",
+        "parentId" : "a3a2e50a-baed-46fc-9ca5-26429ffa52bf",
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "I don't understand any of this :-(\r\n\r\nThe interface \"returns a list of dependent libraries\" (from the doc). IIUC it does that even for not explicitly linked libraries (else why does it iterate through symbols?)\r\n\r\nIf one of the dependent libraries itself depends on another library - shouldn't that other library also be enumerated as a dependency of the original library?",
+        "createdAt" : "2019-07-16T19:27:33Z",
+        "updatedAt" : "2019-07-18T07:29:46Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b920d2b3-98d1-49ed-b100-d765fd45425a",
+        "parentId" : "a3a2e50a-baed-46fc-9ca5-26429ffa52bf",
+        "authorId" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "body" : "It is a question of intent. This PR is trying to do as much or as little to replace the rootmap file logic. In the rootmap-based implementation, rootcling would listen to a bunch of deserialized declarations and try to guess which library it came from. It did not do any transitive dependency resolution.\r\n\r\nThe proposed algorithm is much more precise but introduce O(n^3) complexity, that is for N undefined symbols, iterate over M symbols from L libraries. Because of that I had to only enable it for ACLiC where the N is presumably small. We had a reduced a little M on ELF binaries by using bloom filters. Ideally, with a lot of efforts we could further reduce the complexity.\r\n\r\nA simple (straight forward) implementation of the suggestion would introduce higher complexity. We cannot really use simple caching techniques (such as a map) because we are tight on memory. I'd be in favor of enhancing the algorithm to resolve transitive dependencies once we optimize it to reduce the cubic complexity. Although, nowhere in the autoloading techniques (neither in the owning module-based one) we resolve transitive dependencies.",
+        "createdAt" : "2019-07-16T21:28:00Z",
+        "updatedAt" : "2019-07-18T07:29:46Z",
+        "lastEditedBy" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b6bfc1e0-9361-4e4e-a63b-65be34afd72a",
+        "parentId" : "a3a2e50a-baed-46fc-9ca5-26429ffa52bf",
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "Thanks. Can we rename the function to `GetSharedLibImmediateDepsSlow()` or something, to clarify that this is not meant to come up with the exhaustive list? Or alternatively clarify this in the doc?\r\n\r\nNow - rootmap files tell `TCling` which library to load and which header to parse for a given class. I don't remember nor see that we store dependent libraries in there. Can you remind me of an example?",
+        "createdAt" : "2019-07-16T21:47:33Z",
+        "updatedAt" : "2019-07-18T07:29:46Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0496326a-4cff-4df3-b650-1ed25f19216c",
+        "parentId" : "a3a2e50a-baed-46fc-9ca5-26429ffa52bf",
+        "authorId" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "body" : "Renamed. The code doing library autoloading is [here](https://github.com/root-project/root/blob/master/core/metacling/src/TCling.cxx#L6771). We get the owning module of a used decl and get the relevant library from the modulemap file.\r\n\r\nPS: the relevant rootcling section is here: https://github.com/root-project/root/blob/master/core/dictgen/src/rootcling_impl.cxx#L4871",
+        "createdAt" : "2019-07-17T06:08:15Z",
+        "updatedAt" : "2019-07-18T07:29:46Z",
+        "lastEditedBy" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "46968e9b-c8c4-4149-9c5b-759776449822",
+        "parentId" : "a3a2e50a-baed-46fc-9ca5-26429ffa52bf",
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "Thanks - ok that's mostly used by ACLiC. It notes which libs are currently loaded and will load them before loading the ACLiC'ed lib.\r\n\r\nThe current setup notes *all* libs. I.e. even if libA depends on libB depends on libC - libC will be noted as \"must load\". IIUC your replacement code will only load libs that resolve symbols *of `lib`*, but not *of those that lib depends on*.\r\n\r\nThat's not an issue for explicit linking, which is what we do on Linux and Mac. It is likely going to be an issue if that's not happening (rare or Windows).\r\n\r\nCan you add a comment along these lines? I don't believe that this missing feature should block the PR.",
+        "createdAt" : "2019-07-18T09:30:12Z",
+        "updatedAt" : "2019-07-18T09:30:12Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "abf42d16-d8fd-45ee-8384-a91925880951",
+        "parentId" : "a3a2e50a-baed-46fc-9ca5-26429ffa52bf",
+        "authorId" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "body" : "I do not understand this part `, but not of those that lib depends on.`\r\n\r\nWe essentially disable explicit linking when it comes to ACLiC with modules disabled and fall back to symbol resolution if that's what you meant. The same symbol resolution mechanisms for those undefined symbols will apply to windows. We do not rely on hooks from dyld (although that would bring the algorithm complexity down), so I do not see how windows can be affected. Could you elaborate?\r\n\r\nPS: Did you mean that Windows might need the transitive library dependencies because there is no explicit linking?",
+        "createdAt" : "2019-07-18T10:40:12Z",
+        "updatedAt" : "2019-07-18T10:54:34Z",
+        "lastEditedBy" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ea2ea4216140f75aa079d4730e9954834866b5d4",
+    "line" : 308,
+    "diffHunk" : "@@ -1,1 +6986,6990 @@   std::set<string> DedupSet;\n   std::string Result = lib + ' ';\n   for (const auto &S : BinObjFile->symbols()) {\n      uint32_t Flags = S.getFlags();\n      if (Flags & llvm::object::SymbolRef::SF_Undefined) {"
+  },
+  {
+    "id" : "744eaa96-c3cf-4974-b5ac-edf0203182f5",
+    "prId" : 4005,
+    "prUrl" : "https://github.com/root-project/root/pull/4005#pullrequestreview-262697796",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "72e86a1c-29c4-4565-8179-31c17c444f8c",
+        "parentId" : null,
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "This looks more like `tryDyld`: the algorithm falls back to the `!useDyld` case if the symbol lookup fails. Maybe rename the parameter?",
+        "createdAt" : "2019-07-15T22:37:46Z",
+        "updatedAt" : "2019-07-18T07:29:46Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "719b9110-496e-437f-8532-45f3d3387183",
+        "parentId" : "72e86a1c-29c4-4565-8179-31c17c444f8c",
+        "authorId" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "body" : "I've changed it but I am not convinced it conveys better the meaning.",
+        "createdAt" : "2019-07-16T21:40:17Z",
+        "updatedAt" : "2019-07-18T07:29:46Z",
+        "lastEditedBy" : "6f6f52c8-bace-4788-98aa-f12fb2560025",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ea2ea4216140f75aa079d4730e9954834866b5d4",
+    "line" : 358,
+    "diffHunk" : "@@ -1,1 +7034,7038 @@   if (useDyld) {\n      std::string libs = GetSharedLibImmediateDepsSlow(lib, fInterpreter);\n      if (!libs.empty()) {\n         fAutoLoadLibStorage.push_back(libs);\n         return fAutoLoadLibStorage.back().c_str();"
   }
 ]
