@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "07f9aff8-5fbd-4a13-9a39-346c44aa8899",
+    "prId" : 2487,
+    "prUrl" : "https://github.com/root-project/root/pull/2487#pullrequestreview-153005583",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "266fc2e4-2565-43e4-815e-43980efa0447",
+        "parentId" : null,
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "Why is this an `int` not a `bool`? What are possible values, what is their meaning?",
+        "createdAt" : "2018-08-23T13:07:10Z",
+        "updatedAt" : "2018-08-24T14:54:18Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b06c5e36-5140-4063-8b5c-33fe7d961d66",
+        "parentId" : "266fc2e4-2565-43e4-815e-43980efa0447",
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "What's the use of this variable? I'd argue that to read it safely you need to acquire the mutex, but that means you know that `fMutexBooked` will say \"yes\", and `fBookedThrd` will the this thread id. I'd at least make that an `atomic<int>`.",
+        "createdAt" : "2018-08-23T13:08:23Z",
+        "updatedAt" : "2018-08-24T14:54:18Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ae31d1e-6b5c-4fef-91e5-bede12e19970",
+        "parentId" : "266fc2e4-2565-43e4-815e-43980efa0447",
+        "authorId" : "e4571402-a12a-4377-8cca-960e88b81e3d",
+        "body" : "Here I want to prevent situation, when mutex locked for very long time - many seconds. \r\nTherefore I use extra logic which I calling \"mutex booking\". I lock mutex in the begin, increment extra variable (fMutexBooked) and release lock immediately. At the end of operation variable will be decremented. \r\nAny other lock can lock such mutex, but will detect that it \"booked\". And either try it again (as I did by default) or just exit such function with error code.\r\n\r\nIf I will use only mutex, it will be blocked for long and complex operation and may easily lead to dead locks in the future.\r\n",
+        "createdAt" : "2018-08-24T13:13:17Z",
+        "updatedAt" : "2018-08-24T14:54:19Z",
+        "lastEditedBy" : "e4571402-a12a-4377-8cca-960e88b81e3d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "55954cdf-9244-4522-92c2-2f38a632c9e9",
+        "parentId" : "266fc2e4-2565-43e4-815e-43980efa0447",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "If you can have dead locks this means that you 2 distinct but inter-related locks.   In such a case you have two alternatives, one is to merge the locks (i.e. use only one) or make sure the lock is **only** around code that can not (ever) take the other lock.  This can be achieved sometimes by doing first the work/preparation that might take the other lock and then do the small work (eg. assignment) that need the local lock.\r\n\r\nFor the pattern you use fMutexBooked **must** be an atomic (because it can and will be read and written from multiple threads concurrently.\r\n\r\nTWebWindowManagerGuard implements a busy wait for the lock which is likely worse that what you try to avoid.   \r\n\r\nAnd likely the clincher ... this pattern does not prevent a dead lock (unless you ALWAYS use the can't take the look then quit).  [Be cause if thread A take fMutexBooked One then thread B takes fMutexBooked Two and then attempt to take fMutexBooked One [thread 2 starts a busy wait for A to release the critical section] ... then if thread A attempt to take fMutexBooked Two (before release the One) ... then thread A starts an infinite busy wait for fMutexBooked Two to be released ....\r\n\r\n",
+        "createdAt" : "2018-08-31T12:25:58Z",
+        "updatedAt" : "2018-08-31T12:25:59Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e532a7f3-809a-4552-9bc3-9940148230a3",
+        "parentId" : "266fc2e4-2565-43e4-815e-43980efa0447",
+        "authorId" : "e4571402-a12a-4377-8cca-960e88b81e3d",
+        "body" : "First of all, I do not have deadlocks at the moment. Main motivation for this was - prevent situation when any other thread requesting for the lock blocked for many seconds (time required to start external web-browser process).\r\n\r\nOf course, such approach works only if TWebWindowManagerGuard (or similar technique) used always for the data access - otherwise logic will not work.\r\n\r\nMy idea - later one could implement more smart technique. Instead of dummy sleep loop of TWebWindowManagerGuard one could put other actions which could be executed in that thread. \r\n\r\nAt any moment we could replace this technique with std::recursive_mutex. \r\n",
+        "createdAt" : "2018-08-31T12:38:50Z",
+        "updatedAt" : "2018-08-31T12:38:50Z",
+        "lastEditedBy" : "e4571402-a12a-4377-8cca-960e88b81e3d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7929f484-0e18-4fae-81e4-b2445fa289e3",
+        "parentId" : "266fc2e4-2565-43e4-815e-43980efa0447",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "> First of all, I do not have deadlocks at the moment. Main motivation for this was - prevent situation when any other thread requesting for the lock blocked for many seconds (time required to start external web-browser process).\r\n\r\nThen, please use a simpler implementation for now.  I.e. for example a simple mutex and calls to try_lock.  I currently see 'no' advantages to the more complex implementation (that is currently used in the PR).",
+        "createdAt" : "2018-09-06T16:04:10Z",
+        "updatedAt" : "2018-09-06T16:04:15Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4b80ffa0b0dc5c64fd2f792943e625c8f88d201a",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +43,47 @@   std::string fAddr;                    ///<!  HTTP address of the server\n   std::mutex fMutex;                    ///<!  main mutex to protect\n   int fMutexBooked{0};                  ///<!  flag indicating that mutex is booked for some long operation\n   std::thread::id fBookedThrd;          ///<!  thread where mutex is booked, can be reused\n   unsigned fIdCnt{0};                   ///<!  counter for identifiers"
+  },
+  {
+    "id" : "a8f68c58-7741-410d-8c68-161554d7543a",
+    "prId" : 2487,
+    "prUrl" : "https://github.com/root-project/root/pull/2487#pullrequestreview-148896853",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c3afac47-1010-4b19-8bbf-2d1570e88a1e",
+        "parentId" : null,
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "Same comment as for fMutexBooked",
+        "createdAt" : "2018-08-23T13:08:38Z",
+        "updatedAt" : "2018-08-24T14:54:18Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4b80ffa0b0dc5c64fd2f792943e625c8f88d201a",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +44,48 @@   std::mutex fMutex;                    ///<!  main mutex to protect\n   int fMutexBooked{0};                  ///<!  flag indicating that mutex is booked for some long operation\n   std::thread::id fBookedThrd;          ///<!  thread where mutex is booked, can be reused\n   unsigned fIdCnt{0};                   ///<!  counter for identifiers\n   bool fUseHttpThrd{false};             ///<!  use special thread for THttpServer"
+  }
+]
