@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "8142b2e8-2f85-4d08-9a51-a72b244a5159",
+    "prId" : 3216,
+    "prUrl" : "https://github.com/root-project/root/pull/3216#pullrequestreview-192667868",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cdc5e7e3-0fb8-455a-8c15-f53fb62973d5",
+        "parentId" : null,
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "Is this worth keeping?",
+        "createdAt" : "2019-01-08T07:18:53Z",
+        "updatedAt" : "2019-01-18T01:49:15Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "227e5704-89ae-414a-82a6-ed029f3f9303",
+        "parentId" : "cdc5e7e3-0fb8-455a-8c15-f53fb62973d5",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "no.  WIP .... last step is to remove fLastTree completely.",
+        "createdAt" : "2019-01-12T23:16:18Z",
+        "updatedAt" : "2019-01-18T01:49:15Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3bb33820-85de-4b6f-8d9f-ba6f64e825dc",
+        "parentId" : "cdc5e7e3-0fb8-455a-8c15-f53fb62973d5",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "removed",
+        "createdAt" : "2019-01-15T14:20:40Z",
+        "updatedAt" : "2019-01-18T01:49:16Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6283268671b82aac87b50dfedcb684160f0d09aa",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +128,132 @@      Bool_t IsInitialized() {\n         return fInitialized;\n         // return fLastTree && fCurrentTreeNumber == fDirector->GetTree()->GetTreeNumber() && fLastTree == fDirector->GetTree();\n      }\n"
+  },
+  {
+    "id" : "a42ee11e-f299-4b6b-b444-4bc1ad2fbc40",
+    "prId" : 3216,
+    "prUrl" : "https://github.com/root-project/root/pull/3216#pullrequestreview-192666557",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "be8c8977-2754-4b92-8980-99b233ac38f6",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "There is a lot of repetition of this `if` condition. This violates \"don't repeat yourself\"... Maybe it could be factored out into a separate function.",
+        "createdAt" : "2019-01-14T14:05:49Z",
+        "updatedAt" : "2019-01-18T01:49:16Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2ff3fa72-4abd-4b7e-8502-62771814975c",
+        "parentId" : "be8c8977-2754-4b92-8980-99b233ac38f6",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "This is performance 'critical' code.  It is not clear whether saving the repeated boiler plate (the outer if) is worth the cost (having a function template taking a function as an argument) in term of readbility ....",
+        "createdAt" : "2019-01-14T15:14:28Z",
+        "updatedAt" : "2019-01-18T01:49:16Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2dcedf7e-7ce7-4dfa-a066-be65dbc97af2",
+        "parentId" : "be8c8977-2754-4b92-8980-99b233ac38f6",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "It is not clear to me the code with repetitions is faster than using some inline functions. I don't think you need a template taking a function as argument at all. Also, `ReadNoParentBranchCountCollectionNoPointer()` is already quite a handful in terms of readability. I'm not sure what it's supposed to mean/do. Anyway, below is an example of how to reduce code duplication:\r\n\r\n```cpp\r\n  inline bool UpdateTreeEntry() {\r\n    if ((auto entry = fDirector->GetReadEntry()) != fRead) {\r\n      fRead = entry;\r\n      return true;\r\n    } else {\r\n      return false;\r\n    }\r\n  }\r\n\r\n  inline bool ReadBranch() {\r\n    return fBranch->GetEntry(fRead) != -1;\r\n  }\r\n\r\n  inline bool ReadBranchCount() {\r\n    return fBranch->GetEntry(fRead) != -1;\r\n  }\r\n\r\n  inline void UpdateCollectionProxy() {\r\n    fCollection->PopProxy(); // works even if no proxy env object was set.\r\n    fCollection->PushProxy( fWhere );  \r\n  }\r\n\r\n  bool ReadNoParentBranchCountNoCollection() {\r\n    if (!UpdateTreeEntry())\r\n      return IsInitialized();\r\n    return ReadBranch() && ReadBranchCount();\r\n  }\r\n\r\n  bool ReadNoParentBranchCountCollectionNoPointer() {\r\n    bool ret = ReadNoParentBranchCountNoCollection();\r\n    UpdateCollectionProxy();\r\n    return ret;\r\n  }\r\n```",
+        "createdAt" : "2019-01-15T08:15:29Z",
+        "updatedAt" : "2019-01-18T01:49:16Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6fcfc774-ff9b-4d15-9b94-cf7f73ca7ed8",
+        "parentId" : "be8c8977-2754-4b92-8980-99b233ac38f6",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "Another comment is that making the `EReadType` a bit mask would allow you to collapse all these strangely named functions into a single one:\r\n```cpp\r\n  bool Update(EReadType type) {\r\n    if (!UpdateTreeEntry)\r\n      return IsInitialized();\r\n    bool ret = true;\r\n    if (type & kReadParent)\r\n      ret = ret && UpdateParent();\r\n    if (type & kReadBranch)\r\n      ret = ret && UpdateBranch();\r\n   /* ... */\r\n    return ret;  \r\n}\r\n```",
+        "createdAt" : "2019-01-15T08:27:21Z",
+        "updatedAt" : "2019-01-18T01:49:16Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "026cce1e-5a34-471b-8e64-b0c67640b4c1",
+        "parentId" : "be8c8977-2754-4b92-8980-99b233ac38f6",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "> Also, ReadNoParentBranchCountCollectionNoPointer() is already quite a handful in terms of readability. I'm not sure what it's supposed to mean/do. \r\n\r\nThe name is lame but a straightforward expression of the unfolding of the combinatoric of the original Read function.\r\n\r\n> Anyway, below is an example of how to reduce code duplication:\r\n\r\nIt does indeed reduce duplication.  It does also make it harder for me to reason about performance.  (it does look like that version as one more branch in some of the cases that the PR and I can't know whether that branch will optimized out or not ...)",
+        "createdAt" : "2019-01-15T14:15:30Z",
+        "updatedAt" : "2019-01-18T01:49:16Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1bd769fd-e693-4ba7-aafa-751124c646a6",
+        "parentId" : "be8c8977-2754-4b92-8980-99b233ac38f6",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "> Another comment is that making the EReadType a bit mask would allow you to collapse all these strangely named functions into a single one:\r\n\r\nThis is an interesting option.  Off hand I can not tell whether reintroducing the branches with much faster to evaluate condition will be faster or not than the function pointer ....",
+        "createdAt" : "2019-01-15T14:17:47Z",
+        "updatedAt" : "2019-01-18T01:49:16Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6283268671b82aac87b50dfedcb684160f0d09aa",
+    "line" : 233,
+    "diffHunk" : "@@ -1,1 +319,323 @@      Bool_t ReadNoParentBranchCountCollectionNoPointer() {\n         auto treeEntry = fDirector->GetReadEntry();\n         if (treeEntry != fRead) {\n            Bool_t result = (-1 != fBranchCount->GetEntry(treeEntry));\n            result &= (-1 != fBranch->GetEntry(treeEntry));"
+  },
+  {
+    "id" : "13b3ae67-d613-4939-9681-da05c3ec2b2b",
+    "prId" : 3216,
+    "prUrl" : "https://github.com/root-project/root/pull/3216#pullrequestreview-192525070",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "195b327e-7b06-4305-9189-1ff7c9f4f4bf",
+        "parentId" : null,
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "It seems that making `EReadType` work like a bit mask with a bit for each of parent, pointer, branch, collection, etc would make this whole function a single line or a few lines for computing the `OR` of all flags. This would be a lot more efficient than using all of this branching code.",
+        "createdAt" : "2019-01-15T08:20:48Z",
+        "updatedAt" : "2019-01-18T01:49:16Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6283268671b82aac87b50dfedcb684160f0d09aa",
+    "line" : 141,
+    "diffHunk" : "@@ -1,1 +227,231 @@      Bool_t ReadNoDirector() {\n         return false;\n      }\n\n      Bool_t ReadParentNoCollection() {"
+  }
+]
