@@ -130,5 +130,49 @@
     "commit" : "e9ea12029e0d41c6d9dda65aeb925e58998ab792",
     "line" : 221,
     "diffHunk" : "@@ -1,1 +1298,1302 @@/// Perform boundary safe 'intOrder'-th interpolation of weights in dimension 'dim'\n/// at current value 'xval'\n\n/// \\param[in] iDim Index of the histogram dimension along which to interpolate.\n/// \\param[in] xval Value of histogram variable at dimension `iDim` for which"
+  },
+  {
+    "id" : "597341ae-baf3-4579-bd28-4bd98cf88097",
+    "prId" : 8368,
+    "prUrl" : "https://github.com/root-project/root/pull/8368#pullrequestreview-681028434",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "60a5a156-b70f-4888-84a8-92d3f0e84a74",
+        "parentId" : null,
+        "authorId" : "ec1903c5-44e7-4fb1-bee9-25de61836fba",
+        "body" : "This is weird. The interface enforces `RooRealVar*`. If this cast fails, something is deeply broken. What about just checking for `nullptr`?",
+        "createdAt" : "2021-06-08T13:42:16Z",
+        "updatedAt" : "2021-06-08T13:48:26Z",
+        "lastEditedBy" : "ec1903c5-44e7-4fb1-bee9-25de61836fba",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8dcaa69-f0e4-4b31-96c7-703ac5404747",
+        "parentId" : "60a5a156-b70f-4888-84a8-92d3f0e84a74",
+        "authorId" : "c130f90f-ce87-4bc5-a2bd-7b1b93d94515",
+        "body" : "The callers of this function do not do type checking of the argument, but static_cast the argument to RooRealVar*. The type check is then supposed to be done in the function itself. But for the dynamic_cast to actually do the type check the pointer must first be static_cast back to RooAbsArg*, otherwise the compiler will optimise this to a simple nullptr check since the only way a dynamic_cast of a pointer to a pointer of the same type can fail is if it is the null pointer. The code as it was written was expecting the dynamic_cast to fail for a non-null pointer that originally was not a RooRealVar* (even though it had been static_cast to a RooRealVar* before calling the function). Just checking for nullptr does not guarantee that the pointer is actually a RooRealVar*.\r\nThis was the minimal change to make the code do what was intended.\r\nThe alternative would be to change the signature of the function to use a RooAbsArg*, which avoids casting the pointer to call the function and then casting it back in the function to do the type check. But that is a bigger change, and I proposed the minimal change to fix the warning.",
+        "createdAt" : "2021-06-08T14:46:12Z",
+        "updatedAt" : "2021-06-08T14:46:13Z",
+        "lastEditedBy" : "c130f90f-ce87-4bc5-a2bd-7b1b93d94515",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cee01422-15b5-4fb2-b274-a19d502e5811",
+        "parentId" : "60a5a156-b70f-4888-84a8-92d3f0e84a74",
+        "authorId" : "3cdeea47-0921-4380-9f86-57ac2ba3546a",
+        "body" : "I am not sure I understand the point here. If this function is called with `ourVar` not being a `RooRealVar *` then there is a problem somewhere else in the code. \r\nThis function is an internal one and when used one passes always a RooRealVar pointer, so I don;t see any problem. \r\nA better alternative is to remove the check in any case and pass a reference to RooRealVar. \r\nI would really avoid doing this double cast ",
+        "createdAt" : "2021-06-10T16:50:50Z",
+        "updatedAt" : "2021-06-10T16:51:01Z",
+        "lastEditedBy" : "3cdeea47-0921-4380-9f86-57ac2ba3546a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cd007cc51320e3aab422f1f73a0c465546723707",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +592,596 @@    RooRealVar *ourVar, Int_t *offset)\n{\n  if (!dynamic_cast<RooRealVar*>(static_cast<RooAbsArg*>(ourVar))) {\n    coutE(InputArguments) << \"RooDataHist::adjustBinning(\" << GetName() << \") ERROR: dimension \" << ourVar->GetName() << \" must be real\" << endl ;\n    assert(0) ;"
   }
 ]
