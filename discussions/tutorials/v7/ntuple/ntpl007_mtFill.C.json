@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "b509f71c-974c-40e9-898a-dbdd1a0f988b",
+    "prId" : 8688,
+    "prUrl" : "https://github.com/root-project/root/pull/8688#pullrequestreview-714053070",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ee3a4863-24aa-48fa-80a9-fb7f65539f20",
+        "parentId" : null,
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "As a side questions, is this (user locking call to Fill) the final interface or will the lock/use-of-atomics get added to RNTuple later?",
+        "createdAt" : "2021-07-19T21:22:59Z",
+        "updatedAt" : "2021-07-19T21:22:59Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f03a5e6c-4ef4-4cad-980a-1fb147c7a1ca",
+        "parentId" : "ee3a4863-24aa-48fa-80a9-fb7f65539f20",
+        "authorId" : "71961bd2-e8ee-4d29-b25c-6271d5f56bb1",
+        "body" : "I actually have the same question. I would prefer the lock is internal, but I imagine we would need a non synchronized version for the single thread case.\r\n\r\nA was also thinking about a non blocking version of `Fill` (e.g. `RNTuple::Writer(std::unique_ptr<REntry>)` that would enqueue the serialization for a dedicated thread. Of course you have to pay for the allocation/deallocation of `REntry` at every event:\r\n```cpp\r\nfor(auto& event: all_events) {\r\n  auto entry = ntuple->CreateEntry();\r\n  auto &vpx = *entry->Get<std::vector<float>>(\"vpx\");\r\n  vpx.clear();\r\n  vpx.push_back(42.);\r\n  ntuple->Fill(std::move(entry));\r\n}\r\n```",
+        "createdAt" : "2021-07-20T13:40:32Z",
+        "updatedAt" : "2021-07-20T13:40:32Z",
+        "lastEditedBy" : "71961bd2-e8ee-4d29-b25c-6271d5f56bb1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e455a0d-5476-4988-941f-ff73d03adc47",
+        "parentId" : "ee3a4863-24aa-48fa-80a9-fb7f65539f20",
+        "authorId" : "6cd3c9bc-f261-444d-81ab-c00c917f2197",
+        "body" : "I was planning to keep `Fill()` unlocked for consistency reasons. While we could protect `Fill()`, the rest of the `RNTupleWriter` would still not be prepared to be called concurrently. I think it is cleaner to keep the class [conditionally thread safe](https://root.cern/manual/thread_safety/), like most other RNTuple classes.\r\n\r\nMoving the REntries into a serialization queue is a really interesting idea! I don't think we need/should to address this in the `RNTupleWriter` class though. What we essentially need is a bounded, thread-safe queue for the producer-consumer thread synchronization task. I wonder if an implementation of such a queue would make sense as a generally available utility class in ROOT, @pcanal?\r\n\r\nThat said, using a dedicated thread for the serialization would only make sense if we actually spend a non-negligible amount of time in copying data from the in-memory objects into the I/O buffers.  For compressing I/O buffers, we already have infrastructure in place to do it multi-threaded.  That helps substantially for simple events but it is, as far as I can see, not the main bottleneck for writing/creating complex events.\r\n\r\n@pikacic Perhaps we can discuss it in person?",
+        "createdAt" : "2021-07-21T16:23:34Z",
+        "updatedAt" : "2021-07-21T16:23:34Z",
+        "lastEditedBy" : "6cd3c9bc-f261-444d-81ab-c00c917f2197",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f148b7ee-9318-4e02-9058-f51bd73ebc75",
+        "parentId" : "ee3a4863-24aa-48fa-80a9-fb7f65539f20",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "\"bounded, thread-safe queue for the producer-consumer thread synchronization task\": yes, it does sound useful.  The challenging part is the \"bounded\" part and more particularly what to do when the bound is reached.",
+        "createdAt" : "2021-07-21T16:33:15Z",
+        "updatedAt" : "2021-07-21T16:33:15Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4b73e08-2c9a-44f2-9158-c88c782b4a63",
+        "parentId" : "ee3a4863-24aa-48fa-80a9-fb7f65539f20",
+        "authorId" : "6cd3c9bc-f261-444d-81ab-c00c917f2197",
+        "body" : "I have in mind an implementation with conditional variables, so enqueuing would block if the queue is full.",
+        "createdAt" : "2021-07-22T07:00:22Z",
+        "updatedAt" : "2021-07-22T07:00:22Z",
+        "lastEditedBy" : "6cd3c9bc-f261-444d-81ab-c00c917f2197",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "706d1013-b049-4938-8dc8-6125661c6847",
+        "parentId" : "ee3a4863-24aa-48fa-80a9-fb7f65539f20",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "In some context (CMSSW for example), they have argued that this is sub-optiomal as it prevents the calling thread from doing other work while waiting and in similar context (eg TFileBufferMerger, we have to provide feedback on how full the queue was, some of the discussion also talked about a call back of sort). [@Dr15Jones @dan131riley might have more details]",
+        "createdAt" : "2021-07-22T18:51:53Z",
+        "updatedAt" : "2021-07-22T18:51:53Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "92ac0278-eb07-43b7-83bb-313c36f70532",
+        "parentId" : "ee3a4863-24aa-48fa-80a9-fb7f65539f20",
+        "authorId" : "a4098cc8-1677-4408-8eb5-cabf1875c2bd",
+        "body" : "So it looks to me that in the example, the most time consuming call would actually be `tuple->Fill(*entry);`? If so, then you would get very little concurrency. If the `Fill` call could make use of available threads (much like `TTree::Fill` if ImplicitMT is on) then you'd still have a problem since you'd have lots of possible threads all being blocked and therefore unusable by the `Fill` call. That would mean you'd have to oversubcribed the system, which isn't really a good idea.\r\n\r\nAn alternative design used frequently in CMSSW is to have a `SerialTaskQueue` with an associated callback for when the task finishes. The callback is used to asynchronously start another series of tasks. This is often done recursively: an asynchronous function setup work, when the work completes it enqueues a finishing task and then when the finishing task runs its last step is to call the asynchronous function which had started the whole process.\r\n\r\nBelow is a rewrite of the `Write()` function using this idea (it depends on code similar to https://github.com/cms-sw/cmssw/blob/master/FWCore/Concurrency/interface/SerialTaskQueue.h) using tbb::task_group to handle the thread pool. In the code, no TBB threads are ever blocked so they are always available for work (e.g. by `Fill`).\r\n\r\n```C++\r\nvoid nextEntryAsync(tbb::task_group& group, std::atomic<int>& countDown, int threadID, REntry& entry, RNTupleWriter& tuple, SerialTaskQueue& queue, TRandom3&rand) {\r\n\r\n\tgroup.run([]() {\r\n\t\tif(--countDown >=0) {\r\n      auto id = entry->Get<std::uint32_t>(\"id\");\r\n      auto vpx = entry->Get<std::vector<float>>(\"vpx\");\r\n      auto vpy = entry->Get<std::vector<float>>(\"vpy\");\r\n      auto vpz = entry->Get<std::vector<float>>(\"vpz\");\r\n\t\t\t\r\n      vpx->clear();\r\n      vpy->clear();\r\n      vpz->clear();\r\n      *id = threadID;\r\n      \r\n      int npx = static_cast<int>(prng->Rndm(1) * 15);\r\n      // Set the field data for the current event\r\n      vpx->reserve(npx);\r\n      vpy->reserve(npy);\r\n      vpz->reserve(npz);\r\n      for (int j = 0; j < npx; ++j) {\r\n          float px, py, pz;\r\n          prng->Rannor(px, py);\r\n          pz = px*px + py*py;\r\n\r\n          vpx->emplace_back(px);\r\n          vpy->emplace_back(py);\r\n          vpz->emplace_back(pz);\r\n      }      \r\n      \r\n      //only one thread at a time can fill the tuple\r\n      // once fill is done, try to process next entry\r\n      queue.push(group, [&,threadID]() {\r\n        //internally, Fill could use available TBB threads\r\n        tuple.Fill(entry);\r\n        nextEntryAsync(group, countDown, threadID, entry, tuple, queue, rand);\r\n      });\r\n\t\t}\r\n\t});\r\n}\r\n\r\nvoid Write() {\r\n  \r\n  // Create the data model\r\n  auto model = RNTupleModel::Create();\r\n  model->MakeField<std::uint32_t>(\"id\");\r\n  model->MakeField<std::vector<float>>(\"vpx\");\r\n  model->MakeField<std::vector<float>>(\"vpy\");\r\n  model->MakeField<std::vector<float>>(\"vpz\");\r\n\r\n  // We hand-over the data model to a newly created ntuple of name \"NTuple\", stored in kNTupleFileName\r\n  auto ntuple = RNTupleWriter::Recreate(std::move(model), \"NTuple\", kNTupleFileName);\r\n  \r\n  //set the number of threads total as well as the number of threads for the local arena\r\n  // the global setting makes sure any other arenas used will have their max threads restricted\r\n  tbb::global_control control(tbb::global_control::max_allowed_parallelism, nWriterThreads);\r\n  tbb::task_arena arena(nWriterThreads);\r\n  arena.execute([&]() {\r\n  \r\n    std::atomic<int> countDown = kNEvents;\r\n    \r\n    SerialTaskQueue queue;\r\n    \r\n    std::vector<std::unique_ptr<REntry>> entries;\r\n    std::vector<std::unique_ptr<TRandom3>> rands;\r\n    entries.reserve(nWriterThreads);\r\n    rands.reserve(nWriterThreads);\r\n    \r\n    tbb::task_group group;\r\n    for(int i=0; i< nWriterThreads; ++i) {\r\n      entries.emplace_back(ntuple->CreateEntry());\r\n      rands.emplace_back(std::make_unique<TRandom3>());\r\n      rands.back()->SetSeed();\r\n      nextEntryAsync(group, countDown, i, *entries.back(), ntuple, queue, *rands.back());\r\n    }\r\n    group.wait();\r\n  });\r\n}\r\n```",
+        "createdAt" : "2021-07-23T15:48:31Z",
+        "updatedAt" : "2021-07-23T15:48:32Z",
+        "lastEditedBy" : "a4098cc8-1677-4408-8eb5-cabf1875c2bd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7828d57-576d-4b28-9077-3ad0aef6507d",
+        "parentId" : "ee3a4863-24aa-48fa-80a9-fb7f65539f20",
+        "authorId" : "a4098cc8-1677-4408-8eb5-cabf1875c2bd",
+        "body" : "One item of note in this design, the SerialTaskQueue is implicitly bound because at most nWriteThreads-1 tasks can be waiting in the queue at any one time. That is because new tasks can only be spawned after a task has finished in the queue.",
+        "createdAt" : "2021-07-23T15:55:46Z",
+        "updatedAt" : "2021-07-23T15:55:46Z",
+        "lastEditedBy" : "a4098cc8-1677-4408-8eb5-cabf1875c2bd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "767beb23-76ec-4b59-a835-295471e00870",
+        "parentId" : "ee3a4863-24aa-48fa-80a9-fb7f65539f20",
+        "authorId" : "a4098cc8-1677-4408-8eb5-cabf1875c2bd",
+        "body" : "So pushing things a bit further using the 'task chaining' code (seen here https://github.com/cms-sw/cmssw/blob/master/FWCore/Concurrency/test/test_catch2_WaitingTaskChain.cc) the part of `Write()` that falls within the `arena.execute(...)` could probably be written as\r\n\r\n```C++\r\nstd::atomic<int> countDown = 0;\r\n\r\nSerialTaskQueue queue;\r\n\r\n//setup per 'lane' data structures\r\nstd::vector<std::unique_ptr<REntry>> entries;\r\nstd::vector<std::unique_ptr<TRandom3>> rands;\r\nentries.reserve(nWriterThreads);\r\nrands.reserve(nWriterThreads);\r\n\r\ntbb::task_group group;\r\nFinalWaitingTask finalTask;\r\n{\r\n  //this ensures the finalTask can't be run until after the loop finishes\r\n  WaitingTaskHolder final(group, finalTask);\r\n\r\n  //create as many 'lanes' as threads\r\n  for(int i=0; i< nWriterThreads; ++i)) {\r\n    entries.emplace_back(ntuple->CreateEntry());\r\n    auto entry = entries.back().get();\r\n    rands.emplace_back(std::make_unique<TRandom3>());\r\n    auto rand = rands.back().get();\r\n    rand->SetSeed();\r\n    \r\n    //here is the 'chain' of tasks to be executed\r\n    chain::while([&count, kNEvents](){return ++count< kNEvents;},\r\n        chain::first([&](auto iTask){ fillEntry(*entry); } ) \r\n        | chain::then([&](auto iTask){ queue.push([iTask]() { tuple->Fill(*entry); })})\r\n    )   \r\n    | runLast(final);\r\n  }\r\n}\r\n\r\ngroup.wait();\r\n```\r\n\r\nThe `chain::while` ability doesn't exist in the present code, but I believe it would be possible to create.",
+        "createdAt" : "2021-07-23T19:02:42Z",
+        "updatedAt" : "2021-07-23T19:03:14Z",
+        "lastEditedBy" : "a4098cc8-1677-4408-8eb5-cabf1875c2bd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6782f230427043af5ff7179d4381e3d6e0a1168c",
+    "line" : 85,
+    "diffHunk" : "@@ -1,1 +83,87 @@      }\n\n      std::lock_guard<std::mutex> guard(gLock);\n      ntuple->Fill(*entry);\n   }"
+  }
+]
