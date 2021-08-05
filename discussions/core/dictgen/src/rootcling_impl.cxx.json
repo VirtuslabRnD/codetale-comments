@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "86d54fb2-fe7b-48c9-bd3e-1593e3868b61",
+    "prId" : 752,
+    "prUrl" : "https://github.com/root-project/root/pull/752#pullrequestreview-57227758",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "parentId" : null,
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "I find this problematic - this will mean we'll never fix the underlying build system issue that triggers concurrent invocations on the same dictionary. Could you add a note to the relevant Jira ticket https://sft.its.cern.ch/jira/browse/ROOT-8244 that this commit should be reverted once the issue is fixed?",
+        "createdAt" : "2017-07-11T14:13:41Z",
+        "updatedAt" : "2017-07-12T18:34:30Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dbffb280-75fc-49d8-abbf-8b5fa9688a61",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "This part can actually go away now, as far as I can tell. It was needed before because more than one process was trying to make the dictionaries, and one process would move the files of the other, causing a crash as seen [here](http://cdash.cern.ch/viewBuildError.php?buildid=372174).",
+        "createdAt" : "2017-07-11T14:32:46Z",
+        "updatedAt" : "2017-07-12T18:34:30Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f158cad-717d-4af5-9406-5e9130a450c5",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "2349f38f-171e-43d8-8dee-e8439718c88a",
+        "body" : "According to the [CMake bug tracker](https://cmake.org/Bug/view.php?id=10082) and the [CMake mailing list](https://cmake.org/pipermail/cmake/2016-April/063241.html), the underlying issue is a design flaw in Make (without GNU extensions) which prevents from coordinating the generation of custom_command targets between multiple jobs (this is also why Pere doesn't see this in Ninja). See the man page of \"add_custom_command\" which states that we should never depend on the output files directly, but instead on a custom target. If we don't do this, then the make jobs can't communicate who is responsible for this target and then produce it multiple times (usually twice from what I saw).\r\n\r\nWe already have this custom target in the current CMakeLists.txt, we just had the wrong dependencies based on it (because of the inconsistent naming). Those missing links are fixed in the commit about fixing the dependencies, which should prevent this issue in the way the CMake manual recommends (even though it seems they still make no guarantee that this works as intended on every platform).\r\n\r\nI also added the commented out debug code which helps figuring out if dependencies are missing for rootcling invocations (the developer warnings are enabled by default in CMake, so there isn't a better way of doing this without spamming the compile log). This should fix the problem of \"How do we debug this in the future\" in a systematic (and better) way than hoping to find race conditions by trial-and-error and trying to increase the error-chance by using always the same file name.\r\n\r\nAlso, we should behave like every other generator/compiler which tries to further mitigate this problem by choosing process unique tmp names (see clang etc. with their `FILE.o-UNIQUE` names). We don't know if someone generates build files for something really obscure (e.g. Visual Studio or an old Make version) which chooses the target order in a different way (e.g. on the CMake mailing list people complained that VS seems to have yet another behavior for building these things[1](https://cmake.org/pipermail/cmake/2016-April/063241.html) ), so let's at least give those people at least some relief in the future by making it less likely that things blow up when building :).",
+        "createdAt" : "2017-07-11T14:58:04Z",
+        "updatedAt" : "2017-07-12T18:34:30Z",
+        "lastEditedBy" : "2349f38f-171e-43d8-8dee-e8439718c88a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "072b9c2b-19fd-4b30-90fc-988bb1bce3b7",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "@Teemperor Can you drop this commit from the PR? I think you agree it's not needed anymore, right?",
+        "createdAt" : "2017-07-11T14:59:17Z",
+        "updatedAt" : "2017-07-12T18:34:30Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7c00886-1758-481d-a766-c02b065af2ce",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "2349f38f-171e-43d8-8dee-e8439718c88a",
+        "body" : "@amadio I think I ninja'd you there :)",
+        "createdAt" : "2017-07-11T15:00:33Z",
+        "updatedAt" : "2017-07-12T18:34:30Z",
+        "lastEditedBy" : "2349f38f-171e-43d8-8dee-e8439718c88a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eae37b94-6d64-454b-ae27-9105ab95f884",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "body" : "You certainly did. That's great work that you are doing. It will greatly improve the build system.\r\nAs for the temporary names, maybe using [`mktemp()`](https://linux.die.net/man/3/mktemp) is a better option (if we can find a Windows equivalent).",
+        "createdAt" : "2017-07-11T15:04:14Z",
+        "updatedAt" : "2017-07-12T18:34:30Z",
+        "lastEditedBy" : "a66b5f61-1206-4ddd-b280-befb0005276f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "00b7cf0a-e263-4101-96c0-813b390c52c1",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "@Teemperor \r\n> We don't know if someone generates build files for something really obscure (e.g. Visual Studio or an old Make version) which chooses the target order in a different way\r\n\r\nThat's not the issue.\r\n\r\nWhat you're saying is that build systems might trigger concurrent commands to generate the same target. That's horrendous. It's a bug. It would mean e.g. that the same library is linked twice in parallel. I buy your argument that this is a consequence of your CMake-based configuration to use `add_custom_command`.\r\n\r\nI'd hope that we can *not* use `add_custom_command` and instead use something that allows CMake to construct a proper dependency tree.\r\n\r\nCan we keep the original tmp name, issue an warning message if that file exists and then go use a unique name? That would allows us to detect whether the build system is generating the same dictionary in multiple concurrent processes.",
+        "createdAt" : "2017-07-12T20:29:28Z",
+        "updatedAt" : "2017-07-12T20:31:16Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ddefe36-aa2f-40e8-adff-5d97da386bf6",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "2349f38f-171e-43d8-8dee-e8439718c88a",
+        "body" : "@Axel-Naumann nope, no way around `add_custom_command` and `add_custom_target` here. LLVM is in the same situation with TableGen (even though I'm not sure if they do unique temp files). But we can easily check from CMake if someone forget to link to the custom_target as we have quite obvious naming conventions (and we further prevent this when we refactor most stuff to use the ROOT_STANDARD_WHATEVER function from RootNewMacros).\r\n\r\nI prefer the first suggestion with reverting the \"_tmp\" commit before we start turning rootcling into a tool for checking our CMake build system files.",
+        "createdAt" : "2017-07-12T21:02:20Z",
+        "updatedAt" : "2017-07-12T21:02:21Z",
+        "lastEditedBy" : "2349f38f-171e-43d8-8dee-e8439718c88a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43de4533-e366-4c64-8b93-19b73721b986",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "Thanks, @Teemperor . Anything that prevents CMake from spawning two rootcling processes to build the same product is majorly appreciated by anyone building with `LLVM_BUILD_TYPE=Debug`! :-)",
+        "createdAt" : "2017-07-13T02:09:53Z",
+        "updatedAt" : "2017-07-13T02:09:53Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd7f1074-8b6f-48fe-b7ec-a83a81bc1329",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "@Teemperor ping - can this be reverted so we see build system issues again?",
+        "createdAt" : "2017-08-18T14:10:49Z",
+        "updatedAt" : "2017-08-18T14:10:49Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb541c11-2994-4fcd-93d7-fb246e342e73",
+        "parentId" : "8b7c6456-02f0-4b82-b61e-e0c33d68a0cf",
+        "authorId" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "body" : "@Teemperor and/or should be it be replaced by a 'if already exist' fail?",
+        "createdAt" : "2017-08-18T15:06:39Z",
+        "updatedAt" : "2017-08-18T15:06:39Z",
+        "lastEditedBy" : "335eabbd-4b70-43fb-a046-bf82995f5dd3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "56c8e47d668883805a9e1269d67a335ad475a7de",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +3219,3223 @@\n   std::string getTmpFileName(const std::string &filename) {\n      return filename + \"_tmp_\" + std::to_string(getpid());\n   }\n   /////////////////////////////////////////////////////////////////////////////"
+  }
+]
