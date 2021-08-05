@@ -108,5 +108,104 @@
     "commit" : "a812c62af2d4369eb6c1884fad263a47967b2ac9",
     "line" : 90,
     "diffHunk" : "@@ -1,1 +185,189 @@      ///   TThreadedObject: each slot will hold one `T`. If `kIMTPoolSize` is passed, the\n      ///   number of slots is defined by ROOT's implicit MT pool size; IMT must be enabled.\n      /// \\tparam ARGS Arguments of the constructor of T\n      template<class ...ARGS>\n      TThreadedObject(TNumSlots nslotsTag, ARGS&&... args) : fIsMerged(false)"
+  },
+  {
+    "id" : "4db443f8-31b4-4dfc-84a7-ff15b264888a",
+    "prId" : 5464,
+    "prUrl" : "https://github.com/root-project/root/pull/5464#pullrequestreview-401857115",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "41ed49ba-7ed9-45ba-84eb-d520cf7bd36b",
+        "parentId" : null,
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "`unsigned` arithmatics (`++`, `<=`) are a nightmare. Do we really need this?",
+        "createdAt" : "2020-04-28T13:05:51Z",
+        "updatedAt" : "2020-04-28T16:56:02Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8518c651-0fad-4806-9896-89f68544d6d1",
+        "parentId" : "41ed49ba-7ed9-45ba-84eb-d520cf7bd36b",
+        "authorId" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "body" : "> Do we really need this?\r\n\r\nAs much as you ever really need unsigned integers...it's nice that `TNumSlots{-1}` simply does not compile and I don't have to add a ctor that checks for non-negativity. Plus the number of slots must be non-negative, always grows, and should stay quite far from UINT_MAX. What kind of problems do you expect?\r\n\r\n(just let me know if you want an `int`)",
+        "createdAt" : "2020-04-28T13:32:35Z",
+        "updatedAt" : "2020-04-28T16:56:02Z",
+        "lastEditedBy" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9042d726-7309-4c7b-8744-72f402188306",
+        "parentId" : "41ed49ba-7ed9-45ba-84eb-d520cf7bd36b",
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "OK. But comparison etc is evil - the general (committee) recommendation is \"don't use unsigned unless you do bit manipulations\". https://wesmckinney.com/blog/avoid-unsigned-integers/ https://www.boost.org/doc/libs/develop/libs/safe_numerics/doc/html/tutorial/3.html https://github.com/ericniebler/stl2/issues/182 :-) Your call, I get your argument.",
+        "createdAt" : "2020-04-28T13:52:28Z",
+        "updatedAt" : "2020-04-28T16:56:02Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e232bb5c8f12fd2ac2d01e2fea11cfed4ed1df4e",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +41,45 @@    */\n   struct TNumSlots {\n      unsigned int fVal; // number of slots\n      friend bool operator==(TNumSlots lhs, TNumSlots rhs) { return lhs.fVal == rhs.fVal; }\n      friend bool operator!=(TNumSlots lhs, TNumSlots rhs) { return lhs.fVal != rhs.fVal; }"
+  },
+  {
+    "id" : "bf0fc3d3-fee6-476a-a848-d4e92208c989",
+    "prId" : 5464,
+    "prUrl" : "https://github.com/root-project/root/pull/5464#pullrequestreview-404858779",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6ea0a027-3d7f-40cc-92be-12d46e9da367",
+        "parentId" : null,
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "So then in the end this doesn't grow the slots? Should it not?",
+        "createdAt" : "2020-04-28T13:11:52Z",
+        "updatedAt" : "2020-04-28T16:56:02Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3b7e6be-3893-4e9e-9d5d-c738706293c7",
+        "parentId" : "6ea0a027-3d7f-40cc-92be-12d46e9da367",
+        "authorId" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "body" : "Good point.\r\n\r\nWith the patch in its current form, `TThreadedObject` only grows when access is performed with `Get` or `->` (which make up the simple, sane interface).\r\n\r\nWhen a user asks for a specific slot number through `GetAtSlot`, the problem is that when user requires slot `i`, I would have to create all slots from `nSlots` to `i` included. Or change TThreadedObject's internals a bit more to allow \"holes\". The other problem is that I am not sure what the expected kind of usage for `GetAtSlot` is.\r\n\r\nThese are the two usage patterns that I foresaw for `TThreadedObject`:\r\n\r\n1. user creates `TThreadedObject(model)` and then has however many threads concurrently accessing its contents via the arrow operator. Each thread gets its own copy of `model`, and new slots are appended as needed (this solves our problem with `TTreeProcessorMT`)\r\n2. as a performance optimization, user can create `TThreadedObject(TNumSlots{4}, model)` and then set the slot contents via `SetAtSlot` or modify the contents via `GetAtSlot`. This is, of course, if they are sure that they won't use more than `TNumSlots{4}` slots _or_ they let threads access slots concurrently via `Get` or `->`, which grows the slots as needed, but creates new slots copying the model, does not let users choose their initial content. We don't have this usage pattern in ROOT afaik\r\n\r\nP.S.\r\n~~I broke a use-case: user creates `TThreadedObject(model)` and then accesses `GetAtSlot(i)` with `i <= fgMaxSlots`: before, `GetAtSlot` would lazily populate the slot number requested with a copy of `model`, now we just return a `nullptr`. Fixing it now.~~ I don't know where I was looking, the code is there",
+        "createdAt" : "2020-04-28T15:39:19Z",
+        "updatedAt" : "2020-04-28T16:56:02Z",
+        "lastEditedBy" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d2a8fcc-13a9-4fd7-b9cc-b963888a0c3b",
+        "parentId" : "6ea0a027-3d7f-40cc-92be-12d46e9da367",
+        "authorId" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "body" : "Forgot to ask questions:\r\n* do you think `GetAtSlot(i)` should grow the number of (empty, nullptr) slots to \"at least i\"?\r\n* how is `GetAtSlot` supposed to be used?",
+        "createdAt" : "2020-04-28T15:43:12Z",
+        "updatedAt" : "2020-04-28T16:56:02Z",
+        "lastEditedBy" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a452ed57-0145-4eb1-ad94-eee63419a9e0",
+        "parentId" : "6ea0a027-3d7f-40cc-92be-12d46e9da367",
+        "authorId" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "body" : "Agreed with Axel that it's fine if `GetAtSlot(i)` throws if `i > currentNumberOfSlots`.",
+        "createdAt" : "2020-05-04T10:11:37Z",
+        "updatedAt" : "2020-05-04T10:11:38Z",
+        "lastEditedBy" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e232bb5c8f12fd2ac2d01e2fea11cfed4ed1df4e",
+    "line" : 195,
+    "diffHunk" : "@@ -1,1 +221,225 @@\n         if (i >= nAvailableSlots) {\n            Warning(\"TThreadedObject::GetAtSlot\", \"This slot does not exist.\");\n            return nullptr;\n         }"
   }
 ]
