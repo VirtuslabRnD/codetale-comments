@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "9f38dac1-8bfc-4131-8a54-7ab3384bcda1",
+    "prId" : 8605,
+    "prUrl" : "https://github.com/root-project/root/pull/8605#pullrequestreview-699312751",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5b1d4fe3-b0ec-4d24-89a1-f7eb49ef39bf",
+        "parentId" : null,
+        "authorId" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "body" : "why do you need this conversion to `str` here and below?",
+        "createdAt" : "2021-07-05T12:55:41Z",
+        "updatedAt" : "2021-07-05T15:09:28Z",
+        "lastEditedBy" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6cce1be6-1e6a-4c7e-af2a-a437be693f19",
+        "parentId" : "5b1d4fe3-b0ec-4d24-89a1-f7eb49ef39bf",
+        "authorId" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "body" : "this is the price we pay for passing the `RFriendInfo` struct around and not converting it to python strings e.g. in `TreeHeadNode._get_friend_info` . The constructor of TChain (or the `Add` function used a few lines under) accept `const char *`), while inside that python loop we are passing around `std::string`s . The only exception are actually `friend_name, friend_alias` which since I unpack them in a pair they probably get converted from C++ strings to Python strings during the unpacking. But I still want to keep this convertion to Python string in all calls inside that loop to avoid having a lot of comments to explain this quirk ( I think the conversion explains the intent much better here).",
+        "createdAt" : "2021-07-05T15:20:13Z",
+        "updatedAt" : "2021-07-05T15:21:22Z",
+        "lastEditedBy" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85543938-7e93-43c3-8f2c-f06e0bd03e17",
+        "parentId" : "5b1d4fe3-b0ec-4d24-89a1-f7eb49ef39bf",
+        "authorId" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "body" : "ah it's not a Python problem, it's a C++ problem. nevermind.",
+        "createdAt" : "2021-07-05T15:27:41Z",
+        "updatedAt" : "2021-07-05T15:27:41Z",
+        "lastEditedBy" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e8c8265a-5e61-4ca5-8085-02bc1dd871cc",
+        "parentId" : "5b1d4fe3-b0ec-4d24-89a1-f7eb49ef39bf",
+        "authorId" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "body" : "It goes deeper than I expected actually. So I just tried printing some information from those objects while executing the new roottest added in the sibling PR\r\n```\r\nfriend_name: <class 'str'> = \r\nfriend_alias: <class 'str'> = myfriend\r\nfriend_filenames: <class cppyy.gbl.std.vector<string> at 0x55f1e974f850> = { \"friendtrees_spark.root\" }\r\nfriend_filenames[0]: <class 'str'> = friendtrees_spark.root\r\nfriend_chainsubnames: <class cppyy.gbl.std.vector<string> at 0x55f1e974f850> = { \"randomNumbersBis\" }\r\nfriend_chainsubnames[0]: <class 'str'> = randomNumbersBis\r\n```\r\nAnd from this it looks like everything is a Python string. But  if I remove the extra `str()` conversion and just pass the variables to the TChain methods then I get this error\r\n```\r\nTypeError: none of the 2 overloaded methods succeeded. Full details:\r\n  int TChain::Add(TChain* chain) =>\r\n    TypeError: could not convert argument 1\r\n  int TChain::Add(const char* name, Long64_t nentries = TTree::kMaxEntries) =>\r\n    TypeError: could not convert argument 1 (bad argument type for built-in operation)\r\n```\r\nWhich is weird becuase if I force the conversion with `str()` I don't get it but it looks like they're python strings anyway...",
+        "createdAt" : "2021-07-05T15:46:01Z",
+        "updatedAt" : "2021-07-05T15:55:31Z",
+        "lastEditedBy" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f6f1a15d-8b09-401a-a8a4-83215a9ab56a",
+        "parentId" : "5b1d4fe3-b0ec-4d24-89a1-f7eb49ef39bf",
+        "authorId" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "body" : "Also the fact that `type(friend_filenames[0])` returns `str` while `type(friend_filenames)` returns `cppyy.gbl.std.vector<string>` is weird. It makes me think that cppyy does something that makes the `std::string` accesed by `friend_filenames[0]` look like a Python str while it's not",
+        "createdAt" : "2021-07-05T15:47:30Z",
+        "updatedAt" : "2021-07-05T15:47:30Z",
+        "lastEditedBy" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a40975eb-df06-42b8-8224-55a9e8b94cc4",
+        "parentId" : "5b1d4fe3-b0ec-4d24-89a1-f7eb49ef39bf",
+        "authorId" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "body" : "that's just PyROOT doing its job I'd say?",
+        "createdAt" : "2021-07-05T15:55:18Z",
+        "updatedAt" : "2021-07-05T15:55:18Z",
+        "lastEditedBy" : "f2c15ca6-f995-45d3-a26d-40d002e52d07",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7df8d9d-3923-4291-9507-4f0239d8f193",
+        "parentId" : "5b1d4fe3-b0ec-4d24-89a1-f7eb49ef39bf",
+        "authorId" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "body" : "Yes but it doesn't do it all the way down to passing the string as a `const char *` to `TChain::Add`, which instead happens with a Python string created by forced conversion with `str(friend_filenames[0])`. Anyway, probably not an issue for this PR so I'd keep the conversions there",
+        "createdAt" : "2021-07-05T16:01:23Z",
+        "updatedAt" : "2021-07-05T16:01:23Z",
+        "lastEditedBy" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "997bb567-308c-4517-ad74-130b2d3a2e88",
+        "parentId" : "5b1d4fe3-b0ec-4d24-89a1-f7eb49ef39bf",
+        "authorId" : "4c541c6e-f658-422b-9f5a-7ae0b2a9a1f5",
+        "body" : "I think the confusion here comes from the fact that iterating over an `std::vector<string>` returns `std::string`s, but not accessing elements individually (`friend_filenames[0]` is a Python str). The conversion to Python string you (correctly) added is needed because you get `file_name` from an iteration over the vector, which means it's an `std::string`, which can't convert to `const char *`.",
+        "createdAt" : "2021-07-05T16:14:24Z",
+        "updatedAt" : "2021-07-05T16:15:15Z",
+        "lastEditedBy" : "4c541c6e-f658-422b-9f5a-7ae0b2a9a1f5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8e871da9ace6af0e5647c116f0e8371ce0e35dcd",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +190,194 @@                    for (friend_name, friend_alias), friend_filenames, friend_chainsubnames in zipped_friend_info:\n                        # Start a TChain with the current friend treename\n                        friend_chain = ROOT.TChain(str(friend_name))\n                        # Add each corresponding file to the TChain\n                        if friend_chainsubnames.empty():"
+  },
+  {
+    "id" : "3a6927e8-1d63-4fa2-8e5e-6d321dd764b2",
+    "prId" : 8605,
+    "prUrl" : "https://github.com/root-project/root/pull/8605#pullrequestreview-699297103",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "43a7d5ff-ede5-47ea-a397-ca73f83d3593",
+        "parentId" : null,
+        "authorId" : "4c541c6e-f658-422b-9f5a-7ae0b2a9a1f5",
+        "body" : "So the `subnames` are the names of the friend tree in each file in the chain, but if instead of a chain it's a tree there are no subnames?\r\nWould it be good to add a paragraph about the subnames here?",
+        "createdAt" : "2021-07-05T15:38:48Z",
+        "updatedAt" : "2021-07-05T15:38:48Z",
+        "lastEditedBy" : "4c541c6e-f658-422b-9f5a-7ae0b2a9a1f5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25efd11e-fb73-4126-9319-0909beb6843e",
+        "parentId" : "43a7d5ff-ede5-47ea-a397-ca73f83d3593",
+        "authorId" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "body" : "Yes you are right. If the friend is a `TTree` it will not have sub names so the corresponding vector in `friend_info.fFriendChainSubNames` will be empty. You are also right that I should add some extra comments here :smile:",
+        "createdAt" : "2021-07-05T15:48:55Z",
+        "updatedAt" : "2021-07-05T15:49:07Z",
+        "lastEditedBy" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8e871da9ace6af0e5647c116f0e8371ce0e35dcd",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +178,182 @@                    # element of the iterator represents a single friend tree.\n                    # If the friend is a TChain, the zipped information looks like:\n                    # (name, alias), (file1.root, file2.root, ...), (subname1, subname2, ...)\n                    # If the friend is a TTree, the file list is made of\n                    # only one filename and the list of names of the sub trees"
+  },
+  {
+    "id" : "df6f87ed-6211-4afd-bab2-603b6b238085",
+    "prId" : 8623,
+    "prUrl" : "https://github.com/root-project/root/pull/8623#pullrequestreview-702992821",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f2fe0f2d-46c2-47b6-926c-e5e27c6cab97",
+        "parentId" : null,
+        "authorId" : "4c541c6e-f658-422b-9f5a-7ae0b2a9a1f5",
+        "body" : "You don't need to pass `current_range.id` as parameter if you are already passing `current_range`, right?",
+        "createdAt" : "2021-07-09T12:19:43Z",
+        "updatedAt" : "2021-07-09T12:19:43Z",
+        "lastEditedBy" : "4c541c6e-f658-422b-9f5a-7ae0b2a9a1f5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b749492b-f9f2-4d76-91a9-b0419eeaada7",
+        "parentId" : "f2fe0f2d-46c2-47b6-926c-e5e27c6cab97",
+        "authorId" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "body" : "Exactly! But that will change in the next PR where I will remove `current_range` completely. I prefer passing a single integer rather than the whole object",
+        "createdAt" : "2021-07-09T12:21:16Z",
+        "updatedAt" : "2021-07-09T12:21:16Z",
+        "lastEditedBy" : "82ce2c80-31ff-4f7b-91f0-fff78777d7f9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2b779a51db67ad75a8b748797e789efe2d7257dc",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +219,223 @@\n            # Output of the callable\n            resultptr_list = computation_graph_callable(rdf, current_range.id, rdf_range=current_range)\n\n            mergeables = ["
+  }
+]
