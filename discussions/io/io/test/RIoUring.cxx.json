@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "be6d3d10-d69a-4be6-961a-942e36c054eb",
+    "prId" : 5919,
+    "prUrl" : "https://github.com/root-project/root/pull/5919#pullrequestreview-459320307",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fec023f1-791a-4532-9b46-07c65f9fcfa8",
+        "parentId" : null,
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "Isn't this test going to fail on any platform without iouring? Or does \"it compiles\" automatically mean \"it is available\"? But then why do we need `IsAvailable()`?",
+        "createdAt" : "2020-07-29T10:04:41Z",
+        "updatedAt" : "2020-08-05T12:36:09Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d1d31f04-b64f-4fae-ad3c-addd441c73b1",
+        "parentId" : "fec023f1-791a-4532-9b46-07c65f9fcfa8",
+        "authorId" : "a8c9d8db-0fb8-4803-8857-3254086320bb",
+        "body" : "This is sort of an interesting situation where we can really only detect at runtime if `io_uring` works.\r\nWe try hard at the cmake level to avoid compiling any `io_uring` stuff if the userspace library `liburing` isn't installed.  \r\n```cmake\r\nif(uring)\r\n  ROOT_ADD_GTEST(RIoUring RIoUring.cxx LIBRARIES RIO uring)\r\nendif()\r\n```\r\n\r\nIt is possible to imagine a situation where someone installs liburing but doesn't have the right kernel, so it compiles but fails at runtime with `ENOSYS` etc. It's hard to go off kernel versions themselves (maybe there's a backport). \r\n\r\nThe test itself was intended to be a warning to the developer that `uring` doesn't work on your machine.\r\n\r\n`IsAvailable` is also interesting because right now, all it does it check whether it can open a ring once and caches the result. It is technically possible that this value changes over time (i.e. a number of threads open a ring, exhausting the `memlocked` pool.) I think this different behaviour (checking for each thread) is what's done in the `folly` wrapper. \r\n\r\nhttps://github.com/facebook/folly/blob/edec54f4d5eac315a278a73d960e97c0de74c503/folly/experimental/io/IoUring.cpp#L193-L203",
+        "createdAt" : "2020-07-29T14:24:13Z",
+        "updatedAt" : "2020-08-05T12:36:09Z",
+        "lastEditedBy" : "a8c9d8db-0fb8-4803-8857-3254086320bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e2875c0-ae60-47ef-a2f6-af796d5644d1",
+        "parentId" : "fec023f1-791a-4532-9b46-07c65f9fcfa8",
+        "authorId" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "body" : "OK but as is, roottest might fail just because uring isn't available in the kernel. I don't think that's a situation we want - I haven't broken my ROOT yet roottest fails, and I cannot fix anything in ROOT to make my roottest work again. Shall we discuss what to do here tomorrow during the I/O meeting?",
+        "createdAt" : "2020-07-30T08:42:58Z",
+        "updatedAt" : "2020-08-05T12:36:09Z",
+        "lastEditedBy" : "09b7e073-cbeb-42e8-aa22-8b1468de56ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba5ce5e8-3083-4c06-8499-30ddec76b2f3",
+        "parentId" : "fec023f1-791a-4532-9b46-07c65f9fcfa8",
+        "authorId" : "6cd3c9bc-f261-444d-81ab-c00c917f2197",
+        "body" : "I think by default we should just skip the test if `!IsAvailable()`.  If we want to be very careful, we can set and check an environment variable that indicates that we really expect uring to be there, e.g. `ROOTTEST_HAS_URING`.  On test nodes with a recent enough kernel, we can then fail if this variable is set and `!IsAvailable()`.  To be more safe, we can also revert the default and set `ROOTTEST_NO_URING` where the kernel is too old.",
+        "createdAt" : "2020-07-30T11:28:11Z",
+        "updatedAt" : "2020-08-05T12:36:09Z",
+        "lastEditedBy" : "6cd3c9bc-f261-444d-81ab-c00c917f2197",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9333d236-d89c-4cb0-869c-f219df6d461f",
+        "parentId" : "fec023f1-791a-4532-9b46-07c65f9fcfa8",
+        "authorId" : "a8c9d8db-0fb8-4803-8857-3254086320bb",
+        "body" : "I think either approach makes sense and I am OK skipping all the RIoUring tests if it isn't available (and taking out the IsAvailable test entirely).\r\n\r\n> I haven't broken my ROOT yet roottest fails\r\n\r\nAs implemented, people have to opt in to `uring` when they build ROOT. It's their responsibility to have `liburing` installed and have a relatively recent kernel. If they were to then run the `RIoUring` test suite I think it would be strange to have them pass if `uring` isn't working. I feel the way to fix ROOT in this case is to build it again after turning off `uring`.",
+        "createdAt" : "2020-07-30T14:00:49Z",
+        "updatedAt" : "2020-08-05T12:36:09Z",
+        "lastEditedBy" : "a8c9d8db-0fb8-4803-8857-3254086320bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "318f38a3-5e02-45d5-9ecb-3a72871c692b",
+        "parentId" : "fec023f1-791a-4532-9b46-07c65f9fcfa8",
+        "authorId" : "a8c9d8db-0fb8-4803-8857-3254086320bb",
+        "body" : "I opened a PR to only test on the dedicated Fedora 32 node here https://github.com/root-project/rootspi/pull/82. This PR then requires changes to make sure we're properly handling the `ROOTTEST_ENABLE_URING` environment variable in `io/io/test/CMakeLists.txt`. ",
+        "createdAt" : "2020-07-31T16:54:35Z",
+        "updatedAt" : "2020-08-05T12:36:09Z",
+        "lastEditedBy" : "a8c9d8db-0fb8-4803-8857-3254086320bb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "23d2a9f4d0bba8f4e87541d0baaf8e9e930aa3c1",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +12,16 @@TEST(RIoUring, IsAvailable)\n{\n   ASSERT_TRUE(RIoUring::IsAvailable());\n}\n"
+  }
+]
