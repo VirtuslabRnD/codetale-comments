@@ -834,5 +834,181 @@
     "commit" : "726bd8e27b12b14e53b6d2d89a9576e42e05b21d",
     "line" : 44,
     "diffHunk" : "@@ -1,1 +42,46 @@\t// so that initial CPU affinity settings can be written through to the\n\t// container runtime before the first process begins to execute.\n\tAddContainer(p *v1.Pod, c *v1.Container, containerID string) error\n\n\t// RemoveContainer is called after Kubelet decides to kill or delete a"
+  },
+  {
+    "id" : "24c19c21-64a2-4179-8f16-71427f70f386",
+    "prId" : 103979,
+    "prUrl" : "https://github.com/kubernetes/kubernetes/pull/103979#pullrequestreview-721331882",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "parentId" : null,
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I think this is only partially correct.  You need to prune the admitted pods map to only include those that are still in either config or pod worker but not in both (a pod that is in the pod worker is by definition admitted).  You also want to exclude pods that are no longer running due to termination (which means we will never start the container again, thus we can reuse those CPUs).  You then need to take that pruned list of admitted pods and add it to active pods to get the list of \"pods that should be considered to be allocated guaranteed resources\"\r\n\r\nI think we'll need to add a method on kubelet to make this easier - looking at what that would be right now.",
+        "createdAt" : "2021-07-28T19:20:31Z",
+        "updatedAt" : "2021-07-28T19:20:38Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2de4b17b-5968-4761-a2c1-b616b4d140b7",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "Looking at this, I think we have a bug in that these components need to know about pods that are terminating that have been force deleted (which activePods() does not include).  @Random-Liu I think that components like the cpu_manager, memory_manager, qos_container_manager, and device_manager actually need to know pods that have been force deleted but are still running.  To do that, I'm going to need to enable the pod worker to share that info safely (and consistently, i think).",
+        "createdAt" : "2021-07-28T19:47:27Z",
+        "updatedAt" : "2021-07-28T19:47:28Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "59cd6645-d0b5-45a4-b21d-2b90be476903",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "body" : "I'm not sure what you suggest here is necessary. As you mentioned in your comment [here](https://github.com/kubernetes/kubernetes/issues/103952#issuecomment-888387811), all we should really need to care about is whether the pod is:\r\n\r\n(1) in the active pods list; or\r\n(2) some pod currently waiting to be admitted\r\n\r\nAssuming logic exists to _atomically_ add an admitted pod to the active pod list before starting the next iteration of the admission loop, I believe this should be sufficient. If it doesn't make it into the active list, then we shouldn't be tracking it anyway, and if it's ever removed from the list, we should be done tracking it.\r\n\r\nWe just then need to track a single variable to hold the \"currently being admitting\" pod that gets overwritten each time a new iteration of the admit loop starts.\r\n\r\nThe check in `removeStaleState()` would then remove any state not currently associated with a pod in the active list + this new variable.\r\n\r\nOf course this is all contingent on what I said before:\r\n> Assuming logic exists to _atomically_ add an admitted pod to the active pod list before starting the next iteration of the admission loop, I believe this should be sufficient.\r\n\r\nMaybe there's good reason not to do this?",
+        "createdAt" : "2021-07-29T08:55:08Z",
+        "updatedAt" : "2021-07-29T14:23:27Z",
+        "lastEditedBy" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3a4589f-acd4-443d-b965-5123287ad63d",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "> (1) in the active pods list; or\r\n\r\nThe bug is that the active pods list does not include force deleted pods that may take tens of minutes to complete that may still have running containers that are pinned to certain CPUs.",
+        "createdAt" : "2021-07-29T19:34:36Z",
+        "updatedAt" : "2021-07-29T19:34:37Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "660a6aba-0270-4a21-82c5-aec17263ff30",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "body" : "Is that a problem though? I would think we can safely remove the CPUs assigned to them then, and the next time around the reconcile loop, their containers will be moved onto non-exclusive CPUs.",
+        "createdAt" : "2021-07-29T20:34:05Z",
+        "updatedAt" : "2021-07-29T20:34:06Z",
+        "lastEditedBy" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a7dbf180-9937-4e95-8b6f-954e13f55dfd",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "body" : "Ah, nevermind, the reconcile loop also relies on the activePods List, so there is no way to know we should move these deleted pods to non-exclusive CPUs.",
+        "createdAt" : "2021-07-29T20:35:45Z",
+        "updatedAt" : "2021-07-29T20:35:46Z",
+        "lastEditedBy" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1c8892a0-cbf0-4be6-897a-25fa65009c39",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "body" : "On thing to consider here -- while I agree that this would be nice to have -- it's not something we supported before, so not including it now would not be a regression. It should be in it's own PR.\r\n\r\nI also still think there's a way to handle this without adding a new function (i.e. track which pods' state was removed from `removeStaleState()` and check each of it's container statuses one last time the next time it is in the reconcile loop). If any of them are still running, it will trigger the `Update()` call at the bottom of the loop to remove it's exclusive CPUs.",
+        "createdAt" : "2021-07-30T19:21:53Z",
+        "updatedAt" : "2021-07-30T19:21:54Z",
+        "lastEditedBy" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "51f7efc1-5d19-4c17-baa8-3b690a34d087",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "b15151c4-81af-487d-8c8f-a4f39690bd34",
+        "body" : "@smarterclayton Do you know if the `GetActivePods()` returned force deleted pods before the refactoring? If no, for now, we can at least fix the code to have old behavior and once we will have an option to get force deleted pods, we can refactor the code again.",
+        "createdAt" : "2021-08-01T09:04:52Z",
+        "updatedAt" : "2021-08-01T09:04:52Z",
+        "lastEditedBy" : "b15151c4-81af-487d-8c8f-a4f39690bd34",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa340a8d-c4f7-4f9f-8794-fd0736011878",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "body" : "It doesn’t matter if it included these pods or not before — we’ve never had logic to actually call ‚update()‘ on the containers associated with these types of pods to remove CPUs  from them if they were still running. That is the new logic we would need to add.",
+        "createdAt" : "2021-08-01T09:13:28Z",
+        "updatedAt" : "2021-08-01T09:13:28Z",
+        "lastEditedBy" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10a13474-a817-474d-9d10-48a8ae9cdbb1",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "body" : "Although, I guess if activePods() used to include terminated (but still running) pods before, then we never would have removed stale state about them here, making us „think“ their CPUs were free (even though containers are still running on them).",
+        "createdAt" : "2021-08-01T09:28:52Z",
+        "updatedAt" : "2021-08-01T12:53:15Z",
+        "lastEditedBy" : "8eff55b7-2f52-4dd6-b8a6-b75a1c427179",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a0f1e2b-d89a-4b4e-b64c-cd49559e977b",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "154a8533-a24d-4af9-81fb-0e2db0a9acf3",
+        "body" : "> Although, I guess if activePods() used to include terminated (but still running) pods before, then we never would have removed stale state about them here, making us „think“ their CPUs were free (even though containers are still running on them).\r\n\r\nAFAIU/CT this is the most pressing question now. I fully agree about the general idea to restore the old (and, we learned, not covering some important cases) behaviour and iterating later to actually cover them. The former is important and urgent, the later important as well but less urgent.",
+        "createdAt" : "2021-08-02T06:46:29Z",
+        "updatedAt" : "2021-08-02T06:46:36Z",
+        "lastEditedBy" : "154a8533-a24d-4af9-81fb-0e2db0a9acf3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9cff24d0-205e-422a-8413-44150f230fb8",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "ActivePods() never returned pods that were force deleted.  So you have always been broken on that.",
+        "createdAt" : "2021-08-02T16:57:53Z",
+        "updatedAt" : "2021-08-02T16:57:53Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "741df506-0f64-4570-853a-1b49e04253f6",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "b15151c4-81af-487d-8c8f-a4f39690bd34",
+        "body" : "In this case, can we restore at least the old behavior under the current PR, and once we will have the infrastructure to get force deleted pods we can improve the logic under resource managers.",
+        "createdAt" : "2021-08-03T07:55:25Z",
+        "updatedAt" : "2021-08-03T07:55:25Z",
+        "lastEditedBy" : "b15151c4-81af-487d-8c8f-a4f39690bd34",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ec766048-ec0e-47b3-888c-046bf20bc466",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "b15151c4-81af-487d-8c8f-a4f39690bd34",
+        "body" : "I opened an issue to monitor force deleted pods problem - https://github.com/kubernetes/kubernetes/issues/104099",
+        "createdAt" : "2021-08-03T12:19:23Z",
+        "updatedAt" : "2021-08-03T12:19:38Z",
+        "lastEditedBy" : "b15151c4-81af-487d-8c8f-a4f39690bd34",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d137a96-1326-49c1-b826-5dd1366a6ada",
+        "parentId" : "e182561f-b070-407e-a1c8-7192e53de191",
+        "authorId" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "body" : "I agree this does not block this change, and probably the fix for 104099 should make the code changes here simpler (but we don't have to do it now).",
+        "createdAt" : "2021-08-03T15:16:39Z",
+        "updatedAt" : "2021-08-03T15:16:39Z",
+        "lastEditedBy" : "6e2b5eda-1533-4798-a56c-432faaf38480",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "73a5cce3e642803c22f675bc37bcae781a7de4ee",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +360,364 @@\tif m.pendingAdmissionPod != nil {\n\t\tactiveAndAdmittedPods = append(activeAndAdmittedPods, m.pendingAdmissionPod)\n\t}\n\n\t// Build a list of (podUID, containerName) pairs for all containers in all active Pods."
   }
 ]
