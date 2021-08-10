@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "2edd1d61-1dda-46e0-bf29-fe91fadb5a70",
+    "prId" : 12635,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/12635#pullrequestreview-8536062",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0c8db117-de36-45c8-ade5-5c9116bb9781",
+        "parentId" : null,
+        "authorId" : "dbc0e58d-9f4d-41a9-9fd8-c0b24e9aab13",
+        "body" : "Hm, I don't think this is right: the decorator should, in the general case, yield a component that has a subset of the input props, but this leaves it unchanged. (This is https://github.com/Microsoft/TypeScript/issues/4881.) \n",
+        "createdAt" : "2016-11-12T13:20:07Z",
+        "updatedAt" : "2016-11-14T22:30:54Z",
+        "lastEditedBy" : "dbc0e58d-9f4d-41a9-9fd8-c0b24e9aab13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0ac04b71-1157-4b58-85cc-cfd08db870c1",
+        "parentId" : "0c8db117-de36-45c8-ade5-5c9116bb9781",
+        "authorId" : "390ba971-d431-405e-a158-e9071a64847f",
+        "body" : "Are you sure you interpreted that right?\n\nYes, as a decorator TS ends up inferring that `M` is the same type as `P` since it infers that `TargetClass` has the same type as `TargetClass & ConnectClass<P, TargetClass>` due to the class decorator being generically defined as\n\n```\ntype ClassDecorator = <TFunction extends Function>(target: TFunction) => TFunction | void;\n```\n\nAs a function however, `P` is going to be a subset of the merged props `M` assuming that no custom merge props function is given.\n",
+        "createdAt" : "2016-11-12T17:18:08Z",
+        "updatedAt" : "2016-11-14T22:30:54Z",
+        "lastEditedBy" : "390ba971-d431-405e-a158-e9071a64847f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7aaf2070-020e-4114-806f-b395f25ec9e5",
+        "parentId" : "0c8db117-de36-45c8-ade5-5c9116bb9781",
+        "authorId" : "dbc0e58d-9f4d-41a9-9fd8-c0b24e9aab13",
+        "body" : "I took a closer look at this, and I think my initial reading is correct.\n\nIf we take the second overload of `connect` and assume the user has specified `TStateProps`/`TDispatchProps`/`TOwnProps` explicitly\n\n``` ts\nfunction connect<TStateProps, TDispatchProps, TOwnProps>(...): ComponentDecorator<DefaultMergedProps<TStateProps, TDispatchProps, TOwnProps>, TOwnProps>;\n```\n\nand trace the types through a bit\n\n``` ts\n(component: ComponentType<DefaultMergedProps<TStateProps, TDispatchProps, TOwnProps>>): ComponentType<DefaultMergedProps<TStateProps, TDispatchProps, TOwnProps>> & ConnectClass<TOwnProps, ComponentType<DefaultMergedProps<TStateProps, TDispatchProps, TOwnProps>>>\n```\n\nthe resulting component has the type\n\n``` ts\nComponentType<TOwnProps & TStateProps & TDispatchProps> & ConnectClass<TOwnProps, ComponentType<TOwnProps & TStateProps & TDispatchProps>>\n\n// dropping the StatelessComponent variant for simplicity and removing extraneous bits of ConnectClass\n\nReact.ComponentClass<TOwnProps & TStateProps & TDispatchProps> & React.ComponentClass<TOwnProps>\n\n// which Typescript will presumably simplify to something like the following, or close to it\n\nReact.ComponentClass<TOwnProps & TStateProps & TDispatchProps>\n```\n\nI think this is right, but please correct me if I'm wrong. I hope I didn't drop anything important in the simplification steps.\n\nThe crux of the issue is that the input class type should not appear in the output, but rather a subset of it. If there is a way to somehow get the compiler to accept a different type definition for the function in the case of the decorator but not in the case of a regular function invocation, then there might be a way to do it (or perhaps some foolery with `void`). That said, I don't see how the decorator definition in its current form would have the desired inference you describe in your comment.\n",
+        "createdAt" : "2016-11-14T21:41:53Z",
+        "updatedAt" : "2016-11-14T22:30:54Z",
+        "lastEditedBy" : "dbc0e58d-9f4d-41a9-9fd8-c0b24e9aab13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f342f65-1c13-466c-83fa-3bfb6576a594",
+        "parentId" : "0c8db117-de36-45c8-ade5-5c9116bb9781",
+        "authorId" : "390ba971-d431-405e-a158-e9071a64847f",
+        "body" : "Nope, I think your very last simplification step is incorrect (_I think!_)\n\n~~I believe the calculation of the final intersection type works similarly to `Object.assign` in that it only does a shallow merge of types, from right to left. In this case, the `props` on the prototype of `ConnectClass` will take precedence over whatever props the `TargetClass` needs because the it only looks at `ConnectClass`'s constructor return type.~~\n\nOrder of intersection types does not seem to matter. I've only determined this experimentally, but TypeScript just seems to prefer the prop types of `ConnectClass`, not exactly sure why yet. It looks like it's potentially a TypeScript bug?\n\nHere's an example I just wrote up that demonstrates correct behavior:\n\n``` typescript\ninterface CounterStateProps { value: number; }\ninterface CounterDispatchProps { onIncrement: ActionCreator<CounterState>; }\ninterface CounterState { counter: number; }\ninterface Props { requiredOwnProp: string; }\ndeclare var increment: Function;\n\nclass Counter extends Component<Props & CounterStateProps & CounterDispatchProps, CounterState> {\n    render() {\n        return (\n            <button onClick={this.props.onIncrement}>\n                {this.props.value}\n            </button>\n        );\n    }\n}\n\nconst mapStateToProps = (state: CounterState) => ({\n    value: state.counter\n});\nconst mapDispatchToProps = (dispatch: Dispatch<CounterState>) => ({\n    onIncrement: () => dispatch(increment())\n});\n\nconst WrappedCounter = connect<CounterStateProps, CounterDispatchProps, Props>(\n    mapStateToProps,\n    () => mapDispatchToProps\n)(Counter);\nReactDOM.render((\n    <WrappedCounter requiredOwnProp=\"hello\" value={123} />\n), document.body);\n```\n\nHere, trying to declare `value` (used in `CounterStateProps`) isn't allowed, and tsc will complain\n\n```\nerror TS2339: Property 'value' does not exist on type 'IntrinsicAttributes & IntrinsicClassAttributes<Component<Props, ComponentState>> & Props & { chil...'.\n```\n\nTherefore I'm pretty certain that the final simplification is indeed\n\n```\nReact.ComponentClass<TOwnProps>\n```\n",
+        "createdAt" : "2016-11-14T22:52:28Z",
+        "updatedAt" : "2016-11-14T23:31:35Z",
+        "lastEditedBy" : "390ba971-d431-405e-a158-e9071a64847f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8fe406f-2822-4e99-886d-e7b9d31e9471",
+        "parentId" : "0c8db117-de36-45c8-ade5-5c9116bb9781",
+        "authorId" : "390ba971-d431-405e-a158-e9071a64847f",
+        "body" : "Ok one more text wall\n\nHere's a trace of the above example, but using a decorator:\n\n``` typescript\ninterface CounterStateProps { value?: number; }\ninterface CounterDispatchProps { onIncrement?: ActionCreator<CounterState>; }\ninterface CounterState { counter: number; }\ninterface Props { requiredOwnProp: string; }\ndeclare var increment: Function;\n\nconst mapStateToProps = (state: CounterState) => ({\n    value: state.counter\n});\nconst mapDispatchToProps = (dispatch: Dispatch<CounterState>) => ({\n    onIncrement: () => dispatch(increment())\n});\n\n@connect<CounterStateProps, CounterDispatchProps, Props>(\n    mapStateToProps,\n    () => mapDispatchToProps\n)\nclass Counter extends Component<Props & CounterStateProps & CounterDispatchProps, CounterState> {\n    render() {\n        return (\n            <button onClick={this.props.onIncrement}>\n                {this.props.value}\n            </button>\n        );\n    }\n}\nReactDOM.render((\n    <Counter requiredOwnProp=\"hello\" value={123} />\n), document.body);\n```\n\nThis is incorrectly passing. But, it is good enough, considering the limitations TS's class decorator definition imposes.\n\n``` typescript\n// Our initial (simplified) ComponentDecorator definition\n<TargetClass extends ComponentType<M>>(component: TargetClass): TargetClass & ConnectClass<P, TargetClass>\n\n// So right off the bat, TS breaks things by preventing a correct type for ComponentType & ConnectClass\n<TargetClass extends Function>(target: TargetClass ) => TargetClass\n//\n\n// Applying these constraints onto ComponentDecorator:\n(component: ComponentType<M>): ComponentType<M>\n// Therefore, (TargetClass & ConnectClass<P, TargetClass>) must match ComponentType<M>,\n// and P is essentially forgotten, end of story\n```\n\nThe workaround to this behavior is to declare state and dispatch props as optional so the resulting component can at least be used normally without tsc complaining about missing props.\n",
+        "createdAt" : "2016-11-14T23:15:06Z",
+        "updatedAt" : "2016-11-14T23:15:06Z",
+        "lastEditedBy" : "390ba971-d431-405e-a158-e9071a64847f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6cc2f31d-269d-4e74-9174-9eb98b4d2e51",
+        "parentId" : "0c8db117-de36-45c8-ade5-5c9116bb9781",
+        "authorId" : "dbc0e58d-9f4d-41a9-9fd8-c0b24e9aab13",
+        "body" : "Hm, interesting. If your first comment is consistent, then that would be awesome! In the typescript playground, I put together [this example](https://www.typescriptlang.org/play/#src=interface%20I1%20%7B%0D%0A%20%20foo%3A%20string%3B%0D%0A%20%20bar%3A%20string%3B%0D%0A%7D%0D%0A%0D%0Ainterface%20I2%20%7B%0D%0A%20%20foo%3A%20number%3B%0D%0A%20%20baz%3A%20number%3B%0D%0A%7D%0D%0A%0D%0Aclass%20Class%3CP%3E%20%7B%0D%0A%20%20props%3A%20P%3B%0D%0A%7D%0D%0A%0D%0Atype%20MixedClass%20%3D%20Class%3CI1%3E%20%26%20Class%3CI2%3E%3B%0D%0A%0D%0Alet%20m%3A%20MixedClass%3B%0D%0A%0D%0A):\n\n``` ts\ninterface I1 {\n  foo: string;\n  bar: string;\n}\n\ninterface I2 {\n  foo: number;\n  baz: number;\n}\n\nclass Class<P> {\n  props: P;\n}\n\ntype MixedClass = Class<I1> & Class<I2>;\n\nlet m: MixedClass;\n```\n\nIf you open it up and poke around `m` you can see what it autocompletes: it seems to be doing a recursive intersection on the properties, which makes sense to me. I'm trying to figure out what it is about this case that's causing it to apparently do the right thing, weird though the right thing is.\n",
+        "createdAt" : "2016-11-15T01:53:17Z",
+        "updatedAt" : "2016-11-15T01:53:17Z",
+        "lastEditedBy" : "dbc0e58d-9f4d-41a9-9fd8-c0b24e9aab13",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "592da953-cf27-42c6-aee8-8e2ee61c1607",
+        "parentId" : "0c8db117-de36-45c8-ade5-5c9116bb9781",
+        "authorId" : "390ba971-d431-405e-a158-e9071a64847f",
+        "body" : "Yeah, I can't figure it out. It seems as if the constraint in `TargetClass extends React.ComponentClass<M>` doesn't matter when calculating an intersection type. Otherwise, tsc would freak out at the fact that the two constructor definitions don't have matching types. `ConnectClass<P, W> extends React.ComponentClass<P>` isn't compatible with `React.ComponentClass<M>` unless tsc thinks that `M` is of type `any`.\n\nOh also, [TS #12114](https://github.com/Microsoft/TypeScript/pull/12114) just recently merged with [2.1 final](https://github.com/Microsoft/TypeScript/wiki/Roadmap#21-november-2016)! 🎉🎉🎉\n",
+        "createdAt" : "2016-11-15T04:29:27Z",
+        "updatedAt" : "2016-11-15T04:41:07Z",
+        "lastEditedBy" : "390ba971-d431-405e-a158-e9071a64847f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "27b98d0580fd39f4b99041191ee57373c71998c5",
+    "line" : 70,
+    "diffHunk" : "@@ -1,1 +14,18 @@\n    interface ComponentDecorator<M, P> {\n        <TargetClass extends ComponentType<M>>(component: TargetClass): TargetClass & ConnectClass<P, TargetClass>;\n    }\n"
+  }
+]
