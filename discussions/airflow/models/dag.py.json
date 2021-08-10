@@ -493,5 +493,82 @@
     "commit" : "9b6466f22f42d04d22f516d372a600bba2fc0193",
     "line" : 40,
     "diffHunk" : "@@ -1,1 +311,315 @@        else:\n            raise AirflowException(f'Invalid values of dag.default_view: only support '\n                                   f'{DEFAULT_VIEW_PRESETS}, but get {default_view}')\n        if orientation in ORIENTATION_PRESETS:\n            self.orientation = orientation"
+  },
+  {
+    "id" : "67929296-6802-47ff-8a9e-a33ea07bf092",
+    "prId" : 7038,
+    "prUrl" : "https://github.com/apache/airflow/pull/7038#pullrequestreview-338945150",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "63d4c065-25f5-4081-aeb7-971e0133a5e1",
+        "parentId" : null,
+        "authorId" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "body" : "This change to `get_task_instances()` seems to be newly included from the previously closed PR? This is going to change the TI returned to include those considered in the \"future\".  Why is this change necessary?\r\n\r\nIf it is indeed needed, you should probably consider doing the same as what you did in `scheduler_job.py`, i.e. only include \"future\" tasks if `RUN_FUTURE_EXEC_DATES` is True **and** `dag.schedule_interval` is None ",
+        "createdAt" : "2020-01-06T02:18:12Z",
+        "updatedAt" : "2020-01-20T23:26:14Z",
+        "lastEditedBy" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cbee5463-bcae-44bd-b938-7b1d6912eb58",
+        "parentId" : "63d4c065-25f5-4081-aeb7-971e0133a5e1",
+        "authorId" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "body" : "Okay this does look necessary. And it's easy to fix. How about adding this property to `class DAG`?\r\n\r\n```python\r\nclass DAG:\r\n    ...\r\n    @property\r\n    def allow_future_exec_dates(self):\r\n        return conf.getboolean('scheduler', 'RUN_FUTURE_EXEC_DATES', fallback=False) and self.schedule_interval is None\r\n```\r\n\r\n\r\nThis line can become:\r\n```python\r\n        tis = session.query(TaskInstance).filter(TaskInstance.dag_id == self.dag_id,\r\n                                                 TaskInstance.execution_date >= start_date,\r\n                                                 TaskInstance.task_id.in_([t.task_id for t in self.tasks]))\r\n\r\n        if end_date or not self.allow_future_exec_dates:\r\n            end_date = end_date or timezone.utcnow()\r\n            tis = tis.filter(TaskInstance.execution_date <= end_date)\r\n```\r\n\r\nAnd you may want to use `dag.allow_future_exec_dates` in the two other places that you checked the same conditions too, i.e. scheduler_job.py and runnable_exec_date_dep.py",
+        "createdAt" : "2020-01-06T03:13:05Z",
+        "updatedAt" : "2020-01-20T23:26:14Z",
+        "lastEditedBy" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "100affef-5339-4f8f-ab9d-de520b931930",
+        "parentId" : "63d4c065-25f5-4081-aeb7-971e0133a5e1",
+        "authorId" : "f544d16a-6b8c-4985-b9b6-3c5bd6a31970",
+        "body" : "updated",
+        "createdAt" : "2020-01-06T22:54:08Z",
+        "updatedAt" : "2020-01-20T23:26:14Z",
+        "lastEditedBy" : "f544d16a-6b8c-4985-b9b6-3c5bd6a31970",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "40d17bad2808e91e073ba3cd288da02d2fb3e230",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +789,793 @@            start_date = timezone.make_aware(\n                datetime.combine(start_date, datetime.min.time()))\n\n        tis = session.query(TaskInstance).filter(\n            TaskInstance.dag_id == self.dag_id,"
+  },
+  {
+    "id" : "9ede57e7-c229-4ad3-8bdc-754185f6ea10",
+    "prId" : 7038,
+    "prUrl" : "https://github.com/apache/airflow/pull/7038#pullrequestreview-345089088",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "382d808b-58f5-4f4d-9394-e27463387e06",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "Let's add a test for this piece of code.",
+        "createdAt" : "2020-01-15T21:18:19Z",
+        "updatedAt" : "2020-01-20T23:26:14Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04e8ab68-d583-4376-a48b-d241ef8247b0",
+        "parentId" : "382d808b-58f5-4f4d-9394-e27463387e06",
+        "authorId" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "body" : "@tooptoop4 , maybe add a test for this code to `test_taskinstance.py`, unless you find some better place for the test.",
+        "createdAt" : "2020-01-20T07:22:22Z",
+        "updatedAt" : "2020-01-20T23:26:14Z",
+        "lastEditedBy" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "40d17bad2808e91e073ba3cd288da02d2fb3e230",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +798,802 @@        if end_date or not self.allow_future_exec_dates:\n            end_date = end_date or timezone.utcnow()\n            tis = tis.filter(TaskInstance.execution_date <= end_date)\n\n        if state:"
   }
 ]
