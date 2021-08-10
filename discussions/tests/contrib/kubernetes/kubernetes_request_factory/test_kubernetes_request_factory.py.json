@@ -1,0 +1,35 @@
+[
+  {
+    "id" : "ea4958fe-c61b-4592-9d9e-e05a456a1ca4",
+    "prId" : 4952,
+    "prUrl" : "https://github.com/apache/airflow/pull/4952#pullrequestreview-221263122",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "83c92938-39af-444e-8d01-66ab70ac4acc",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "I wonder if all of these tests which have a (None and \"set X to something\") could be done using parameterized?\r\n\r\n```python\r\n    @parameterized.expand([\r\n        (None,),\r\n        ('IfNotPresent',),\r\n    ])\r\n    def test_extract_image_pull_policy(self, pull_policy):\r\n        input_req = self.req.copy()\r\n        expected = self.req\r\n        pod = Pod('v3.14', {}, [], image_pull_policy=pull_policy)\r\n\r\n        self.kubernetes_request_factory.extract_image_pull_policy(pod, input_req)\r\n        reference['spec']['containers'][0]['imagePullPolicy'] = pull_policy\r\n        self.assertDictEqual(input_req, reference)\r\n```\r\n\r\nExcept in this particular example I note https://github.com/apache/airflow/blob/master/airflow/contrib/kubernetes/pod.py#L87 IfNotPresent is the default when not passed, so I'm not sure why the \"None\" case in this function passed without modifying the reference spec?\r\n\r\n(It may be slightly more complex than the example I gave to set the right value in the expected/reference object, but I think this drys up the tests nicely)",
+        "createdAt" : "2019-03-29T11:16:56Z",
+        "updatedAt" : "2019-04-01T18:13:58Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ccb89495-694f-44cc-a4f4-e2924e1fd09e",
+        "parentId" : "83c92938-39af-444e-8d01-66ab70ac4acc",
+        "authorId" : "ca740401-a2d3-4a1e-ba4a-88c55e2b236f",
+        "body" : "So I had implemented the tests using `@parameterized.expand` as suggested (good suggestion btw), testing essentially that if the default argument was given that the function would be identity, the `Pod` would remain unaltered. The issue is that methods in `pod_request_factory` aren't uniform in how they approaches default arguments. Some apply the arguments anyway, even though the key is optional and the value is empty. Example; \r\n\r\n```\r\n    @staticmethod\r\n    def extract_labels(pod, req):\r\n        req['metadata']['labels'] = req['metadata'].get('labels', {})\r\n        for k, v in six.iteritems(pod.labels):\r\n            req['metadata']['labels'][k] = v\r\n```\r\nvs\r\n```\r\n    @staticmethod\r\n    def extract_init_containers(pod, req):\r\n        if pod.init_containers:\r\n            req['spec']['initContainers'] = pod.init_containers\r\n```\r\n\r\nI originally removed the tests for consistency, but I added them back in for cases where the function checks if the argument is truthy.",
+        "createdAt" : "2019-04-01T18:05:21Z",
+        "updatedAt" : "2019-04-01T18:37:59Z",
+        "lastEditedBy" : "ca740401-a2d3-4a1e-ba4a-88c55e2b236f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6e0068fd466869a49b2075b9a19379c7e349bc63",
+    "line" : 58,
+    "diffHunk" : "@@ -1,1 +56,60 @@        self.assertEqual(self.input_req, self.expected)\n\n    def test_extract_image_pull_policy(self):\n        # Test when pull policy is not none\n        pull_policy = 'IfNotPresent'"
+  }
+]

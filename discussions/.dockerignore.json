@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "dc23f18a-eae8-4aa1-949b-1f90090e04e1",
+    "prId" : 4936,
+    "prUrl" : "https://github.com/apache/airflow/pull/4936#pullrequestreview-220925763",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ea603efd-6776-44d2-9b9f-4b32ac081d30",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Why ignore everything and then add a few things back in? The list of things we dont want in isn't that big.",
+        "createdAt" : "2019-03-25T09:21:35Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a724b24-29ef-4a02-be71-14dc1e2889bd",
+        "parentId" : "ea603efd-6776-44d2-9b9f-4b32ac081d30",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I have already given a talk on that actually I plan to write blog post :). \r\n\r\nIt's a practice I now absolutely recommend. I read it in many places as recommendation (for example here: https://youknowfordevs.com/2018/12/07/getting-control-of-your-dockerignore-files.html). But I experienced the effect of it in airflow. Besides longer time to build, this is a problem of cache invalidation when you do 'COPY .' . \r\n\r\nThe thing is that in this case the whole context has to match when you run rebuild of the image and if you add everything by default then every single file generated or added by accident in your source dir will cause context invalidation. \r\n\r\nWe already generate a lot of stuff in the sources (node_modules, 'static' and a number of others). When you do local development you often run stuff (such as document generation) locally and they introduce a lot of garbage in your context and invalidate the cache (thus pretty much every single time you restart dockerfile from the COPY . step no matter if the actual sources changed or not. \r\n\r\nMoreover - you are not able to foresee what other stuff will be generated in the sources in the future. So no matter how hard you try and exclude everything you do not want, somebody few months from now might add a single generated file (or likely directory) that will cause subsequent frequent cache invalidations. Therefore \"exclude everything\" and then \"add what you need\" works much better. There is no chance you forget to add something important then - because your tests will fail.\r\n\r\nThis is actually the reason I now deliberately build Docker image and run tests from the binary image rather than using sources mounted (as it was before). This way your full docker image is tested. Previously some files could be ignored on build but then mounted from sources - which is quite bad practice - because it does not test the Docker image but some hybrid of Docker image and mounted sources (which are not necessarily the same).\r\n\r\nOne - hugely important additional thing - making context as minimal as possible is a huge time saver for local builds. What happens under the hood when Docker build runs, the whole context is compressed/packed and sent to the engine rather than used from local sources. This is the reason why Docker build sometimes pauses for many seconds until build starts - if you see it, it usually means you have not done good job in excluding some generated binaries. If you don't ignore such generated files (especially node_modules which are huge/lots of files)  then your context might grow very large (and uncontrollably).\r\n\r\nExcluding ** is all but guarantee that the context will not grow accidentally and uncontrollably.\r\n",
+        "createdAt" : "2019-03-25T14:18:33Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8be974d8-7b9f-4102-86fe-e3523a3dd107",
+        "parentId" : "ea603efd-6776-44d2-9b9f-4b32ac081d30",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "I worry that by excluding ** we will miss new files is all.\r\n\r\nYou  also have a number of duplicates in this file\r\n\r\nhttps://github.com/apache/airflow/blob/55d4afc354905cc78f2c8f2033caa6a7f8d5c66e/.dockerignore#L30\r\n\r\nhttps://github.com/apache/airflow/blob/55d4afc354905cc78f2c8f2033caa6a7f8d5c66e/.dockerignore#L50-L53\r\n\r\nThere's no need for both right?\r\n\r\n",
+        "createdAt" : "2019-03-25T14:58:30Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "846da85a-e6e5-4482-9330-f87f11104304",
+        "parentId" : "ea603efd-6776-44d2-9b9f-4b32ac081d30",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "And if we are excluding everything then do we need these\r\n\r\nhttps://github.com/apache/airflow/blob/55d4afc354905cc78f2c8f2033caa6a7f8d5c66e/.dockerignore#L75-L107",
+        "createdAt" : "2019-03-25T14:58:50Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f03141a-ae36-4645-ac79-6eacbf19b9f0",
+        "parentId" : "ea603efd-6776-44d2-9b9f-4b32ac081d30",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Correct with the duplicates. I reviewed and removed it.\r\n\r\nThere is little worry that we will forget something - the tests will catch it (and it should rarely be needed - adding a new folder or file at the top level should be really rare event)\r\n\r\nAnd yes - you need those extra specs because they will exclude what should not be part of those included dirs above. The pattern I follow is (and I saw it suggested by several people):\r\n\r\n1) ** -> Exclude everything\r\n2) !/airflow -> include only those top-level folders/top-level files that you need\r\n3) **/__pycache__/ -> from those folders that you included in 2) exclude all the generated content that follows common patterns for generated stuff (like *.pyc file or /__pycache__/ folders)\r\n\r\nI feel very strong about it - having to debug the context changes (and figuring out what the hell changed to trigger copying of the files again) for many hours. Example: only after a while I realised that there is a generated folder in docs which is _build next to _template (which is not generated, thought the name kind of suggest it). And just generating the docs locally triggered rebuild of Dockerfile (that's why I did not include the whole docs folder :) ). Otherwise I would have to specifically exclude that particular folder (if I knew that I have to do it). I really think adding stuff deliberately to Docker context makes much more sense. \r\n\r\nAlternative is to move ALL generated content to specific directory, and exclude that directory - but this is not always possible (node_modules) and from my experience people will not \"stick\" to it - they will start generating random files in different folders. Of course we are not protected if someone starts generating \"xyz\" file/folder inside \"airflow\" folder. But it's rather unlikely someone will do something that crazy.  I think generating something in sources is rather bad practice and you do it only if you cannot do it otherwise (that's one of the parts I don't like about python - .pyc files are generated next to actual source files. It reminds me of times when I used RCS versioning system and we had source.c,v next to every file.... BRRR)\r\n\r\nBut to be honest - It was much bigger problem and I eventually introduced checksums for important files (setup/docker) to check if we need to run docker build at all.\r\n\r\nBut still I think it makes it much more resilient for future changes that might produce uncontrollable and unpredictable context \"growth\". ",
+        "createdAt" : "2019-03-25T22:33:39Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3abbe999-66f3-4e09-a07f-ea3a8a374196",
+        "parentId" : "ea603efd-6776-44d2-9b9f-4b32ac081d30",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I can give some more examples where things could go south. When I run unit tests from the IDE, the logs by default are written in the working directory - which is by default airflow's  root folder. They are now ignored with .gitignore but when docker build is executed the logs are potentially big and should not be sent as part of the context. It's safer to exclude those by default.",
+        "createdAt" : "2019-04-01T05:18:37Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "925397ddb9c3b470f256f429dbf339448c99f0ef",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +25,29 @@\n# Ignore everything\n**\n\n# Allow only these directories"
+  },
+  {
+    "id" : "a0f15933-bb04-4c92-8a0c-5afa498b4120",
+    "prId" : 4936,
+    "prUrl" : "https://github.com/apache/airflow/pull/4936#pullrequestreview-223534521",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "571a34cb-455a-4f97-8a51-e6a3a5b34fa9",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "(I don't know why git doesn't ship with this on by default in the global excludes file for OSx :( )",
+        "createdAt" : "2019-04-05T10:59:37Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4b4a39b-5293-4ceb-a735-3fafd177ac23",
+        "parentId" : "571a34cb-455a-4f97-8a51-e6a3a5b34fa9",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Yeah :(.",
+        "createdAt" : "2019-04-06T09:06:32Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "925397ddb9c3b470f256f429dbf339448c99f0ef",
+    "line" : 99,
+    "diffHunk" : "@@ -1,1 +97,101 @@\n# Exclude auto-generated Finder files on Mac OS\n**/.DS_Store\n**/Thumbs.db"
+  }
+]

@@ -119,5 +119,566 @@
     "commit" : "02d1dea3e8df2398152de097adca79292f1e53bb",
     "line" : 32,
     "diffHunk" : "@@ -1,1 +38,42 @@WORKDIR /opt/airflow/airflow/www\nRUN npm install \\\n    && npm run prod\n\nWORKDIR /opt/airflow"
+  },
+  {
+    "id" : "6e7cbde5-8042-401a-9146-5b7c7f290d7f",
+    "prId" : 4936,
+    "prUrl" : "https://github.com/apache/airflow/pull/4936#pullrequestreview-218328153",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8c58473e-717b-472c-a49e-e232cf21dd40",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "This just affects  `RUN` stanzas, not anything related  to `docker run` etc right?",
+        "createdAt" : "2019-03-25T08:56:59Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "52bb6025-3cd0-4c63-a354-f153a4f62189",
+        "parentId" : "8c58473e-717b-472c-a49e-e232cf21dd40",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Correct. It's only the shell used during `docker build` . By default it is `/bin/sh` and it causes multiple problems when you try to use more advanced bash-magic (such as -x, pipefail and the like). It is quite common approach to switch to bash - it's less \"portable\" in a way (for example your Dockerfile will not run on Windows :P)  but this only matters if you target really portable base for your Docker images (which is not our case - we know bash will be there and I guess we are all much more familiar in bash-isms rather than sh-isms),",
+        "createdAt" : "2019-03-25T13:32:12Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "925397ddb9c3b470f256f429dbf339448c99f0ef",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +27,31 @@FROM ${PYTHON_BASE_IMAGE} as airflow-apt-deps\n\nSHELL [\"/bin/bash\", \"-o\", \"pipefail\", \"-e\", \"-u\", \"-x\", \"-c\"]\n\n# Need to repeat the empty argument here otherwise it will not be set for this stage"
+  },
+  {
+    "id" : "dfdf6a28-8db5-4d59-850f-075c6edf4014",
+    "prId" : 4936,
+    "prUrl" : "https://github.com/apache/airflow/pull/4936#pullrequestreview-219219546",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1cea47c6-4784-4244-af11-474e0bd85ef9",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Do we  need  these here given they are  in the base layer?",
+        "createdAt" : "2019-03-25T08:59:38Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a83da4fc-463d-48fa-ab60-55addb1eec01",
+        "parentId" : "1cea47c6-4784-4244-af11-474e0bd85ef9",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Very good question. Actually yes and no :).\r\n\r\nThat's one of the things I've learned about some intricacies of multi-stage builds. You need to declare ARGs in the other image if you want to use it. Otherwise the ARGS will be empty. Also I found that the default value from the base image carries over to the second definition (surprisingly) so you do not have repeat the default value :D. \r\n\r\nThen I decided then that all ARGS with default parameters will be defined at the beginning of the base layer (it's easier to find them there) and used when they are needed in the multi-stage images. Some duplication on one hand but then all the \"configuration\" of the image is defined in one place.\r\n\r\nAlternative (which  have to test) is to move the CASS_ ARGs (and few others such as no PIP_CACHE) with defaults to be only defined in the \"main\" layer and not at the top of the file. I think that could work and is a bit less duplication more distribution of configuration. I am on the fence on this one.\r\n\r\nWhat do you think? What's your subjective opinion on that?",
+        "createdAt" : "2019-03-25T13:41:36Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "52d682d2-71e5-487b-9cc6-b3c2ea843ee7",
+        "parentId" : "1cea47c6-4784-4244-af11-474e0bd85ef9",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Actually I gave it a spin and tried to move the default definition closer to the actual use and it feels a bit better. Having defaults close to where they are used is actually much more readable and there is little need to group ARGS together at the beginning of the Dockerfile.\r\n\r\nThe only one that needs to be repeated is PYTHON_BASE_IMAGE - it has to be set before FROM and needs to be repeated after FROM because otherwise the ARG value is not visible for the ENV line (strange and not intuitive but this is how it works for Dockerfile - just double-checked)\r\n\r\n<img width=\"655\" alt=\"Screenshot 2019-03-25 at 23 10 35\" src=\"https://user-images.githubusercontent.com/595491/54957561-5e086880-4f53-11e9-936a-b7a02b597946.png\">\r\n\r\n<img width=\"663\" alt=\"Screenshot 2019-03-25 at 23 11 27\" src=\"https://user-images.githubusercontent.com/595491/54957566-61035900-4f53-11e9-935c-565dd6258d08.png\">\r\n\r\n",
+        "createdAt" : "2019-03-25T22:12:55Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "042b1585-e885-4642-b168-dee23ddd528f",
+        "parentId" : "1cea47c6-4784-4244-af11-474e0bd85ef9",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Fixed. We will have far less duplication now in the next pushed version",
+        "createdAt" : "2019-03-27T00:15:25Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "925397ddb9c3b470f256f429dbf339448c99f0ef",
+    "line" : 118,
+    "diffHunk" : "@@ -1,1 +112,116 @@\nENV CASS_DRIVER_BUILD_CONCURRENCY=${CASS_DRIVER_BUILD_CONCURRENCY}\nENV CASS_DRIVER_NO_CYTHON=${CASS_DRIVER_NO_CYTHON}\n\n# By default PIP install is run without cache to make image smaller"
+  },
+  {
+    "id" : "89d2f79c-a83e-414e-a97d-2d867de9f506",
+    "prId" : 4936,
+    "prUrl" : "https://github.com/apache/airflow/pull/4936#pullrequestreview-223215728",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b2ca8d5b-1852-4c02-b946-6c6103bef095",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Having this after copying source files seems out of place/not where I would have put this.\r\n\r\nIs there a reason this is in this image rather than, say before the first `COPY` in this image, or in the airflow-apt-deps image?",
+        "createdAt" : "2019-03-25T09:02:11Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eedb762c-6626-4e9e-8988-c832b67143cc",
+        "parentId" : "b2ca8d5b-1852-4c02-b946-6c6103bef095",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "The main reason was to make sure we always use latest dependencies and update frequently. I think that originated from our original (long time ago :) ) discussion with @Fokko - he was concerned that we will be \"stuck\" with some older version of apt-get dependencies, rather than latest ones. \r\n\r\nThere must be some trigger to invalidate such apt-get and we can play a bit with it. \r\n\r\nI also don't find it particularly good to run apt-get upgrade after adding sources. I'd rather do it after copying \"setup.py\" and related files - this way we would always upgrade to latest apt dependencies together with updates to pip dependencies (which makes perfect sense).\r\n\r\nThis will be less frequent on one hand but also more stable (less risk that build starts failing because some  dependency-triggered issue independent of code change). Similarly as in case of PIP dependencies that gives IMHO the best of both worlds - fairly frequent, automated update of dependencies and relative stability - the dependencies will always be \"fixed\" between a change in setup.py - so no more broken builds \"out-of-the-blue\".\r\n\r\nPaired with regularly daily-cron-triggered fresh rebuild from the scratch, I think we might have perfect solution that detects dependency-triggered errors quickly but does not stop contributors from working and running Travis CI tests.\r\n\r\nI think we are aligned on that @ashb and I am happy to move it there.\r\n\r\n@Fokko  - what do you think?\r\n",
+        "createdAt" : "2019-03-25T13:50:49Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7a3a609-ff90-4beb-8d47-4d39b122b59a",
+        "parentId" : "b2ca8d5b-1852-4c02-b946-6c6103bef095",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Should we move this to before the ` COPY --chown=airflow:airflow . /opt/airflow/` line then?",
+        "createdAt" : "2019-04-05T11:05:51Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "925397ddb9c3b470f256f429dbf339448c99f0ef",
+    "line" : 201,
+    "diffHunk" : "@@ -1,1 +178,182 @@    && apt-get upgrade -y --no-install-recommends \\\n    && apt-get clean \\\n    && rm -rf /var/lib/apt/lists/*\n\n# Additional python deps to install"
+  },
+  {
+    "id" : "07e8d6ca-105b-47ad-adeb-854020ba6deb",
+    "prId" : 4936,
+    "prUrl" : "https://github.com/apache/airflow/pull/4936#pullrequestreview-223213965",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e0dd4649-750f-402f-9de1-73c090c783b8",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Since we are splitting out to multi-stage images it would be nice to node and the asset build stage as it's own step so that in the final image we have\r\n\r\n```\r\nCOPY --from=airflow-assets /opt/airflow/airflow/www/static/dist /opt/airflow/airflow/www/static/dist\r\n```\r\n\r\nNo node, no node modules in final image that way.",
+        "createdAt" : "2019-03-25T09:23:45Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "600d3345-662f-4574-9c25-ff7a7dff9650",
+        "parentId" : "e0dd4649-750f-402f-9de1-73c090c783b8",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "But that would prevent you from re-running npm ci/npm run prod when you work with mounted sources. It's not really acceptable for local development with the CI image. \r\n\r\nI think it's good to keep it - at the very least - for the CI image. I can think about some optional step to build it as another stage for \"Airflow\" image - but I think it's not really good idea. I will think a bit more about it, but as I see it, it would complicate the whole Dockerfile and image a lot with little gain. I'd rather leave that in for now. \r\n\r\nEspecially that we have bright future. I think it's a good candidate  for upcoming changes in Docker - especially Buildkit. There is a new, experimental feature with mount type in RUN command.  It could be used for that purpose. Secret type seems especially interesting as it prevents the layer generated by a RUN command to ever appear in the final image (it will be present during the build):\r\nhttps://github.com/moby/buildkit/blob/b521aae3ea1e1bb73298481ac538f9880ccd3854/frontend/dockerfile/docs/experimental.md#run---mounttypesecret \r\n\r\nI already saw people commenting that they would use secret for that very purpose you described. It was foreseen for other purpose (to keep secretes from leaking) but maybe in the final buildkit release there will be a new type \"ignored\" or smth. :)",
+        "createdAt" : "2019-03-25T14:35:43Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c2a7a04-6763-4473-b282-287cdd80adbb",
+        "parentId" : "e0dd4649-750f-402f-9de1-73c090c783b8",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Fair, on CI this makes sense. ",
+        "createdAt" : "2019-04-05T11:00:51Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "925397ddb9c3b470f256f429dbf339448c99f0ef",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +60,64 @@\n# Install basic apt dependencies\nRUN curl -sL https://deb.nodesource.com/setup_10.x | bash - \\\n    && apt-get update \\\n    && apt-get install -y --no-install-recommends \\"
+  },
+  {
+    "id" : "2c15abb4-9be9-4b9c-be03-4d756d7a6c2d",
+    "prId" : 4936,
+    "prUrl" : "https://github.com/apache/airflow/pull/4936#pullrequestreview-223215390",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e3ff5f7d-48a8-45bd-9a85-bf2de29f5607",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Typo:\r\n\r\n```suggestion\r\n# Always apt-get update/upgrade here to get latest dependencies before\r\n```\r\n",
+        "createdAt" : "2019-04-05T11:04:52Z",
+        "updatedAt" : "2019-04-07T14:43:01Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "925397ddb9c3b470f256f429dbf339448c99f0ef",
+    "line" : 196,
+    "diffHunk" : "@@ -1,1 +173,177 @@COPY --chown=airflow:airflow . /opt/airflow/\n\n# Always add-get update/upgrade here to get latest dependencies before\n# we redo pip install\nRUN apt-get update \\"
+  },
+  {
+    "id" : "6d80e11b-ca77-438c-9d18-ae188e6d4236",
+    "prId" : 4937,
+    "prUrl" : "https://github.com/apache/airflow/pull/4937#pullrequestreview-218385467",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ad926f30-a547-47ff-964b-4ad8d51627ed",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "What are these mkdirs for?",
+        "createdAt" : "2019-03-25T09:04:50Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f73703c1-d4c6-4bd6-8859-2b9a69661cb9",
+        "parentId" : "ad926f30-a547-47ff-964b-4ad8d51627ed",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "see the comment above: # Note missing directories on debian-stretch https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=863199\r\n",
+        "createdAt" : "2019-03-25T14:36:18Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a62d31f-0022-4d95-ac34-608cb0a67888",
+        "parentId" : "ad926f30-a547-47ff-964b-4ad8d51627ed",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Oh I thought that was about the `if`. Can you separate the comments:\r\n\r\n```\r\n\r\n# Note the ifs below might be removed if Buildkit will become usable. It should skip building this\r\n# image automatically if it is not used. For now we still go through all layers below but they are empty\r\n#\r\n# Note missing directories on debian-stretch https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=863199 \r\n```",
+        "createdAt" : "2019-03-25T15:01:39Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d080b9678a8a8bb91f61ca8dcb1ae420f23680c2",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +139,143 @@        # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=863199\n        mkdir -pv /usr/share/man/man1 \\\n        && mkdir -pv /usr/share/man/man7 \\\n        && apt-get update \\\n        && apt-get install --no-install-recommends -y \\"
+  },
+  {
+    "id" : "b3fd7e6e-128e-4463-b711-f819bd6f452a",
+    "prId" : 4937,
+    "prUrl" : "https://github.com/apache/airflow/pull/4937#pullrequestreview-223534657",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2dc5b972-8702-4a49-b9fc-dd922ef9e71c",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "No mysql-client?",
+        "createdAt" : "2019-03-25T09:05:20Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b3eec34-eecb-4ca9-9850-182e145dd42e",
+        "parentId" : "2dc5b972-8702-4a49-b9fc-dd922ef9e71c",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Well.. It's installed few steps below. That was one of the differences I had to battle - in debian-stretch installing mysql from apt-get results in installing mariadb. Which is fine being open-source and if you do not like Oracle ;). But I guess the goal is to test it with real Oracle^H^H^H^H^H^HMysql client (unless we are fine with mariadb :) )\r\n\r\nActually that installation method might still change as I still did not have mysql running on Travis (it works locally) so I presume something with the installation method messes it up - likely location of some configuration directories.",
+        "createdAt" : "2019-03-25T14:41:37Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9b8fc68-89be-4fb3-8d0c-70963fcbe20c",
+        "parentId" : "2dc5b972-8702-4a49-b9fc-dd922ef9e71c",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "For client libs I don't see a problem using the debian provided libs, even if those are maraidb: That is what a number of people would get if they aren't running in docker.",
+        "createdAt" : "2019-03-25T15:04:53Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "21fb580c-8237-4c89-8b45-2dd5090f0b54",
+        "parentId" : "2dc5b972-8702-4a49-b9fc-dd922ef9e71c",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "OK. That's good then. It will be easier a bit then :). I will test it as i am close to get simpler mysql install following the other problems.",
+        "createdAt" : "2019-03-27T00:20:32Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8df11dde-6a5a-4992-9d1f-4f39a73025e3",
+        "parentId" : "2dc5b972-8702-4a49-b9fc-dd922ef9e71c",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I looked into it and I think we should stick with MySQL. It's only pure Debian Stretch that released MariaDB packages as default (and only) choice: https://mariadb.org/debian-9-released-mariadb-mysql-variant/ . On Ubuntu 18.04, MySQL is still the default choice and you have to add MariaDB manually (https://tecadmin.net/install-mariadb-on-ubuntu-18-04-bionic/). I am not 100% sure, but I think Ubuntu user base will be far bigger than Debian's so having a \"true\" MySQL libs makes perfect sense. MySQL is still FOSS so no problems with licensing etc - and I am using official Oracle installation instructions for Debian, so I guess this should be fine @ashb?\r\n",
+        "createdAt" : "2019-03-27T09:39:58Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c2dd02e-d54b-4443-b208-676e5d1f88e4",
+        "parentId" : "2dc5b972-8702-4a49-b9fc-dd922ef9e71c",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "I think we're having this conversation again in another PR, right? We agreed (already changed?) the base image to use os provided libmysqlclient packages right?",
+        "createdAt" : "2019-04-05T11:11:38Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6308a58f-9f7f-4b72-916b-1d1e6185166e",
+        "parentId" : "2dc5b972-8702-4a49-b9fc-dd922ef9e71c",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Right. Changing it now back to use mariadb libraries. Will make it a bit smaller and faster :)",
+        "createdAt" : "2019-04-06T09:11:04Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d080b9678a8a8bb91f61ca8dcb1ae420f23680c2",
+    "line" : 108,
+    "diffHunk" : "@@ -1,1 +152,156 @@          openssh-server \\\n          postgresql-client \\\n          python-selinux \\\n          sqlite3 \\\n          tmux \\"
+  },
+  {
+    "id" : "2a6094e5-3acd-41ff-ac42-a1041b37dd80",
+    "prId" : 4937,
+    "prUrl" : "https://github.com/apache/airflow/pull/4937#pullrequestreview-218388269",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6621e27e-f9f2-4048-a652-64bd0f936a4d",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "For now  would it be clearer to have this image in an  extra file, or would that complicate the build hook unnecessarily?",
+        "createdAt" : "2019-03-25T09:18:29Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3582cc38-058e-4fea-a914-2bcfd89ae37c",
+        "parentId" : "6621e27e-f9f2-4048-a652-64bd0f936a4d",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I tried it initially and it was indeed very complex :). \r\n\r\nI think there is a huge benefit on being able to run \"docker build .\" and get the Airflow images build via single command (this is how it works now).  We can build the main image by just 'docker build .\" but also CI image in a single build by just changing the \"APT_DEPS_IMAGE\" build-arg to be \"airflow-ci-apt-deps\". If we split it to separate files, we can still have one 'docker build' for the for \"Airflow\" image but it will no longer be possible to build CI image with single \"docker build . --build-arg=...\"  command.\r\n\r\nThe main problem if you keep separate files is that you cannot use the nice multi-staging \"local\" image names. You have to use tags or hashes and make sure that you use the right image build in a separate Docker build. So to build an image you need to coordinate several 'docker builds'. It's messy. Been there, done that. Multi-staging simplifies it a lot.",
+        "createdAt" : "2019-03-25T14:54:07Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb2adf78-2424-4b43-9950-e00827fd4738",
+        "parentId" : "6621e27e-f9f2-4048-a652-64bd0f936a4d",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "> The main problem if you keep separate files is that you cannot use the nice multi-staging >\"local\" image names\r\n\r\nOh yeah. Worth the pain for now.\r\n\r\n",
+        "createdAt" : "2019-03-25T15:05:44Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d080b9678a8a8bb91f61ca8dcb1ae420f23680c2",
+    "line" : 91,
+    "diffHunk" : "@@ -1,1 +135,139 @@# Note the ifs below might be removed if Buildkit will become usable. It should skip building this\n# image automatically if it is not used. For now we still go through all layers below but they are empty\nRUN if [[ \"${APT_DEPS_IMAGE}\" == \"airflow-ci-apt-deps\" ]]; then \\\n        # Note missing man directories on debian-stretch\n        # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=863199"
+  },
+  {
+    "id" : "10f24fed-fb59-4d1a-8ba5-f156d3191438",
+    "prId" : 4937,
+    "prUrl" : "https://github.com/apache/airflow/pull/4937#pullrequestreview-244851964",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6a3b61b8-a33f-479f-bff1-f95442e5f46f",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "I hate the new gpg2 agent behaviour :(",
+        "createdAt" : "2019-06-03T10:07:51Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d4c2e53f-4eec-41df-a2a9-367c2aedc958",
+        "parentId" : "6a3b61b8-a33f-479f-bff1-f95442e5f46f",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Yeah. Likewise. Unfortunately this is the recommended way to install it on Debian :(.",
+        "createdAt" : "2019-06-03T12:40:22Z",
+        "updatedAt" : "2019-06-09T14:58:20Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d080b9678a8a8bb91f61ca8dcb1ae420f23680c2",
+    "line" : 58,
+    "diffHunk" : "@@ -1,1 +102,106 @@       done \\\n    && gpg --export \"${KEY}\" | apt-key add - \\\n    && gpgconf --kill all \\\n    rm -rf \"${GNUPGHOME}\"; \\\n    apt-key list > /dev/null \\"
+  },
+  {
+    "id" : "81505dd7-b971-490e-8426-92335343c7c9",
+    "prId" : 4937,
+    "prUrl" : "https://github.com/apache/airflow/pull/4937#pullrequestreview-244876646",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c8c0f7f7-c27e-4032-b791-c9f4e623f248",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "What's the purpose of this line?",
+        "createdAt" : "2019-06-03T10:08:04Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e49ac4f-4356-4839-8c1e-987e51868656",
+        "parentId" : "c8c0f7f7-c27e-4032-b791-c9f4e623f248",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I think I can remove that line. It is more for debugging to check if the key was imported than anything else.",
+        "createdAt" : "2019-06-03T12:43:01Z",
+        "updatedAt" : "2019-06-09T14:58:20Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8d68dbdd-a0dc-4653-8abc-492d99341bbc",
+        "parentId" : "c8c0f7f7-c27e-4032-b791-c9f4e623f248",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Oh - rather than doing ` > /etc/apt/trusted.gpg.d/mysql.gpg` could we do `| apt-key add -` so that we'd get an error if something went wrong?",
+        "createdAt" : "2019-06-03T13:11:49Z",
+        "updatedAt" : "2019-06-09T14:58:20Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c060afa5-a953-455a-9068-c1d428c3d5f0",
+        "parentId" : "c8c0f7f7-c27e-4032-b791-c9f4e623f248",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I will try.",
+        "createdAt" : "2019-06-03T13:26:07Z",
+        "updatedAt" : "2019-06-09T14:58:20Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d080b9678a8a8bb91f61ca8dcb1ae420f23680c2",
+    "line" : 60,
+    "diffHunk" : "@@ -1,1 +104,108 @@    && gpgconf --kill all \\\n    rm -rf \"${GNUPGHOME}\"; \\\n    apt-key list > /dev/null \\\n    && echo \"deb http://repo.mysql.com/apt/ubuntu/ trusty mysql-5.6\" | tee -a /etc/apt/sources.list.d/mysql.list \\\n    && apt-get update \\"
+  },
+  {
+    "id" : "abe32287-84f8-4982-9c40-ace7bdaffeaf",
+    "prId" : 4937,
+    "prUrl" : "https://github.com/apache/airflow/pull/4937#pullrequestreview-244854269",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f7801e64-d763-443e-be27-bef36ee0f6a9",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Random (unrelated) thought:\r\n\r\nShould we mock/stub the tests that are speaking to hive? I haven't looked at them, but needing this running feels like we are exercising hive in our test suite which isn't our job? ",
+        "createdAt" : "2019-06-03T10:10:18Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb365339-e410-4fdc-89ee-e06cdcd1a7c1",
+        "parentId" : "f7801e64-d763-443e-be27-bef36ee0f6a9",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Might be a good idea to check in the future. I created https://issues.apache.org/jira/browse/AIRFLOW-4728 ",
+        "createdAt" : "2019-06-03T12:45:17Z",
+        "updatedAt" : "2019-06-09T14:58:20Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d080b9678a8a8bb91f61ca8dcb1ae420f23680c2",
+    "line" : 173,
+    "diffHunk" : "@@ -1,1 +217,221 @@fi\n\nENV PATH \"${PATH}:/tmp/hive/bin\"\n\n############################################################################################################"
+  },
+  {
+    "id" : "256e2882-e0b4-4292-bf21-3bc9f54cf34e",
+    "prId" : 4937,
+    "prUrl" : "https://github.com/apache/airflow/pull/4937#pullrequestreview-244867252",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9f25332b-79a9-4ee0-95de-d4b3cf2082a2",
+        "parentId" : null,
+        "authorId" : "03e41e23-f438-4a06-9652-8f20638d2c3a",
+        "body" : "I wanted to make this a separate container, but never got the time to do this. Maybe a good idea as a follow up PR.",
+        "createdAt" : "2019-06-03T11:27:25Z",
+        "updatedAt" : "2019-06-09T14:58:20Z",
+        "lastEditedBy" : "03e41e23-f438-4a06-9652-8f20638d2c3a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "79909ad8-7b9f-4ecf-9a82-e3b27621e4dd",
+        "parentId" : "9f25332b-79a9-4ee0-95de-d4b3cf2082a2",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "It is already planned. I spoke to @gerardo  about that one and we want to make it a separate PR later.",
+        "createdAt" : "2019-06-03T13:09:49Z",
+        "updatedAt" : "2019-06-09T14:58:20Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d080b9678a8a8bb91f61ca8dcb1ae420f23680c2",
+    "line" : 160,
+    "diffHunk" : "@@ -1,1 +204,208 @@fi\n\nENV MINICLUSTER_URL=https://github.com/bolkedebruin/minicluster/releases/download/\nENV MINICLUSTER_VER=1.1\n# Install MiniCluster TODO: install it differently. Installing to /tmp is probably a bad idea"
+  },
+  {
+    "id" : "b08db173-7ffc-4c26-a601-bc08efb833ea",
+    "prId" : 4938,
+    "prUrl" : "https://github.com/apache/airflow/pull/4938#pullrequestreview-256735419",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "82f190b7-ff5c-4f9f-9272-815a786e4c14",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Probably a further enhancment (i.e. not in this PR) but is it worth making a separate npm-only image and doing the `npm run prod` in there.\r\n\r\nMaybe this is where the flavours of image come in - for ci/dev having Npm in the same image makes sense, but for prod it would be nice to not have to install node.",
+        "createdAt" : "2019-07-02T08:08:17Z",
+        "updatedAt" : "2019-07-17T19:40:34Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7c9e97b9-08f4-4b29-9801-43be4231463c",
+        "parentId" : "82f190b7-ff5c-4f9f-9272-815a786e4c14",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Absolutely. I will include that as part of proposal for Production image discussion!",
+        "createdAt" : "2019-07-02T08:22:41Z",
+        "updatedAt" : "2019-07-17T19:40:34Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "879f2f1d5847c415e605ef3a56fe87e0a9d6b28b",
+    "line" : 206,
+    "diffHunk" : "@@ -1,1 +359,363 @@    if [[ \"${BUILD_NPM}\" == \"true\" ]]; then \\\n        gosu ${AIRFLOW_USER} npm run prod; \\\n    fi\n\n# Always apt-get update/upgrade here to get latest dependencies before"
   }
 ]

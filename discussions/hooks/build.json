@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "4627e17c-b274-48d6-b627-44c77f2ab469",
+    "prId" : 4937,
+    "prUrl" : "https://github.com/apache/airflow/pull/4937#pullrequestreview-244863442",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a718b07d-b31f-41cb-b7b6-c581b808eab9",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Why do we care about G/O permissions?",
+        "createdAt" : "2019-04-05T11:13:52Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b1e55a89-62f5-445a-96b4-423d36d201cf",
+        "parentId" : "a718b07d-b31f-41cb-b7b6-c581b808eab9",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "It's an intricacy of how git checkout works and how docker build checks invalidation of context combined with traditionally different umask on different platforms. \r\n\r\nI plan to write a blog post about it soon as it is not well known problem.\r\n\r\nGit does not store read/write permissions for files (it only stores executable permissions). When you run git checkout on a fresh repo during CI build, the files are created using umask configured for that system. This is controlled by https://git-scm.com/docs/git-config/1.6.3.1#git-config-coresharedRepository setting and default setting is 'umask' - this is how git is configured in all CI services I know :).\r\n\r\nWhen we build image on one system and run --cache-from on a different machine, we want to make sure context is the same otherwise 'COPY setup.py' or 'COPY .' layer will be invalidated. Docker uses a lot of information about each file to detect context change. One of the things it checks are permissions of the file - including group/writeable permissions (it used to take into account file modification date as well but it's been fixed years ago)\r\n\r\nThe problem is that on different Linux systems can have different umask setting. The most popular umask values are 0002 and 0022 (first gives write access for the group, second only read). Here is some reasoning behind it: https://unix.stackexchange.com/questions/315121/why-is-the-default-umask-002-or-022-in-many-unix-systems-seems-insecure-by-defa\r\n\r\nSo the problem is that when you checkout the same repo/tag on two systems with different umask, your files will be different so your context will be invalidated.\r\n\r\nAnd - glad that you asked ;) - obviously DockerHub and Travis CI have different umask setting. So when you build image on DockerHub and try to rebuild on Travis it will see them as different context and will start it from re-installing all PIP dependencies (setup.py group-writeable bit is the difference that triggers it). \r\n\r\nSo before we run `docker build` I make sure to clear write bits for all files - just to make sure context is the same for all machines.\r\n\r\n",
+        "createdAt" : "2019-04-06T09:41:13Z",
+        "updatedAt" : "2019-06-09T14:58:19Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa706392-3b21-4f87-ab30-99fe7b6e68e3",
+        "parentId" : "a718b07d-b31f-41cb-b7b6-c581b808eab9",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Could you summarize this in a two/three line comment here please?",
+        "createdAt" : "2019-06-03T10:16:42Z",
+        "updatedAt" : "2019-06-09T14:58:20Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "60012306-675b-4e44-a745-9980c3221aa4",
+        "parentId" : "a718b07d-b31f-41cb-b7b6-c581b808eab9",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Yep. I Will.",
+        "createdAt" : "2019-06-03T13:02:54Z",
+        "updatedAt" : "2019-06-09T14:58:20Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d080b9678a8a8bb91f61ca8dcb1ae420f23680c2",
+    "line" : 394,
+    "diffHunk" : "@@ -1,1 +392,396 @@        ACCESS_RIGHTS=$(\"${STAT_BIN}\" -c \"%A\" \"${FILE}\" || echo \"--------\")\n        # check if the file is group/other writeable\n        if [[ \"${ACCESS_RIGHTS:5:1}\" != \"-\" || \"${ACCESS_RIGHTS:8:1}\" != \"-\" ]]; then\n            \"${STAT_BIN}\" --printf \"%a %A %F \\t%s \\t->    \" \"${FILE}\"\n            chmod og-w \"${FILE}\""
+  },
+  {
+    "id" : "49a8418a-0949-4bf4-889c-69a2668bbc8c",
+    "prId" : 4938,
+    "prUrl" : "https://github.com/apache/airflow/pull/4938#pullrequestreview-255603081",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f666b5c1-f110-475f-a37c-c3f8b6f0db2c",
+        "parentId" : null,
+        "authorId" : "2aa388e9-6fe5-4c02-8af7-e8ebfa6408d5",
+        "body" : "Where is `IMAGES_TO_PULL` being used? I can't find another place where the variable is being used.",
+        "createdAt" : "2019-06-28T05:22:39Z",
+        "updatedAt" : "2019-07-17T19:40:34Z",
+        "lastEditedBy" : "2aa388e9-6fe5-4c02-8af7-e8ebfa6408d5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dfd0bfa8-f0c8-43c0-a133-d6a03e7903b1",
+        "parentId" : "f666b5c1-f110-475f-a37c-c3f8b6f0db2c",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "It's just two lines below. It was hidden by Github as it did not change :). ",
+        "createdAt" : "2019-06-28T06:30:16Z",
+        "updatedAt" : "2019-07-17T19:40:34Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "879f2f1d5847c415e605ef3a56fe87e0a9d6b28b",
+    "line" : 284,
+    "diffHunk" : "@@ -1,1 +363,367 @@        echo \"Skip downloading the slim Airflow image\"\n    else\n        IMAGES_TO_PULL=\"${IMAGES_TO_PULL} ${AIRFLOW_SLIM_CI_IMAGE}\"\n    fi\n"
+  },
+  {
+    "id" : "f643571c-c50b-452a-af31-2afa9c5bec3d",
+    "prId" : 4938,
+    "prUrl" : "https://github.com/apache/airflow/pull/4938#pullrequestreview-256889986",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab481ecd-932d-4a92-a3e7-8a8a096486a5",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Are the previous 3 statments the same as this?\r\n\r\n```bash\r\nBRANCH_NAME=${SOURCE_BRANCH:-\"master\"}\r\n```",
+        "createdAt" : "2019-07-02T08:39:35Z",
+        "updatedAt" : "2019-07-17T19:40:34Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a405d395-aacd-4037-82de-68fc1cebf86e",
+        "parentId" : "ab481ecd-932d-4a92-a3e7-8a8a096486a5",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Not really. You can override BRANCH_NAME in your configuration, but I can force it with SOURCE_BRANCH. I needed that mainly for cases before I merge it into master. For now I have to pretend that I am building from master branch even if I run it from ms-travis-ci-tests branch so that I can have it properly pushed to DockerHub registry. I configured DockerHub builds to have SOURCE_BRANCH=\"master\". I will remove it during the merge to master. Those three lines will be changed to simply\r\n\r\n`BRANCH_NAME=${BRANCH_NAME:=\"master\"}`\r\n\r\nand SOURCE_BRANCH will be removed completely",
+        "createdAt" : "2019-07-02T11:55:23Z",
+        "updatedAt" : "2019-07-17T19:40:34Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa0a9b91-9c33-493c-b292-e1d130bed115",
+        "parentId" : "ab481ecd-932d-4a92-a3e7-8a8a096486a5",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "👌 ",
+        "createdAt" : "2019-07-02T13:24:41Z",
+        "updatedAt" : "2019-07-17T19:40:34Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "879f2f1d5847c415e605ef3a56fe87e0a9d6b28b",
+    "line" : 353,
+    "diffHunk" : "@@ -1,1 +457,461 @@\n# Default branch name for triggered builds is master (for dockerhub)\nBRANCH_NAME=${BRANCH_NAME:=\"master\"}\n# Set Airflow container to branch name\nAIRFLOW_CONTAINER_BRANCH_NAME=${AIRFLOW_CONTAINER_BRANCH_NAME:=${BRANCH_NAME}}"
+  }
+]
