@@ -306,5 +306,115 @@
     "commit" : "3207bd2f8b66eb881dab4286365a53c31291009e",
     "line" : 44,
     "diffHunk" : "@@ -1,1 +1186,1190 @@            base_date = dag.latest_execution_date or timezone.utcnow()\n\n        with create_session() as session:\n            dag_runs = (\n                session.query(DagRun)"
+  },
+  {
+    "id" : "dc1fb52c-f3f4-4300-bfc0-6dbb3cd2b3b1",
+    "prId" : 5037,
+    "prUrl" : "https://github.com/apache/airflow/pull/5037#pullrequestreview-256090337",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8d656a16-b601-4401-afac-efbb20cbf55e",
+        "parentId" : null,
+        "authorId" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "body" : "Does this mean `try_count` can at most be 2?",
+        "createdAt" : "2019-05-14T23:34:40Z",
+        "updatedAt" : "2019-06-26T14:18:19Z",
+        "lastEditedBy" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "83741537-b25c-492d-985f-ef8834224c9e",
+        "parentId" : "8d656a16-b601-4401-afac-efbb20cbf55e",
+        "authorId" : "c1f7098b-8541-4270-af2c-b615763c584e",
+        "body" : "No, actually try_count was initialised out of the block. Now made the correction. ",
+        "createdAt" : "2019-05-15T14:55:07Z",
+        "updatedAt" : "2019-06-26T14:18:19Z",
+        "lastEditedBy" : "c1f7098b-8541-4270-af2c-b615763c584e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "130d4d86-c319-4d2d-95cb-77d2f7f6f899",
+        "parentId" : "8d656a16-b601-4401-afac-efbb20cbf55e",
+        "authorId" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "body" : "If `ti_fails` is not sorted this piece of logic won't work correct, will it? If it is sorted, you still need to reset `try_count`. Also can you elaborate the difference of the bar items we are adding here versus the items we were adding [here](https://github.com/apache/airflow/pull/5037/files#diff-948e87b4f8f644b3ad8c7950958df033R1744) please?",
+        "createdAt" : "2019-05-17T22:16:44Z",
+        "updatedAt" : "2019-06-26T14:18:19Z",
+        "lastEditedBy" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e08ce37-da29-48fa-9108-24a65457209e",
+        "parentId" : "8d656a16-b601-4401-afac-efbb20cbf55e",
+        "authorId" : "c1f7098b-8541-4270-af2c-b615763c584e",
+        "body" : "1. ti_fails will always be in sorted order because of the nature of task_fail table having auto increment key. \r\n2. try_count is always reset as 1 in the starting of the for loop of ti_fails. But yeah thanks for catching this. I have to reset it once new failed task instance comes into the picture. \r\n3. gantt_bar_items appended against the tis metadata are having the state as success or running or final fail from task_instance table so having the try_number for the same only. It doesn't capture the all the failed instances. In case of failed tasks, entries go into task_fail table and we can't get the try number from there directly hence I am incrementing the try_count and appending the same against ti_fails metadata because of the nature of task_fail table.",
+        "createdAt" : "2019-05-21T07:50:17Z",
+        "updatedAt" : "2019-06-26T14:18:19Z",
+        "lastEditedBy" : "c1f7098b-8541-4270-af2c-b615763c584e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b844f4d-0321-4c3f-b13b-d31e92d80812",
+        "parentId" : "8d656a16-b601-4401-afac-efbb20cbf55e",
+        "authorId" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "body" : "1. I don't think having auto increment key has anything to do with the order of data returned. A quick search gave me [this](https://dba.stackexchange.com/questions/5774/why-is-ssms-inserting-new-rows-at-the-top-of-a-table-not-the-bottom/5775#5775https://dba.stackexchange.com/questions/5774/why-is-ssms-inserting-new-rows-at-the-top-of-a-table-not-the-bottom/5775#5775).\r\n3. Assuming appending twice will not create two row for the same task instance in the graph( please confirm this), we are showing total try count only if the task instance is in FAILED state. This can be quite confusing. We need to probably revisit and decide what exactly we want to display and at least make sure it is consistent between task instances in different states.",
+        "createdAt" : "2019-05-23T21:24:17Z",
+        "updatedAt" : "2019-06-26T14:18:19Z",
+        "lastEditedBy" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d2a9e09-4187-47a5-87ae-7828cc1baf9c",
+        "parentId" : "8d656a16-b601-4401-afac-efbb20cbf55e",
+        "authorId" : "c1f7098b-8541-4270-af2c-b615763c584e",
+        "body" : "Answer to your questions -\r\n1. I understand the fact but that order is already maintained through this ordered [list](https://github.com/apache/airflow/pull/5037/files#diff-948e87b4f8f644b3ad8c7950958df033R1728)  keeping the gantt chart in mind. Anyhow metadata apart from try number is coming in sorted order.\r\nExample can be understood by the below use case -\r\n\r\nmysql> select * from task_fail as tf  where TF.task_id = 'get_op'  AND TF.execution_date = '2019-05-29 05:30:00.000000' AND TF.dag_id='example_http_operator1';\r\n+----+---------+------------------------+----------------------------+----------------------------+----------------------------+----------+\r\n| id | task_id | dag_id                 | execution_date             | start_date                 | end_date                   | duration |\r\n+----+---------+------------------------+----------------------------+----------------------------+----------------------------+----------+\r\n|  8 | get_op  | example_http_operator1 | 2019-05-29 05:30:00.000000 | 2019-05-30 22:37:45.177828 | 2019-05-30 22:37:51.449197 |        6 |\r\n| 27 | get_op  | example_http_operator1 | 2019-05-29 05:30:00.000000 | 2019-05-30 22:43:08.766188 | 2019-05-30 22:43:10.270735 |        2 |\r\n| 46 | get_op  | example_http_operator1 | 2019-05-29 05:30:00.000000 | 2019-05-30 22:48:20.494280 | 2019-05-30 22:48:22.069887 |        2 |\r\n| 62 | get_op  | example_http_operator1 | 2019-05-29 05:30:00.000000 | 2019-05-30 22:53:27.867508 | 2019-05-30 22:53:29.474945 |        2 |\r\n+----+---------+------------------------+----------------------------+----------------------------+----------------------------+----------+\r\n4 rows in set (0.00 sec)\r\n\r\nmysql> select * from task_fail as tf  where TF.task_id = 'post_op'  AND TF.execution_date = '2019-05-29 05:30:00.000000' AND TF.dag_id='example_http_operator1';\r\n+----+---------+------------------------+----------------------------+----------------------------+----------------------------+----------+\r\n| id | task_id | dag_id                 | execution_date             | start_date                 | end_date                   | duration |\r\n+----+---------+------------------------+----------------------------+----------------------------+----------------------------+----------+\r\n| 17 | post_op | example_http_operator1 | 2019-05-29 05:30:00.000000 | 2019-05-30 22:38:19.100704 | 2019-05-30 22:38:26.619226 |        8 |\r\n| 36 | post_op | example_http_operator1 | 2019-05-29 05:30:00.000000 | 2019-05-30 22:43:36.747317 | 2019-05-30 22:43:38.238442 |        1 |\r\n| 53 | post_op | example_http_operator1 | 2019-05-29 05:30:00.000000 | 2019-05-30 22:48:48.267570 | 2019-05-30 22:48:49.595367 |        1 |\r\n| 69 | post_op | example_http_operator1 | 2019-05-29 05:30:00.000000 | 2019-05-30 22:53:55.739041 | 2019-05-30 22:53:57.038769 |        1 |\r\n+----+---------+------------------------+----------------------------+----------------------------+----------------------------+----------+\r\n4 rows in set (0.00 sec)\r\nExplanation : list has been formed by taking each individual task like appending the above result. Please find the below screenshot to validate the same results -\r\n<img width=\"1560\" alt=\"Screen Shot 2019-05-31 at 12 24 37 AM\" src=\"https://user-images.githubusercontent.com/20847563/58656806-93a64500-833a-11e9-8df3-ab91d5ce1c65.png\">\r\n\r\n2. Yes, It is not appending twice. reasoning is same as above. All the metadata except try count is populated through the same logic. I have just added this only in both the gantt_bar_items. Above than that, I am showing the try count in every state. As task_fail doesn't have try number in it's table so I have made the logic to get the same and that's how try number is appended in gantt_bar_items of the failed tasks as well. \r\nMoreover, the conclusion is that we need to display try_count every-time user the Gantt UI of airflow irrespective of state and that is consistent across different states. \r\n",
+        "createdAt" : "2019-05-30T19:00:58Z",
+        "updatedAt" : "2019-06-26T14:18:19Z",
+        "lastEditedBy" : "c1f7098b-8541-4270-af2c-b615763c584e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bf2f41fb-18df-4d03-a09a-4942f928e808",
+        "parentId" : "8d656a16-b601-4401-afac-efbb20cbf55e",
+        "authorId" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "body" : "1. Yes all task fails are grouped by task_id as we have only one ti for each task, missed this part earlier.  Tho we can still have wrong order of task fails. Result is that in the gantt chart, we can have a try with later start date appear on the left side of a try with earlier start date.\r\n2. Mb misunderstood the state there, didn't get that append will create a new column in the row. In this case, did we append the last try for failed tasks twice?( visually doesn't seem to create a problem tho)",
+        "createdAt" : "2019-06-25T00:01:03Z",
+        "updatedAt" : "2019-06-26T14:18:19Z",
+        "lastEditedBy" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5a8b5925-ec5d-4dcf-b684-5d3e7402a4d1",
+        "parentId" : "8d656a16-b601-4401-afac-efbb20cbf55e",
+        "authorId" : "c1f7098b-8541-4270-af2c-b615763c584e",
+        "body" : "Please find my answers -\r\n1. Start date is already coming in the correct order even with out introducing my changes. I have only added the try number in every column. So gantt chart will not have any case in which later start date appears on the left side as compare to earlier start date.\r\n2. Even in this, append is already creating the column twice with out introducing my changes and yes there is no problem with this as well. ",
+        "createdAt" : "2019-06-26T14:16:52Z",
+        "updatedAt" : "2019-06-26T14:18:19Z",
+        "lastEditedBy" : "c1f7098b-8541-4270-af2c-b615763c584e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da3b6d39-b087-4fd9-9948-17db4b0835af",
+        "parentId" : "8d656a16-b601-4401-afac-efbb20cbf55e",
+        "authorId" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "body" : "The value of [ti_fails](https://github.com/apache/airflow/pull/5037/files#diff-948e87b4f8f644b3ad8c7950958df033R1728) is not guaranteed to be ordered but you don't have to include a fix in your PR as it is not newly introduced. I'll submit a new JIRA for it.",
+        "createdAt" : "2019-06-30T20:48:39Z",
+        "updatedAt" : "2019-06-30T20:48:48Z",
+        "lastEditedBy" : "a3c64a30-509c-4788-80d1-4f17cb3b5530",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1a7cf89e13707c23c9f6afb5868880e03580c1f5",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +1750,1754 @@            end_date = tf.end_date or timezone.utcnow()\n            if tf_count != 0 and tf.task_id == prev_task_id:\n                try_count = try_count + 1\n            else:\n                try_count = 1"
   }
 ]
