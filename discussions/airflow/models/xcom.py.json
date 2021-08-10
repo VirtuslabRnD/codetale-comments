@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "67ea53b9-fc2f-42c2-a542-095f24bd6009",
+    "prId" : 6370,
+    "prUrl" : "https://github.com/apache/airflow/pull/6370#pullrequestreview-307613299",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e7c2791f-a6b7-458c-8892-323e580fe41f",
+        "parentId" : null,
+        "authorId" : "a1587925-b1c0-4469-a592-51497b162e71",
+        "body" : "@Fokko couple things / questions\r\n\r\n1. it seems we don't need this index anymore, now that there is a primary key with the same columns\r\n2. i could be wrong (i am new to alembic and sqlalchemy) but aren't you missing a migration script for users who are upgrading? \r\n3. should we add `PrimaryKeyConstraint('dag_id', 'task_id', 'execution_date', 'key')` here to clarify order of index columns?  Although it seems that table structure is entirely managed by alembic, and these table args have no effect, we should probably be consistent (and if i understand correctly, if not specified, primary key cols are ordered as they appear in table def).  ",
+        "createdAt" : "2019-10-26T05:41:22Z",
+        "updatedAt" : "2019-10-26T05:44:10Z",
+        "lastEditedBy" : "a1587925-b1c0-4469-a592-51497b162e71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "78a99742-0adf-4a57-86c6-15a1600ec1b7",
+        "parentId" : "e7c2791f-a6b7-458c-8892-323e580fe41f",
+        "authorId" : "03e41e23-f438-4a06-9652-8f20638d2c3a",
+        "body" : "Yes, you're right. The index has been replaced by the PrimaryKey.\r\n\r\n- For sqlite the only way of doing these kinds of changes is dropping and recreating the table. Because sqlite does not have any support for altering columns. \r\n- The table is actually more or less the same, only the ID column is removed (which wasn't being used).\r\n- I looked at other `__table_args__`, and I don't see a `PrimaryKeyConstraint` being defined. I think it would make sense to add this.",
+        "createdAt" : "2019-10-26T08:40:35Z",
+        "updatedAt" : "2019-10-26T08:40:52Z",
+        "lastEditedBy" : "03e41e23-f438-4a06-9652-8f20638d2c3a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74186475-5588-4ad8-ae8d-e711e05c819f",
+        "parentId" : "e7c2791f-a6b7-458c-8892-323e580fe41f",
+        "authorId" : "a1587925-b1c0-4469-a592-51497b162e71",
+        "body" : "I was mainly looking at this PR mainly to learn how to do DB change, in case I ever want to propose something involving DB schema change.  But noticed these things and wanted to surface in case something was possibly missed.\r\n\r\n**Clarification of observations**\r\n\r\n* I noticed that only migration changes in this PR are in the `current_schema` migration script, and they are only applied if table not exists.  So this indicated to me that this change would not be applied on upgrades, whether sqlite or any other database.\r\n* I tried doing a new install (on sqlite) and both index and primary key were present.\r\n* I tried doing upgrade (on sqlite) and the `id` column was not dropped.\r\n\r\n**sqlite migration issues**\r\n\r\nRe sqlite migrations, [this stack overflow post](https://stackoverflow.com/a/32510603/2761682) that indicates that table alters on sqlite are supported with alembic > 0.7.0 using batch mode, where it will handle creating new tables and copying data.  Wondering if that is possibly relevant here.\r\n\r\n**alembic revision issues**\r\n\r\nI tried running `alembic revision` locally and encountered 2 issues.  1 was typing import resolution error due to new `airflow/typing.py` module being in same directory where we try to run alembic.  2 was `FAILED: Multiple heads are present;` in alembic.  Are migrations are handled by release manager so we don't deal with them in PRs?\r\n\r\nThis [blog post](https://blog.jerrycodes.com/multiple-heads-in-alembic-migrations/) suggests adding unit test for detecting multiple revision heads.  Maybe that's a good idea.\r\n\r\n**upgrades**\r\nare we meant to be able to upgrade to 2.0 from 1.10.X?  cus i tried installing fresh install of 1.10.6 and then checking out master and running `airflow db upgrade` and got an error.  Is this something that we should be testing for possibly?\r\n\r\nSorry, know, these questions sort of venture off out of scope of this PR...",
+        "createdAt" : "2019-10-26T17:38:28Z",
+        "updatedAt" : "2019-10-26T18:19:10Z",
+        "lastEditedBy" : "a1587925-b1c0-4469-a592-51497b162e71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1fe566c2-8085-452d-9dab-bf42cdeee2ba",
+        "parentId" : "e7c2791f-a6b7-458c-8892-323e580fe41f",
+        "authorId" : "03e41e23-f438-4a06-9652-8f20638d2c3a",
+        "body" : "The change is fully backward compatible. The only chance is getting rid of the `id` column because that one wasn't used anywhere in the code. The index on there has been replaced by the primary key. Because this is such a small change, I thought this would be okay to keep this only for new installations.\r\n\r\nThe merging of the alembic should have been fixed here: https://github.com/apache/airflow/pull/6362 Please check if you're on the latest master. The unit test sounds like an excellent idea.\r\n\r\nRegarding the upgrade, that should work. Could you share the error?\r\n\r\nI'll work on a migration script: https://jira.apache.org/jira/browse/AIRFLOW-5767\r\n\r\n\r\n \r\n\r\n",
+        "createdAt" : "2019-10-26T21:29:52Z",
+        "updatedAt" : "2019-10-26T21:29:53Z",
+        "lastEditedBy" : "03e41e23-f438-4a06-9652-8f20638d2c3a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1c701628-8dd9-4cb3-bab7-3cc3e475aba1",
+        "parentId" : "e7c2791f-a6b7-458c-8892-323e580fe41f",
+        "authorId" : "a1587925-b1c0-4469-a592-51497b162e71",
+        "body" : "Here is the error message:\r\n\r\n```\r\n~/code/airflow master ⇡\r\nv1-10 ❯ airflow db upgrade\r\n/Users/dstandish/code/airflow/airflow/models/dagbag.py:21: DeprecationWarning: the imp module is deprecated in favour of importlib; see the module's documentation for alternative uses\r\n  import imp\r\nDB: sqlite:////Users/dstandish/airflow/airflow.db\r\n[2019-10-26 15:23:49,454] {db.py:318} INFO - Creating tables\r\nINFO  [alembic.runtime.migration] Context impl SQLiteImpl.\r\nINFO  [alembic.runtime.migration] Will assume non-transactional DDL.\r\nTraceback (most recent call last):\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/base.py\", line 162, in _catch_revision_errors\r\n    yield\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/base.py\", line 364, in _upgrade_revs\r\n    revs = list(revs)\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/revision.py\", line 819, in _iterate_revisions\r\n    select_for_downgrade and requested_lowers\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/revision.py\", line 814, in <genexpr>\r\n    rev.revision\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/revision.py\", line 746, in _iterate_related_revisions\r\n    \", \".join(r.revision for r in overlaps),\r\nalembic.script.revision.RevisionError: Requested revision a56c9515abdc overlaps with other requested revisions 004c1210f153, 74effc47d867\r\n\r\nThe above exception was the direct cause of the following exception:\r\n\r\nTraceback (most recent call last):\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/bin/airflow\", line 7, in <module>\r\n    exec(compile(f.read(), __file__, 'exec'))\r\n  File \"/Users/dstandish/code/airflow/airflow/bin/airflow\", line 39, in <module>\r\n    args.func(args)\r\n  File \"/Users/dstandish/code/airflow/airflow/utils/cli.py\", line 74, in wrapper\r\n    return f(*args, **kwargs)\r\n  File \"/Users/dstandish/code/airflow/airflow/bin/cli.py\", line 1236, in upgradedb\r\n    db.upgradedb()\r\n  File \"/Users/dstandish/code/airflow/airflow/utils/db.py\", line 326, in upgradedb\r\n    command.upgrade(config, 'heads')\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/command.py\", line 298, in upgrade\r\n    script.run_env()\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/base.py\", line 489, in run_env\r\n    util.load_python_file(self.dir, \"env.py\")\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/util/pyfiles.py\", line 98, in load_python_file\r\n    module = load_module_py(module_id, path)\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/util/compat.py\", line 173, in load_module_py\r\n    spec.loader.exec_module(module)\r\n  File \"<frozen importlib._bootstrap_external>\", line 728, in exec_module\r\n  File \"<frozen importlib._bootstrap>\", line 219, in _call_with_frames_removed\r\n  File \"/Users/dstandish/code/airflow/airflow/migrations/env.py\", line 103, in <module>\r\n    run_migrations_online()\r\n  File \"/Users/dstandish/code/airflow/airflow/migrations/env.py\", line 97, in run_migrations_online\r\n    context.run_migrations()\r\n  File \"<string>\", line 8, in run_migrations\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/runtime/environment.py\", line 846, in run_migrations\r\n    self.get_context().run_migrations(**kw)\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/runtime/migration.py\", line 507, in run_migrations\r\n    for step in self._migrations_fn(heads, self):\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/command.py\", line 287, in upgrade\r\n    return script._upgrade_revs(revision, rev)\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/base.py\", line 369, in _upgrade_revs\r\n    for script in reversed(list(revs))\r\n  File \"/usr/local/Cellar/python/3.7.3/Frameworks/Python.framework/Versions/3.7/lib/python3.7/contextlib.py\", line 130, in __exit__\r\n    self.gen.throw(type, value, traceback)\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/base.py\", line 196, in _catch_revision_errors\r\n    compat.raise_from_cause(util.CommandError(err.args[0]))\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/util/compat.py\", line 297, in raise_from_cause\r\n    reraise(type(exception), exception, tb=exc_tb, cause=exc_value)\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/util/compat.py\", line 290, in reraise\r\n    raise value.with_traceback(tb)\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/base.py\", line 162, in _catch_revision_errors\r\n    yield\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/base.py\", line 364, in _upgrade_revs\r\n    revs = list(revs)\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/revision.py\", line 819, in _iterate_revisions\r\n    select_for_downgrade and requested_lowers\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/revision.py\", line 814, in <genexpr>\r\n    rev.revision\r\n  File \"/Users/dstandish/.virtualenvs/v1-10/lib/python3.7/site-packages/alembic/script/revision.py\", line 746, in _iterate_related_revisions\r\n    \", \".join(r.revision for r in overlaps),\r\nalembic.util.exc.CommandError: Requested revision a56c9515abdc overlaps with other requested revisions 004c1210f153, 74effc47d867\r\n```\r\n\r\nTo reproduce here's what I did:\r\n```\r\ngit pull upstream master # ensure we have latest\r\ngit checkout v-10-stable # 1.10.6rc2\r\nrm ~/airflow/airflow.db\r\nairflow initdb\r\ngit checkout master\r\nairflow db upgrade\r\n```",
+        "createdAt" : "2019-10-26T22:28:25Z",
+        "updatedAt" : "2019-10-26T22:28:25Z",
+        "lastEditedBy" : "a1587925-b1c0-4469-a592-51497b162e71",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df5bf499-428b-4a57-bff1-1be926a9bf94",
+        "parentId" : "e7c2791f-a6b7-458c-8892-323e580fe41f",
+        "authorId" : "03e41e23-f438-4a06-9652-8f20638d2c3a",
+        "body" : "Thanks for pointing this out @dstandish. This is indeed an issue. Could you create a ticket for this? And include the stack trace and how to reproduce this? That would be very helpful. Thanks ",
+        "createdAt" : "2019-10-27T08:22:01Z",
+        "updatedAt" : "2019-10-27T08:22:01Z",
+        "lastEditedBy" : "03e41e23-f438-4a06-9652-8f20638d2c3a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f5faaea-e4e8-47eb-abfe-ef22be450a44",
+        "parentId" : "e7c2791f-a6b7-458c-8892-323e580fe41f",
+        "authorId" : "a1587925-b1c0-4469-a592-51497b162e71",
+        "body" : "OK created issue [here](https://issues.apache.org/jira/browse/AIRFLOW-5794) & assigned to you for now",
+        "createdAt" : "2019-10-28T01:37:55Z",
+        "updatedAt" : "2019-10-28T01:37:55Z",
+        "lastEditedBy" : "a1587925-b1c0-4469-a592-51497b162e71",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9b9312a60f891475d3072584171c2af56246829",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +54,58 @@\n    __table_args__ = (\n        Index('idx_xcom_dag_task_date', dag_id, task_id, execution_date, unique=False),\n    )\n"
+  }
+]
