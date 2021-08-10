@@ -1,0 +1,24 @@
+[
+  {
+    "id" : "a955d661-a67e-4749-9d04-5ee8ab604c5c",
+    "prId" : 39008,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/39008#pullrequestreview-299491386",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9309e568-dafd-4554-80a4-e2100b8ff30d",
+        "parentId" : null,
+        "authorId" : "f18100c7-3642-4412-ab4e-5ca8dd7d3888",
+        "body" : "Bug caught by change:\r\n\r\nAfter the change this line got flagged as `\"Property 'validateBody' does not exist\"`.\r\n\r\n`ctx.validateBody` here actually relied on the index signature and was inferred as `any` (making this whole test file pretty useless).\r\n\r\nThe type of `ctx` is `ParameterizedContext`:\r\n\r\n```\r\npost(\r\n        path: string | RegExp | (string | RegExp)[],\r\n        ...middleware: Array<Router.IMiddleware<StateT, CustomT>>\r\n    ): Router<StateT, CustomT>;\r\n\r\nexport type IMiddleware<StateT = any, CustomT = {}> =\r\n        Koa.Middleware<StateT, CustomT & IRouterParamContext<StateT, CustomT>>\r\n\r\ntype Middleware<\r\n        StateT = DefaultState,\r\n        CustomT = DefaultContext\r\n    > = compose.Middleware<ParameterizedContext<StateT, CustomT>>;\r\n```\r\n\r\nThe module `@types/koa-bouncer` augments `koa`'s `Context`:\r\n\r\n```\r\ninterface Context {\r\n    vals: any;\r\n    validateBody: (key: string) => KoaBouncer.Validator;\r\n    // ...\r\n}\r\n```\r\n\r\nBut `Context` inherits from `ParameterizedContext`:\r\n\r\n```\r\ninterface Context extends ParameterizedContext {}\r\n```\r\n\r\nSo `ctx.validateBody` is `any`.\r\n\r\n---\r\n\r\nI took `koa-router` out of the equation because:\r\n\r\n- the library `koa-bouncer` itself doesn't depend on it\r\n- makes this more unit-testy\r\n\r\n---\r\n\r\nIf you wonder, why the fallback `CustomT = DefaultContext` didn't work - `Router` would need to be changed to, but I'd leave this for a separate PR:\r\n\r\n```diff\r\n- declare class Router<StateT = any, CustomT = {}> {\r\n+ declare class Router<StateT = Koa.DefaultState, CustomT = Koa.DefaultContext> {\r\n```",
+        "createdAt" : "2019-10-09T15:15:39Z",
+        "updatedAt" : "2019-10-09T18:33:53Z",
+        "lastEditedBy" : "f18100c7-3642-4412-ab4e-5ca8dd7d3888",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1c6be21d9e1aad3334c95adb64e658bf965ae474",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +7,11 @@\napp.use(async ctx => {\n    ctx.validateBody('uname')\n        .required('Username required')\n        .isString()"
+  }
+]
