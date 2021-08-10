@@ -152,5 +152,82 @@
     "commit" : "84d5e27e49ffd0154c6a2846d33f962ab4942a8d",
     "line" : 20,
     "diffHunk" : "@@ -1,1 +930,934 @@\n                self.render_templates(context=context)\n                if STORE_SERIALIZED_DAGS:\n                    RTIF.write(RTIF(ti=self, render_templates=False), session=session)\n                    RTIF.delete_old_records(self.task_id, self.dag_id, session=session)"
+  },
+  {
+    "id" : "c7c22e60-b66a-4a6d-8553-928089202309",
+    "prId" : 7257,
+    "prUrl" : "https://github.com/apache/airflow/pull/7257#pullrequestreview-348372203",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "71bf5886-a93b-4b27-b4ae-5fb047edb59d",
+        "parentId" : null,
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "I think this attribute should always be created. If it is not needed, it should have an empty value. It is better to solve the problem of missing attributes than to hide the problem. All attributes, that the class has, should be created in the __init__ method.\r\n```python\r\nself.start_date.strftime('%Y%m%dT%H%M%S') if self.start_date else None,\r\n```\r\nThe use of getattr is a trick that allows you to write dynamic code, but we have a known class here that has known attributes.  We don't need dynamic objects here, but stable and solid types.",
+        "createdAt" : "2020-01-25T12:11:07Z",
+        "updatedAt" : "2020-01-25T12:29:14Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4efa6632-38d2-44e6-8d93-30e8b9508aaf",
+        "parentId" : "71bf5886-a93b-4b27-b4ae-5fb047edb59d",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I agree in principle. It should be as you described. But currently we face different reality. Solving it in the way you describe is much bigger task.\r\n\r\nI just want to solve current tests not to show failures where there are no failures at all. Failing exception in \"log\" is not a good \"test\" so it does not hide the problem. Logs should never \"detect\" a problem - they should print the current state of the object and not randomly fail.\r\n\r\nRight now in logs you see unrelated failures, you have inconsistency in the way how those attributes are treated - and sometimes you think those are the problems with tests - where they aren't. \r\n\r\nSo right now I am not trying to solve this \"bigger\" problem only the small one. But I created \r\nthe issue and marked you there https://issues.apache.org/jira/browse/AIRFLOW-6640 to solve the bigger issue. ",
+        "createdAt" : "2020-01-25T21:36:44Z",
+        "updatedAt" : "2020-01-25T21:36:44Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e062ffe9-cbeb-47b7-a9c9-2bdc7229e377",
+        "parentId" : "71bf5886-a93b-4b27-b4ae-5fb047edb59d",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "Can you indicate which test has this problem?  It seems to me that the test in this place may fail only in one situation - when execution_date == None, because the existence of the attribute is guaranteed by metaclase - SQlAlchemy.",
+        "createdAt" : "2020-01-26T03:59:43Z",
+        "updatedAt" : "2020-01-26T03:59:43Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61159875-c20b-411d-85a7-63bd9550290f",
+        "parentId" : "71bf5886-a93b-4b27-b4ae-5fb047edb59d",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I saw it in a few tests, but one particularly that I could see it happening was:\r\n`pytest tests/task/task_runner/test_standard_task_runner.py  -s`\r\n\r\nYou can run it in v1-10-test branch (commit ca0bbba19add1aef564c3379a9b8dfce55000cf1) to reproduce it. I have already applied this change with formatting while testing v1-10-test branch so it does not occur in the v1-10-test branch tip.\r\n\r\nI am now trying to fix all the flakiness and make v1-10-test stable and remove all the false information printed/flaky tests etc. so if you would like to spend quite some time and investigate it and make sure that it's fixed better - I am happy if you can help with this tasks. \r\n\r\nJust to give you perspective - I had quite a lot to do to fix all the various test flakiness so I have no time to analyse all the path of TaskInstance printing and adding if's is the easiest one so I do not have think about this as well. So if you have time and can do it better I am more than happy. I assigned it to you then and maybe we can fix it together: https://issues.apache.org/jira/browse/AIRFLOW-6640 \r\n",
+        "createdAt" : "2020-01-26T10:59:38Z",
+        "updatedAt" : "2020-01-26T10:59:38Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da2a4288-d8b5-48a4-917b-eeba63a0da63",
+        "parentId" : "71bf5886-a93b-4b27-b4ae-5fb047edb59d",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "This is the error I originally had. The test was still passing and the ERROR sigterm logs were expected (on kill). But then apparently in signal processing path task instance was being printed to log and it was producing this misleading exceptions about NoneType not having strftime.  I looked at other places where task instance was printed and I simply aligned all the places to be the same (with getattr and checking for empty) - just to have a consistent approach.\r\n\r\nIf you can modify all the places to not use getattra and maybe even extract taskinstance printing to separate method and trace down where the attributes could have been missing and make sure it is all tested for all cases, I am happy if you do it. \r\n\r\nNote that you should do it for both master and v1-10-test because primary problem was in 1.10 branch.\r\n\r\n```\r\ntests/task/task_runner/test_standard_task_runner.py::TestStandardTaskRunner::test_on_kill ========================= AIRFLOW ==========================\r\nAirflow home /root/airflow\r\nHome of the user: /root\r\nSkipping initializing of the DB as it was initialized already.\r\nYou can re-initialize the database by adding --with-db-init flag when running tests.\r\n[2020-01-25 11:38:56,950] {{__init__.py:51}} INFO - Using executor SequentialExecutor\r\n[2020-01-25 11:38:56,951] {{dagbag.py:403}} INFO - Filling up the DagBag from /opt/airflow/tests/dags\r\n[2020-01-25 11:38:57,050] {test_task_view_type_check.py:50} INFO - class_instance type: <class 'unusual_prefix_5d280a9b385120fec3c40cfe5be04e2f41b6b5e8_test_task_view_type_check.CallableClass'>\r\n[2020-01-25 11:38:57,085] {{dagbag.py:271}} INFO - File /opt/airflow/tests/dags/test_zip.zip assumed to contain no DAGs. Skipping.\r\n[2020-01-25 11:38:57,144] {{standard_task_runner.py:52}} INFO - Started process 235 to run task\r\n[2020-01-25 11:38:57,196] {{dagbag.py:403}} INFO - Filling up the DagBag from /opt/airflow/tests/dags/test_on_kill.py\r\nRunning %s on host %s <TaskInstance: test_on_kill.task1 2016-01-01T00:00:00+00:00 [None]> 7f8368b91b67\r\n[2020-01-25 11:39:00,161] {{helpers.py:322}} INFO - Sending Signals.SIGTERM to GPID 235\r\n[2020-01-25 11:39:00,162] {{taskinstance.py:941}} ERROR - Received SIGTERM. Terminating subprocesses.\r\n[2020-01-25 11:39:00,164] {{test_on_kill.py:36}} INFO - Executing on_kill\r\n[2020-01-25 11:39:00,162] {{taskinstance.py:941}} ERROR - Received SIGTERM. Terminating subprocesses.\r\n[2020-01-25 11:39:00,165] {{test_on_kill.py:36}} INFO - Executing on_kill\r\n[2020-01-25 11:39:00,185] {{taskinstance.py:1122}} ERROR - Task received SIGTERM signal\r\nTraceback (most recent call last):\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 966, in _run_raw_task\r\n    result = task_copy.execute(context=context)\r\n  File \"/opt/airflow/tests/dags/test_on_kill.py\", line 32, in execute\r\n    os.system('sleep 10')\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 943, in signal_handler\r\n    raise AirflowException(\"Task received SIGTERM signal\")\r\nairflow.exceptions.AirflowException: Task received SIGTERM signal\r\n[2020-01-25 11:39:00,185] {{taskinstance.py:1122}} ERROR - Task received SIGTERM signal\r\nTraceback (most recent call last):\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 966, in _run_raw_task\r\n    result = task_copy.execute(context=context)\r\n  File \"/opt/airflow/tests/dags/test_on_kill.py\", line 33, in execute\r\n    time.sleep(10)\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 943, in signal_handler\r\n    raise AirflowException(\"Task received SIGTERM signal\")\r\nairflow.exceptions.AirflowException: Task received SIGTERM signal\r\n[2020-01-25 11:39:00,194] {{taskinstance.py:1171}} ERROR - Failed to send email to: None\r\n[2020-01-25 11:39:00,194] {{taskinstance.py:1171}} ERROR - Failed to send email to: None\r\n[2020-01-25 11:39:00,201] {{taskinstance.py:1172}} ERROR - 'NoneType' object has no attribute 'strftime'\r\nTraceback (most recent call last):\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 966, in _run_raw_task\r\n    result = task_copy.execute(context=context)\r\n  File \"/opt/airflow/tests/dags/test_on_kill.py\", line 33, in execute\r\n    time.sleep(10)\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 943, in signal_handler\r\n    raise AirflowException(\"Task received SIGTERM signal\")\r\nairflow.exceptions.AirflowException: Task received SIGTERM signal\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nTraceback (most recent call last):\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 1166, in handle_failure\r\n    self.start_date.strftime('%Y%m%dT%H%M%S'),\r\nAttributeError: 'NoneType' object has no attribute 'strftime'\r\n[2020-01-25 11:39:00,201] {{taskinstance.py:1172}} ERROR - 'NoneType' object has no attribute 'strftime'\r\nTraceback (most recent call last):\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 966, in _run_raw_task\r\n    result = task_copy.execute(context=context)\r\n  File \"/opt/airflow/tests/dags/test_on_kill.py\", line 32, in execute\r\n    os.system('sleep 10')\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 943, in signal_handler\r\n    raise AirflowException(\"Task received SIGTERM signal\")\r\nairflow.exceptions.AirflowException: Task received SIGTERM signal\r\n\r\nDuring handling of the above exception, another exception occurred:\r\n\r\nTraceback (most recent call last):\r\n  File \"/opt/airflow/airflow/models/taskinstance.py\", line 1166, in handle_failure\r\n    self.start_date.strftime('%Y%m%dT%H%M%S'),\r\nAttributeError: 'NoneType' object has no attribute 'strftime'\r\n[2020-01-25 11:39:00,257] {{helpers.py:288}} INFO - Process psutil.Process(pid=235, status='terminated') (235) terminated with exit code 1\r\n[2020-01-25 11:39:00,258] {{helpers.py:288}} INFO - Process psutil.Process(pid=238, status='terminated') (238) terminated with exit code None\r\n[2020-01-25 11:39:00,259] {{helpers.py:288}} INFO - Process psutil.Process(pid=237, status='terminated') (237) terminated with exit code None\r\n[2020-01-25 11:39:00,288] {{helpers.py:288}} INFO - Process psutil.Process(pid=236, status='terminated') (236) terminated with exit code None\r\nPASSED\r\n```",
+        "createdAt" : "2020-01-26T11:05:50Z",
+        "updatedAt" : "2020-01-26T11:05:50Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61bb3c9c-9aa5-40b2-93f4-bf03b7cd50cf",
+        "parentId" : "71bf5886-a93b-4b27-b4ae-5fb047edb59d",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Let me know how you want to proceed please :)",
+        "createdAt" : "2020-01-26T11:06:44Z",
+        "updatedAt" : "2020-01-26T11:06:44Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9de1854bf78afa0a9bcdf247c975ec2ff57ad2b4",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +1150,1154 @@                            self,\n                            'start_date') and self.start_date else '',\n                        self.end_date.strftime('%Y%m%dT%H%M%S') if hasattr(\n                            self,\n                            'end_date') and self.end_date else '')"
   }
 ]
