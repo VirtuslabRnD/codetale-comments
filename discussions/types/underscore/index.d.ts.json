@@ -174,5 +174,159 @@
     "commit" : "dd60bbc45b4ab1dedcc34273ba910a20717b4102",
     "line" : 93,
     "diffHunk" : "@@ -1,1 +5064,5068 @@    }\n\n    interface _Chain<T, V = T> {\n\n        /* *************"
+  },
+  {
+    "id" : "c84a0faa-9938-4d19-8970-1fae010845a0",
+    "prId" : 45304,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/45304#pullrequestreview-431549713",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "52350452-6515-4160-b7e9-50beb83d02ce",
+        "parentId" : null,
+        "authorId" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "body" : "With regards to the performance impact of these changes, this will technically handle someone's custom extended array type, but that's probably not a common scenario. If this performance change is really a concern, I could change the Underscore and chain functions to use the below more static set of overloads instead and only be making this a tiny bit more inconvenient for those hopefully rare few that make lists or dictionaries that have extra bits tacked on.\r\n\r\n```TS\r\n        <T>(value: T[]): Underscore<T, T[]>;\r\n        <T>(value: List<T>): Underscore<T, List<T>>;\r\n        <T>(value: Dictionary<T>): Underscore<T, Dictionary<T>>;\r\n        <V>(value: V): Underscore<V>;\r\n```",
+        "createdAt" : "2020-06-05T17:21:54Z",
+        "updatedAt" : "2020-06-18T04:46:45Z",
+        "lastEditedBy" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71b7ce79-c509-4673-8225-985e6f50b241",
+        "parentId" : "52350452-6515-4160-b7e9-50beb83d02ce",
+        "authorId" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "body" : "Still probably not a big deal, but I suppose one common item that fits the bill of a list that might have extra bits tacked on is `arguments` (though the only extra bit I see right now in Chrome is `callee`).",
+        "createdAt" : "2020-06-05T17:24:54Z",
+        "updatedAt" : "2020-06-18T04:46:45Z",
+        "lastEditedBy" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8721b917-bd22-41bb-be73-e40fbfe765b4",
+        "parentId" : "52350452-6515-4160-b7e9-50beb83d02ce",
+        "authorId" : "d6dbc01c-d9ed-403c-aba1-4b9e918920b4",
+        "body" : "Could you give some examples of code that typechecks with your changes but not with the old code? I think `arguments` and similar array-likes (including `Array` itself, in fact) are already covered by the `List<T>` case.\r\n\r\nWherever TS encounters a type such as `List<T>`, it will always also accept anything that extends that type. Constructions of the form `V extends List<T>` are generally only needed when you need to do your own type computations (like in this case, in order to distinguish the `Dictionary` case from the general fallback type).",
+        "createdAt" : "2020-06-08T12:37:20Z",
+        "updatedAt" : "2020-06-18T04:46:45Z",
+        "lastEditedBy" : "d6dbc01c-d9ed-403c-aba1-4b9e918920b4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1bb67a8a-acc0-4129-8138-b4e28a67303c",
+        "parentId" : "52350452-6515-4160-b7e9-50beb83d02ce",
+        "authorId" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "body" : "There is one place that is immediately improved by these changes and two that would be improved in a future PR. The spot that is immediately improved is `.value()`, which will now provide the original wrapped type instead of an Underscore interface that may not exactly match the provided type. The first improvement in a later PR is `each`, which is expected to return the same object it was given. The second improvement in a later PR is the type of the original object that is provided as the third argument to iterators, though that will be applied to `Underscore` and `_Chain` but not `UnderscoreStatic` in the currently planned set of changes.\r\n\r\nAll that being said, it's not super useful to use the return value of `each` or to do something like `_(specialArray).value()` or `_.chain(specialArray).value()`, and it's probably not even terribly interesting to retain the original type for iterators (personally I've never actually written an iterator that's even used that third argument).\r\n\r\nIf the possibility of being given types that are assignable to but are not exactly the same as Underscore interfaces doesn't need to be handled, I don't think it's necessary to use the extra constraints for dictionaries either; `<T>(value: Dictionary<T>): Underscore<T, Dictionary<T>>;` should be a sufficient overload for dictionaries as long as it comes before the overload that takes any value. It seems like it would be nice to consistently treat special cases for both dictionaries and arrays in a similar fashion, but I will admit that special cases for dictionaries seem more likely to actually happen in the real world so I'd be ok with leaving `V extends Dictionary<T>` but removing the similar constraint for lists if you'd prefer.\r\n\r\nShort contrived examples of special dictionary and list types that would potentially benefit from inferring and propagating the specific dictionary and list types are below.\r\n\r\n```TS\r\n// lists when using an overload that does not propagate the full type\r\nconst stringListWithAddedBits = { 0: 'str', length: 1, nonListProperty: 'suffix' }; // full type is { 0: string, length: number, nonListProperty: string } but it is assignable to List<string>\r\n_(stringListWithAddedBits).value().nonListProperty; // error - nonListProperty does not exist\r\n_(stringListWithAddedBits).each(value => console.log(value)).nonListProperty; // error - nonListProperty does not exist\r\n_(stringListWithAddedBits).map((value, index, list) => value + list.nonListProperty); // error - nonListProperty does not exist\r\n\r\n// dictionaries when using an overload that does not propagate the full type\r\nconst dictionaryWithKnownProperties = {\r\n    numberProperty: 3,\r\n    alsoANumberProperty: 4\r\n}; // full type is { numberProperty: number, alsoANumberProperty: number } but it is assignable to Dictionary<number>\r\n_(dictionaryWithKnownProperties).value().numberProperty; // error - numberProperty does not exist\r\n_(dictionaryWithKnownProperties).each(value => console.log(value)).numberProperty; // error - numberProperty does not exist\r\n_(dictionaryWithKnownProperties).map((value, index, list) => value + list.numberProperty); // error - numberProperty does not exist\r\n```",
+        "createdAt" : "2020-06-09T09:46:22Z",
+        "updatedAt" : "2020-06-18T04:46:46Z",
+        "lastEditedBy" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "444bf9ef-4940-479b-adf2-170fd3b09063",
+        "parentId" : "52350452-6515-4160-b7e9-50beb83d02ce",
+        "authorId" : "d6dbc01c-d9ed-403c-aba1-4b9e918920b4",
+        "body" : "Actually, I'm mildly convinced. I agree that `_(x).value()` is useless, but the other bits are nice to have. I'd approve keeping this change.",
+        "createdAt" : "2020-06-09T11:14:11Z",
+        "updatedAt" : "2020-06-18T04:46:46Z",
+        "lastEditedBy" : "d6dbc01c-d9ed-403c-aba1-4b9e918920b4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26ee0a62-ac75-43a6-b093-4f80e6c995de",
+        "parentId" : "52350452-6515-4160-b7e9-50beb83d02ce",
+        "authorId" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "body" : "Sounds good, I suppose it would be good to add some tests around these cases as well so I'll go do that 😄 ",
+        "createdAt" : "2020-06-09T16:17:26Z",
+        "updatedAt" : "2020-06-18T04:46:46Z",
+        "lastEditedBy" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3694685-66b7-433b-bb75-90500aa39b13",
+        "parentId" : "52350452-6515-4160-b7e9-50beb83d02ce",
+        "authorId" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "body" : "Surprisingly when putting together these tests I found that an automatically-typed new object can be inferred to be a dictionary with string properties but one with an interface containing only string properties cannot, which admittedly makes the dictionary case outlined above a little less useful.\r\n\r\n```TS\r\n// I tried using both non-string and string syntax when defining the property names below just to see if one would make TS happier than the other\r\ninterface StronglyKeyedSimpleStringObjectDictionary {\r\n    'a': SimpleStringObject;\r\n    'b': SimpleStringObject;\r\n    'c': SimpleStringObject;\r\n}\r\n\r\nconst rawSimpleSimpleObjectDictionary = { a: { a: 'a', b: 'c' }, b: { a: 'b', b: 'b' }, c: { a: 'c', b: 'a' } };\r\nconst stronglyKeyedSimpleStringObjectDictionary: StronglyKeyedSimpleStringObjectDictionary = rawSimpleSimpleObjectDictionary;\r\nconst simpleStringObjectDictionary1: _.Dictionary<SimpleStringObject> = rawSimpleSimpleObjectDictionary; // ok\r\nconst simpleStringObjectDictionary2: _.Dictionary<SimpleStringObject> = stronglyKeyedSimpleStringObjectDictionary; // error: Type 'StronglyKeyedSimpleStringObjectDictionary' is not assignable to type 'Dictionary<SimpleStringObject>'. Index signature is missing in type 'StronglyKeyedSimpleStringObjectDictionary'.\r\n```\r\n\r\nThat being said, it's still possible to define an interface that has properties that are known to be defined as well as an index signature, which could still be useful, so I added tests around that to close this out.",
+        "createdAt" : "2020-06-16T14:14:06Z",
+        "updatedAt" : "2020-06-18T04:46:46Z",
+        "lastEditedBy" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3835c33848aed8f30912d06e75e9074c51cf5d6d",
+    "line" : 64,
+    "diffHunk" : "@@ -1,1 +127,131 @@         * @returns An Underscore wrapper around the supplied value.\n         **/\n        <T extends TypeOfList<V>, V extends List<any> = List<T>>(value: V): Underscore<T, V>;\n        <T extends TypeOfDictionary<V>, V extends Dictionary<any> = Dictionary<T>>(value: V): Underscore<T, V>;\n        <V>(value: V): Underscore<never, V>;"
+  },
+  {
+    "id" : "7fd8f7ab-407b-45fc-a6e8-bd85a20527ba",
+    "prId" : 45304,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/45304#pullrequestreview-432648045",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "271eb36c-a8d0-498a-8b38-c6b626564287",
+        "parentId" : null,
+        "authorId" : "d6dbc01c-d9ed-403c-aba1-4b9e918920b4",
+        "body" : "Continueing the above discussion, this might already be enough to catch anything array-like:\r\n\r\n```suggestion\r\n        chain<T>(value: List<T>): _Chain<T, List<T>>;\r\n```",
+        "createdAt" : "2020-06-08T12:44:37Z",
+        "updatedAt" : "2020-06-18T04:46:45Z",
+        "lastEditedBy" : "d6dbc01c-d9ed-403c-aba1-4b9e918920b4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e53409bb-0c4b-418d-9afa-084d21288f74",
+        "parentId" : "271eb36c-a8d0-498a-8b38-c6b626564287",
+        "authorId" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "body" : "Per [this comment](https://github.com/DefinitelyTyped/DefinitelyTyped/pull/45304#discussion_r437329713), I'm resolving this conversation without making changes.",
+        "createdAt" : "2020-06-17T18:04:53Z",
+        "updatedAt" : "2020-06-18T04:46:46Z",
+        "lastEditedBy" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3835c33848aed8f30912d06e75e9074c51cf5d6d",
+    "line" : 106,
+    "diffHunk" : "@@ -1,1 +4122,4126 @@         * @returns An underscore chain wrapper around the supplied value.\n         **/\n        chain<T extends TypeOfList<V>, V extends List<any> = List<T>>(value: V): _Chain<T, V>;\n        chain<T extends TypeOfDictionary<V>, V extends Dictionary<any> = Dictionary<T>>(value: V): _Chain<T, V>;\n        chain<V>(value: V): _Chain<never, V>;"
+  },
+  {
+    "id" : "85c42859-3bd8-4359-bc33-e8b5c9b58c77",
+    "prId" : 45304,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/45304#pullrequestreview-433370691",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b13838e3-9d51-43b6-acae-36fce272e06e",
+        "parentId" : null,
+        "authorId" : "d6dbc01c-d9ed-403c-aba1-4b9e918920b4",
+        "body" : "Is the use of `never` safe? It's just a guess, but my first impression is that the following will break:\r\n\r\n```ts\r\n_.chain([1, 2, 3]).find(n => n % 2).value();\r\n```",
+        "createdAt" : "2020-06-18T13:35:28Z",
+        "updatedAt" : "2020-06-18T13:35:28Z",
+        "lastEditedBy" : "d6dbc01c-d9ed-403c-aba1-4b9e918920b4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8540a401-2ffa-4f3f-9104-d7f04aa268a6",
+        "parentId" : "b13838e3-9d51-43b6-acae-36fce272e06e",
+        "authorId" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "body" : "Happily `find` specifically has an extensive set of tests in a form that I actually based most of the tests I wrote off of (see [namespace TestFind in underscore-tests.ts](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/underscore/underscore-tests.ts#L23)), so I can confidently say that the example you provide works as expected 😄 \r\n\r\nWhat happens there is that you end up with a `_Chain<T, V>` (where `T` represents the type of items in a collection and `V` represents the wrapped value) that is `_Chain<never, number | undefined>`, and since `value` is defined as `value(): V;` the result ends up being `number | undefined`.\r\n\r\nWhat the `never` does get in the way of is using subsequent functions that depend on the collection item type `T`; for example, the second find call below would get an `n` of `never` since the chain is not wrapping a collection type where having a collection item type makes sense.\r\n\r\n```TS\r\n_.chain([1, 2, 3]) // result is _Chain<number, number[]>\r\n    .find(n => n % 2) // result is _Chain<never, number | undefined>\r\n    .find(n => n % 2) // This seems like it should be an error, but apparently doing math on a `never` is allowed. It would prevent most other operations though.\r\n    .value(); // result is `undefined`, which is accurate (though admittedly that's more by luck than by design since I'm not really focusing on correct results for inappropriate usages at this time)\r\n```\r\n\r\n(Sigh) Or at least it would if `_Chain.find` didn't have a few issues with its present declaration including its own local redeclaration of the `T` generic and a union of iterator types that makes TS less good at automatically inferring the types that should be applied to callbacks.",
+        "createdAt" : "2020-06-18T14:57:33Z",
+        "updatedAt" : "2020-06-18T16:24:32Z",
+        "lastEditedBy" : "96815620-060a-4548-941b-0e1ee9e23ed1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3835c33848aed8f30912d06e75e9074c51cf5d6d",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +114,118 @@    type TypeOfCollection<V> = V extends _.Collection<infer T> ? T : never;\n\n    type _ChainSingle<V> = _Chain<TypeOfCollection<V>, V>;\n\n    interface Cancelable {"
   }
 ]
