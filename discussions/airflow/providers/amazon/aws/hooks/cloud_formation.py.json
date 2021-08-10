@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "05c688bf-7f08-4b0f-bf9d-fff5cec7222f",
+    "prId" : 6824,
+    "prUrl" : "https://github.com/apache/airflow/pull/6824#pullrequestreview-348703824",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5d862fd0-aa73-4f09-a585-cbbedfefe1a1",
+        "parentId" : null,
+        "authorId" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "body" : "```python\r\n        except ClientError as e:\r\n            if 'does not exist' in str(e):\r\n                return None\r\n            raise e\r\n```\r\n\r\nI am also wondering if `ClientError` is the correct exception type to catch.\r\n\r\nThe docs https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/cloudformation.html#CloudFormation.Client.describe_stacks are saying that it raises an `AmazonCloudFormationException` when it does not exist.\r\n\r\nSo then I would only catch this:\r\n```python\r\n        except AmazonCloudFormationException as e:\r\n            return None\r\n```",
+        "createdAt" : "2020-01-22T14:31:53Z",
+        "updatedAt" : "2020-01-27T14:47:11Z",
+        "lastEditedBy" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "403673e1-95fb-4de5-a9ff-4d64e3e04573",
+        "parentId" : "5d862fd0-aa73-4f09-a585-cbbedfefe1a1",
+        "authorId" : "1ebba45e-b727-42c9-a94d-d123271255c6",
+        "body" : "Yep, I read that, however there is no class by name `AmazonCloudFormationException` in boto.\r\n\r\nI could add:\r\n```\r\nif e.response['Error']['Code'] == 'ValidationError':\r\n```\r\nas suggested [here](https://stackoverflow.com/a/47040476/2489287)\r\n\r\nHowever since we are using boto's cloudformation client here it is certain that that would be the value of the error code in the exception.\r\n\r\nShould I make this change? or should we go for the brevity of simply catching `ClientError` and not check its error code value.",
+        "createdAt" : "2020-01-23T08:12:11Z",
+        "updatedAt" : "2020-01-27T14:47:11Z",
+        "lastEditedBy" : "1ebba45e-b727-42c9-a94d-d123271255c6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d19bd31a-738d-4279-b386-53846f2bcc99",
+        "parentId" : "5d862fd0-aa73-4f09-a585-cbbedfefe1a1",
+        "authorId" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "body" : "In my opinion going for the error code is far better than checking the message string.",
+        "createdAt" : "2020-01-27T12:36:35Z",
+        "updatedAt" : "2020-01-27T14:47:11Z",
+        "lastEditedBy" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ca6bac8-375d-4c64-a4a5-33af55eb85c7",
+        "parentId" : "5d862fd0-aa73-4f09-a585-cbbedfefe1a1",
+        "authorId" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "body" : "Ah you mean we still need to check the `if 'does not exist' in str(e):` ?",
+        "createdAt" : "2020-01-27T12:37:47Z",
+        "updatedAt" : "2020-01-27T14:47:11Z",
+        "lastEditedBy" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b548f1f-6b24-4f0c-8410-c54d9bf4f1d8",
+        "parentId" : "5d862fd0-aa73-4f09-a585-cbbedfefe1a1",
+        "authorId" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "body" : "Hm ya then let's simply stick with it - so no change needed from your side :)\r\n\r\nThanks for the explanation. 👍 ",
+        "createdAt" : "2020-01-27T12:41:06Z",
+        "updatedAt" : "2020-01-27T14:47:11Z",
+        "lastEditedBy" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c88e6c2c-71a5-41b8-9e5b-0e2fd6052a22",
+        "parentId" : "5d862fd0-aa73-4f09-a585-cbbedfefe1a1",
+        "authorId" : "1ebba45e-b727-42c9-a94d-d123271255c6",
+        "body" : "![image](https://user-images.githubusercontent.com/5708714/73183505-92285900-4123-11ea-881d-e9b161d12eff.png)\r\n\r\n\r\nWe could check the error code instead of the message string, and assume that `ValidationError` returned from `describe_stacks` could only be due to stack not existing.\r\n\r\nHowever there could be other scenarios in which that can happen, for example, illegal characters in `StackName`:\r\n```\r\n>>> cf.describe_stacks(StackName='||')\r\n\r\nTraceback (most recent call last):\r\n  File \"<stdin>\", line 1, in <module>\r\n  File \"/usr/local/lib/python3.7/site-packages/botocore/client.py\", line 357, in _api_call\r\n    return self._make_api_call(operation_name, kwargs)\r\n  File \"/usr/local/lib/python3.7/site-packages/botocore/client.py\", line 661, in _make_api_call\r\n    raise error_class(parsed_response, operation_name)\r\nbotocore.exceptions.ClientError: An error occurred (ValidationError) when calling the DescribeStacks operation: 1 validation error detected: Value '||' at 'stackName' failed to satisfy constraint: Member must satisfy regular expression pattern: [a-zA-Z][-a-zA-Z0-9]*|arn:[-a-zA-Z0-9:/._+]*```",
+        "createdAt" : "2020-01-27T14:15:43Z",
+        "updatedAt" : "2020-01-27T14:47:11Z",
+        "lastEditedBy" : "1ebba45e-b727-42c9-a94d-d123271255c6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f60b0709-9c13-4fe7-9ccf-427616f76748",
+        "parentId" : "5d862fd0-aa73-4f09-a585-cbbedfefe1a1",
+        "authorId" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "body" : "Yes, so let's better check the message string then.",
+        "createdAt" : "2020-01-27T14:31:03Z",
+        "updatedAt" : "2020-01-27T14:47:11Z",
+        "lastEditedBy" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "78a5d82cbe49e20b13ba0c4cfa8bcb1f8e8f5dfc",
+    "line" : 58,
+    "diffHunk" : "@@ -1,1 +56,60 @@                return None\n            else:\n                raise e\n\n    def create_stack(self, stack_name, params):"
+  }
+]
