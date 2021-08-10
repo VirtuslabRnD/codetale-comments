@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "fb327278-931a-4fb3-8953-adb0d1dba83c",
+    "prId" : 4182,
+    "prUrl" : "https://github.com/apache/airflow/pull/4182#pullrequestreview-353219304",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "73050f37-1293-4a92-8f60-06c5c2280357",
+        "parentId" : null,
+        "authorId" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "body" : "@rmn36 @kaxil @ashb @Fokko \r\n\r\nI'm trying to understand the rationale behind this line. E.g. for a dag that looks like this, with just op1 >> op2. When we run the DAG, both op1 and op2 become skipped. The reason is op1 raises `AirflowSkipException`, so op1 is skipped. op2 is set to `none_failed`. But op2 is also skipped because this line checks `skipped == upstream` and marks op2 as skipped.\r\n\r\nHowever, the doc for \"Trigger Rule\" says:\r\n```none_failed: all parents have not failed (failed or upstream_failed) i.e. all parents have succeeded or been skipped```\r\n\r\nSo if I interpret this correctly, when all of op2's upstream tasks are skipped, none of them have failed. So op2 should be success rather than skip. \r\n\r\nThis may be a feature or a bug. If it's a feature, we need to update the doc. Or if it's a bug we should fix this line.\r\n\r\nWhat do you think?\r\n\r\n```\r\nwith DAG(\"skip_exception\", schedule_interval=None, start_date=pendulum.parse(\"20190101\")) as dag:\r\n    def raise_skip():\r\n        raise AirflowSkipException\r\n    op1 = PythonOperator(task_id=\"op1\", python_callable=raise_skip)\r\n    op2 = DummyOperator(task_id=\"op2\", trigger_rule=\"none_failed\")\r\n    op1 >> op2\r\n```",
+        "createdAt" : "2019-12-24T05:18:31Z",
+        "updatedAt" : "2019-12-24T05:18:31Z",
+        "lastEditedBy" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5859e625-0903-4c36-a085-34eb18eda89d",
+        "parentId" : "73050f37-1293-4a92-8f60-06c5c2280357",
+        "authorId" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "body" : "Pls note that this can be a feature worth preserving, because if someone wants his task op2 to only run if at least some upstream tasks have succeeded (while others can be skipped), he can use \"none_failed\" to do that because that's exactly what this line does. \r\n\r\nHowever, if he wants to have his task op2 succeed as long as none of the upstream tasks fail (either skipped for success), he can still use \"none_failed\" for it. The only workaround he needs to add is to introduce a DummyOperator that always succeeds directly upstream of op2.\r\n\r\nSo we can keep this feature, but we should make it clear in the doc that if all the upstream tasks are skipped, a task marked with \"none_failed\" will be skipped. Pls let me know. i don't mind creating a PR to update the doc.",
+        "createdAt" : "2019-12-24T05:31:01Z",
+        "updatedAt" : "2019-12-24T05:31:01Z",
+        "lastEditedBy" : "f85ef659-e88b-40c6-856b-c86350e0d001",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f03b1fee-8714-4d49-b744-a8b57099385e",
+        "parentId" : "73050f37-1293-4a92-8f60-06c5c2280357",
+        "authorId" : "b9562236-3520-4646-a0a5-de434b259a58",
+        "body" : "> Pls note that this can be a feature worth preserving, because if someone wants his task op2 to only run if at least some upstream tasks have succeeded (while others can be skipped), he can use \"none_failed\" to do that because that's exactly what this line does.\r\n> \r\n> However, if he wants to have his task op2 succeed as long as none of the upstream tasks fail (either skipped for success), he can still use \"none_failed\" for it. The only workaround he needs to add is to introduce a DummyOperator that always succeeds directly upstream of op2.\r\n> \r\n> So we can keep this feature, but we should make it clear in the doc that if all the upstream tasks are skipped, a task marked with \"none_failed\" will be skipped. Pls let me know. i don't mind creating a PR to update the doc.\r\n\r\nIn my opinion, this isn't a reasonable workaround. I'm developing complex DAGs that consist of several tasks with only one upstream dependency-- all of which could be potentially skipped. The `none_failed` trigger rule seemed to be the perfect rule for my use case, but anytime I skip a task, skips propagate down until the next task with multiple upstream deps. Wouldn't the reason you mentioned to preserve this feature be satisfied by the ONE_SUCCESS trigger rule? Either way, I believe that `none_failed` communicates \"trigger if all upstream are success or skipped\" as your docs suggest.",
+        "createdAt" : "2020-01-03T16:03:59Z",
+        "updatedAt" : "2020-01-06T14:00:29Z",
+        "lastEditedBy" : "b9562236-3520-4646-a0a5-de434b259a58",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "69f661f0-ba0d-4330-bae6-a8f3dd009dc8",
+        "parentId" : "73050f37-1293-4a92-8f60-06c5c2280357",
+        "authorId" : "b9562236-3520-4646-a0a5-de434b259a58",
+        "body" : "cc: @rmn36 @kaxil @ashb @Fokko @yuqian90 \r\n\r\nDo you all agree? Should I file a JIRA for this?",
+        "createdAt" : "2020-01-06T14:00:04Z",
+        "updatedAt" : "2020-01-06T14:00:04Z",
+        "lastEditedBy" : "b9562236-3520-4646-a0a5-de434b259a58",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a53e9bc9-901e-4c33-acc1-7b9d94faab86",
+        "parentId" : "73050f37-1293-4a92-8f60-06c5c2280357",
+        "authorId" : "b226f603-38da-43d4-b4d1-a7520720964c",
+        "body" : "@ChrisEverling leaving a note here for others who find this conversation, a JIRA ticket was filed for this:  https://issues.apache.org/jira/browse/AIRFLOW-4453",
+        "createdAt" : "2020-02-04T18:54:30Z",
+        "updatedAt" : "2020-02-04T18:54:30Z",
+        "lastEditedBy" : "b226f603-38da-43d4-b4d1-a7520720964c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8178702a2004b4c3f60ad5cad29932405a303564",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +156,160 @@                if upstream_failed or failed:\n                    ti.set_state(State.UPSTREAM_FAILED, session)\n                elif skipped == upstream:\n                    ti.set_state(State.SKIPPED, session)\n"
+  }
+]
