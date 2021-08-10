@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "15211e87-f70e-4d1c-aae2-7a81743addb3",
+    "prId" : 33113,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/33113#pullrequestreview-207102192",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c2e2d6cb-4e63-4f54-9cba-59fcb60f98b8",
+        "parentId" : null,
+        "authorId" : "08fff3db-4c67-4b1f-b9df-5f6599d90ead",
+        "body" : "These tests below are failing when running `npm run test` and when running `dtslint` manually.\r\n\r\nIt seems to think that these methods return a `stream.Transform` instead of a `ProgressStream`.\r\n\r\n![2019-02-16_11-12-09](https://user-images.githubusercontent.com/5085260/52898652-7660c700-31e0-11e9-90a6-2253189226ae.png)\r\n\r\nTypeScript@3.3.3 does not report any errors when compiling code that uses these definitions (nor any problems in vscode). TSLint (using vscode-typescript-tslint-plugin@1.0.0) does not report any problems with the definitions or with the tests.\r\n\r\n![2019-02-16_11-45-12](https://user-images.githubusercontent.com/5085260/52898636-59c48f00-31e0-11e9-85d1-375e0c2c0cf6.png)\r\n\r\n\r\nBoth of these interpret the return value as `ProgressStream`. If I change the `$ExpectType` assertion to expect a `Transform` instead, TSLint says the assertion failed because it got a `ProgressStream`.\r\n\r\n![2019-02-16_11-42-40](https://user-images.githubusercontent.com/5085260/52898622-31d52b80-31e0-11e9-9a46-2c4ed41a2d6a.png)\r\n\r\nDoes anyone know what's going on here?\r\n",
+        "createdAt" : "2019-02-16T10:48:41Z",
+        "updatedAt" : "2019-02-23T08:32:31Z",
+        "lastEditedBy" : "08fff3db-4c67-4b1f-b9df-5f6599d90ead",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2d906c7-0c46-453d-a825-2ab968b73037",
+        "parentId" : "c2e2d6cb-4e63-4f54-9cba-59fcb60f98b8",
+        "authorId" : "e5ae6fc6-9e2b-4b96-8480-7066f2f51e54",
+        "body" : "@mickdekkers, thanks for following up!  Something's definitely wrong, since the language service and linter disagree, but I'm not sure what the correct behavior is.  I've filed https://github.com/Microsoft/TypeScript/issues/30031.\r\n\r\nIn the meantime, I'd suggest using `extends`, rather than an intersection type, to work around this problem.  Sorry for the trouble.",
+        "createdAt" : "2019-02-21T23:48:05Z",
+        "updatedAt" : "2019-02-23T08:32:31Z",
+        "lastEditedBy" : "e5ae6fc6-9e2b-4b96-8480-7066f2f51e54",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d097497-c1d5-4618-acc7-92b94b26d67e",
+        "parentId" : "c2e2d6cb-4e63-4f54-9cba-59fcb60f98b8",
+        "authorId" : "08fff3db-4c67-4b1f-b9df-5f6599d90ead",
+        "body" : "Hi @amcasey, thanks for looking into this!\r\n\r\nThe reason I used an intersection type is because I could find no way of extending `stream.Transform` with new overloads for `on(event)`.\r\n\r\nSpecifically, I initially tried to define `ProgressStream` as an interface like this:\r\n\r\n```ts\r\ninterface ProgressStream extends stream.Transform {\r\n    on(event: \"progress\", listener: ProgressListener): ProgressStream;\r\n    on(event: \"length\", listener: (length: number) => void): ProgressStream;\r\n    setLength(length: number): void;\r\n    progress(): Progress;\r\n}\r\n```\r\n\r\nBut this way TypeScript reports a compile error (using `npm run lint progress-stream`):\r\n\r\n```\r\nError: /DefinitelyTyped/types/progress-stream/index.d.ts:34:15\r\nERROR: 34:15  expect  TypeScript@next compile error:\r\nInterface 'ProgressStream' incorrectly extends interface 'Transform'.\r\n  Types of property 'on' are incompatible.\r\n    Type '{ (event: \"progress\", listener: ProgressListener): ProgressStream; (event: \"length\", listener: (length: number) => void): ProgressStream; }' is not assignable to type '{ (event: \"close\", listener: () => void): this; (event: \"data\", listener: (chunk: any) => void): this; (event: \"end\", listener: () => void): this; (event: \"readable\", listener: () => void): this; (event: \"error\", listener: (err: Error) => void): this; (event: string | symbol, listener: (...args: any[]) => void): thi...'.\r\n      Types of parameters 'event' and 'event' are incompatible.\r\n        Type '\"close\"' is not assignable to type '\"progress\"'.\r\n\r\n/DefinitelyTyped/types/progress-stream/progress-stream-tests.ts:56:6\r\nERROR: 56:6   expect  TypeScript@next compile error:\r\nArgument of type '\"close\"' is not assignable to parameter of type '\"length\"'.\r\nERROR: 58:6   expect  TypeScript@next compile error:\r\nArgument of type '\"data\"' is not assignable to parameter of type '\"length\"'.\r\nERROR: 60:6   expect  TypeScript@next compile error:\r\nArgument of type '\"end\"' is not assignable to parameter of type '\"length\"'.\r\nERROR: 62:6   expect  TypeScript@next compile error:\r\nArgument of type '\"error\"' is not assignable to parameter of type '\"length\"'.\r\nERROR: 64:6   expect  TypeScript@next compile error:\r\nArgument of type '\"readable\"' is not assignable to parameter of type '\"length\"'.\r\n```\r\n\r\nNote that `close`, `data`, `end`, `error`, and `readable` are all events on `stream.Transform`. (These event definitions are part of `stream.Readable`, which is extended by `stream.Duplex`, which in turn is extended by `stream.Transform`.)\r\n\r\nI [asked for advice](https://gitter.im/Microsoft/TypeScript?at=5c67247b604f233ab617c4e7) on the TypeScript Gitter, which is what led me to the current definitions using an intersection type.\r\n\r\nDo you know of any other way to do this?",
+        "createdAt" : "2019-02-22T08:47:45Z",
+        "updatedAt" : "2019-02-23T08:32:31Z",
+        "lastEditedBy" : "08fff3db-4c67-4b1f-b9df-5f6599d90ead",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "275f2cd2-55dd-44ec-b00f-af05eefbd269",
+        "parentId" : "c2e2d6cb-4e63-4f54-9cba-59fcb60f98b8",
+        "authorId" : "e5ae6fc6-9e2b-4b96-8480-7066f2f51e54",
+        "body" : "Hi @mickdekkers, to clarify, the way you're doing it now makes perfect sense.  I only suggested changing it as a way of working around a bug.  To get the extends version to compile, you will, unfortunately, have to _redeclare_ all of the overloads from `Transform`.  Your way is better, but this will make it possible to merge before the bug is fixed. \r\n\r\nI will, somewhat reluctantly, point out that you also have the option of adjusting your test.  If you do so, please leave a comment explaining why.",
+        "createdAt" : "2019-02-22T18:59:17Z",
+        "updatedAt" : "2019-02-23T08:32:31Z",
+        "lastEditedBy" : "e5ae6fc6-9e2b-4b96-8480-7066f2f51e54",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "14a9570b-f188-47a5-a4ee-575fc1fb1e6c",
+        "parentId" : "c2e2d6cb-4e63-4f54-9cba-59fcb60f98b8",
+        "authorId" : "08fff3db-4c67-4b1f-b9df-5f6599d90ead",
+        "body" : "Hi @amcasey, thanks for getting back to me! I was hoping to avoid redeclaring all the overloads, but it does look like the `extends` version is the best option for now 🙂\r\n\r\nI updated the `ProgressStream` definition and added an explanation in a comment.",
+        "createdAt" : "2019-02-23T08:49:39Z",
+        "updatedAt" : "2019-02-23T08:49:39Z",
+        "lastEditedBy" : "08fff3db-4c67-4b1f-b9df-5f6599d90ead",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "52f566fbbc5eb07de1f48afa2a44662802165b2c",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +53,57 @@// Check if ProgressStream extends stream.Transform correctly\n\n// $ExpectType ProgressStream\np.on(\"close\", () => {});\n// $ExpectType ProgressStream"
+  }
+]
