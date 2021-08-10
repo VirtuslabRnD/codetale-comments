@@ -53,5 +53,104 @@
     "commit" : "f6b806ef11beb6f6d3cb3673cf20f31320321ba4",
     "line" : 50,
     "diffHunk" : "@@ -1,1 +237,241 @@        \"\"\"\n        :param training_job_name: the name of the training job\n        :type training_job_name: string\n        Return the training job info associated with the current job_name\n        :return: A dict contains all the training job info"
+  },
+  {
+    "id" : "26d517a9-7b0f-4730-846a-45a9530b9c9a",
+    "prId" : 4091,
+    "prUrl" : "https://github.com/apache/airflow/pull/4091#pullrequestreview-170507169",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "92e69a37-d6d4-4cc7-bb2c-c89557485969",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "I'm somewhat surprised there isn't a CloudWatchLogs.Paginator for get_log_events in boto3.\r\n\r\nThat said, given we're passing `logStreamNames=stream_name` couldn't we use something like:\r\n\r\n\r\n```\r\npaginator = self.get_log_conn().get_paginator('filter_log_events')\r\nresponse = paginator.paginate(logGroupName=log_group,\r\n                              logStreamName=stream_name,\r\n                              startTime=start_time,\r\n                              startFromHead=True)\r\n\r\n\r\nfor page in response:\r\n    events = page['events']\r\n    ...\r\n```\r\n\r\n(i.e. remove the next_token/token_arg etc by using boto3 Paginators). I'm not sure the `while event_count > 0`: would be needed then either.\r\n\r\nI'm not familiar enough with the CloudWatch Logs APIs to say if get_log_events and filter_log_events do the same here.",
+        "createdAt" : "2018-10-27T20:53:09Z",
+        "updatedAt" : "2018-11-01T00:34:32Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1996cc5b-27ab-4e1c-9fce-9e54327df199",
+        "parentId" : "92e69a37-d6d4-4cc7-bb2c-c89557485969",
+        "authorId" : "34237513-44bd-45f2-806b-8a8b84c9999f",
+        "body" : "Yep I was surprised when I did not find it during development. My concern for 'filter_log_events' is, it does not have an argument to force events order by timestamp. All docs I can find did not mention it. \r\n\r\nI do need log events to be in time order since I am extracting these logs during runtime. SageMaker keeps writing logs to cloudwatch and my codes keep extracting them to Airflow Log. I have to make sure what users see it in timestamp order.\r\n\r\nLet me confirm with cloudwatch team for this. Since at least my approach now is not wrong (it's basically a customized paginator), I probably can update this in next PR after I get response fro cloudwatch guys?",
+        "createdAt" : "2018-10-31T10:43:17Z",
+        "updatedAt" : "2018-11-01T00:34:32Z",
+        "lastEditedBy" : "34237513-44bd-45f2-806b-8a8b84c9999f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fd2b5c8e-d38e-4169-aded-f214f1420303",
+        "parentId" : "92e69a37-d6d4-4cc7-bb2c-c89557485969",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Sounds good",
+        "createdAt" : "2018-10-31T19:34:52Z",
+        "updatedAt" : "2018-11-01T00:34:32Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3e5c12c-ad29-4759-9606-8b3ed7eb1c8d",
+        "parentId" : "92e69a37-d6d4-4cc7-bb2c-c89557485969",
+        "authorId" : "34237513-44bd-45f2-806b-8a8b84c9999f",
+        "body" : "I talked with cloudwatch guys. They identified my use case as 'tailing the logs'. So 'get_log_events' is what they recommend to use (nextToken will never be null in this case unlike what in 'filter_log_events'). \r\n",
+        "createdAt" : "2018-10-31T23:06:00Z",
+        "updatedAt" : "2018-11-01T00:34:32Z",
+        "lastEditedBy" : "34237513-44bd-45f2-806b-8a8b84c9999f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bba35b16-ac05-4db7-8f1d-d7c77429bfe1",
+        "parentId" : "92e69a37-d6d4-4cc7-bb2c-c89557485969",
+        "authorId" : "34237513-44bd-45f2-806b-8a8b84c9999f",
+        "body" : "Hence I guess I don't need to change these codes although I don't like them :) compared to a paginator.",
+        "createdAt" : "2018-10-31T23:06:51Z",
+        "updatedAt" : "2018-11-01T00:34:32Z",
+        "lastEditedBy" : "34237513-44bd-45f2-806b-8a8b84c9999f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "438aa8a6db2f16ead76725d298869820e705b4f4",
+    "line" : 350,
+    "diffHunk" : "@@ -1,1 +273,277 @@                                                          startTime=start_time,\n                                                          startFromHead=True,\n                                                          **token_arg)\n            next_token = response['nextForwardToken']\n            events = response['events']"
+  },
+  {
+    "id" : "4d3c1f68-efd3-440b-9ec8-50e3e429bb65",
+    "prId" : 4091,
+    "prUrl" : "https://github.com/apache/airflow/pull/4091#pullrequestreview-170187721",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0ca7bd73-532a-47ff-b1a3-97067bc3c7be",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "`filter_log_events` has an interlaved parameters:\r\n\r\n> *interleaved* (boolean) -- If the value is true, the operation makes a best effort to provide responses that contain events from multiple log streams within the log group, interleaved in a single response. If the value is false, all the matched log events in the first log stream are searched first, then those in the next log stream, and so on. The default is false.\r\n\r\nCan we remove this entire function and use that API call instead?",
+        "createdAt" : "2018-10-27T20:55:48Z",
+        "updatedAt" : "2018-11-01T00:34:32Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9734f6c1-d9ca-4dd0-915e-f1b348198292",
+        "parentId" : "0ca7bd73-532a-47ff-b1a3-97067bc3c7be",
+        "authorId" : "34237513-44bd-45f2-806b-8a8b84c9999f",
+        "body" : "See above comments.\r\n\r\nIf I can make sure filter_log_events will always return filtered events in timestamp order, I am happy to make the change.",
+        "createdAt" : "2018-10-31T10:44:26Z",
+        "updatedAt" : "2018-11-01T00:34:32Z",
+        "lastEditedBy" : "34237513-44bd-45f2-806b-8a8b84c9999f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "438aa8a6db2f16ead76725d298869820e705b4f4",
+    "line" : 372,
+    "diffHunk" : "@@ -1,1 +289,293 @@        \"\"\"\n        Iterate over the available events coming from a set of log streams in a single log group\n        interleaving the events from each stream so they're yielded in timestamp order.\n\n        :param log_group: The name of the log group."
   }
 ]
