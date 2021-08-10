@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "70af73fe-d239-4a44-9169-36adc8e5626a",
+    "prId" : 45490,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/45490#pullrequestreview-432132087",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8045b9c7-0750-459f-8ed4-b794ceaafbcf",
+        "parentId" : null,
+        "authorId" : "64552b51-af57-448f-947e-8c81d1c0915c",
+        "body" : "Ideally tests should be using the handler types, like a user would, but we still have several in this style. It's much less important when there isn't a result type though.",
+        "createdAt" : "2020-06-15T23:33:22Z",
+        "updatedAt" : "2020-06-17T08:45:36Z",
+        "lastEditedBy" : "64552b51-af57-448f-947e-8c81d1c0915c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b94de34e-2249-4ba1-9326-2d7e9a65c3c8",
+        "parentId" : "8045b9c7-0750-459f-8ed4-b794ceaafbcf",
+        "authorId" : "16dd2030-07ba-475d-8ae2-240e06af3dce",
+        "body" : "after I gave it a bit of thought it makes more sense to remove those Codebuild specific handlers. In my project I'm currently receiving these types as a message of `SNSEvent` triggered by CloudWatch event. That means that if I needed to create a handler, I would be just replicating `SNS` types\r\nI already removed those handlers\r\nThanks",
+        "createdAt" : "2020-06-16T07:13:19Z",
+        "updatedAt" : "2020-06-17T08:45:36Z",
+        "lastEditedBy" : "16dd2030-07ba-475d-8ae2-240e06af3dce",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fdf4992f-e8b1-4920-ae7d-8fd1a1961b65",
+        "parentId" : "8045b9c7-0750-459f-8ed4-b794ceaafbcf",
+        "authorId" : "64552b51-af57-448f-947e-8c81d1c0915c",
+        "body" : "Sorry, wrote the first review on a phone, so I was a bit terse. I'm referring to writing the test that uses the types as a user would use the types, e.g. writing a handler that reads the fields. This catches a lot of broken changes or unexpected warts in using types.\r\n\r\nSo for this package that would be writing a handler type, normally something like:\r\n\r\n```ts\r\nconst someHandler: SomeHandler = async (event) => {\r\n  strOrUndefined = event.someOptionalField;\r\n  ...\r\n};\r\n```\r\n\r\nthough it's a bit more complicated with a result type.",
+        "createdAt" : "2020-06-16T10:13:03Z",
+        "updatedAt" : "2020-06-17T08:45:36Z",
+        "lastEditedBy" : "64552b51-af57-448f-947e-8c81d1c0915c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe8fe722-81ff-46ff-8289-1fa52fd52221",
+        "parentId" : "8045b9c7-0750-459f-8ed4-b794ceaafbcf",
+        "authorId" : "16dd2030-07ba-475d-8ae2-240e06af3dce",
+        "body" : " I understand what you mean about the test of handler. What I wanted to say is that handler does not directly receive `CodeBuildCloudWatchStateEvent`, but it receives `SNSEvent` with record that contains `CodeBuildCloudWatchStateEvent` as a JSON string in  `Message`\r\n\r\nSomething like\r\n```\r\nimport { CodeBuildCloudWatchStateEvent, SNSEvent } from 'aws-lambda'\r\n\r\nexport const handleCodebuildEvent = async (event: SNSEvent) => {\r\n  const record = event.Records[0]\r\n\r\n  const codebuildEvent: CodeBuildCloudWatchStateEvent = JSON.parse(record.Sns.Message)\r\n}\r\n```\r\n\r\nI haven't tried integration with EventBridge, only via CloudWatch Event and SNS.\r\nBasically the use case is that you have CloudWatch event defined that checks CodeBuild state changes. Upon event it pushes a message to SNS topic and there is lambda subscribed to this SNS topic. This lambda consumes the messages  as in a code of block above.\r\n\r\nI already have working monitoring of CodePipelines in the same way - CloudWatch event checks CodePipeline executions and upon event it pushes messages to SNS topic and there is lambda subscribed to that topic\r\n\r\n```\r\nimport { CodePipelineCloudWatchActionEvent, SNSEvent } from 'aws-lambda'\r\n\r\nexport const handlePipelineEvent = async (event: SNSEvent) => {\r\n  const record = event.Records[0]\r\n\r\n  const pipelineEvent: CodePipelineCloudWatchActionEvent = JSON.parse(record.Sns.Message)\r\n}\r\n```\r\n\r\nIn this use case I'm not sure it makes sense to create a test for handler, cause I would be testing the `SNSEvent` in the handler, not the `CodeBuildCloudWatchStateEvent` - since handler receives type of `SNSEvent` and the `CodeBuildCloudWatchStateEvent` is just a stringified JSON in the `SNSEvent`\r\nHowever if you feel strong about it I can add the test that will contain `SNSEvent` as an event type of handler and it will contain JSON string of `CodeBuildCloudWatchStateEvent` and in the end I will just check whether the `Message` of `SNSEvent` consists the same stringified JSON",
+        "createdAt" : "2020-06-17T07:12:00Z",
+        "updatedAt" : "2020-06-17T08:45:36Z",
+        "lastEditedBy" : "16dd2030-07ba-475d-8ae2-240e06af3dce",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5a658b96-1fa5-493c-b9a7-f260b593ff5f",
+        "parentId" : "8045b9c7-0750-459f-8ed4-b794ceaafbcf",
+        "authorId" : "64552b51-af57-448f-947e-8c81d1c0915c",
+        "body" : "EventBridge is just CloudWatch Events renamed. Presumably you can just send these events straight to lambda: (I haven't messed with anything other than scheduled events), this would be the handler type.\r\n\r\nI would *somewhat* strongly prefer that the test was reading from the event, not creating one, as that catches problems with changes to the structure.\r\n\r\nWith SNS usage as the test, this might look something like:\r\n\r\n```ts\r\nexport const handlePipelineEvent = async (snsEvent: SNSEvent) => {\r\n  const event: CodePipelineCloudWatchActionEvent = JSON.parse(snsEvent.Records[0].Sns.Message)\r\n\r\n  str = event.version;\r\n  str = event.id;\r\n  // and so on for the rest of the fields, using types from `aws-lambda-tests.ts` where appropriate.\r\n}\r\n```\r\n\r\nbut obviously, that's quite a decent bit of work, so I'm not going to block on that, much better to have this merged.",
+        "createdAt" : "2020-06-17T07:22:43Z",
+        "updatedAt" : "2020-06-17T08:45:36Z",
+        "lastEditedBy" : "64552b51-af57-448f-947e-8c81d1c0915c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a7d9a0c-3b9d-44d5-a40e-83150349ebe6",
+        "parentId" : "8045b9c7-0750-459f-8ed4-b794ceaafbcf",
+        "authorId" : "64552b51-af57-448f-947e-8c81d1c0915c",
+        "body" : "For comparison, here's an example of a test parsing data from the event to get further data:\r\nhttps://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/aws-lambda/test/cloudwatch-tests.ts#L13-L15\r\n\r\nNote that unless you're getting this as an event directly in a handler, this type shouldn't have the `...Event` suffix, maybe something like `...MessageData`? But I think you can and thus should use the EventBridge handler structure.",
+        "createdAt" : "2020-06-17T07:27:44Z",
+        "updatedAt" : "2020-06-17T08:45:36Z",
+        "lastEditedBy" : "64552b51-af57-448f-947e-8c81d1c0915c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a669ac2-dc2b-4de0-9eae-8a25681488b5",
+        "parentId" : "8045b9c7-0750-459f-8ed4-b794ceaafbcf",
+        "authorId" : "16dd2030-07ba-475d-8ae2-240e06af3dce",
+        "body" : "ok, no problem\r\nI'll modify it and add the tests 👍 ",
+        "createdAt" : "2020-06-17T07:33:12Z",
+        "updatedAt" : "2020-06-17T08:45:36Z",
+        "lastEditedBy" : "16dd2030-07ba-475d-8ae2-240e06af3dce",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7cbc1f3b3cf2f0087f9e7b78b0df90d4083715a1",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +10,14 @@ * see https://docs.aws.amazon.com/codebuild/latest/userguide/sample-build-notifications.html\n */\nconst CodeBuildCloudWatchStateEvent: CodeBuildCloudWatchStateEvent = {\n    version: '0',\n    id: 'abcdefgrt-2384-7605-5520-1530a88cf416',"
+  }
+]
