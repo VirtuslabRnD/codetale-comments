@@ -570,5 +570,115 @@
     "commit" : "40d17bad2808e91e073ba3cd288da02d2fb3e230",
     "line" : 29,
     "diffHunk" : "@@ -1,1 +798,802 @@        if end_date or not self.allow_future_exec_dates:\n            end_date = end_date or timezone.utcnow()\n            tis = tis.filter(TaskInstance.execution_date <= end_date)\n\n        if state:"
+  },
+  {
+    "id" : "4e64b0d7-6dd2-4af6-985d-fe2d14c54e84",
+    "prId" : 7477,
+    "prUrl" : "https://github.com/apache/airflow/pull/7477#pullrequestreview-362559859",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "01ce44d3-5fd1-450a-8b3e-749b99fe3200",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "If we made this a method on DagBag instead dag_by_ids is `self.dags` - it's possibly a micro-optimization, but right now the only case of \"bulk_sync\" is being called with `DAG.bulk_sync_to_db(dagbag.dags.values())` -- so we're throwing away the info we've already got to re-compute it.",
+        "createdAt" : "2020-02-21T09:33:15Z",
+        "updatedAt" : "2020-02-27T06:27:44Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "402b810a-b14f-43e2-a7a6-6f5b4d4287aa",
+        "parentId" : "01ce44d3-5fd1-450a-8b3e-749b99fe3200",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "I checked and it doesn't have a big impact on performance. I left the current code to keep the code legible. ",
+        "createdAt" : "2020-02-21T11:14:30Z",
+        "updatedAt" : "2020-02-27T06:27:44Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "51bb35951e7702d0a31487238f75854c0360929e",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +1477,1481 @@            sync_time = timezone.utcnow()\n        log.info(\"Sync %s DAGs\", len(dags))\n        dag_by_ids = {dag.dag_id: dag for dag in dags}\n        dag_ids = set(dag_by_ids.keys())\n        orm_dags = ("
+  },
+  {
+    "id" : "f5d0c3e5-e414-41b9-a32f-e3844c14d5be",
+    "prId" : 7477,
+    "prUrl" : "https://github.com/apache/airflow/pull/7477#pullrequestreview-362527126",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3972934c-5a95-492e-a3d4-b8e41eeb23fb",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "This I think is going to go back to the DB, ignoring the joinedload you did earlier? Or does this somehow work because of the smarts in the SQLASession?",
+        "createdAt" : "2020-02-21T09:42:01Z",
+        "updatedAt" : "2020-02-27T06:27:44Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d77d25bb-e994-4dd8-9c51-ca086b5ce6c8",
+        "parentId" : "3972934c-5a95-492e-a3d4-b8e41eeb23fb",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "SQLAlchemy is smart enough.\r\nWhen I did following changes:\r\n```diff\r\n-        orm_dags = session.query(DagModel) \\\r\n-            .options(\r\n-            joinedload(DagModel.tags, innerjoin=False)\r\n-        ) \\\r\n-            .filter(DagModel.dag_id.in_(dag_ids)).all()\r\n+        orm_dags = session.query(DagModel)\\\r\n+            .filter(DagModel.dag_id.in_(dag_ids)).all()\r\n``` \r\nI got following values - \r\nBefore - 200 DAGs:\r\n```\r\nQuery count:  602\r\nAverage took 3736.448 ms\r\n```\r\nAfter:\r\n```\r\nQuery count:  801\r\nAverage took 3946.783 ms\r\n```",
+        "createdAt" : "2020-02-21T10:00:15Z",
+        "updatedAt" : "2020-02-27T06:27:44Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37f6e9f5-92a0-44b8-ac46-6ced205963c3",
+        "parentId" : "3972934c-5a95-492e-a3d4-b8e41eeb23fb",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "~I think you have before and after backwards here :)~\r\n\r\nAh no I see. \r\n\r\nAnyway, cool",
+        "createdAt" : "2020-02-21T10:17:14Z",
+        "updatedAt" : "2020-02-27T06:27:44Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "51bb35951e7702d0a31487238f75854c0360929e",
+    "line" : 108,
+    "diffHunk" : "@@ -1,1 +1516,1520 @@            orm_dag.description = dag.description\n            orm_dag.schedule_interval = dag.schedule_interval\n            orm_dag.tags = dag.get_dagtags(session=session)\n\n        session.commit()"
+  },
+  {
+    "id" : "b2c250ba-beb5-4c29-a682-8c826133607d",
+    "prId" : 7477,
+    "prUrl" : "https://github.com/apache/airflow/pull/7477#pullrequestreview-363739912",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1e458469-02e3-4c91-ad27-7e924bb64cfe",
+        "parentId" : null,
+        "authorId" : "8649c9db-e4a7-4aa4-8d8f-c2c7fc5ae1ec",
+        "body" : "it might be worth doing this in smaller batches rather than one gigantic commit. I don't think atomicity is a concern but large transactions may be.",
+        "createdAt" : "2020-02-24T21:33:07Z",
+        "updatedAt" : "2020-02-27T06:27:44Z",
+        "lastEditedBy" : "8649c9db-e4a7-4aa4-8d8f-c2c7fc5ae1ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a53d5ec3-fca4-4f97-aeba-2cb05420ae2c",
+        "parentId" : "1e458469-02e3-4c91-ad27-7e924bb64cfe",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "This is only done from DAGs from one file. I suspect that even if someone puts 200+ DAG in one file, adding up to 200+ entry to DB in one transaction is not a problem. ",
+        "createdAt" : "2020-02-24T22:14:16Z",
+        "updatedAt" : "2020-02-27T06:27:44Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "51bb35951e7702d0a31487238f75854c0360929e",
+    "line" : 110,
+    "diffHunk" : "@@ -1,1 +1518,1522 @@            orm_dag.tags = dag.get_dagtags(session=session)\n\n        session.commit()\n\n        for dag in dags:"
   }
 ]
