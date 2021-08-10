@@ -262,5 +262,148 @@
     "commit" : "a13ceb2bb3760c272c92e6f412e083fb45c66f36",
     "line" : 7,
     "diffHunk" : "@@ -1,1 +256,260 @@        if kube_client_request_args:\n            self.kube_client_request_args = json.loads(kube_client_request_args)\n            if self.kube_client_request_args['_request_timeout'] and \\\n                    isinstance(self.kube_client_request_args['_request_timeout'], list):\n                self.kube_client_request_args['_request_timeout'] = \\"
+  },
+  {
+    "id" : "bfab6935-09a6-4bdf-bf32-3d61b0901646",
+    "prId" : 5200,
+    "prUrl" : "https://github.com/apache/airflow/pull/5200#pullrequestreview-231991996",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fc36fd64-8f63-46fd-b616-52fad2e81ed1",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Instead of using this here could we instead use a normal Queue and use get_nowait instead? Since the only use appears to be:\r\n\r\n```python\r\n        while not self.watcher_queue.empty():\r\n            self.process_watcher_task()\r\n```\r\n\r\ncould we instead do:\r\n\r\n```python\r\n        try:\r\n            while True:\r\n                task = self.watcher_queue.get_nowait()\r\n                self.process_watcher_task(task)\r\n        except queue.Empty:\r\n            pass\r\n```\r\n\r\n(and change process_watcher_task fn to accept the event rather than having it pull it off the queue itself).\r\n\r\ni.e. don't ever call `.empty()` on this queue.",
+        "createdAt" : "2019-04-29T12:21:04Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d26fb434-7b38-474f-8bea-c11eafeb8400",
+        "parentId" : "fc36fd64-8f63-46fd-b616-52fad2e81ed1",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I'd rather keep the current approach. In the implementation with managers, empty() has the added benefit that it will process all the events that were already put in the queue. With the get_nowait() there is a chance that some of those events already posted by other processes. Of course they will be picked up in the next heartbeat, but it somehow feels wrong. \r\n\r\nIf you imagine that you have a busy scheduler, the get_nowait() will mean that there will pretty much always be some unprocessed entries left in the queue if you kill the scheduler. Not sure what heartbeat period usually is but it feels wrong to wait until next heartbeat. \r\n\r\nBut I can be convinced otherwise (as I do not yet fully grasp all the details of this processing).",
+        "createdAt" : "2019-04-29T19:20:01Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "003eaa9a-4c8e-4449-8e74-4dab9d8ec456",
+        "parentId" : "fc36fd64-8f63-46fd-b616-52fad2e81ed1",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Ok. I convinced myself :). Once I use manager.Queue() everywhere it's actually good idea to use get_nowait here as it will be reliable as well.",
+        "createdAt" : "2019-04-30T04:16:19Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "05c1f519-e2ce-405f-bc88-92db0d66ffd3",
+        "parentId" : "fc36fd64-8f63-46fd-b616-52fad2e81ed1",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I replaced all the loops in kubernetes executor with the same pattern now, and included the task_done() calls as those are now Joinable queues.",
+        "createdAt" : "2019-04-30T04:36:44Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5305d8e6-aa64-4f95-ad9a-60232e44be5f",
+        "parentId" : "fc36fd64-8f63-46fd-b616-52fad2e81ed1",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Just one small difference. I prefer the case where try/except is inside the while loop and we explicitly break . It's a bit clearer what our intention is rather than pass in outer exception.",
+        "createdAt" : "2019-04-30T04:40:01Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aa16653349e1fa6301c272cd307a3a88dc51e786",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +377,381 @@        self.worker_configuration = WorkerConfiguration(kube_config=self.kube_config)\n        self._manager = multiprocessing.Manager()\n        self.watcher_queue = self._manager.Queue()\n        self.worker_uuid = worker_uuid\n        self.kube_watcher = self._make_kube_watcher()"
+  },
+  {
+    "id" : "8b9876d3-4677-4bc4-a11e-6efea7073634",
+    "prId" : 5200,
+    "prUrl" : "https://github.com/apache/airflow/pull/5200#pullrequestreview-231988945",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d483af1f-226a-4499-b5c5-c31b06a4b50a",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "And here maybe we could use a multiprocessing.JoinableQueue instead.",
+        "createdAt" : "2019-04-29T12:23:26Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "194fcb67-4b88-43ee-907f-6f194e4aecf7",
+        "parentId" : "d483af1f-226a-4499-b5c5-c31b06a4b50a",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Agree. I think in this case we have no empty() problem.",
+        "createdAt" : "2019-04-29T19:23:10Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "91de7128-3b17-40e5-887c-b15fc3ec68d1",
+        "parentId" : "d483af1f-226a-4499-b5c5-c31b06a4b50a",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I also think we should get rid of the qsize() as it won't work on MacOS",
+        "createdAt" : "2019-04-29T19:25:15Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80261019-a853-4da7-906f-c6a961eba875",
+        "parentId" : "d483af1f-226a-4499-b5c5-c31b06a4b50a",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Ok. I took a deeper look and I discovered something else. Unlike the original multiprocessing.Queue(), the queue() returned by manager's Queue() method is actually a joinable queue already (both Python 2 and 3). And if I tried to use a direct (non-managed) Joinable Queue with get_nowait() I hit the same problem as the original LocalExecutor.test().\\\r\n\r\nAt the end I am changing it to manager.Queue() and add task_done() to handle join separately.\r\n\r\nBTW. I think task_done() was missing in the original implementation anyway as already .join() was used which could have caused unclean shutdown/hangs in the kubernetes executor. I kind of wonder how it worked before at all.",
+        "createdAt" : "2019-04-30T04:13:52Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aa16653349e1fa6301c272cd307a3a88dc51e786",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +710,714 @@        # /CoreV1Api.md#list_namespaced_pod\n        KubeResourceVersion.reset_resource_version()\n        self.task_queue = self._manager.Queue()\n        self.result_queue = self._manager.Queue()\n        self.kube_client = get_kube_client()"
+  },
+  {
+    "id" : "ac72507f-af2d-4e43-ae53-e293e3f73989",
+    "prId" : 5200,
+    "prUrl" : "https://github.com/apache/airflow/pull/5200#pullrequestreview-231995937",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a8641ec3-c59b-490d-96b3-758496e485a9",
+        "parentId" : null,
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I think we had problem here before. task_queue.join() was used but task_done() never called., so I think we could have some hangs when trying to stop gracefully KubernetesScheduler.",
+        "createdAt" : "2019-04-30T05:13:42Z",
+        "updatedAt" : "2019-04-30T07:26:48Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aa16653349e1fa6301c272cd307a3a88dc51e786",
+    "line" : 137,
+    "diffHunk" : "@@ -1,1 +792,796 @@    def end(self):\n        self.log.info('Shutting down Kubernetes executor')\n        self.task_queue.join()\n        self.result_queue.join()\n        if self.kube_scheduler:"
   }
 ]
