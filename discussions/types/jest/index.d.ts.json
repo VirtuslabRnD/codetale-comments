@@ -757,5 +757,71 @@
     "commit" : "68b52e14810df2587af9a101fa3f67b6f399b0ed",
     "line" : 4,
     "diffHunk" : "@@ -1,1 +29,33 @@//                 Regev Brody <https://github.com/regevbr>\n// Definitions: https://github.com/DefinitelyTyped/DefinitelyTyped\n// Minimum TypeScript Version: 3.8\n\ndeclare var beforeAll: jest.Lifecycle;"
+  },
+  {
+    "id" : "51df3f5a-e5e0-4634-a5be-deb461908e61",
+    "prId" : 55013,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/55013#pullrequestreview-725829623",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b2b1ddc3-17cc-44d8-a0a1-70475de8d0e8",
+        "parentId" : null,
+        "authorId" : "14dcc82f-aade-4928-b66a-5ef85cdfeb4d",
+        "body" : "While this is correct for test suite & case functions, it's technically not for hooks because you can return any value so long as you don't have the `done` callback, as it's meant to make it easier compatibility with short-handed arrow functions; currently this type will require folks to return a promise even if they're not doing anything async.\r\n\r\nI think we should make a new `HookCallback` to cover this (I'm impartial to if we create a new `Lifecycle`-like type or make `Lifecycle` take a generic of `ProvidesCallback | HookCallback`)",
+        "createdAt" : "2021-08-08T21:27:34Z",
+        "updatedAt" : "2021-08-08T21:28:09Z",
+        "lastEditedBy" : "14dcc82f-aade-4928-b66a-5ef85cdfeb4d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "291f52fd-ccbd-460c-87f7-0fc502914335",
+        "parentId" : "b2b1ddc3-17cc-44d8-a0a1-70475de8d0e8",
+        "authorId" : "f0821d07-7fb4-4408-8e34-e4775e103e75",
+        "body" : "Thanks for the review! :raised_hands:\r\n\r\n> currently this type will require folks to return a promise even if they're not doing anything async\r\n\r\nThe `ProvidesCallback` type should allow them to return void or undefined or a promise if they don't use done (the tests verify this I believe). If they use done, they must return void or undefined. We could make this more explicit perhaps by changing this line to:\r\n\r\n```ts\r\ntype ProvidesCallback = ((cb: DoneCallback) => void | undefined) | (() => Promise<unknown> | void | undefined);\r\n```\r\n\r\n---\r\n\r\n> make it easier compatibility with short-handed arrow functions\r\n\r\nI'm not sure of exactly what you mean here. This change _will_ disallow code like:\r\n\r\n```ts\r\nconst getMagicNumber = () => 1234;\r\njest.beforeAll(() => getMagicNumber());\r\n```\r\n\r\nbecause we would then be returning a number. This is not void, undefined or Promise<unknown>.\r\n\r\nThis is intentional for Jest 27 to match @SimenB's change: [\"Disallow return values other than a `Promise` from hooks and tests\"](https://github.com/facebook/jest/pull/10512/files#diff-06572a96a58dc510037d5efa622f9bec8519bc1beab13c9f251e97e657a9d4edR23)\r\n\r\nIf you think we should allow hooks to return `any` we could easily implement that with something like:\r\n\r\n```ts\r\ntype ProvidesHookCallback = (cb: DoneCallback) => any;\r\n// or just so it's clear that it's a subtype (but wouldn't change the actual typing)\r\ntype ProvidesHookCallback = (cb: DoneCallback) => any | ProvidesCallback;\r\n\r\ntype Lifecycle = (fn: ProvidesHookCallback, timeout?: number) => any;\r\n```\r\n\r\n...but I believe this will create a discrepancy between DefinitelyTyped and Jest which is undesirable. Happy to take the consensus of active reviewers though.",
+        "createdAt" : "2021-08-09T18:49:07Z",
+        "updatedAt" : "2021-08-09T18:49:07Z",
+        "lastEditedBy" : "f0821d07-7fb4-4408-8e34-e4775e103e75",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "475c51e8-b9e3-465c-b116-40f66d5962b7",
+        "parentId" : "b2b1ddc3-17cc-44d8-a0a1-70475de8d0e8",
+        "authorId" : "14dcc82f-aade-4928-b66a-5ef85cdfeb4d",
+        "body" : "What I'm meaning is that it's still valid to return anything from a hook so long as you don't have `done` - I've confirmed this with this on latest jest:\r\n\r\n```\r\ndescribe('a test', () => {\r\n  beforeEach(() => 1);\r\n\r\n  it('passes', () => {\r\n    expect(true).toBe(true);\r\n  });\r\n});\r\n```\r\n\r\nWe're even doing it in [`eslint-plugin-jest`](https://github.com/jest-community/eslint-plugin-jest/blob/main/src/rules/__tests__/no-deprecated-functions.test.ts#L129):\r\n\r\n```\r\n// no-deprecated-functions.ts\r\n/** @internal */\r\nexport const _clearCachedJestVersion = () => (cachedJestVersion = null);\r\n\r\n// __tests_/no-deprecated-functions.ts\r\ndescribe('the rule', () => {\r\n  beforeEach(() => _clearCachedJestVersion());\r\n  ...\r\n});\r\n```\r\n\r\nThe problem I'm foreseeing is that people will be using this pattern without issue on Jest 27 right now, only for them to update their types and suddenly get it flagged as an error despite it working at runtime - and unless they scour the changelog and find the entry mentioning this breaking type-only change, I expect they'll open issues and PRs here saying the types are wrong.",
+        "createdAt" : "2021-08-09T20:16:37Z",
+        "updatedAt" : "2021-08-09T20:18:40Z",
+        "lastEditedBy" : "14dcc82f-aade-4928-b66a-5ef85cdfeb4d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5da76274-532d-4e43-b10c-8796ee000ee2",
+        "parentId" : "b2b1ddc3-17cc-44d8-a0a1-70475de8d0e8",
+        "authorId" : "f0821d07-7fb4-4408-8e34-e4775e103e75",
+        "body" : "Sure, happy to - I only made this change to match the changelog and internal jest types.\r\n\r\nAs long as nobody else objects I'll change this, as per the end of my previous comment (adding `ProvidesHookCallback`).",
+        "createdAt" : "2021-08-09T21:27:16Z",
+        "updatedAt" : "2021-08-09T21:27:16Z",
+        "lastEditedBy" : "f0821d07-7fb4-4408-8e34-e4775e103e75",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "40a1ce6b-5b1b-4438-88a0-313dd1a18c1d",
+        "parentId" : "b2b1ddc3-17cc-44d8-a0a1-70475de8d0e8",
+        "authorId" : "14dcc82f-aade-4928-b66a-5ef85cdfeb4d",
+        "body" : "> as per the end of my previous comment (adding ProvidesHookCallback).\r\n\r\n~I believe the change you described there won't be correct: `Lifecycle` is currently used to type both hooks (which do allow returning anything unless you're using `done`) & tests (which don't allow returning anything ever).~\r\n\r\n~The current change you've made looks correct for tests, so I think we just need to make a new type (or really duplicate the types as they were before your change) for hooks - which is why I suggested maybe using a generic might be tidier since it would save having two `Lifecycle` types.~\r\n\r\nNope I'm wrong - it's `ProvidesCallback` that is being used for both hooks and tests currently 😅 \r\n\r\nIn saying that, the `ProvidesHookCallback` should not allow returning if the callback function is present, as that will cause an error in v27.",
+        "createdAt" : "2021-08-09T21:33:08Z",
+        "updatedAt" : "2021-08-09T21:37:20Z",
+        "lastEditedBy" : "14dcc82f-aade-4928-b66a-5ef85cdfeb4d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "63b487b9c57fd9c1987bacd04c82105422600444",
+    "line" : 74,
+    "diffHunk" : "@@ -1,1 +332,336 @@    }\n\n    type ProvidesCallback = ((cb: DoneCallback) => void | undefined) | (() => Promise<unknown>);\n    type ProvidesHookCallback = (() => any) | ProvidesCallback;\n"
   }
 ]
