@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "fa24f734-9e41-4efe-aa6a-099198e4980f",
+    "prId" : 6590,
+    "prUrl" : "https://github.com/apache/airflow/pull/6590#pullrequestreview-318618662",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "382ba080-9c10-4fae-9113-dcede6f26e7a",
+        "parentId" : null,
+        "authorId" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "body" : "1) would we be able to specify a pip.conf (in case of wanting to install from private pypi server)?\r\n2) This re-instantiation / pip install every time the task runs adds potentially a lot of latency before pipeline submission (and pip install logging spam) if installing large/many packages. \r\nIt would be good if we could re-use these virtualenvs effectively caching some dependencies (rather than re-installing from pip all the time from a bare virtualenv). However, there'd have to be a mechanism to check if this worker has a copy of the virtualenv necessary .",
+        "createdAt" : "2019-11-15T21:32:27Z",
+        "updatedAt" : "2020-01-19T12:48:46Z",
+        "lastEditedBy" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "660fbe2b-6d18-4de1-bbe1-05e410e32749",
+        "parentId" : "382ba080-9c10-4fae-9113-dcede6f26e7a",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "1. If you want to set up a private pip repository for Cloud Composer, then you should follow these instructions:\r\nhttps://cloud.google.com/composer/docs/how-to/using/installing-python-dependencies#install-private\r\nYou will also need to set the ``PIP_CONFIG_FILE`` environment variable when you use the virtual environment\r\n2. Unfortunately, in distributed systems we should not save files on the current environment and rely on the fact that they will be available on restart. This can cause many problems, e.g. taking up all the disk space.\r\nInstead, I recommend delivering packages from a local folder that you have previously set up. I have prepared a script that shows how to download all packages to the directory and then install them in a virtual environment\r\n```bash\r\n#!/bin/bash -x\r\n\r\nTMP_PYPI=\"$(mktemp -d)\"\r\nTMP_VENV=\"$(mktemp -d)\"\r\n\r\nvirtualenv ${TMP_PYPI}/venv\r\nvirtualenv ${TMP_VENV}\r\n\r\nSTART_FETCH=$(date +%s)\r\nsource ${TMP_VENV}/bin/activate\r\nmkdir -p \"${TMP_PYPI}/packages\"\r\npip download apache-beam[gcp] -d \"${TMP_PYPI}/packages\"\r\nEND_FETCH=$(date +%s)\r\n\r\nSTART_INSTALL=$(date +%s)\r\nsource ${TMP_VENV}/bin/activate\r\npip install $(find \"${TMP_PYPI}/packages\" -type f)\r\nEND_INSTALL=$(date +%s)\r\n\r\necho \"Fetch time: $(( END_FETCH - START_FETCH )) seconds\"\r\necho \"Install time: $(( END_INSTALL - START_INSTALL )) seconds\"\r\n```\r\nFor me, the download process took a long time, but the local installation was significantly faster.\r\n```\r\nFetch time: 41 seconds\r\nInstall time: 20 seconds\r\n```\r\nIt is worth remembering that just starting the workers takes a few minutes, so in this case the differences of a few seconds will not matter much.",
+        "createdAt" : "2019-11-17T00:23:10Z",
+        "updatedAt" : "2020-01-19T12:48:46Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26929e48-5f5d-4a02-b0d0-f0a649335788",
+        "parentId" : "382ba080-9c10-4fae-9113-dcede6f26e7a",
+        "authorId" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "body" : "Interesting. For Composer, it'd be useful to put these downloaded files in the `/data/` directory on GCS which always gets synced to workers, and have the install happen from there rather than always redownloading.\r\nhttps://cloud.google.com/composer/docs/concepts/cloud-storage\r\nAgree this may be composer specific optimization and not appropriate for OSS trunk.",
+        "createdAt" : "2019-11-18T20:47:44Z",
+        "updatedAt" : "2020-01-19T12:48:46Z",
+        "lastEditedBy" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "83ec1bad19383279ecc03b6e147b8101d02c44a4",
+    "line" : 75,
+    "diffHunk" : "@@ -1,1 +538,542 @@        if py_requirements is not None:\n            with TemporaryDirectory(prefix='dataflow-venv') as tmp_dir:\n                py_interpreter = prepare_virtualenv(\n                    venv_directory=tmp_dir,\n                    python_bin=py_interpreter,"
+  }
+]
