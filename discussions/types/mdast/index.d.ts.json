@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "589cbb7f-1c8c-42ed-9e4d-43329bb077d0",
+    "prId" : 54421,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/54421#pullrequestreview-703517799",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5c14f0fd-3c1a-43c0-a162-6628c7be81b9",
+        "parentId" : null,
+        "authorId" : "9d7c2812-05ea-4d7e-ab2d-2285bbbeda55",
+        "body" : ":thinking: this may be outside the scope of this PR but something worth considering.\r\nLet's say `remark-frontmatter` adds this snippet to it's typings.\r\nLet's also say I have a package in my dependency tree that uses `remark-frontmatter`, but I don't directly import it, use it, or have access to the `TOML` type.\r\n\r\nWould this pattern mean that, because a dependency uses `remark-frontmatter` I now have all the frontmatter node types added to my `mdast` types? :thinking: ",
+        "createdAt" : "2021-07-10T14:44:51Z",
+        "updatedAt" : "2021-07-10T14:46:51Z",
+        "lastEditedBy" : "9d7c2812-05ea-4d7e-ab2d-2285bbbeda55",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16fd1b7e-e5c9-47fb-ab6a-00a4de07a108",
+        "parentId" : "5c14f0fd-3c1a-43c0-a162-6628c7be81b9",
+        "authorId" : "8a2e7504-ca6b-44e6-85b7-ac124b465c9d",
+        "body" : "This is rather important to figure out, because I am planning on adding such integrations to the remark plugins!",
+        "createdAt" : "2021-07-10T15:31:31Z",
+        "updatedAt" : "2021-07-10T15:31:31Z",
+        "lastEditedBy" : "8a2e7504-ca6b-44e6-85b7-ac124b465c9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23f647be-d097-4b42-8507-1c5299455a1e",
+        "parentId" : "5c14f0fd-3c1a-43c0-a162-6628c7be81b9",
+        "authorId" : "8a2e7504-ca6b-44e6-85b7-ac124b465c9d",
+        "body" : "remark-frontmatter’s nodes are arbitrary: based on options. So could we add those nodes “programatically”? 🤔",
+        "createdAt" : "2021-07-10T15:32:26Z",
+        "updatedAt" : "2021-07-10T15:32:26Z",
+        "lastEditedBy" : "8a2e7504-ca6b-44e6-85b7-ac124b465c9d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e9a993c-07ca-47d6-b286-be8eeeedb644",
+        "parentId" : "5c14f0fd-3c1a-43c0-a162-6628c7be81b9",
+        "authorId" : "67195de8-a220-482d-b913-a938505457ce",
+        "body" : "The augmentation happens if the **TypeScript** file in which it happens is imported. The JavaScript output is irrelevant.\r\n\r\nLet’s say a package uses `remark-frontmatter`. If it uses the types by `remark-frontmatter` in its output, then `remark-frontmatter/index.d.ts` will be imported and the augmentations in it will get applied.\r\n\r\nFor example, the following plugin named `foo` will use `remark-frontmatter`, bus has a different default.\r\n\r\n```ts\r\nimport { Plugin } from 'unified'\r\nimport frontmatter, { RemarkFrontmatterOptions } from 'remark-frontmatter'\r\n\r\nexport const foo: Plugin<[RemarkFrontmatterOptions]> = (options = ['toml']) => {\r\n  return frontmatter(options)\r\n}\r\n```\r\n\r\nThis will generate the following type definitions in `node_modules/foo/index.d.ts`:\r\n\r\n```ts\r\nimport { Plugin } from 'unified'\r\nimport { RemarkFrontmatterOptions } from 'remark-frontmatter'\r\n\r\nexport const foo: Plugin<[RemarkFrontmatterOptions]>;\r\n```\r\n\r\nMeaning if `foo` gets imported, `remark-frontmatter` also gets imported and its module augmentations get applied.\r\n\r\nHowever, this example limits the use of `remark-frontmatter` by not allowing options:\r\n\r\n```ts\r\nimport { Plugin } from 'unified'\r\nimport frontmatter from 'remark-frontmatter'\r\n\r\nexport const foo: Plugin<[]> = () => {\r\n  return frontmatter(['toml'])\r\n}\r\n```\r\n\r\nThis will generate the following type definitions in `node_modules/foo/index.d.ts`:\r\n\r\n```ts\r\nimport { Plugin } from 'unified'\r\n\r\nexport const foo: Plugin<[]>;\r\n```\r\n\r\nMeaning `remark-frontmatter` won’t be imported, so the augmentation doesn’t take place.\r\n\r\nI think this is rare though.\r\n\r\n---\r\n\r\n> remark-frontmatter’s nodes are arbitrary: based on options. So could we add those nodes “programatically”? :thinking:\r\n\r\nThis can’t be done. If one wants to define new node types using `remark-frontmatter`, they need to define this manually.\r\n\r\n```ts\r\nimport { Root, Literal } from 'mdast'\r\nimport * as remark from 'remark'\r\nimport * as frontmatter from 'remark-frontmatter'\r\n\r\ninterface Metal extends Literal {\r\n  type: 'metal';\r\n}\r\n\r\ndeclare module 'mdast' {\r\n  interface BlockContentMap {\r\n    metal: Metal;\r\n  }\r\n}\r\n\r\nfunction metalProcessor() {\r\n  return (root: Root) => {\r\n    for (const child of root.children) {\r\n      if (child.type === 'metal') {\r\n        // $ExpectType Metal\r\n        child;\r\n        child.type = 'text'\r\n        child.value = `🤘${child.value}🤘`\r\n      }\r\n    }\r\n  }\r\n}\r\n\r\nremark()\r\n  .use(frontmatter, [ { type: 'metal', fence: '\\m/' } ] )\r\n  .use(metalProcessor)\r\n```\r\n\r\nWhat could be done is narrow down the types accepted by `remark-frontmatter` so it only accepts registered types.",
+        "createdAt" : "2021-07-10T17:27:45Z",
+        "updatedAt" : "2021-07-10T17:27:46Z",
+        "lastEditedBy" : "67195de8-a220-482d-b913-a938505457ce",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "36570adc-2969-4813-a710-93aeeb8b8817",
+        "parentId" : "5c14f0fd-3c1a-43c0-a162-6628c7be81b9",
+        "authorId" : "9d7c2812-05ea-4d7e-ab2d-2285bbbeda55",
+        "body" : "Thanks for the clarification @remcohaszing! :bow: \r\nMy main concern was augmentation happening without an explicit import, it sounds like this will not be the case.",
+        "createdAt" : "2021-07-10T17:46:27Z",
+        "updatedAt" : "2021-07-10T17:46:27Z",
+        "lastEditedBy" : "9d7c2812-05ea-4d7e-ab2d-2285bbbeda55",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "de25dcc3cf71092bab28fdd083dd6e1ad5affc5e",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +48,52 @@ *     toml: TOML;\n *   }\n * }\n */\nexport interface DefinitionContentMap {"
+  }
+]
