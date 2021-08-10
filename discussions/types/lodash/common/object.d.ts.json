@@ -20,5 +20,93 @@
     "commit" : "79b40511a06e9e4079808147630cdb2bca3ebc33",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +2861,2865 @@        omit<T extends AnyKindOfDictionary>(\n            object: T | null | undefined,\n            ...paths: Array<Many<PropertyName>>\n        ): T;\n"
+  },
+  {
+    "id" : "d47c4c22-6359-4fef-81bd-c3c1f7faa289",
+    "prId" : 27370,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/27370#pullrequestreview-138748205",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "468ddcfd-3123-4d64-b00a-de55a712a9a5",
+        "parentId" : null,
+        "authorId" : "fb0aaf85-cd8a-41bc-b18d-36fea4011685",
+        "body" : "This will break `pickBy` for objects that don't have an index signature, e.g.\r\n\r\n```ts\r\nconst obj = {\r\n    a: 1,\r\n    b: \"b\",\r\n};\r\n_.pickBy(obj, (x): x is number => typeof x === \"number\"); // Error: obj does not have an index signature\r\n```\r\n\r\n~I think the better solution is to fix the FP generation script, although that may be difficult. I think this issue extends beyond just `pickBy`, though - I believe there are many `fp` functions that require you to pass explicit type arguments.~\r\n\r\n~If fixing the `fp` generator proves to be too difficult, then as a workaround we can add 2 overloads of `pickBy`: one for `Dictionary` and one for normal objects. Maybe a 3rd for `NumericDictionary`, too.~",
+        "createdAt" : "2018-07-18T16:26:02Z",
+        "updatedAt" : "2018-08-02T15:45:19Z",
+        "lastEditedBy" : "fb0aaf85-cd8a-41bc-b18d-36fea4011685",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e4e0096-38cf-4f5f-a558-209fc96d4c8a",
+        "parentId" : "468ddcfd-3123-4d64-b00a-de55a712a9a5",
+        "authorId" : "fb0aaf85-cd8a-41bc-b18d-36fea4011685",
+        "body" : "Actually, it looks like the non-type-guarded version of `pickBy` already has 3 overloads (`Dictionary`, `NumericDictionary`, `object`). So I think we should mirror that in the type guarded version. So there should be 6 overloads total (3 type-guarded, 3 non-type-guarded)",
+        "createdAt" : "2018-07-18T16:32:04Z",
+        "updatedAt" : "2018-08-02T15:45:19Z",
+        "lastEditedBy" : "fb0aaf85-cd8a-41bc-b18d-36fea4011685",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09464219-3a9d-4777-81a1-7083291c6752",
+        "parentId" : "468ddcfd-3123-4d64-b00a-de55a712a9a5",
+        "authorId" : "0a67fd49-8b41-42a0-9d85-8a4ba0bfcc90",
+        "body" : "``` ts\r\n    interface MixedRecordInterface {\r\n        a: string;\r\n        b: number;\r\n    }\r\n    const mixedRecordInterface: MixedRecordInterface = anything;\r\n\r\n    _.pickBy(mixedRecordInterface, (item: string | number): item is number => typeof item === \"number\"); // $ExpectType Partial<MixedRecord>\r\n\r\n    type MixedRecordType = {\r\n        a: string;\r\n        b: number;\r\n    }\r\n    const mixedRecordType: MixedRecordType = anything;\r\n\r\n    _.pickBy(mixedRecordType, (item: string | number): item is number => typeof item === \"number\"); // $ExpectType Dictionary<number>\r\n```\r\n\r\nThese tests already passes, thanks to these overloads:\r\n\r\n``` ts\r\n        pickBy<T>(\r\n            object: Dictionary<T> | null | undefined,\r\n            predicate?: ValueKeyIteratee<T>\r\n        ): Dictionary<T>;\r\n\r\n        pickBy<T extends object>(\r\n            object: T | null | undefined,\r\n            predicate?: ValueKeyIteratee<T[keyof T]>\r\n        ): PartialObject<T>;\r\n```\r\n\r\nWe don't need a type guard specific overload for the record object, since we can't narrow the record type to just the filtered keys (e.g. `{ b: number }`) anyway. (AFAIK that's not possible in TS.)\r\n\r\n(If we pass a type alias instead of an interface, the index signature overload is used instead because of https://github.com/Microsoft/TypeScript/issues/15300.)\r\n\r\nThus, I think we only need the overload for a predicate with a user-defined type guard when the object passed in is a dictionary, not a record.\r\n\r\nI will add an overload for `NumericDirectionary`.",
+        "createdAt" : "2018-07-18T17:32:35Z",
+        "updatedAt" : "2018-08-02T15:45:19Z",
+        "lastEditedBy" : "0a67fd49-8b41-42a0-9d85-8a4ba0bfcc90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "782f0564-c2e1-4275-9dfc-020f4fa5f82b",
+        "parentId" : "468ddcfd-3123-4d64-b00a-de55a712a9a5",
+        "authorId" : "0a67fd49-8b41-42a0-9d85-8a4ba0bfcc90",
+        "body" : "After adding overloads for `NumericDictionary`, I now have a different problem.\r\n\r\n``` ts\r\n/* Argument of type 'NumericDictionary<string | number> | null | undefined' is not assignable to parameter of type 'Dictionary<string | number> | null | undefined'.\r\n        Type 'NumericDictionary<string | number>' is not assignable to type 'Dictionary<string | number>'.\r\n            Index signature is missing in type 'NumericDictionary<string | number>'. */\r\n    fp.pickBy((item: string | number): item is number => typeof item === \"number\")(mixedNumericDictionary); // $ExpectType NumericDictionary<number>\r\n```\r\n\r\nThis is because the same it's using the `Dictionary` overload instead of the `NumericDictionary` overload, as `Dictionary` comes first and TS has no way of knowing we're going to pass a `NumericDictionary` later on… 😒 ",
+        "createdAt" : "2018-07-18T17:37:25Z",
+        "updatedAt" : "2018-08-02T15:45:19Z",
+        "lastEditedBy" : "0a67fd49-8b41-42a0-9d85-8a4ba0bfcc90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6836b8f7-e330-4e42-bf17-fe791c5dc092",
+        "parentId" : "468ddcfd-3123-4d64-b00a-de55a712a9a5",
+        "authorId" : "0a67fd49-8b41-42a0-9d85-8a4ba0bfcc90",
+        "body" : "Currently, `fp.pickBy` has overloads for both `Dictionary` and `NumericDictionary`.\r\n\r\nHowever, this isn't practical because we don't pass the dictionary to this function, but instead to the resulting function.\r\n\r\nI guess we need the call to `fp.pickBy()` to return a function which has two overloads, one for `Dictionary` and one for `NumericDictionary`.\r\n\r\nIs this possible?\r\n\r\n/cc @aj-r (Thank you for all your help on this!)",
+        "createdAt" : "2018-07-19T09:57:57Z",
+        "updatedAt" : "2018-08-02T15:45:19Z",
+        "lastEditedBy" : "0a67fd49-8b41-42a0-9d85-8a4ba0bfcc90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c621680d-4ad9-46c4-9523-df014c6690e9",
+        "parentId" : "468ddcfd-3123-4d64-b00a-de55a712a9a5",
+        "authorId" : "fb0aaf85-cd8a-41bc-b18d-36fea4011685",
+        "body" : "> I guess we need the call to fp.pickBy() to return a function which has two overloads, one for Dictionary and one for NumericDictionary.\r\n\r\nThe fp generator should do that automatically as long as the type of the second parameter (`predicate`) is identical for both overloads. I think you could use `ObjectIteratorTypeGuard<Dictionary<T>` for both overloads, although the third callback parameter won't quite have the right type.\r\n\r\nHowever that brings up an interesting point - the callback for `pickBy` has 2 parameters, but `ObjectIteratorTypeGuard` has 3 parameters. So maybe `ObjectIteratorTypeGuard` isn't the right type to use at all. Maybe you need to make a new callback type (`ValueKeyIteratorTypeGuard`?) and use that for both the `Dictionary` and `NumericDictionary` overloads. ",
+        "createdAt" : "2018-07-19T13:53:10Z",
+        "updatedAt" : "2018-08-02T15:45:19Z",
+        "lastEditedBy" : "fb0aaf85-cd8a-41bc-b18d-36fea4011685",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74299737-da44-46eb-aaef-315477f4d8f1",
+        "parentId" : "468ddcfd-3123-4d64-b00a-de55a712a9a5",
+        "authorId" : "0a67fd49-8b41-42a0-9d85-8a4ba0bfcc90",
+        "body" : "Thanks, I've fixed that now. I awkwardly called it `ObjectIteratorTypeGuardWithoutCollection`. Any better ideas?\r\n\r\nI wonder why `pickBy` doesn't receive the `collection` param… 🤔 ",
+        "createdAt" : "2018-07-19T16:15:01Z",
+        "updatedAt" : "2018-08-02T15:45:19Z",
+        "lastEditedBy" : "0a67fd49-8b41-42a0-9d85-8a4ba0bfcc90",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a2036114aec1d4e95b72a5351244e258040a5f75",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +3113,3117 @@         */\n        pickBy<T, S extends T>(\n            object: Dictionary<T> | null | undefined,\n            predicate: ValueKeyIterateeTypeGuard<T, S>\n        ): Dictionary<S>;"
   }
 ]
