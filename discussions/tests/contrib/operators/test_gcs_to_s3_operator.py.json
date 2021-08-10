@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "d7e052b6-8a3f-458d-bbfe-5b41d8534a20",
+    "prId" : 4766,
+    "prUrl" : "https://github.com/apache/airflow/pull/4766#pullrequestreview-229569385",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e77b9c39-191a-48f9-b923-68648632db0a",
+        "parentId" : null,
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I think we need at least one more test - where the list of files differ and we send a small subset of files.",
+        "createdAt" : "2019-04-22T19:36:22Z",
+        "updatedAt" : "2019-04-23T13:56:15Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb1f921a-fae8-4541-8bb3-2408133e1f2f",
+        "parentId" : "e77b9c39-191a-48f9-b923-68648632db0a",
+        "authorId" : "7867302f-cb0b-4215-a870-6c4eb70b293f",
+        "body" : "That test is already there from line 48 to 73, the test upload the first file into S3 and then sync all gcs existing files, and the expected behaviour is to, after running the operator, all the files exists in the s3 bucket. The unit test that is missing is the one that set replace as True and all the files are replaced. I can add it, just confirm that the existing tests, cover what are you talking about @potiuk please",
+        "createdAt" : "2019-04-22T22:00:29Z",
+        "updatedAt" : "2019-04-23T13:56:15Z",
+        "lastEditedBy" : "7867302f-cb0b-4215-a870-6c4eb70b293f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7adb192e-0473-4bfe-b879-c46e96069a54",
+        "parentId" : "e77b9c39-191a-48f9-b923-68648632db0a",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Yeah. I see the test but it's not exactly what I talked about. I think we have two cases that are \"extremes\". The first test uses \"replace=True\" - so it will work no matter if the original file was there or not and always copies all files.  The second test tests that nothing has been copied because the files are already there. What I talked about is something in the middle - I think it might be pretty useful to test the \"incremental\" behaviour in case of replace = False where one file is there, but some other file is not - and we only copy the missing file.",
+        "createdAt" : "2019-04-23T05:30:58Z",
+        "updatedAt" : "2019-04-23T13:56:15Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cdcf3fc2-0326-4a5c-8449-7b627395e728",
+        "parentId" : "e77b9c39-191a-48f9-b923-68648632db0a",
+        "authorId" : "7867302f-cb0b-4215-a870-6c4eb70b293f",
+        "body" : "That's exactly the test that is already present:\r\n\r\nlines 62:66\r\n```Python\r\n       # create dest bucket\r\n        hook = S3Hook(aws_conn_id=None)\r\n        b = hook.get_bucket('bucket')\r\n        b.create()\r\n        b.put_object(Key=MOCK_FILES[0], Body=b'testing') # here is the incremental happening\r\n```\r\nCrate the destination bucket and create just the first element of the MOCK_FILES  list in the S3 bucket (**note the [0] in line 66**), so now the destination bucket have\r\n`TEST1.csv`\r\nand the origin bucket have all the files in the MOCK_FILES\r\n`TEST1.csv, TEST2.csv, TEST3.csv`\r\n\r\nLine 71:73\r\n```Python\r\n        uploaded_files = operator.execute(None)\r\n        self.assertEqual(sorted(MOCK_FILES[1:]),\r\n                         sorted(uploaded_files))\r\n```\r\nthe **uploaded_files** variable have the files that were uploaded from gcs to s3 due the execution of the operator, in the line 72 we expect that the files in MOCK_FILES, except the first one, were transfer (**note the [1:] in line 72**), because it was already there\r\n\r\nand then in the line 74, expect that all the files that are in the origin, exists in the destination.",
+        "createdAt" : "2019-04-23T07:14:13Z",
+        "updatedAt" : "2019-04-23T13:56:15Z",
+        "lastEditedBy" : "7867302f-cb0b-4215-a870-6c4eb70b293f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e746a8b-87c4-4bcf-9958-8be48de04c04",
+        "parentId" : "e77b9c39-191a-48f9-b923-68648632db0a",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Aaaaah. I see now. The first test originally did not have replace value set and the second had replace = False so somehow I assumed that replace was TRUE by default (which it was not). So I thought the \"incremental\" behaviour was not tested :). What was not tested was replace=True in fact. Which I see you just added ! Cool. Also the docstring now helps with explaining that it is False. Maybe to avoid confusion you could add replace in all cases or remove it whenever it is set to False (default). It might be misleading otherwise.\r\n\r\nGreat tests! It looks really good now.",
+        "createdAt" : "2019-04-23T08:54:11Z",
+        "updatedAt" : "2019-04-23T13:56:15Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "46544358-61b7-4287-9401-c9431b83c322",
+        "parentId" : "e77b9c39-191a-48f9-b923-68648632db0a",
+        "authorId" : "7867302f-cb0b-4215-a870-6c4eb70b293f",
+        "body" : "Changes made, now all the test have the replace param.",
+        "createdAt" : "2019-04-23T13:59:15Z",
+        "updatedAt" : "2019-04-23T13:59:15Z",
+        "lastEditedBy" : "7867302f-cb0b-4215-a870-6c4eb70b293f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3b36058aa1ffa7ecfaf04d885aec796f70689734",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +75,79 @@        self.assertEqual(sorted(MOCK_FILES),\n                         sorted(hook.list_keys('bucket', delimiter='/')))\n\n    # Test2: All the files are already in origin and destination without replace\n    @mock_s3"
+  }
+]
