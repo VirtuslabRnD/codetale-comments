@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "19c04e9a-594d-4284-b2d5-ea8381c9dba0",
+    "prId" : 6523,
+    "prUrl" : "https://github.com/apache/airflow/pull/6523#pullrequestreview-409217366",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3393c9b7-bd2e-487a-8c7e-c3f84393ebe6",
+        "parentId" : null,
+        "authorId" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "body" : "Hi,\r\n\r\nI've just upgraded from v.1.10.6 and thus [this change has been included](https://airflow.apache.org/docs/stable/changelog.html#airflow-1-10-7-2019-12-24), breaking a lot of the DAGs we currently have setup due to this change.\r\n**I hugely appreciate the effort in this development**, although fair warning of this _breaking change_ would have been very appreciated.\r\n\r\nJust leaving this here in case someone using `KubernetesPodOperator` finds the same _issue_ when upgrading.\r\n```python\r\n...\r\n  File \"/usr/local/lib/python3.6/site-packages/airflow/contrib/operators/kubernetes_pod_operator.py\", line 167, in __init__ \r\n    self.name = self._set_name(name) \r\n  File \"/usr/local/lib/python3.6/site-packages/airflow/contrib/operators/kubernetes_pod_operator.py\", line 269, in _set_name \r\n    validate_key(name, max_length=63) \r\n  File \"/usr/local/lib/python3.6/site-packages/airflow/utils/helpers.py\", line 64, in validate_key \r\n    \"The key has to be less than {0} characters\".format(max_length)) \r\nairflow.exceptions.AirflowException: The key has to be less than 63 characters\r\n```\r\n\r\nI understand [Kubernetes has a character limit of 63 for its label's names](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set) but, at least in v1.10.6 (the latest version previous to this change) [Airflow adds another 9 characters to the name](https://github.com/apache/airflow/blob/1.10.6/airflow/contrib/kubernetes/pod_generator.py#L167), so I'm guessing the limit to set here would be `54`, right?\r\n\r\nPlease let me know if I'm missing something.\r\n\r\nAgain, thanks a lot for the work on this, I mean this as constructive feedback.\r\n",
+        "createdAt" : "2020-05-08T18:00:08Z",
+        "updatedAt" : "2020-05-08T18:05:28Z",
+        "lastEditedBy" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7827c5dc-14a0-47a6-a39c-75d8c141ecba",
+        "parentId" : "3393c9b7-bd2e-487a-8c7e-c3f84393ebe6",
+        "authorId" : "62bb13b5-8a60-4b4b-9533-e96d14a3a544",
+        "body" : "Interesting that it's a breaking change, I was in the understanding that it would fail downstream and hence was a good check to move upstream to point of DAG creation. If this causes reproducible errors (do you have a MWE @dsaiztc with a breaking change?) that didn't occur before, it should either be loosened  and for sure mentioned in UPDATING.md, or fixed to incorporate the 9 characters as mentioned above. What do you say @potiuk? ",
+        "createdAt" : "2020-05-08T18:17:47Z",
+        "updatedAt" : "2020-05-08T18:34:35Z",
+        "lastEditedBy" : "62bb13b5-8a60-4b4b-9533-e96d14a3a544",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "14003ede-20a1-4dce-8545-86a42671198c",
+        "parentId" : "3393c9b7-bd2e-487a-8c7e-c3f84393ebe6",
+        "authorId" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "body" : "Sorry, I'm not an expert in Kubernetes.\r\n\r\nI was creating the POD names in `KubernetesPodOperator` just concatenating the DAG name with the task name and haven't had any issue whatsoever. Suddenly when updating Airflow I started to see how many of my DAGs wouldn't be working as they didn't pass the newly-added validation.\r\n\r\nMight we be confusing the limit on the _labels_ (`63` characters) and the _subdomains_ (`253` characters)?\r\n\r\nI cannot get a clear view reading the docs:\r\n- [Object Names and IDs](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/)\r\n- [Identifiers and Names in Kubernetes](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/architecture/identifiers.md)\r\n\r\nAlso the [_unofficial Kubernetes_ mentions a limit of `253` characters](https://unofficial-kubernetes.readthedocs.io/en/latest/concepts/overview/working-with-objects/names/). \r\n\r\n",
+        "createdAt" : "2020-05-10T22:22:07Z",
+        "updatedAt" : "2020-05-10T22:22:08Z",
+        "lastEditedBy" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7408db48-e1e1-4699-a25e-8f04e0152452",
+        "parentId" : "3393c9b7-bd2e-487a-8c7e-c3f84393ebe6",
+        "authorId" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "body" : "Hey @ddelange, I can confirm that the limit for the POD name is **`253` characters** and not `63`.\r\n\r\nTried out with one of my colleagues in our _k8s_ cluster, only giving an error when trying to create a POD with more than `253` characters:\r\n\r\n```sh\r\nThe Pod \"eot5ahm9ua4ocahmahghoma1xoh7neihuvohz3oofaiz1iesaet2eibuwee5didietheet7faelohceyo1ci2eithu9nutie5fee5ahhohy0haegaikeizohngahzahteseifo5au2eb0aizi7reph9eibo5sahlee7hiequ2aeko6yiam8ieca4si6hodeiquoh6ceu9ienge2ooh4uo2umaijaec4aeli4ohfeodie3xahkove2iogieno2i\" is invalid: metadata.name: Invalid value: \"eot5ahm9ua4ocahmahghoma1xoh7neihuvohz3oofaiz1iesaet2eibuwee5didietheet7faelohceyo1ci2eithu9nutie5fee5ahhohy0haegaikeizohngahzahteseifo5au2eb0aizi7reph9eibo5sahlee7hiequ2aeko6yiam8ieca4si6hodeiquoh6ceu9ienge2ooh4uo2umaijaec4aeli4ohfeodie3xahkove2iogieno2i\": must be no more than 253 characters\r\n```",
+        "createdAt" : "2020-05-11T14:19:22Z",
+        "updatedAt" : "2020-05-11T14:19:23Z",
+        "lastEditedBy" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "331e9adfd1d19d63c0b746c01d3d7f3e94fe7620",
+    "line" : 156,
+    "diffHunk" : "@@ -1,1 +177,181 @@\n    def _set_name(self, name):\n        validate_key(name, max_length=63)\n        return re.sub(r'[^a-z0-9.-]+', '-', name.lower())\n"
+  },
+  {
+    "id" : "cc899b23-b85c-4162-9c21-46d7b3b3cf87",
+    "prId" : 6523,
+    "prUrl" : "https://github.com/apache/airflow/pull/6523#pullrequestreview-409576458",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "af480836-b11c-406f-a97b-6d778b8c50c3",
+        "parentId" : null,
+        "authorId" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "body" : "So, with all that into consideration I'd suggest the following change:\r\n\r\n```suggestion\r\n        validate_key(name, max_length=244)\r\n```\r\n\r\nConsidering a maximum char limit of `253` (`244` plus the `9` characters mentioned in my first comment).\r\n\r\nThoughts?",
+        "createdAt" : "2020-05-11T14:48:22Z",
+        "updatedAt" : "2020-05-11T14:49:58Z",
+        "lastEditedBy" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9425cbe9-849c-4d62-ab6a-581015f663ca",
+        "parentId" : "af480836-b11c-406f-a97b-6d778b8c50c3",
+        "authorId" : "62bb13b5-8a60-4b4b-9533-e96d14a3a544",
+        "body" : "Good catch! Agreed :) Do you wanna make a PR to master? Preferably with a small Jira ticket so it can be cherry-picked to 1-10?",
+        "createdAt" : "2020-05-11T15:21:10Z",
+        "updatedAt" : "2020-05-11T15:21:11Z",
+        "lastEditedBy" : "62bb13b5-8a60-4b4b-9533-e96d14a3a544",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f5e573a-1a9c-4cf5-8d19-7b1064d305af",
+        "parentId" : "af480836-b11c-406f-a97b-6d778b8c50c3",
+        "authorId" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "body" : "I can give it a try... (never done this before)\r\nCreate a JIRA ticket + PR?\r\nShould I base the PR in branch `v1-10-stable`?",
+        "createdAt" : "2020-05-11T16:27:06Z",
+        "updatedAt" : "2020-05-11T16:27:07Z",
+        "lastEditedBy" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5e8f1ed-413a-4ba3-bfd6-db792c21eac7",
+        "parentId" : "af480836-b11c-406f-a97b-6d778b8c50c3",
+        "authorId" : "62bb13b5-8a60-4b4b-9533-e96d14a3a544",
+        "body" : "Please base it on master (v2.0) - new releases for the v1 branches are mostly commits cherry-picked from master onto the 1-10-test and later the 1-10-stable branches",
+        "createdAt" : "2020-05-11T20:49:41Z",
+        "updatedAt" : "2020-05-11T20:49:41Z",
+        "lastEditedBy" : "62bb13b5-8a60-4b4b-9533-e96d14a3a544",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3966a6fc-1b15-443f-80a4-739dc5c27bbb",
+        "parentId" : "af480836-b11c-406f-a97b-6d778b8c50c3",
+        "authorId" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "body" : "Not sure if it's complete enough, it's the first time I contribute (bear with me :see_no_evil:): https://github.com/apache/airflow/pull/8829\r\n\r\nAny feedback is welcome!",
+        "createdAt" : "2020-05-11T22:30:54Z",
+        "updatedAt" : "2020-05-11T22:30:55Z",
+        "lastEditedBy" : "3604ad12-d5ab-44c4-9e44-bdc9ffd8da99",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "331e9adfd1d19d63c0b746c01d3d7f3e94fe7620",
+    "line" : 156,
+    "diffHunk" : "@@ -1,1 +177,181 @@\n    def _set_name(self, name):\n        validate_key(name, max_length=63)\n        return re.sub(r'[^a-z0-9.-]+', '-', name.lower())\n"
+  }
+]
