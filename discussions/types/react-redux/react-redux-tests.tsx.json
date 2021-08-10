@@ -207,5 +207,104 @@
     "commit" : "e8f2d97c8051b54ccbdc6ac78502612867ef2526",
     "line" : 9,
     "diffHunk" : "@@ -1,1 +905,909 @@\n    const OnlyState = connect(\n        (state: {a: number}, props: {b: number}) => ({a: state.a, c: state.a + props.b})\n    )(props => <span>{props.a} + {props.b} = {props.c}</span>)\n    interface State { a: number };"
+  },
+  {
+    "id" : "11903b70-7eb3-490d-bdbd-7754e67ac192",
+    "prId" : 30760,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/30760#pullrequestreview-178634480",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "08ec96ac-1331-47f8-8ffe-73d8ad68f0ba",
+        "parentId" : null,
+        "authorId" : "a81e6202-fa01-4d6d-b977-d96c59398a53",
+        "body" : "If you're using `redux-thunk` you should be using `ThunkDispatch` as the type of `dispatch` which would correctly handle thunk action creators.\r\n\r\nProbably better to add a test just to make sure `mapDispatchToProps(dispatch: ThunkDispatch)` is assignable as the 2nd argument.",
+        "createdAt" : "2018-11-27T02:02:30Z",
+        "updatedAt" : "2018-11-27T06:18:51Z",
+        "lastEditedBy" : "a81e6202-fa01-4d6d-b977-d96c59398a53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "55fdc319-bd2b-471b-ba0e-9bf5653e986b",
+        "parentId" : "08ec96ac-1331-47f8-8ffe-73d8ad68f0ba",
+        "authorId" : "0b9eba81-2056-4749-8c25-f212b6a4a275",
+        "body" : "Can I use a `ThunkDispatch` type in tests without adding explicit dependency on `redux-thunk`?\r\n\r\nIf \"No\", then what are the benefits  of using `ThunkDispatch` instead of simple `Dispatch` in the test? As far as I can tell `react-redux` will NOT use type inference to pick up `ThunkDispatch` type from `mapDispatchToProps` argument (i.e. `react-redux` will still use simple `Dispatch` under the hood  regardless of what type you're using in test).\r\n\r\nI'd like to avoid explicit dependency on `redux-thunk`, because:\r\n- `react-redux` can easily be used without `redux-thunk`, so it's there's no actual depenendency in place (and I'm not sure if adding `redux-thunk` to `react-redux`'s  `package.json` will not lead to problem for the people not using `redux-thunk`)\r\n- even if we use `redux-thunk` only for the tests, future maintainers may use it in the type definitions (just because the dependency is already there), which may make them less generic (they will stop working for custom `redux-thunk` implemenations, for example)\r\n- it will be a bad example for the future maintainers that may add dependencies on other Redux middlewares by analogy which may affect `redux-thunk`'s definitions verstaility/maintainability (I cannot imagine how though; it's more like a gut feeling).",
+        "createdAt" : "2018-11-27T06:14:05Z",
+        "updatedAt" : "2018-11-27T06:22:15Z",
+        "lastEditedBy" : "0b9eba81-2056-4749-8c25-f212b6a4a275",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08feeba7-902c-498c-93aa-2e103743574a",
+        "parentId" : "08ec96ac-1331-47f8-8ffe-73d8ad68f0ba",
+        "authorId" : "a81e6202-fa01-4d6d-b977-d96c59398a53",
+        "body" : "Not really...... would probably have to copy the definition\r\n\r\n```ts\r\nexport interface ThunkDispatch<S, E, A extends Action> {\r\n  <T extends A>(action: T): T;\r\n  <R>(asyncAction: ThunkAction<R, S, E, A>): R;\r\n}\r\n```\r\n\r\nBecause it doesn't `extends Dispatch` it looks like it wouldn't work, not directly. With the way the `Middleware` / `StoreEnhancer` interface works, they actually can upgrade the type of `dispatch` in a specific `redux` store (which would have to be accessed with `typeof store['dispatch']`), but I'm not sure there's any way to propagate it to `react-redux` as `connect` doesn't know what store it is connecting to.\r\n\r\nSo there are two alternatives: do something similar to what `styled-components` does and have a way to reexport in your own code a version of `react-redux` where the store/dispatch types are hardcoded to types you're aware of, or change `redux-thunk` to directly augment `Dispatch<A>` instead.\r\n\r\nOr recommend that users write the module augmentation themselves:\r\n\r\n```ts\r\nimport { ThunkDispatch } from 'redux-thunk'\r\n\r\ninterface State {\r\n  // your redux store state\r\n}\r\n\r\ndeclare module 'redux' {\r\n  interface Dispatch<A extends Action> extends ThunkDispatch<State, never, A> {}\r\n}\r\n```",
+        "createdAt" : "2018-11-27T06:42:57Z",
+        "updatedAt" : "2018-11-27T06:42:57Z",
+        "lastEditedBy" : "a81e6202-fa01-4d6d-b977-d96c59398a53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "68f761df-3c0f-4a80-a5d2-6e913b40acc6",
+        "parentId" : "08ec96ac-1331-47f8-8ffe-73d8ad68f0ba",
+        "authorId" : "0b9eba81-2056-4749-8c25-f212b6a4a275",
+        "body" : "Thank you very much for explanation, but to be honest I did not get the complete picture out of it (seems like I'm not yet ready for such an abstract types; I'll probably need to re-read your comment again and again to understand it).\r\n\r\nEven if the problem is real (I'll check if it exists for me in my project), it seems like it was there even before I introduced any of my thunk-changes - hence it's not immediate subject of this PR. I'm going to contemplate on it and maybe I'll come up with the follow up PR to address it.\r\n\r\nRight now I'm more concerned by the fact that my previous PR introduced regression into the `@types/react-redux@6.0.10`, so I'd like to merge this PR as fast as possible to fix previously introduced regression.\r\n\r\nSo, if you don't mind, let's delay this problem for a while.",
+        "createdAt" : "2018-11-27T07:10:42Z",
+        "updatedAt" : "2018-11-27T07:13:14Z",
+        "lastEditedBy" : "0b9eba81-2056-4749-8c25-f212b6a4a275",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "84bc355df06ea07679ab0634483c08f76ac4bb7c",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +157,161 @@        return {\n            remove(item: string) {\n                return () => dispatch({ type: 'REMOVE_ITEM', item });\n            }\n        };"
+  },
+  {
+    "id" : "b2e20433-811a-442a-8afb-5c09250b7492",
+    "prId" : 30760,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/30760#pullrequestreview-178624002",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0b383c26-f0a9-467b-9469-5e3bbf5cb148",
+        "parentId" : null,
+        "authorId" : "a81e6202-fa01-4d6d-b977-d96c59398a53",
+        "body" : "It could be nice to have a simply-named type operator that you can use to transform the types yourself.\r\n\r\nThis is how I generally declare my components' inputs:\r\n\r\n```ts\r\ninterface OwnProps {\r\n  // ...\r\n}\r\n\r\ninterface ReduxProps {\r\n  // things from mapStateToProps\r\n}\r\n\r\nfunction mapStateToProps(state: State /* if required: , ownProps: OwnProps */): ReduxProps {\r\n  return { /* ... */ }\r\n}\r\n\r\nconst mapDispatchToProps = {\r\n  actionCreator1,\r\n  actionCreator2\r\n}\r\n\r\ntype Props = OwnProps & ReduxProps & typeof mapDispatchToProps\r\n```\r\n\r\nThe request is for something like `type ResolveThunks<T> = ...` that you could then use like `ResolveThunks<typeof mapDispatchToProps>`.",
+        "createdAt" : "2018-11-27T02:07:10Z",
+        "updatedAt" : "2018-11-27T06:18:51Z",
+        "lastEditedBy" : "a81e6202-fa01-4d6d-b977-d96c59398a53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "93db9217-3ab8-4b78-9116-f78c69ca65ae",
+        "parentId" : "0b383c26-f0a9-467b-9469-5e3bbf5cb148",
+        "authorId" : "a81e6202-fa01-4d6d-b977-d96c59398a53",
+        "body" : "(oh, you have `WithThunkActionCreators` but would be nice to have a shorter name)",
+        "createdAt" : "2018-11-27T02:08:38Z",
+        "updatedAt" : "2018-11-27T06:18:51Z",
+        "lastEditedBy" : "a81e6202-fa01-4d6d-b977-d96c59398a53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a3c49a4-be5a-49c6-a222-59579a503a39",
+        "parentId" : "0b383c26-f0a9-467b-9469-5e3bbf5cb148",
+        "authorId" : "0b9eba81-2056-4749-8c25-f212b6a4a275",
+        "body" : "Renamed `WithThunkActionCreators` to `ResolveThunks`.",
+        "createdAt" : "2018-11-27T06:19:35Z",
+        "updatedAt" : "2018-11-30T11:46:46Z",
+        "lastEditedBy" : "0b9eba81-2056-4749-8c25-f212b6a4a275",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "84bc355df06ea07679ab0634483c08f76ac4bb7c",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +117,121 @@    interface TestComponentProps extends OwnProps {\n        simpleAction: typeof simpleAction;\n        thunkAction(param1: number, param2: string): Promise<string>;\n   }\n    class TestComponent extends React.Component<TestComponentProps> {}"
   }
 ]
