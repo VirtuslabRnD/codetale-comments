@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "7319390b-fd0d-48cd-9fc0-fad5948abdd0",
+    "prId" : 12923,
+    "prUrl" : "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/12923#pullrequestreview-11712001",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "976f72c1-87d2-47e5-992e-9b1fafa4694f",
+        "parentId" : null,
+        "authorId" : "505ff022-363e-4bcc-93dc-ed992b68f8ed",
+        "body" : "Is there any chance we want to consider using `RibbonGenerator<{}, Datum, SubgroupDatum>` as the return type of this overload? I believe it would still be compatible with most usages, but it would prevent accidental unsafe usage of a potentially-unknown `this` context.\r\n\r\nAgain, not a comment for this particular PR. I'm just bringing it up as I notice it.",
+        "createdAt" : "2016-12-05T19:55:02Z",
+        "updatedAt" : "2016-12-06T17:23:38Z",
+        "lastEditedBy" : "505ff022-363e-4bcc-93dc-ed992b68f8ed",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35200789-d775-42fb-872a-209f3728d201",
+        "parentId" : "976f72c1-87d2-47e5-992e-9b1fafa4694f",
+        "authorId" : "b97ad7b9-a71a-418e-8d81-d15777ab9de6",
+        "body" : "Good question you are raising here. The `any` vs `{}` for the `this` context is actually referring to a general pattern in use right now for all those generators which can render to `canvas` or generate a path string, e.g. when used on a selection of `SVGPathElement`.\r\n\r\nSo the question generalizes to e.g. to `arc()` in d3-shape etc. With that in mind:\r\n* You are right that there is a risk that someone uses one of the factory overloads that default the `this` context to `any` and then inadvertently invokes a method on `this` in a callback without further thought to the actual nature of the invocation context. And yes, there is some limited protection afforded when using `{}`\r\n* The reason I note the _limited_ is that if someone creates a variable/constant to hold a callback function and sets a differing `this` context, e.g. for re-usability or code readability,\r\n```ts\r\nlet cb: (this: SVGPathElement, d: ArcDatum) => number = function(this: SVGPathElement, d: ArcDatum) {\r\n    let b: string | null = this.baseURI;\r\n    return 10;\r\n};\r\n```\r\nthen the `{}` no longer holds. I.e.\r\n```ts\r\nlet svgArc = d3Shape.arc<ArcDatum>(); // of type Arc<{}, ArcDatum> with the changed default\r\n\r\nsvgArc.cornerRadius(cb); // does NOT fail!\r\n```\r\nAlthough, this would fail:\r\n```ts\r\nlet svgArc = d3Shape.arc<ArcDatum>(); // of type Arc<{}, ArcDatum> with the changed default\r\n\r\nsvgArc.cornerRadius(function(d) {\r\n   let b: string | null = this.baseUri; // fails as baseUri is not defined on '{}'\r\n   return 10;\r\n});\r\n```\r\n* There is another implication: The \"shorthands\" factory signatures where `any` is used were intended as convenience functions,in cases, where callbacks do not utilize `this` for the use case at hand. Obviously, you are right there is not guarantee that someone does not try. Changing `any` to `{}` does not directly affect the convenience of using the generator in a typical `svg` path setting, where the `this` context is not explicitly required. I.e. for the `svgArc` from above:\r\n```ts\r\nlet pArc: Selection<SVGPathElement, ArcDatum, any, any> = select<SVGPathElement, ArcDatum>('.arc-paths'); // mock\r\n\r\n// configure the accessors to work with ArcDatum only\r\n\r\npArc.attr('d', svgArc); // compiles!\r\n```\r\nHowever, trying the same when rendering to a `canvas` rendering context, fails under normal circumstances, e.g.:\r\n```ts\r\nlet canvasArc = d3Shape.arc();\r\n\r\n// configure canvasArc including assigning the canvas rendering context\r\n// Have arcDefaultDatum defined\r\n\r\ncanvasArc(arcDefaultDatum); // fails to compile, as 'this' context of '{}' cannot be assigned to 'this' of type 'void'\r\n```\r\nThe only way to get it to work with a `canvas` setting would be to use the most extensive factory signature with `This` generic set to `void`, so that one has `Arc<void, ...>`\r\n\r\nSo with all that being said, `any` seemed somewhat easier, while not perfect.",
+        "createdAt" : "2016-12-06T19:46:22Z",
+        "updatedAt" : "2016-12-06T19:46:22Z",
+        "lastEditedBy" : "b97ad7b9-a71a-418e-8d81-d15777ab9de6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "004778dd-ae16-4ea0-97de-f36fa95a130a",
+        "parentId" : "976f72c1-87d2-47e5-992e-9b1fafa4694f",
+        "authorId" : "505ff022-363e-4bcc-93dc-ed992b68f8ed",
+        "body" : "D'oh, I keep forgetting about canvases. I guess `any` works better than... `void | {}`, I think it would be?",
+        "createdAt" : "2016-12-07T00:10:38Z",
+        "updatedAt" : "2016-12-07T00:10:38Z",
+        "lastEditedBy" : "505ff022-363e-4bcc-93dc-ed992b68f8ed",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2477e238a5951578050adee562a539c91ab5e8e7",
+    "line" : 404,
+    "diffHunk" : "@@ -1,1 +387,391 @@ * The second generic corresponds to the datum type of the chord subgroup, i.e. source or target of the cord. The default type is ChordSubgroup.\n */\nexport function ribbon<Datum, SubgroupDatum>(): RibbonGenerator<any, Datum, SubgroupDatum>;\n/**\n * Creates a new ribbon generator with the default settings."
+  }
+]
