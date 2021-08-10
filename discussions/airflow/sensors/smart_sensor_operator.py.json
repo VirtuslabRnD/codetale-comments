@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "4e50d223-ea5e-4b5a-b232-67b816becb03",
+    "prId" : 5499,
+    "prUrl" : "https://github.com/apache/airflow/pull/5499#pullrequestreview-463390333",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5edf1492-968c-40f1-8a1f-3950742bebbc",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "Can we add docstrings for params",
+        "createdAt" : "2020-08-07T15:49:36Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5b5bbff3492fab908dd1c8142ba3beaa3fb274c2",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +70,74 @@\n    :param si: The sensor_instance ORM object.\n    \"\"\"\n    def __init__(self, si):\n        self.dag_id = si.dag_id"
+  },
+  {
+    "id" : "6d11b593-f240-42a7-a358-ae38c2a6fd91",
+    "prId" : 5499,
+    "prUrl" : "https://github.com/apache/airflow/pull/5499#pullrequestreview-468736061",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "544569d8-5890-4150-8d0b-8f95b439f862",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "I am concerned about any join that involves TaskInstance as that table can contain large number of records.\r\n\r\nDid you find any issues with this with your Prod cluster?",
+        "createdAt" : "2020-08-07T16:44:57Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "387250fd-f1d3-4c91-a4dc-3c6ca6402075",
+        "parentId" : "544569d8-5890-4150-8d0b-8f95b439f862",
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "How about if we filter first with `State.SENSING` to decrease the set we do joins, WDYT?",
+        "createdAt" : "2020-08-07T16:46:07Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "806087c9-3346-4c0c-b915-5535c533b0f2",
+        "parentId" : "544569d8-5890-4150-8d0b-8f95b439f862",
+        "authorId" : "b2325481-de41-4b6d-a7c1-7152249759ba",
+        "body" : "Thanks Kaxil for raising this. Yes the query performance is really important. I think this query should be safe at least in mysql engine. \r\n\r\nWe have the index on the hashcode in sensor_instace table which can largely reduce the time of this query (and also another query for load sensor tasks).\r\n\r\nIn our experience of using smart sensor, this query did not cause any issue and the max duplicate jobs in our db is around 500 at the same time. We all know that our scale of airflow cluster is much larger than most use cases so I assume if this query is safe in our cluster it seems not likely to cause a performance issue in other system. \r\n\r\nAlso, before creating this PR, we have tested with `explain` the queries with different order in our mysql db. For this query the results are the same. DB engine do the optimization and putting the `filter` before or after the `join` in sqlalchemy does not really matter. ",
+        "createdAt" : "2020-08-17T18:28:58Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "b2325481-de41-4b6d-a7c1-7152249759ba",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5b5bbff3492fab908dd1c8142ba3beaa3fb274c2",
+    "line" : 451,
+    "diffHunk" : "@@ -1,1 +449,453 @@                .filter(SI.hashcode == poke_hash) \\\n                .filter(SI.operator == operator) \\\n                .with_for_update().all()\n\n            end_date = timezone.utcnow()"
+  },
+  {
+    "id" : "ea60278b-f519-4e9a-9b74-385d60aa5b0a",
+    "prId" : 5499,
+    "prUrl" : "https://github.com/apache/airflow/pull/5499#pullrequestreview-465497391",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "40b33baf-9ecb-45f7-9c27-99cadd7b8bb6",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "Can this be removed?",
+        "createdAt" : "2020-08-07T16:46:19Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6bea4ff3-82a5-490f-bd06-2b66a6f5f239",
+        "parentId" : "40b33baf-9ecb-45f7-9c27-99cadd7b8bb6",
+        "authorId" : "b2325481-de41-4b6d-a7c1-7152249759ba",
+        "body" : "Task instance states could be changed by user activities such as marking dagrun and ti states from UI. The `sensor_instance` table will respect `task_instance` state changing that happened during it's poking phase. So if a user mark a ti state, it will not be overwritten by smart sensor.  ",
+        "createdAt" : "2020-08-11T23:36:12Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "b2325481-de41-4b6d-a7c1-7152249759ba",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5b5bbff3492fab908dd1c8142ba3beaa3fb274c2",
+    "line" : 463,
+    "diffHunk" : "@@ -1,1 +461,465 @@                    count_marked += 1\n                else:\n                    # ti.state != State.SENSING\n                    sensor_instance.state = ti.state\n"
+  },
+  {
+    "id" : "d4d8fddf-b8f9-4812-b1b4-a239aea5c9b9",
+    "prId" : 5499,
+    "prUrl" : "https://github.com/apache/airflow/pull/5499#pullrequestreview-465288223",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "120d84ea-eec3-47d7-b96d-ad23732a60c5",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "When they are no pokes needed, does the smart sensor DAG keeps running or is it marked complete",
+        "createdAt" : "2020-08-07T16:54:13Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67559753-e17c-41e1-aa73-730ec1c552af",
+        "parentId" : "120d84ea-eec3-47d7-b96d-ad23732a60c5",
+        "authorId" : "b2325481-de41-4b6d-a7c1-7152249759ba",
+        "body" : "Smart sensor DAGs keeps running in smart sensor mode. One task will be turned off by the execution_timeout after running for 24 hours and there will always a new dagrun kicked off to take over the poking job.",
+        "createdAt" : "2020-08-11T17:40:48Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "b2325481-de41-4b6d-a7c1-7152249759ba",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5b5bbff3492fab908dd1c8142ba3beaa3fb274c2",
+    "line" : 733,
+    "diffHunk" : "@@ -1,1 +731,735 @@\n        self.hostname = get_hostname()\n        while True:\n            poke_start_time = timezone.utcnow()\n"
+  },
+  {
+    "id" : "74c49317-f602-42fe-8ebd-8fe6cbb8b3dd",
+    "prId" : 5499,
+    "prUrl" : "https://github.com/apache/airflow/pull/5499#pullrequestreview-469938778",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d58bba74-dfdd-4024-8252-d4052afafa22",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "Can you please add these metrics to https://github.com/apache/airflow/blob/master/docs/metrics.rst",
+        "createdAt" : "2020-08-18T23:12:02Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "124c0e8c-2553-4838-9e22-42b8c4f57de2",
+        "parentId" : "d58bba74-dfdd-4024-8252-d4052afafa22",
+        "authorId" : "b2325481-de41-4b6d-a7c1-7152249759ba",
+        "body" : "Thanks for reminding. Added metrics to the doc.",
+        "createdAt" : "2020-08-19T00:49:48Z",
+        "updatedAt" : "2020-09-08T11:37:36Z",
+        "lastEditedBy" : "b2325481-de41-4b6d-a7c1-7152249759ba",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5b5bbff3492fab908dd1c8142ba3beaa3fb274c2",
+    "line" : 724,
+    "diffHunk" : "@@ -1,1 +722,726 @@            Stats.gauge(\"smart_sensor_operator.poked_exception\", count_poke_exception)\n            Stats.gauge(\"smart_sensor_operator.exception_failures\", count_exception_failures)\n            Stats.gauge(\"smart_sensor_operator.infra_failures\", count_infra_failure)\n        except Exception as e:  # pylint: disable=broad-except\n            self.log.exception(\"Exception at getting loop stats %s\")"
+  }
+]
