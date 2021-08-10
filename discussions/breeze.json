@@ -207,5 +207,71 @@
     "commit" : "41349c68d4e5a66ef87152d44a8ce2b2c2c5c594",
     "line" : 453,
     "diffHunk" : "@@ -1,1 +1261,1265 @@}\n\nfunction flag_airflow_variants() {\n      echo \"\n-p, --python <PYTHON_MAJOR_MINOR_VERSION>"
+  },
+  {
+    "id" : "435f1b56-4a72-41ca-9114-19ec56a7ec11",
+    "prId" : 8898,
+    "prUrl" : "https://github.com/apache/airflow/pull/8898#pullrequestreview-414368360",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "946fa149-e6c2-4f9e-b4db-9bbde10d10f0",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "We need to change the version.py file before we upload it to PyPI to include rcX.\r\n\r\nDo we already do that somewhere ?",
+        "createdAt" : "2020-05-19T10:10:11Z",
+        "updatedAt" : "2020-05-19T11:15:37Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "140b91ac-c69a-4b13-9fe4-0da8ae57371e",
+        "parentId" : "946fa149-e6c2-4f9e-b4db-9bbde10d10f0",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "We don't have to. Let me explain.\r\n\r\nWhen we use the `--version-suffix-for-svn rc1` we generate packages without any suffix and we rename them to contain the rc1 in the name. This is so that when we release we can rename the packages back.\r\n\r\nHowever when you use the `--version-suffix-for-pypi`, the suffix is added dynamically during package generation - it's appended to the version of package. \r\n\r\nThe version is not read from version.py, it is read from the most recent PROVIDERS_CHANGES_YYYY_MM_DD.md  -> YYYY.[M]M.[D]D \r\n\r\nTheoretically, it can be a different version for each package being prepared (depending which PROVIDERS_CHANGES_YYYY_MM_DD.md is most recent (by the date). \r\n\r\nIt works like this:\r\n\r\n1)  Prepare release notes\r\n```\r\n./breeze prepare-backport-readme -- 2020.05.20 PACKAGE1 PACKAGE2\r\n```\r\n\r\nPrepares the README.md and PROVIDERS_CHANGES_2020.05.20.md for the packages specified.\r\n\r\nYou commit that and only tag the release after it has been merged into master.\r\n\r\n2) Then from that tagged release.  when you want to generate those packages you run:\r\n\r\n```\r\n./breeze prepare-backport-packages --version-suffix-for-pypi rc1 -- PACKAGE1 PACKAGE2\r\n```\r\nand the packages are generated with 2020.5.20rc1 version. Under the hood `setup_backport_packages.py` is run with --version-suffix rc1 flag and it will simply append the suffix to the  package version. There is no need to modify any sources temporarily, the suffix is added dynamically via result o this method call:\r\n\r\n```\r\ndef get_package_release_version(provider_package_id: str, version_suffix: str = \"\") -> str:\r\n    \"\"\"\r\n    Returns release version including optional suffix.\r\n\r\n    :param provider_package_id: package id\r\n    :param version_suffix: optional suffix (rc1, rc2 etc).\r\n    :return:\r\n    \"\"\"\r\n    return get_latest_release(\r\n        get_package_path(provider_package_id=provider_package_id)).release_version + version_suffix\r\n```\r\n\r\n3) Later when you want to release final packages for PyPI you run (from the same tag/commit) :\r\n\r\n```\r\n./breeze prepare-backport-packages -- PACKAGE1 PACKAGE2\r\n```\r\nAnd no version suffix is added in this case.\r\n\r\n4) For SVN packages you simply rename the packages already in SVN. They do not contain the rc1 suffix internally - only in the name.\r\n\r\nCurrently, I am only using it to generate all packages so there is no risk of mistakes but later I want to add additional switch `prepare-backport-packages --package-version 2020.05.20`. This will verify if the packages being released have all the 'CHANGES' prepared (via `prepare-backport-readme`)  and that they are the latest ''CHANGES' and that this version has not already been released (checking for tag version in the git log and possibly pypi). But I will only be able to test it after we release officially the first wave of packages so I wanted to implement it later. This will protect against the accidental generation of the same package version as already released. \r\n\r\nEventually, I want to get rid of the manual operations and have all the steps automated within breeze so that you do not have to copy&paste commands from BACKPORT_PACKAGES.md, but this will require at least few iterations of releasing packages to get it consistently right.\r\n\r\nI want the release process to take a few minutes and have it fully repeatable by anyone without setting up anything else but the local key and pypirc configuration. I want to be able to release quite a bit more often in the future - especially if we go AIP-8 route and split Airflow 2.0 into separate \"core\" and \"providers\" packages from day one. I treat backport packages as a testing ground for that approach to see if it is workable, so that I can propose it.\r\n\r\nWe can likely adopt it later to release airflow in the same way - without having to modify and discard version.py and add breeze command to do the same - but I planned to do it later.\r\n\r\n",
+        "createdAt" : "2020-05-19T11:42:07Z",
+        "updatedAt" : "2020-05-19T11:43:05Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7033ad07-cba8-4efa-b2ef-571c8312f963",
+        "parentId" : "946fa149-e6c2-4f9e-b4db-9bbde10d10f0",
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "I think historically this was done so that even if someone installed the rc packages when they do `airflow version` it shows `rc` string in it. However maybe for backport packages it might not matter, thoughts @ashb ?",
+        "createdAt" : "2020-05-19T11:45:46Z",
+        "updatedAt" : "2020-05-19T11:45:46Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe915bae-0162-4cfb-a2be-6f53f5886ffc",
+        "parentId" : "946fa149-e6c2-4f9e-b4db-9bbde10d10f0",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "> I think historically this was done so that even if someone installed the rc packages when they do `airflow version` it shows `rc` string in it. However maybe for backport packages it might not matter, thoughts @ashb ?\r\n\r\nYeah, since Airflow has `airflow.__version__` we want that to be right for RC releases, but as you say, the backport providers don't have this attribute anywhere (and it's probably not needed to add one) so this is a good approach for providers.",
+        "createdAt" : "2020-05-19T11:50:32Z",
+        "updatedAt" : "2020-05-19T11:50:32Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0411f928-6692-42c4-bbf1-b0009f5a9f9a",
+        "parentId" : "946fa149-e6c2-4f9e-b4db-9bbde10d10f0",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Ah I see. There is no 'airflow version\" command in those packages. And we can easily do it for airflow in the future - instead of reading from version.py we could generate an embedded version.txt file generated on the fly during package building and read the version from there.",
+        "createdAt" : "2020-05-19T11:53:55Z",
+        "updatedAt" : "2020-05-19T11:55:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f5b4ccc8c019564d8cc40cb626f592ecc7c95755",
+    "line" : 140,
+    "diffHunk" : "@@ -1,1 +1650,1654 @@-S, --version-suffix-for-pypi\n        Adds optional suffix to the version in the generated backport package. It can be used\n        to generate rc1/rc2 ... versions of the packages to be uploaded to PyPI.\n\n-N, --version-suffix-for-svn"
   }
 ]

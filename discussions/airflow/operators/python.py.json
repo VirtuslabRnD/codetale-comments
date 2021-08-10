@@ -31,5 +31,368 @@
     "commit" : "a6c55ec0f2cd7ba7300669e023b6a0b2d31e1e0a",
     "line" : 29,
     "diffHunk" : "@@ -1,1 +286,290 @@                                                   (lambda x: 0).__name__)):\n            raise AirflowException('{} only supports functions for python_callable arg'.format(\n                self.__class__.__name__))\n        # check that args are passed iff python major version matches\n        if (python_version is not None and"
+  },
+  {
+    "id" : "f9558dd4-c407-4f52-aa47-e1721514c28e",
+    "prId" : 8962,
+    "prUrl" : "https://github.com/apache/airflow/pull/8962#pullrequestreview-419618969",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "07e74697-6e03-4b0f-a1f1-aa6f59df1817",
+        "parentId" : null,
+        "authorId" : "06a356e2-8fb5-4f99-b8bb-46ce12d2daa0",
+        "body" : "I can definitely see the value in unrolling dictionaries, but I'm curious for lists/tuples, especially since it seems a bit brittle (changing ordering of elements/removing elements/etc will break consuming code).\r\n\r\nCurious why default is off, seems like defaulting it on could be nice for the prototyping/new user use-cases.\r\n\r\nMy concern here is we are exposing an interface we will need to support that does not provide significant value to users that will increase complexity (e.g. the `  if not kwargs.get('do_xcom_push', True) and not multiple_outputs:` line. I know you've being working with some other Pipeline execution abstractions, do they support similar things?\r\n\r\nTo other committers/reviewers: I think this should warrant special attention in this review since this is going to become part of the public API and hard to change in the future.",
+        "createdAt" : "2020-05-21T22:23:27Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "06a356e2-8fb5-4f99-b8bb-46ce12d2daa0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c8702ec-2191-4b60-a7f4-6683e3309ae7",
+        "parentId" : "07e74697-6e03-4b0f-a1f1-aa6f59df1817",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "List/tuples is just an easy way to send several outputs w no specific name. Changing ordering should be transparent, also tuples and lists are ordered by default so it should be fine?\r\n\r\nDefault is off to avoid doing calculation unless explicit. Can change it to on if needed.\r\n\r\nFrom the other frameworks only databand supports it I believe. Dagster has a different mechanism and Prefect has an indexing mechanism that may work w numbers? not sure https://docs.prefect.io/core/concepts/tasks.html#indexing\r\n\r\nCC @evgenyshulman ",
+        "createdAt" : "2020-05-21T23:45:39Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c169bda0-b9b4-4808-9bae-a099290b8a0d",
+        "parentId" : "07e74697-6e03-4b0f-a1f1-aa6f59df1817",
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "I think I'd be +1 for only supporting \"unrolling\" of dicts -- unrolling lists/tuples makes the consuming code harder to follow:\r\n\r\n```python\r\n@dag.task\r\ndef x():\r\n  return \"a\", \"b\"\r\n\r\nr = x()\r\nemail(r[1])  # What is r[1]\r\n```\r\n\r\nWe _could_ support it, but I feel encouraging users to write better code might be a good idea? Don't know.",
+        "createdAt" : "2020-05-22T09:38:28Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "99a9f8c1-11ad-49e3-84c5-af64735582af",
+        "parentId" : "07e74697-6e03-4b0f-a1f1-aa6f59df1817",
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "Personally I would prefer to use typehints to indicate multiple output than a flag. It will solve the issue and add more information to task definitions. Of course, typehints are optional but we can require them to make multiple outputs work. Here's a similar thing from PySpark:\r\n\r\nhttps://databricks.com/blog/2020/05/20/new-pandas-udfs-and-python-type-hints-in-the-upcoming-release-of-apache-spark-3-0.html",
+        "createdAt" : "2020-05-22T09:54:13Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61dfbe48-b142-4b9f-bd87-8e2a02a8f4df",
+        "parentId" : "07e74697-6e03-4b0f-a1f1-aa6f59df1817",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "I like the typehints, but would probably leave it for a follow up PR. Rather make it explicit. \r\n\r\nHappy to revert unrolling tuples and lists.",
+        "createdAt" : "2020-05-22T16:46:57Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "05331914-03fa-4f5a-864c-8b700d10c6d0",
+        "parentId" : "07e74697-6e03-4b0f-a1f1-aa6f59df1817",
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "I've created a issue for future https://github.com/apache/airflow/issues/8996",
+        "createdAt" : "2020-05-24T08:58:09Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "30487116-7e06-4b89-96d1-b8466406ffad",
+        "parentId" : "07e74697-6e03-4b0f-a1f1-aa6f59df1817",
+        "authorId" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "body" : "To me the \"unrolling\" functionality seems to create overhead here. Why can't you push the objects pickled or as json string to xcom? If you want to have it unrolled this (in my opinion) should be done by the user.",
+        "createdAt" : "2020-05-27T11:58:33Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "e29ffafb-ac51-434b-b9e0-af262caae1ee",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ceccf0dd-1569-40e9-9bd1-db64c5715269",
+        "parentId" : "07e74697-6e03-4b0f-a1f1-aa6f59df1817",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "With current approach you get both: unrolled and not unrolled. You access each as needed. It's flexible and easier to use when you need several outputs. Also it mimics other frameworks, so it should feel natural for the user.\r\n\r\nResolving comment for now, if someone has anything else to discuss on the topic, please reopen or start new thread.",
+        "createdAt" : "2020-05-27T21:23:22Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3dd411303e2604e1e0a81d91b186b189733db332",
+    "line" : 142,
+    "diffHunk" : "@@ -1,1 +261,265 @@    :param python_callable: Function to decorate\n    :type python_callable: Optional[Callable]\n    :param multiple_outputs: if set, function return value will be\n        unrolled to multiple XCom values. List/Tuples will unroll to xcom values\n        with index as key. Dict will unroll to xcom values with keys as XCom keys."
+  },
+  {
+    "id" : "3cf57451-2970-4f1f-8cb7-a840f539e94b",
+    "prId" : 8962,
+    "prUrl" : "https://github.com/apache/airflow/pull/8962#pullrequestreview-417033794",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ebe06642-81eb-484e-be74-1c7b789aa0d3",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "Why from BaseOperator, and not from PythonOperator?",
+        "createdAt" : "2020-05-22T09:23:31Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2beefa5f-fd19-4ff1-9df0-141092394e79",
+        "parentId" : "ebe06642-81eb-484e-be74-1c7b789aa0d3",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "Mainly this came from a realization that we were reimplementing PythonOperator either way. Main discussion here: https://github.com/databand-ai/airflow/pull/5#discussion_r416168956",
+        "createdAt" : "2020-05-22T16:23:36Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3dd411303e2604e1e0a81d91b186b189733db332",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +150,154 @@\n\nclass _PythonFunctionalOperator(BaseOperator):\n    \"\"\"\n    Wraps a Python callable and captures args/kwargs when called for execution."
+  },
+  {
+    "id" : "87e8230b-0473-4de6-b889-f13e324691b2",
+    "prId" : 8962,
+    "prUrl" : "https://github.com/apache/airflow/pull/8962#pullrequestreview-429911055",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1b101a93-0055-4f78-9c5b-ed765506ccf8",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "```suggestion\r\n    _PythonFunctionalOperator._validate_python_callable(python_callable)\r\n    return wrapper(python_callable)\r\n```\r\n\r\nI think is what we should do -- let's validate this as _early_ as possible.\r\n\r\nWhat use case/pattern does allowing it to be not specified give us?",
+        "createdAt" : "2020-05-22T10:18:50Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3d05d9e-c9a8-49e3-b094-77e957951195",
+        "parentId" : "1b101a93-0055-4f78-9c5b-ed765506ccf8",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "This will not work. If I pass arguments to `@task(multiple_outputs=True)` this will break.",
+        "createdAt" : "2020-05-22T17:10:40Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cfc9ffa7-f0ad-4e66-95b5-4ee8a614027a",
+        "parentId" : "1b101a93-0055-4f78-9c5b-ed765506ccf8",
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "Is there any particular reason why we don't do simply:\r\n```python\r\ndef task(*args, **kwargs):\r\n    \"\"\"\r\n    Python operator decorator. Wraps a function into an Airflow operator.\r\n    Accepts kwargs for operator kwarg. Will try to wrap operator into DAG at declaration or\r\n    on function invocation. Use alias to reuse function in the DAG.\r\n    \"\"\"\r\n    if args:\r\n        raise AirflowException(\"No args allowed\")\r\n    \r\n    def wrapper(f):\r\n        \"\"\"\r\n        Python wrapper to generate PythonFunctionalOperator out of simple python functions.\r\n        Used for Airflow functional interface\r\n        \"\"\"\r\n        _PythonFunctionalOperator.validate_python_callable(f)\r\n\r\n        @functools.wraps(f)\r\n        def factory(*args, **f_kwargs):\r\n            op = _PythonFunctionalOperator(\r\n                python_callable=f, \r\n                task_id=f.__name__,\r\n                op_args=args, \r\n                op_kwargs=f_kwargs, \r\n                **kwargs\r\n             )\r\n            return XComArg(op)\r\n        return factory\r\n    return wrapper\r\n```\r\n",
+        "createdAt" : "2020-05-29T11:32:04Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c218cbac-babe-4afe-807e-ff13ebe82edf",
+        "parentId" : "1b101a93-0055-4f78-9c5b-ed765506ccf8",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "Yes, this code will fail when you do:\r\n```\r\n@task \r\ndef example(...)\r\n  ...\r\n``` \r\ndecorators get function as the first arg. If we want to allow both kwargs and no kwargs we need to do this small and more verbose approach.\r\n\r\n",
+        "createdAt" : "2020-05-29T16:34:35Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ccda62e5-1c3f-411a-87c4-5e2fcb9afab4",
+        "parentId" : "1b101a93-0055-4f78-9c5b-ed765506ccf8",
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "What about?\r\n```python\r\nif len(args) > 1:\r\n        raise AirflowException(\"No args allowed\")\r\n```\r\nWe do this in `apply_defaults`. ",
+        "createdAt" : "2020-06-11T09:04:46Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "117172d5-f09a-44cd-9d96-2e21fa169b8c",
+        "parentId" : "1b101a93-0055-4f78-9c5b-ed765506ccf8",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "I'm still not sure why do we want to make task signature more generic. Your proposal basically would mean that I can do: `@task('test')` I still need to check that the first arg (if exists) is a callable. I don't see much difference in declaring the wrapper function before or after the check.",
+        "createdAt" : "2020-06-11T18:02:59Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bc47814b-5060-428f-adfa-6be29295db83",
+        "parentId" : "1b101a93-0055-4f78-9c5b-ed765506ccf8",
+        "authorId" : "b8b84983-5876-4ccf-886c-2449d94ca22f",
+        "body" : "@casassg I'm a bit confused, can we not give a task_id as an argument and have that become the task_id? Ideally we wouldn't just want \"task_1\" \"task_2\" etc. if we can name them (unless I'm missing something which I probably am)",
+        "createdAt" : "2020-06-11T20:38:37Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "b8b84983-5876-4ccf-886c-2449d94ca22f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "47e89d73-9253-46c3-8019-e3165a722dfe",
+        "parentId" : "1b101a93-0055-4f78-9c5b-ed765506ccf8",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "@dimberman you can name them manually as well. `@task(task_id='my_task')` Added a test for this.",
+        "createdAt" : "2020-06-11T22:58:24Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "36452c27-49a6-4ae2-a897-564219842633",
+        "parentId" : "1b101a93-0055-4f78-9c5b-ed765506ccf8",
+        "authorId" : "b8b84983-5876-4ccf-886c-2449d94ca22f",
+        "body" : "Awesome thanks @casassg ",
+        "createdAt" : "2020-06-12T17:17:11Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "b8b84983-5876-4ccf-886c-2449d94ca22f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3dd411303e2604e1e0a81d91b186b189733db332",
+    "line" : 167,
+    "diffHunk" : "@@ -1,1 +286,290 @@    elif python_callable is not None:\n        raise AirflowException('No args allowed while using @task, use kwargs instead')\n    return wrapper\n\n"
+  },
+  {
+    "id" : "a5197faf-667a-44f1-a643-39ff5ed3aa34",
+    "prId" : 8962,
+    "prUrl" : "https://github.com/apache/airflow/pull/8962#pullrequestreview-421107946",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0a8d79af-1504-4483-a56f-1f01600026f4",
+        "parentId" : null,
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "Would you mind adding a comment about how the auto generated id looks like? It would make it easier to understand what we are doing here. ",
+        "createdAt" : "2020-05-29T11:03:53Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8d6a2e6-7ba5-4fcc-b7c0-d43680408334",
+        "parentId" : "0a8d79af-1504-4483-a56f-1f01600026f4",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "Added!",
+        "createdAt" : "2020-06-09T01:08:43Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3dd411303e2604e1e0a81d91b186b189733db332",
+    "line" : 101,
+    "diffHunk" : "@@ -1,1 +220,224 @@        if not suffixes:\n            return f'{core}__1'\n        return f'{core}__{suffixes[-1] + 1}'\n\n    @staticmethod"
+  },
+  {
+    "id" : "cb7a59be-b123-4997-9672-6165e0dc6061",
+    "prId" : 8962,
+    "prUrl" : "https://github.com/apache/airflow/pull/8962#pullrequestreview-427597874",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e8ce6850-4fd0-4680-a967-86111eb658e4",
+        "parentId" : null,
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "This is tricky one... and I would be in favor of using `inspect.ismethod` instead of argument checking. Otherwise this will rise error:\r\n```python\r\n@task\r\ndef troll_airflow(self):\r\n    return f\"Haha it doesn't work\"\r\n```",
+        "createdAt" : "2020-05-29T11:05:44Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fc5fe02c-d98f-4837-8ed1-18353b40471f",
+        "parentId" : "e8ce6850-4fd0-4680-a967-86111eb658e4",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "Seems `ismethod` does not work. https://stackoverflow.com/questions/47599749/check-if-function-belongs-to-a-class, keeping it as is as the __qualname__ may involve a bit more difficult setup and does not accept functions defined in classes that are not methods.",
+        "createdAt" : "2020-05-29T16:32:03Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "673b6378-6722-4050-b9da-c167f476709f",
+        "parentId" : "e8ce6850-4fd0-4680-a967-86111eb658e4",
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "What about class methods?",
+        "createdAt" : "2020-06-09T07:50:23Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be2e78db-2244-42c0-98b3-d27460423a61",
+        "parentId" : "e8ce6850-4fd0-4680-a967-86111eb658e4",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "It will fail as `@classmethod` does not return a callable it seems (surprising to me as well, but it fails on checking if python_callable is a callable).",
+        "createdAt" : "2020-06-09T22:59:05Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3dd411303e2604e1e0a81d91b186b189733db332",
+    "line" : 115,
+    "diffHunk" : "@@ -1,1 +234,238 @@            raise TypeError('`python_callable` param must be callable')\n        if 'self' in signature(python_callable).parameters.keys():\n            raise AirflowException('@task does not support methods')\n\n    def execute(self, context: Dict):"
+  },
+  {
+    "id" : "75440e8e-8003-45c9-a535-8d397fa40e7a",
+    "prId" : 8962,
+    "prUrl" : "https://github.com/apache/airflow/pull/8962#pullrequestreview-426722882",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9cccde4a-1bdb-46fe-a01c-aefdff923907",
+        "parentId" : null,
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "This is an unexpected parameter. There's no such param in `task` signature. ",
+        "createdAt" : "2020-05-29T11:20:27Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "654cab23-3994-4bfa-9930-fd1670e2635a",
+        "parentId" : "9cccde4a-1bdb-46fe-a01c-aefdff923907",
+        "authorId" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "body" : "Added it here for visibility.",
+        "createdAt" : "2020-06-09T01:11:44Z",
+        "updatedAt" : "2020-06-23T18:02:27Z",
+        "lastEditedBy" : "d22b786b-b06e-462c-a530-7ee1b6ae12d3",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3dd411303e2604e1e0a81d91b186b189733db332",
+    "line" : 146,
+    "diffHunk" : "@@ -1,1 +265,269 @@        with index as key. Dict will unroll to xcom values with keys as XCom keys.\n        Defaults to False.\n    :type multiple_outputs: bool\n\n    \"\"\""
   }
 ]
