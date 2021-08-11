@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "a923280b-6805-4830-9d13-bf8199e7fccd",
+    "prId" : 47747,
+    "prUrl" : "https://github.com/ansible/ansible/pull/47747#pullrequestreview-170179977",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b60bb4a0-437e-440f-ab77-7b734584c65d",
+        "parentId" : null,
+        "authorId" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "body" : "Here primary key of resource 'name' is hardcoded to retrieve existing REST object. Should we make it configurable ?",
+        "createdAt" : "2018-10-30T06:59:08Z",
+        "updatedAt" : "2018-11-01T14:41:06Z",
+        "lastEditedBy" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d28ce911-4c43-4d20-8158-7ebb048de3fa",
+        "parentId" : "b60bb4a0-437e-440f-ab77-7b734584c65d",
+        "authorId" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "body" : "Yeah, actually it can already be modified by supplying the `filters` argument to the play. For example, to filter by id, you can write a task like this:\r\n```\r\n      ftd_configuration:\r\n        operation: upsertNetworkObject\r\n        data:\r\n          name: NewNetworkName\r\n        filters:\r\n          id: 123\r\n```",
+        "createdAt" : "2018-10-31T10:26:36Z",
+        "updatedAt" : "2018-11-01T14:41:06Z",
+        "lastEditedBy" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "680d79e695ef03fdc7d20688014076607938433d",
+    "line" : 329,
+    "diffHunk" : "@@ -1,1 +311,315 @@            data = params[ParamName.DATA]\n            if not params.get(ParamName.FILTERS):\n                params[ParamName.FILTERS] = {'name': data['name']}\n\n            existing_obj = None"
+  },
+  {
+    "id" : "50f8edf6-4b46-425a-9d9f-ed9e6b4dd0cf",
+    "prId" : 47747,
+    "prUrl" : "https://github.com/ansible/ansible/pull/47747#pullrequestreview-174739502",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "34ccf43e-aac7-4822-a9e8-372a92dad1e2",
+        "parentId" : null,
+        "authorId" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "body" : "I was wondering this change can make the error handling very coarse when customer has given operation_name wrong e.g. say 'ad' or 'edt' etc. Consider a case where customer is using this to configure 100s of FD device and say one playbook has this wrong operation. This will cause to send 100 rest request only to figure out operation_name was misspelled. I think we should catch this right at the module operations parsing . soemthing like below\r\n```\r\ndiff --git a/lib/ansible/modules/network/ftd/ftd_configuration.py b/lib/ansible/modules/network/ftd/ftd_configuration.py\r\nindex 464fabd..596012e 100644\r\n--- a/lib/ansible/modules/network/ftd/ftd_configuration.py\r\n+++ b/lib/ansible/modules/network/ftd/ftd_configuration.py\r\n@@ -160,12 +160,14 @@ def is_find_by_filter_operation(operation_name, operation_spec, params):\r\n \r\n def main():\r\n     fields = dict(\r\n-        operation=dict(type='str', required=True),\r\n+        operation=dict(choices=['get', 'add', 'edit', 'delete', 'upsert',\r\n+            'other'], required=True),\r\n         data=dict(type='dict'),\r\n         query_params=dict(type='dict'),\r\n         path_params=dict(type='dict'),\r\n         register_as=dict(type='str'),\r\n         filters=dict(type='dict')\r\n+        operation_other=dict(type='str')\r\n     )\r\n     module = AnsibleModule(argument_spec=fields,\r\n                            supports_check_mode=True)\r\n```\r\nCan we have separate handling for non-crud operations ?",
+        "createdAt" : "2018-10-31T13:55:52Z",
+        "updatedAt" : "2018-11-01T14:41:06Z",
+        "lastEditedBy" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fec63869-b2d5-4454-b830-616912a926c4",
+        "parentId" : "34ccf43e-aac7-4822-a9e8-372a92dad1e2",
+        "authorId" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "body" : "I agree that it would be nice to validate the operation names before running the playbook somehow, but at the same time, we want to make it easy to use. In the current implementation, a single `operation` field defines both the action (`add`, `edit`, etc) and entity (`NetworkObject`, `AccessRule`, etc).\r\n\r\nReplacing the action with an enum having `['get', 'add', 'edit', 'delete', 'upsert', 'other']` values, we will also need to add two extra fields:\r\n- `operation_other` for `other` operations;\r\n- `entity_type` for CRUD operations.\r\n\r\nAt the moment, replacing one `operation` field with three (`operation_type`, `entity_type`, and `operation_other`) sounds complicated from UX perspective. In the future, we might need to separate non-CRUD operations into a separate module and it will simplify things.",
+        "createdAt" : "2018-11-01T15:35:58Z",
+        "updatedAt" : "2018-11-01T15:37:08Z",
+        "lastEditedBy" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a99e2068-1c3f-4747-a1dc-8a87773003b4",
+        "parentId" : "34ccf43e-aac7-4822-a9e8-372a92dad1e2",
+        "authorId" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "body" : "If you plan to separate non-CRUD operations in future , then better to do it now ! it will never happen in future because it will always break backward compatibility. Once customer starts using it this way there is going to be much higher resistance to change the API.",
+        "createdAt" : "2018-11-12T08:08:44Z",
+        "updatedAt" : "2018-11-12T08:18:16Z",
+        "lastEditedBy" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "548a2321-872b-43f7-9e0c-57fcb1a32f06",
+        "parentId" : "34ccf43e-aac7-4822-a9e8-372a92dad1e2",
+        "authorId" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "body" : "Sorry for my bad explanation. What I meant is that `ftd_configuration` will remain the primary module for managing FTD configuration. We have created the [docs](https://developer.cisco.com/site/ftd-ansible) containing the list of operations it supports and some people have already started using it. \r\n\r\nAs some non-CRUD operations require multiple steps (tasks) to be executed (e.g., to make a deployment, you start a deployment job first and wait until it finishes), we thought about creating a helper module (or even Ansible roles) to standardize boilerplate code for such common tasks in the future. Though, these tasks can be still achieved by writing multiple/complex plays using `ftd_configuration` module.",
+        "createdAt" : "2018-11-12T16:16:10Z",
+        "updatedAt" : "2018-11-12T16:16:40Z",
+        "lastEditedBy" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2edc71ba-bdb0-48da-a532-081c0ca99b76",
+        "parentId" : "34ccf43e-aac7-4822-a9e8-372a92dad1e2",
+        "authorId" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "body" : "@annikulin I got what you are saying. So say we commit this code and customer starts using ftd_configuration for non-crud operations because there is no other method to do tasks such as 'deployment'. Now when you release a new module/role for theses tasks, can you deprecate non-crud operations from ftd_configurations ? I believe no as you won't be sure whether it will break someone. So my suggestion was to do it intended way starting from 2.8.",
+        "createdAt" : "2018-11-14T08:23:53Z",
+        "updatedAt" : "2018-11-14T08:24:01Z",
+        "lastEditedBy" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "680d79e695ef03fdc7d20688014076607938433d",
+    "line" : 247,
+    "diffHunk" : "@@ -1,1 +246,250 @@            resp = list(self.get_objects_by_filter(op_name, params))\n        else:\n            resp = self.send_general_request(op_name, params)\n        return resp\n"
+  },
+  {
+    "id" : "22ae993f-fb05-43e1-acff-1b6605eecdfc",
+    "prId" : 47747,
+    "prUrl" : "https://github.com/ansible/ansible/pull/47747#pullrequestreview-173970386",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d3b9d176-645a-499e-98b3-29940598104e",
+        "parentId" : null,
+        "authorId" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "body" : "on py2.7 I am getting below error when trying to add new Network_object\r\n```\r\nThe full traceback is:\r\nTraceback (most recent call last):\r\n  File \"/home/vagrant/.ansible/tmp/ansible-local-26093iZ9x1I/ansible-tmp-1540995434.55-165674802918250/AnsiballZ_ftd_configuration.py\", line 113, in <module>\r\n    _ansiballz_main()\r\n  File \"/home/vagrant/.ansible/tmp/ansible-local-26093iZ9x1I/ansible-tmp-1540995434.55-165674802918250/AnsiballZ_ftd_configuration.py\", line 105, in _ansiballz_main\r\n    invoke_module(zipped_mod, temp_path, ANSIBALLZ_PARAMS)\r\n  File \"/home/vagrant/.ansible/tmp/ansible-local-26093iZ9x1I/ansible-tmp-1540995434.55-165674802918250/AnsiballZ_ftd_configuration.py\", line 48, in invoke_module\r\n    imp.load_module('__main__', mod, module, MOD_DESC)\r\n  File \"/tmp/ansible_ftd_configuration_payload_3gzquE/__main__.py\", line 140, in <module>\r\n  File \"/tmp/ansible_ftd_configuration_payload_3gzquE/__main__.py\", line 121, in main\r\n  File \"/tmp/ansible_ftd_configuration_payload_3gzquE/ansible_ftd_configuration_payload.zip/ansible/module_utils/network/ftd/configuration.py\", line 222, in execute_operation\r\n  File \"/tmp/ansible_ftd_configuration_payload_3gzquE/ansible_ftd_configuration_payload.zip/ansible/module_utils/network/ftd/configuration.py\", line 235, in crud_operation\r\n  File \"/tmp/ansible_ftd_configuration_payload_3gzquE/ansible_ftd_configuration_payload.zip/ansible/module_utils/network/ftd/configuration.py\", line 253, in get_operation_spec\r\n  File \"/tmp/ansible_ftd_configuration_payload_3gzquE/ansible_ftd_configuration_payload.zip/ansible/module_utils/connection.py\", line 201, in __rpc__\r\nansible.module_utils.connection.ConnectionError: 'ascii' codec can't encode character u'\\u2264' in position 190520: ordinal not in range(128)\r\n\r\n```\r\nmy playbook has operation \r\noperation: \"addNetworkObject\"\r\n\r\n",
+        "createdAt" : "2018-10-31T14:20:38Z",
+        "updatedAt" : "2018-11-01T14:41:06Z",
+        "lastEditedBy" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eeee768f-14f5-4cb8-b751-1fa34566c600",
+        "parentId" : "d3b9d176-645a-499e-98b3-29940598104e",
+        "authorId" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "body" : "Good catch! It happened because `format` method does not handle unicode strings gracefully in Python 2.7 (more info [here](https://www.saltycrane.com/blog/2014/07/old-string-formatting-and-new-format-method-handle-unicode-differently/)). I updated this line to use the old string formatting that works both with unicode and byte strings.\r\nWe completely missed this issue as the API spec on real back-end does not contain unicode-specific characters, so all tests passed. But good that you found it 👍",
+        "createdAt" : "2018-11-01T15:12:36Z",
+        "updatedAt" : "2018-11-01T15:12:37Z",
+        "lastEditedBy" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8061ea40-cd8f-49c4-b534-e19f2d237ae3",
+        "parentId" : "d3b9d176-645a-499e-98b3-29940598104e",
+        "authorId" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "body" : "@annikulin new error. not sure how it is working for you . It it trying to index into list with a string  at last function in traceback\r\nThe full traceback is:\r\nTraceback (most recent call last):\r\n  File \"/home/vagrant/.ansible/tmp/ansible-local-31309R9mPLw/ansible-tmp-1541166190.87-33859762983323/AnsiballZ_ftd_configuration.py\", line 113, in <module>\r\n    _ansiballz_main()\r\n  File \"/home/vagrant/.ansible/tmp/ansible-local-31309R9mPLw/ansible-tmp-1541166190.87-33859762983323/AnsiballZ_ftd_configuration.py\", line 105, in _ansiballz_main\r\n    invoke_module(zipped_mod, temp_path, ANSIBALLZ_PARAMS)\r\n  File \"/home/vagrant/.ansible/tmp/ansible-local-31309R9mPLw/ansible-tmp-1541166190.87-33859762983323/AnsiballZ_ftd_configuration.py\", line 48, in invoke_module\r\n    imp.load_module('__main__', mod, module, MOD_DESC)\r\n  File \"/tmp/ansible_ftd_configuration_payload_EvFz6v/__main__.py\", line 140, in <module>\r\n  File \"/tmp/ansible_ftd_configuration_payload_EvFz6v/__main__.py\", line 121, in main\r\n  File \"/tmp/ansible_ftd_configuration_payload_EvFz6v/ansible_ftd_configuration_payload.zip/ansible/module_utils/network/ftd/configuration.py\", line 223, in execute_operation\r\n  File \"/tmp/ansible_ftd_configuration_payload_EvFz6v/ansible_ftd_configuration_payload.zip/ansible/module_utils/network/ftd/configuration.py\", line 240, in crud_operation\r\n  File \"/tmp/ansible_ftd_configuration_payload_EvFz6v/ansible_ftd_configuration_payload.zip/ansible/module_utils/network/ftd/configuration.py\", line 84, in is_add_operation\r\n  File \"/tmp/ansible_ftd_configuration_payload_EvFz6v/ansible_ftd_configuration_payload.zip/ansible/module_utils/network/ftd/configuration.py\", line 486, in is_post_request\r\nTypeError: string indices must be integers\r\n",
+        "createdAt" : "2018-11-02T14:30:21Z",
+        "updatedAt" : "2018-11-02T14:30:21Z",
+        "lastEditedBy" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1e5d9488-af02-4683-b858-6a21f157e3d5",
+        "parentId" : "d3b9d176-645a-499e-98b3-29940598104e",
+        "authorId" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "body" : "yes this passes with latest FW v 6.3.0. In ansible module code, can we identify if api spec returned by device does not work  ? Do we have instances of cisco FTD v < 6.3.0 in field ?",
+        "createdAt" : "2018-11-12T08:18:09Z",
+        "updatedAt" : "2018-11-12T08:18:16Z",
+        "lastEditedBy" : "57c7b7b8-4598-4ae1-bf5b-37072cd4824c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef836dc5-50da-4046-b225-fa91eda051f5",
+        "parentId" : "d3b9d176-645a-499e-98b3-29940598104e",
+        "authorId" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "body" : "Yes, there is v6.2.3. We have tested the code with all FTD versions (including v6.2.3 and v6.3) and the [test playbooks](https://github.com/CiscoDevNet/FTDAnsible/tree/master/samples) passed.\r\nWe are also working on setting up a CI for [FTD Ansible](https://github.com/CiscoDevNet/FTDAnsible) repo to run playbooks with all FTD versions automatically.\r\nThe reason why it failed was the invalid API specs inside the demo app. For regular builds, it's being built during the build process, while for the demo app it was manually included inside and this issue occurred.",
+        "createdAt" : "2018-11-12T15:58:51Z",
+        "updatedAt" : "2018-11-12T15:59:38Z",
+        "lastEditedBy" : "ad799401-6135-48d7-aec9-41db567f849d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "680d79e695ef03fdc7d20688014076607938433d",
+    "line" : 252,
+    "diffHunk" : "@@ -1,1 +251,255 @@    def get_operation_spec(self, operation_name):\n        if operation_name not in self._operation_spec_cache:\n            self._operation_spec_cache[operation_name] = self._conn.get_operation_spec(operation_name)\n        return self._operation_spec_cache[operation_name]\n"
+  }
+]
