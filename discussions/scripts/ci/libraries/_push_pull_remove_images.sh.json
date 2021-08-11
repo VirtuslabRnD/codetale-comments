@@ -53,5 +53,38 @@
     "commit" : "2894c7a2ae9cb2311bc7ea0692ccbb8a6fca92f5",
     "line" : 61,
     "diffHunk" : "@@ -1,1 +315,319 @@    set +e\n    while true; do\n        docker manifest inspect \"${image_to_wait_for}\"\n        local res=$?\n        if [[ ${res} == \"0\" ]]; then"
+  },
+  {
+    "id" : "0a05d060-0e70-4127-a7e2-472c74215bba",
+    "prId" : 14120,
+    "prUrl" : "https://github.com/apache/airflow/pull/14120#pullrequestreview-592756002",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c2a755fa-9b88-40c7-838c-e83540dffac2",
+        "parentId" : null,
+        "authorId" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "body" : "This seems like a funny optimization to do, given that GITHUB_REGISTRY is set. Why do we need this?",
+        "createdAt" : "2021-02-17T12:27:37Z",
+        "updatedAt" : "2021-02-22T03:27:19Z",
+        "lastEditedBy" : "f73f66ab-2657-4a50-be7a-2ca3ca98c202",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "51a2576a-5a28-459f-aff4-9c23b9c677eb",
+        "parentId" : "c2a755fa-9b88-40c7-838c-e83540dffac2",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "It's not an optimization - it's a feature (and this is the only reason why this PR is implemented). \r\n\r\nThis \"auto-detection\" here is precisely for the reason we found today that the old code of switching \"wait for images\" would not work.  This Script is used in ci.yml and `GITHUB_REGISTRY` cannot be set as global variable if you want to enable and easy switch without having to update `ci.yml`\r\n\r\nThe secret to switch images is not available in fork PR workflow. Currently the only way we can communicate the type of registry we use is by checking if the image is available in both registries and when it is in one of them - set `GITHUB_REGISTRY` value based on that. This is the same mechanism we already used to see if the images are actually built - we checked if they are pushed to the registry. Now we additionally check from which registry they came so that we can set `GITHUB_REGISTRY` variable based on that. So the `GITHUB_REGISTRY`\r\n\r\nThis has the advantage over other solutions that when you change the registry in secret, you do not have to update the ci.yml (which means that PRs do not have to rebased to take advantage. Basically the ci.yml is identical, no matter which registry is used. This was the whole point of this PR - to be able to switch between the registries freely and without disruption to existing PRs.\r\n\r\nOf course we do not have to do it. We can simply switch permanently - that would be easier, but we actually cannot switch entirely to gcr.io . The problem is that then if someone tries to build it in their own fork as PR/master push it will not work without pre-configuraation. GHCR requires few steps to set up (crating repos and assigning permissions) to work. As I described in CI.rst:\r\n\r\n> The new `GitHub Container Registry <https://docs.github.com/en/packages/guides/about-github-container-registry>`_\r\n    which is in Public Beta, has many more features (including permission management, public access and\r\n    image retention possibility). It has also the drawback (at least as of January 2020) that you need to\r\n    have separate personal access token created as ``PAT_CR`` secret in your repository with write access\r\n    to registry in order to make it works. You also have to manually manage permissions of the images,\r\n    i.e. after creating images for the first time, you need to set their visibility to \"Public\" and\r\n    add ``Admin`` permissions to group of people managing the images (in our case ``airflow-committers`` group).\r\n    This makes it not very suitable to use GitHub container registry if you want to run builds of Airflow\r\n    in your own forks (note - it does not affect pull requests from forks to Airflow).\r\n\r\nSo when we switch to GHCR in `apache` repo the same ci.yml should use GHCR for the `apache` repo and the docker.package registry for all other repositories. \r\n\r\nOf course we could add some \"ifs\" in both build and ci workflows (if github.repository == \"apache/airflow\" ) but using ifs to set env variables (as you saw above) is messy - here the 'falsy' value would not help and github expression language has no ternary operator. However it has the big drawback that you need to synchronize ci.yml and build.yml and PRs will only work after rebasing if we change the hard-coded values in the expression. So rather than hardcode the value, I used auto-detection.\r\n\r\nI would be happy if you find a simpler way of doing it - so far I could not find an easier way to make existing PRs to take advantage of the configuration (secret in this case) in the apache repo.\r\n\r\nAny ideas ?\r\n\r\n",
+        "createdAt" : "2021-02-18T00:59:21Z",
+        "updatedAt" : "2021-02-22T03:27:19Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7cbab2b05ca1e36c97f619b66ecfe711f1d10aba",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +274,278 @@\n# waits for an image to be available in GitHub Packages. Should be run with `set +e`\n# the buid automatically determines which registry to use based one the images available\nfunction push_pull_remove_images::check_for_image_in_github_packages() {\n    local github_repository_lowercase"
   }
 ]
