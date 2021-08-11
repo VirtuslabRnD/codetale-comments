@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "c4510f3f-6f65-439a-b3b3-d922836e6855",
+    "prId" : 9566,
+    "prUrl" : "https://github.com/apache/airflow/pull/9566#pullrequestreview-439356636",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "13e245c2-f15d-44ee-a324-7dcbd5e9436f",
+        "parentId" : null,
+        "authorId" : "ac146d4b-7b35-4c19-a812-3c6b9ad04bae",
+        "body" : "This would work for templates passed in with a *.json extension, but doesn't cover the case where report is passed as a JSON string template.  For example:\r\n\r\n```\r\ncreate_report = GoogleCampaignManagerInsertReportOperator(\r\n        task_id=\"create_report\",\r\n        gcp_conn_id=self.config.get(\"gcp_connection_id\"),\r\n        profile_id=self.config.get(\"cm_profile_id\"),\r\n        report=\"\"\"\r\n            {\r\n               'name': '{{ params.title }}',\r\n               'accountId': '{{ params.account }}',\r\n               'fileName': '{{ params.file_name }}',\r\n               'type': 'STANDARD',\r\n               'criteria': {\r\n               ...\"\"\",\r\n        params=report_params,\r\n        dag=self.dag)\r\n```\r\n\r\nSafest approach may be to parse the json string within the execute method.",
+        "createdAt" : "2020-06-29T15:51:55Z",
+        "updatedAt" : "2020-07-01T11:15:25Z",
+        "lastEditedBy" : "ac146d4b-7b35-4c19-a812-3c6b9ad04bae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa7e633d-695d-4cf7-a415-a679c1b49fa1",
+        "parentId" : "13e245c2-f15d-44ee-a324-7dcbd5e9436f",
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "According to documentation user should provide a dictionary so I would say that passing `str` doesn't have to be supported. ",
+        "createdAt" : "2020-06-29T16:18:01Z",
+        "updatedAt" : "2020-07-01T11:15:25Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "00eed977-a48b-4421-a7e2-31dee06029b6",
+        "parentId" : "13e245c2-f15d-44ee-a324-7dcbd5e9436f",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "You can create a task as below to create a task based on a JSON file from another source e.g. variable.\r\n```\r\ncreate_report = GoogleCampaignManagerInsertReportOperator(\r\n        task_id=\"create_report\",\r\n        gcp_conn_id=self.config.get(\"gcp_connection_id\"),\r\n        profile_id=self.config.get(\"cm_profile_id\"),\r\n        report=json.loads(\"\"\"\r\n            {\r\n               'name': '{{ params.title }}',\r\n               'accountId': '{{ params.account }}',\r\n               'fileName': '{{ params.file_name }}',\r\n               'type': 'STANDARD',\r\n               'criteria': {\r\n               ...\"\"\"),\r\n        params=report_params,\r\n        dag=self.dag)\r\n```\r\nOtherwise we have ambiguity. The str type means the path to the file in one case and the contents of the file in other case.",
+        "createdAt" : "2020-06-29T16:24:23Z",
+        "updatedAt" : "2020-07-01T11:15:25Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73ced25d-0b93-43b2-a0f4-39497d26d7f0",
+        "parentId" : "13e245c2-f15d-44ee-a324-7dcbd5e9436f",
+        "authorId" : "ac146d4b-7b35-4c19-a812-3c6b9ad04bae",
+        "body" : "True, although you can't take advantage of Airflow's [built-in macros](https://airflow.apache.org/docs/stable/macros-ref.html) like task_instance.  Also deviates from the behavior of other templated operators (e.g. [BashOperator](https://github.com/apache/airflow/blob/master/airflow/operators/bash.py)).",
+        "createdAt" : "2020-06-29T17:18:04Z",
+        "updatedAt" : "2020-07-01T11:15:25Z",
+        "lastEditedBy" : "ac146d4b-7b35-4c19-a812-3c6b9ad04bae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3b910022-0867-4438-a350-1d4582bc497c",
+        "parentId" : "13e245c2-f15d-44ee-a324-7dcbd5e9436f",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "You can because the templates are rendered recursively.\r\nhttps://github.com/apache/airflow/blob/1c48ffbe25c3e304660b7e75a49e88bd114dde46/airflow/models/baseoperator.py#L872-L929\r\nThe problem only occurs when you use Jinja templates to generate new structures e.g. create new array elements.",
+        "createdAt" : "2020-06-29T17:30:24Z",
+        "updatedAt" : "2020-07-01T11:15:25Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a77a1ca6ce16039a2d09f01b6517a0f5ab0fb724",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +302,306 @@    def prepare_template(self) -> None:\n        # If .json is passed then we have to read the file\n        if isinstance(self.report, str) and self.report.endswith('.json'):\n            with open(self.report, 'r') as file:\n                self.report = json.load(file)"
+  }
+]

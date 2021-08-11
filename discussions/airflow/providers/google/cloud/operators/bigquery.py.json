@@ -240,5 +240,159 @@
     "commit" : "516ccead561d79613ea250edb946ad6f70f9fc81",
     "line" : 17,
     "diffHunk" : "@@ -1,1 +549,553 @@            gcp_conn_id = bigquery_conn_id\n\n        warnings.warn(\n            \"This operator is deprecated. Please use `BigQueryInsertJobOperator`.\",\n            DeprecationWarning, stacklevel=3,"
+  },
+  {
+    "id" : "a721ecb4-e813-405d-aa18-1b721ee02794",
+    "prId" : 9590,
+    "prUrl" : "https://github.com/apache/airflow/pull/9590#pullrequestreview-441193894",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7cfa8d52-9830-40ac-827a-f1504e5360c2",
+        "parentId" : null,
+        "authorId" : "e3fe1065-d55e-4251-b731-d633d946748b",
+        "body" : "the job polls here",
+        "createdAt" : "2020-07-01T21:01:01Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "e3fe1065-d55e-4251-b731-d633d946748b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7dd582dd7cc824221d60ffaad2887827fb84e003",
+    "line" : 108,
+    "diffHunk" : "@@ -1,1 +1720,1724 @@        )\n        # Start the job and wait for it to complete and get the result.\n        job.result()\n        return job\n"
+  },
+  {
+    "id" : "cb64eeb9-4157-4c30-bc32-f7de49bb1246",
+    "prId" : 9590,
+    "prUrl" : "https://github.com/apache/airflow/pull/9590#pullrequestreview-457910459",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "df2f4d96-9289-41a0-ae8f-c02e32fa7a73",
+        "parentId" : null,
+        "authorId" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "body" : "what does this do to the the behavior for re-running a DAG for an execution date? \r\nWould this not by default reattach to the originally succeeded job (rather than expected behavior or re-running the job)? Should this be configurable?",
+        "createdAt" : "2020-07-10T00:16:56Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9da71dbc-5e61-4152-b09a-aae4cc969a3f",
+        "parentId" : "df2f4d96-9289-41a0-ae8f-c02e32fa7a73",
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "My question is: if job succeded why should we rerun it instead of using the existing result?  ",
+        "createdAt" : "2020-07-10T04:53:26Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "011b02a9-d81c-40b7-a18c-5156ffe8bcd4",
+        "parentId" : "df2f4d96-9289-41a0-ae8f-c02e32fa7a73",
+        "authorId" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "body" : "In short, the underlying table / partition could have changed between the original run and the new run and in many cases the user will want to ensure that the result of this job is based on a fresh run of the query.\r\n\r\nAirflow cannot know if the underlying table(s) have changed since the original run.\r\n\r\nTo give an example use case:\r\nImagine a streaming job in charge of inserting records to an hourly partitioned fact table and a DAG responsible for running some hourly analytics query (joins to dimension tables / aggregation). Once the processing time watermark passes the end of the partition interval original scheduled dag run runs (BigQueryInsertJobOperator task runs a query on the data at this processing time). Then late data (event time << processing time) arrives that should still go to the old partition (because partitioning is on event time). When the streaming job detects this it could use some mechanism (e.g. the REST API or an alert to a human who manually re-runs the dag for an execution date) to tell the DAG (and this BigQueryInsertJobOperator) to re-run because the original run for this interval / partition was actually against incomplete data. ",
+        "createdAt" : "2020-07-10T17:15:50Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff154f12-6c12-4850-aca8-2773c5f9b310",
+        "parentId" : "df2f4d96-9289-41a0-ae8f-c02e32fa7a73",
+        "authorId" : "243b44f0-ed59-492b-8b17-19b6e29cf2f2",
+        "body" : "@turbaszek I tend to agree with @jaketf.  We frequently might want to rerun a DAG for a prior, successful execution date at some point in the future that would overwrite data in a partitioned BigQuery table.  Typically this might occur because of a change in the business logic.\r\n\r\nSo, in my opinion, the `job_id` needs to be more unique than just `airflow_{self.dag_id}_{self.task_id}_{exec_date}_` in order to account for this.\r\n\r\nIf I clear the status of a task in a DAG, I expect that task to be fully rerun.",
+        "createdAt" : "2020-07-21T07:32:21Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "243b44f0-ed59-492b-8b17-19b6e29cf2f2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d6eaf061-91e5-4d4a-a7f8-6e01f1a45519",
+        "parentId" : "df2f4d96-9289-41a0-ae8f-c02e32fa7a73",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "I think we will not be able to create universal behavior that will keep idempotency. Some users want to always execute SQL query, others want to use predetermined results, and others want to re-query only when it is backfill. All the cases sound correct and they cannot always be combined into a single operator without additional parameters.",
+        "createdAt" : "2020-07-29T09:58:34Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d6db44f3-c1f9-4e4e-9617-28d634fa4a6c",
+        "parentId" : "df2f4d96-9289-41a0-ae8f-c02e32fa7a73",
+        "authorId" : "243b44f0-ed59-492b-8b17-19b6e29cf2f2",
+        "body" : "Then there should be additional parameters.  IMHO, I don't think it is controversial to suggest that, when the status of a BQ task is cleared, the default behaviour should be that the query if fully rerun.  Other cases sound like less common scenarios (in my experience at least).",
+        "createdAt" : "2020-07-29T12:05:15Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "243b44f0-ed59-492b-8b17-19b6e29cf2f2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4e85dab-333b-4bed-8459-e2c60a6a9ea7",
+        "parentId" : "df2f4d96-9289-41a0-ae8f-c02e32fa7a73",
+        "authorId" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "body" : "> the query if fully rerun.\r\n\r\nThat was the original behaviour as the `job_id` was always generated by discovery API. ",
+        "createdAt" : "2020-07-29T12:22:09Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "0d4fd7c4-f8ab-4371-acfe-b9cca6decaf5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e70ce092-cd8a-41e0-bf41-9994d5231130",
+        "parentId" : "df2f4d96-9289-41a0-ae8f-c02e32fa7a73",
+        "authorId" : "243b44f0-ed59-492b-8b17-19b6e29cf2f2",
+        "body" : "Indeed.  I'd say that should be the default going forward too.",
+        "createdAt" : "2020-07-29T16:24:57Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "243b44f0-ed59-492b-8b17-19b6e29cf2f2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a4f683e-014f-4356-9d76-f686d3b03b13",
+        "parentId" : "df2f4d96-9289-41a0-ae8f-c02e32fa7a73",
+        "authorId" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "body" : "> I think we will not be able to create universal behavior that will keep idempotency. Some users want to always execute SQL query, others want to use predetermined results, and others want to re-query only when it is backfill. All the cases sound correct and they cannot always be combined into a single operator without additional parameters.\r\n\r\nThis is an interesting point. Perhaps we consider bringing back the deprecated BigQueryOperator (contract is always runs a new query) and than have this BigQueryInsertJobOperator (contract is create job if not succeeded exists).\r\n\r\nIMHO we can have both behaviors in a single operator with a `force_rerun=True` parameter that controls how the job id is generated.\r\n```python3\r\n# choice of uuid \r\nuniqueness_hash = hash(uuid.uuid4()) if self.force_rerun else hash(job_config)\r\n\r\njob_id = f\"{dag_id}{task_id}{exec_date}{uniqueness_hash}\"\r\n```",
+        "createdAt" : "2020-07-29T21:27:13Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7dd582dd7cc824221d60ffaad2887827fb84e003",
+    "line" : 151,
+    "diffHunk" : "@@ -1,1 +1754,1758 @@            self._handle_job_error(job)\n        except Conflict:\n            # If the job already exists retrieve it\n            job = hook.get_job(\n                project_id=self.project_id,"
+  },
+  {
+    "id" : "e3d8f46f-6f69-4e6a-a5b8-21b59c59e7a9",
+    "prId" : 9590,
+    "prUrl" : "https://github.com/apache/airflow/pull/9590#pullrequestreview-461180440",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "68cfec2c-3f44-4123-9b03-f9a7e56fe49b",
+        "parentId" : null,
+        "authorId" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "body" : "```suggestion\r\n                    f\"want to force rerun it consider setting `force_rerun=True`.\"\r\n                    f\"Or, if you want to reattach in this scenario add {job.state} to `reattach_states`\"\r\n```",
+        "createdAt" : "2020-08-04T21:19:54Z",
+        "updatedAt" : "2020-08-10T09:51:31Z",
+        "lastEditedBy" : "c6742e4c-543e-4eea-b495-c6ec28597226",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7dd582dd7cc824221d60ffaad2887827fb84e003",
+    "line" : 171,
+    "diffHunk" : "@@ -1,1 +1768,1772 @@                raise AirflowException(\n                    f\"Job with id: {job_id} already exists and is in {job.state} state. If you \"\n                    f\"want to force rerun it consider setting `force_rerun=True`.\"\n                    f\"Or, if you want to reattach in this scenario add {job.state} to `reattach_states`\"\n                )"
   }
 ]
