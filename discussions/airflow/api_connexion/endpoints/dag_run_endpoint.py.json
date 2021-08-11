@@ -229,5 +229,93 @@
     "commit" : "c7f590d1b4eedfb00ece0828e55e876ecd4babe3",
     "line" : 67,
     "diffHunk" : "@@ -1,1 +123,127 @@    offset,\n):\n    total_entries = query.count()\n    query = _apply_date_filters_to_query(\n        query,"
+  },
+  {
+    "id" : "d3c10715-3590-4e81-a0f1-76cae0b02df8",
+    "prId" : 15174,
+    "prUrl" : "https://github.com/apache/airflow/pull/15174#pullrequestreview-627530143",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d3944399-ed82-4e07-8d16-477a86b9f955",
+        "parentId" : null,
+        "authorId" : "c7b0cb1c-ff95-4ec9-a0c6-a9f1b5135a52",
+        "body" : "Can you add execution_date to the filter in line 256 instead of another query?",
+        "createdAt" : "2021-04-03T14:41:40Z",
+        "updatedAt" : "2021-04-06T07:52:03Z",
+        "lastEditedBy" : "c7b0cb1c-ff95-4ec9-a0c6-a9f1b5135a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b16a2ec5-b385-4de2-b363-737e87cfb730",
+        "parentId" : "d3944399-ed82-4e07-8d16-477a86b9f955",
+        "authorId" : "29b924c6-b357-4b24-aba4-4989658ba9c1",
+        "body" : "Originally I have decided to go with that logic, but there are two cases which can happen\r\n1. the DagRun.run_id is same and DagRun.execution_date is same\r\n2. the DagRun.run_id is different and DagRun.execution_date is same\r\n\r\nin both the cases it should throw the execution_date error as there are two unique constraints\r\n\r\nUniqueConstraint('dag_id', 'execution_date')\r\nUniqueConstraint('dag_id', 'run_id')\r\n\r\nIf I added the DagRun.execution_date in the same query on line 256 then, we are missing the AlreadyExists error when the DagRun.run_id is different, because of this the `dagrun_instance` will be a None result and the DagRun will get created.\r\n\r\nlet me know if anything is wrong with my logic\r\nThanks",
+        "createdAt" : "2021-04-03T14:53:10Z",
+        "updatedAt" : "2021-04-06T07:52:03Z",
+        "lastEditedBy" : "29b924c6-b357-4b24-aba4-4989658ba9c1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "646bc7c6-c7d8-43bc-bddb-ac76ca06ee45",
+        "parentId" : "d3944399-ed82-4e07-8d16-477a86b9f955",
+        "authorId" : "c7b0cb1c-ff95-4ec9-a0c6-a9f1b5135a52",
+        "body" : "Oh, I see, just took a look at the table now. In that case, this will work instead of a separate query:\r\n```\r\nsession.query(DagRun).filter(DagRun.dag_id == dag_id).\r\n            filter(or_(DagRun.run_id == post_body[\"run_id\"],\r\n                    DagRun.execution_date == post_body[\"execution_date\"])).first()\r\n```\r\n",
+        "createdAt" : "2021-04-03T20:50:27Z",
+        "updatedAt" : "2021-04-06T07:52:03Z",
+        "lastEditedBy" : "c7b0cb1c-ff95-4ec9-a0c6-a9f1b5135a52",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a76cfab-20a6-456c-9b61-143387651c5a",
+        "parentId" : "d3944399-ed82-4e07-8d16-477a86b9f955",
+        "authorId" : "29b924c6-b357-4b24-aba4-4989658ba9c1",
+        "body" : "Thanks @ephraimbuddy \r\nI have added these changes",
+        "createdAt" : "2021-04-04T07:18:11Z",
+        "updatedAt" : "2021-04-06T07:52:03Z",
+        "lastEditedBy" : "29b924c6-b357-4b24-aba4-4989658ba9c1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ba2213c-f0b7-423a-a614-3bd511113801",
+        "parentId" : "d3944399-ed82-4e07-8d16-477a86b9f955",
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "Agree with @ephraimbuddy , you are missing `.filter(DagRun.dag_id == dag_id)` that Ephraim suggested",
+        "createdAt" : "2021-04-04T11:29:36Z",
+        "updatedAt" : "2021-04-06T07:52:03Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "37047e837a402cf0efc72fcc8a6e0946b0a00ce1",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +262,266 @@            f\"DAGRun ExecutionDate: '{post_body['execution_date']}' already exists\"\n        )\n\n    raise AlreadyExists(\n        detail=f\"DAGRun with DAG ID: '{dag_id}' and DAGRun ID: '{post_body['run_id']}' already exists\""
+  },
+  {
+    "id" : "6d9f4a83-7dbb-4654-aa8d-b26d32b004cc",
+    "prId" : 15174,
+    "prUrl" : "https://github.com/apache/airflow/pull/15174#pullrequestreview-627548282",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6ef76aab-2e2c-4591-8679-0e77f88f8a87",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "```suggestion\r\n            detail=f\"A DagRun with dag_id: '{dag_id}' and \"\r\n            f\"execution_date: '{post_body['execution_date']}' already exists\"\r\n```",
+        "createdAt" : "2021-04-04T15:10:52Z",
+        "updatedAt" : "2021-04-06T07:52:03Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "37047e837a402cf0efc72fcc8a6e0946b0a00ce1",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +260,264 @@        raise AlreadyExists(\n            detail=f\"DAGRun with DAG ID: '{dag_id}' and \"\n            f\"DAGRun ExecutionDate: '{post_body['execution_date']}' already exists\"\n        )\n"
   }
 ]
