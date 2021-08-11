@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "618ac7b3-76bf-4d31-a244-dd88b1884ecf",
+    "prId" : 43988,
+    "prUrl" : "https://github.com/ansible/ansible/pull/43988#pullrequestreview-150988763",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bf64af4d-9475-46cb-9cc7-dac6babb0992",
+        "parentId" : null,
+        "authorId" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "body" : "Is 1 assumed to be the `My Company` tenant?  how can one know it's 1, without prior assumptions and by only using this module?\r\n=> Can you make the module take `parent_name` param and look it up, instead of id?",
+        "createdAt" : "2018-08-14T19:24:07Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "afadb556-43bf-4bf0-b736-f93392424eb5",
+        "parentId" : "bf64af4d-9475-46cb-9cc7-dac6babb0992",
+        "authorId" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "body" : "The parent name is not unique. You can easily have the following tenant structure:\r\n\r\n/root\r\n/root/sub1\r\n/root/sub1/sub1\r\n/root/sub1/root\r\n/root/root/sub1\r\n\r\nAn option would be in stead of specifying the tenant name let the user specify the full path something like: tenant_path: /root/sub1/sub2 (where the tenant name would be sub2)\r\n\r\n\r\nAnd another situation. Suppose I want to change the name for an existing tenant. Perhaps adding an optional tenant_id that can be used to change a tenant name? What do you think?",
+        "createdAt" : "2018-08-14T21:19:50Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1efe1caa-f667-46ec-9b02-2eae86439233",
+        "parentId" : "bf64af4d-9475-46cb-9cc7-dac6babb0992",
+        "authorId" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "body" : "I like the path idea.  `/root/sub1/sub2` is much easier than calling the module 3 times, with `register:` to get parent ids to follow the chain...\r\nIs `/` (or another char) impossible in a name?  If not, could take a list of components (and maybe allow a string `'foo'` as shorthand for `['foo']` for convenience).\r\n\r\nGreat question about renaming!  I don't think we supported renaming in any other miq module.   @gtanzillo @abellotti @zgalor @yaacov @elad661 any ideas?\r\nPerhaps add an `old_name` or `new_name` (or path) field.  Is there any existing pattern for this in Ansible?  Can it be idempotent?",
+        "createdAt" : "2018-08-15T11:11:01Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bbe04e5d-5036-432e-b2ec-8852b9331a73",
+        "parentId" : "bf64af4d-9475-46cb-9cc7-dac6babb0992",
+        "authorId" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "body" : "I know in the vmware_guest lets you supply the VM uuid to rename a VM, see https://docs.ansible.com/ansible/2.5/modules/vmware_guest_module.html, search for \"Rename a VM (requires the VM's uuid)\". So perhaps to support renaming the internal Id could be supplied.\r\n\r\nIf have tested if a special character can be used as a separator, but all chars slashes, backslashes are all valid for a tenant name. Having looked at the vmware_guest module they use the name_match attribute, in combination with the uuid. This could also be an approach:\r\n1. First use tenant_id, if supplied (rename tenant if name differs)\r\n2. Use parent_id, if supplied , and tenant name (if the tenant is not found under the supplied parent_id but was uniquely identified by the name move the tenant to the supplied parent_id)\r\n3. Use tenant name, If multiple found use the name_match attribute to select the first found or last found\r\n\r\nor use the tenant_path as a list. I don't think the shorthand if 1 name is supplied would work. It is unclear if you want to edit the root tenant or some other sub tenant I think...\r\n\r\n\r\n\r\n",
+        "createdAt" : "2018-08-15T22:55:18Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa41580a-6877-424c-a7fc-f1d0861997cf",
+        "parentId" : "bf64af4d-9475-46cb-9cc7-dac6babb0992",
+        "authorId" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "body" : "I ended up allowing the giving the option to supply the parent name with build-in uniqueness checks as an alternative to the parent_id. This should cover most situations I think.",
+        "createdAt" : "2018-08-30T13:18:26Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c2e4d9dd3cf97424943f16e91721061aae584752",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +93,97 @@    name: 'Dep1'\n    description: 'Manufacturing department'\n    parent_id: 1\n    manageiq_connection:\n      url: 'http://127.0.0.1:3000'"
+  },
+  {
+    "id" : "a5f28db9-8bb2-4b94-8136-108c7e522e6b",
+    "prId" : 43988,
+    "prUrl" : "https://github.com/ansible/ansible/pull/43988#pullrequestreview-146405469",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "872b2c0a-3853-4e9a-8481-6a65641532fe",
+        "parentId" : null,
+        "authorId" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "body" : "I assume parent_id not necessary for deletion?",
+        "createdAt" : "2018-08-14T19:24:58Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "94eff73b-3748-4e47-b36c-19dfde849b98",
+        "parentId" : "872b2c0a-3853-4e9a-8481-6a65641532fe",
+        "authorId" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "body" : "The tenant name does not uniquely identifies a tenant, the name in combination of the parent does.  ",
+        "createdAt" : "2018-08-14T21:19:53Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c1a038b9-ba9e-4afe-a513-fcf3e07576e0",
+        "parentId" : "872b2c0a-3853-4e9a-8481-6a65641532fe",
+        "authorId" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "body" : "Ah :+1:.  I should have started by saying I don't know anything about tenants in manageiq :)",
+        "createdAt" : "2018-08-15T11:01:15Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c2e4d9dd3cf97424943f16e91721061aae584752",
+    "line" : 106,
+    "diffHunk" : "@@ -1,1 +104,108 @@    state: 'absent'\n    name: 'Dep1'\n    parent_id: 1\n    manageiq_connection:\n      url: 'http://127.0.0.1:3000'"
+  },
+  {
+    "id" : "09d5ea8a-7e48-4268-821f-209cabd04a7c",
+    "prId" : 43988,
+    "prUrl" : "https://github.com/ansible/ansible/pull/43988#pullrequestreview-146257159",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cebaee23-f871-41c8-b3b6-d9df935e9746",
+        "parentId" : null,
+        "authorId" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "body" : "I think for `http:` connections `verify_ssl` is meaningless and can be omitted.",
+        "createdAt" : "2018-08-14T19:26:16Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "de5e1b91-f661-4a4e-9b31-f71565f2ab84",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4bc51fef-0d51-43f3-91ee-6469cc5f7c60",
+        "parentId" : "cebaee23-f871-41c8-b3b6-d9df935e9746",
+        "authorId" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "body" : "True. Is would make sense to have an example with the option verify_ssl: False shown.",
+        "createdAt" : "2018-08-14T21:21:35Z",
+        "updatedAt" : "2018-09-21T18:57:51Z",
+        "lastEditedBy" : "e86e89f8-3f83-45b1-8744-180feb3aaee1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c2e4d9dd3cf97424943f16e91721061aae584752",
+    "line" : 89,
+    "diffHunk" : "@@ -1,1 +109,113 @@      username: 'admin'\n      password: 'smartvm'\n      verify_ssl: False\n\n- name: Set tenant quota for cpu_allocated, mem_allocated, remove quota for vms_allocated"
+  }
+]
