@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "1bc7561c-34dd-45d0-9b35-b8321dffe9ab",
+    "prId" : 24210,
+    "prUrl" : "https://github.com/ansible/ansible/pull/24210#pullrequestreview-35940350",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2095e051-0b75-4af5-b1d6-fc3a163e9069",
+        "parentId" : null,
+        "authorId" : "fc84e3a8-7a8a-45ea-ba68-7e6e0b604075",
+        "body" : "I think you still need `and value` here\r\n\r\nAnd while we're at it, I don't really see a reason for validator, as the only one is netconf_port, so one might as well fold that in to this method and make the check `if key == 'netconf_port' and value:` right? (Or if you really want room for more validators, `if not value: continue` followed by checking the key)",
+        "createdAt" : "2017-05-02T16:31:14Z",
+        "updatedAt" : "2017-05-02T16:31:14Z",
+        "lastEditedBy" : "fc84e3a8-7a8a-45ea-ba68-7e6e0b604075",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3c3dad38-6d99-4be2-8705-2a4bc927108c",
+        "parentId" : "2095e051-0b75-4af5-b1d6-fc3a163e9069",
+        "authorId" : "7a1e5757-684b-4684-bcab-c114385bca28",
+        "body" : "if `netconf_port` has no value in playbook eg: `netconf_port:` the `and value` condition will bypass the validation and will result in sending `None` value of port to the device, which is not right.\r\n\r\nI think current logic to identify if validation function is implemented or not is more extendible instead of having `if` clause for each `key`",
+        "createdAt" : "2017-05-02T16:49:48Z",
+        "updatedAt" : "2017-05-02T16:49:48Z",
+        "lastEditedBy" : "7a1e5757-684b-4684-bcab-c114385bca28",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a10b0a38-8ed5-4aba-a7dc-4b57bb912866",
+        "parentId" : "2095e051-0b75-4af5-b1d6-fc3a163e9069",
+        "authorId" : "fc84e3a8-7a8a-45ea-ba68-7e6e0b604075",
+        "body" : "Well, `netconf_port` has a default, so it shouldn't be `None` anyway, which means the value guarding is unnecessary anyway (and harmful if `netconf_port == 0`)\r\n\r\nI also freely admit that querying `globals()` to find function names is more extensible, but it is so at the cost of readability and surprise factor when trying to debug. And since the methods are manually authored instead of dynamically imported or generated, it is easy to save someone else the cognitive load of wondering what might get a validator function & from where by spelling them out rather than letting Python find them for you. But that's only my opinion and I don't think that's enough to hold this back if you don't agree.",
+        "createdAt" : "2017-05-02T22:24:28Z",
+        "updatedAt" : "2017-05-02T22:24:28Z",
+        "lastEditedBy" : "fc84e3a8-7a8a-45ea-ba68-7e6e0b604075",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c60bd81c-349c-4a0f-a5b9-a2f341074fd9",
+        "parentId" : "2095e051-0b75-4af5-b1d6-fc3a163e9069",
+        "authorId" : "7a1e5757-684b-4684-bcab-c114385bca28",
+        "body" : "For below playbook:\r\n```\r\n    - name: Configure Netconf\r\n      junos_netconf:\r\n        state: present\r\n        netconf_port:\r\n```\r\nThe ouptut is\r\n```\r\nchanged: [vsrx01] => {\r\n    \"changed\": true, \r\n    \"commands\": [\r\n        \"set system services netconf ssh port None\"\r\n    ], \r\n    \"invocation\": {\r\n        \"module_args\": {\r\n            \"host\": null, \r\n            \"netconf_port\": null, \r\n            \"password\": null, \r\n            \"port\": null, \r\n            \"provider\": {\r\n                \"host\": \"vsrx01\", \r\n                \"password\": \"VALUE_SPECIFIED_IN_NO_LOG_PARAMETER\", \r\n                \"port\": null, \r\n                \"ssh_keyfile\": null, \r\n                \"timeout\": null, \r\n                \"transport\": null, \r\n                \"username\": \"ansible\"\r\n            }, \r\n            \"ssh_keyfile\": null, \r\n            \"state\": \"present\", \r\n            \"timeout\": 10, \r\n            \"transport\": null, \r\n            \"username\": null\r\n        }\r\n    }\r\n}\r\n```\r\nSo the port value is set to `None` even if it has a default value.\r\n\r\nI agree with your point that `globals()` way in not as much readable, but it is extensible in a sense adding new validation requires adding only validation function without change to existing code.\r\n",
+        "createdAt" : "2017-05-03T05:06:54Z",
+        "updatedAt" : "2017-05-03T05:06:54Z",
+        "lastEditedBy" : "7a1e5757-684b-4684-bcab-c114385bca28",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f657ed7e2ecc4fe3d1a295af7662b52701a3b711",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +140,144 @@        # validate the param value (if validator func exists)\n        validator = globals().get('validate_%s' % key)\n        if callable(validator):\n            validator(value, module)\n"
+  }
+]
