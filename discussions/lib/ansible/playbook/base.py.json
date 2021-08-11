@@ -75,5 +75,137 @@
     "commit" : "445be8e7dd274b2749ce170ff8dfe0eacd4d1be0",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +344,348 @@            value = float(value)\n        elif attribute.isa == 'bool':\n            value = boolean(value, strict=True)\n        elif attribute.isa == 'percent':\n            # special value, which may be an integer or float"
+  },
+  {
+    "id" : "be589ee3-6eb7-4ec1-900c-27c8eda3e56a",
+    "prId" : 74039,
+    "prUrl" : "https://github.com/ansible/ansible/pull/74039#pullrequestreview-658384928",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a06000ce-b7ba-44c8-9997-b0f0957fb710",
+        "parentId" : null,
+        "authorId" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "body" : "Wishing for a time machine on this one to go back to 2.10- in the collections world, ideally, an unqualified action_group entry should be assumed to live in the defining collection, not \"ansible.legacy\" (which implies that there's a builtin redirect- made sense in 2.10, not so much now). Unfortunately, there are already collections in the wild that define action_groups relying on the `ansible.legacy`/`ansible.builtin` behavior.\r\n\r\nI think it'd be OK to break the `ansible.legacy` part (in favor of `ansible.builtin`)- collections that actually want that behavior should be free to define the entries explicitly as `ansible.legacy` (but realistically, most probably shouldn't, and I'd be fine with saying \"you can't\"). But to keep 2.10-era collections working, we'd have to implement this change as \"first try to resolve from the current collection, then fall back to `ansible.builtin`\".\r\n\r\nThe main reason for this is to keep the places where a collection needs to hardcode its own name inside itself small.",
+        "createdAt" : "2021-04-16T17:15:17Z",
+        "updatedAt" : "2021-04-26T14:18:05Z",
+        "lastEditedBy" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba390e99-1d73-4b66-bca4-8fb9b8f10e5e",
+        "parentId" : "a06000ce-b7ba-44c8-9997-b0f0957fb710",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "I'm not sure if I really understand what you're saying.\r\n\r\nThis applies to module_defaults in a playbook, not action_groups in collections. If a group/action in action_groups is not fully qualified, it is part of the collection still, and not 'ansible.legacy'. A group definition in action_groups is always part of its own ns.coll.\r\n\r\nAdding 'ansible.legacy' to unqualified group names was intended to differentiate from opting into redirected-only actions\r\n```\r\nmodule_defaults:\r\n  group/ansible.builtin.aws:  # redirected group only\r\n    ...\r\n```\r\nand something that should maintain legacy behavior:\r\n```\r\nmodule_defaults:\r\n  group/aws:  # legacy and redirected group\r\n    ...\r\n```\r\n\r\nSince there's been a big push from docs to use fully qualified names for everything it didn't seem harmful to allow legacy behavior more explicitly with a fully qualified group name. I waffled over that though, and I could refactor _resolve_group to include 'ansible.legacy' actions for `group/aws` without adding support for `group/ansible.legacy.aws`. Do you want me to remove this?\r\n\r\nI would prefer to not break 'ansible.legacy' actions though with the unqualified group name, which is what this bit is mainly for. A collection could include 'ansible.legacy' actions in a group, but I don't think they have any incentive or particular reason to do that. I don't think many people outside of core were even aware of ansible.legacy until recently. Calling `aws_s3` which resolves to a legacy override should continue working with `group/aws:`, but I see no reason that `group/amazon.aws.aws` should add support for it.",
+        "createdAt" : "2021-04-21T20:05:41Z",
+        "updatedAt" : "2021-04-26T14:18:05Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f5c7c763-10e4-4e1a-a0f1-862f25bf2aeb",
+        "parentId" : "a06000ce-b7ba-44c8-9997-b0f0957fb710",
+        "authorId" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "body" : "Sorry, I put this comment in the wrong spot- the `module_defaults` side is fine as-is. My beef was with the `action_groups` plugin canonicalization in `mod_args.py` for action/module entries that are unqualified. Does what I said make sense if you re-evaluate it in that context? :laughing: ",
+        "createdAt" : "2021-04-21T20:41:26Z",
+        "updatedAt" : "2021-04-26T14:18:05Z",
+        "lastEditedBy" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f94190a-d4a3-486f-8a1f-dca246f438c9",
+        "parentId" : "a06000ce-b7ba-44c8-9997-b0f0957fb710",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "I'm not sure, it's kind of part of the same train of thought. mod_args is also just for playbooks, not for resolving actions in action_groups. Here where you commented adds support for explicit FQ ansible.legacy group names and mod_args.py adds support for explicit FQ ansible.legacy action names. I'm not sure if one makes sense without the other. So whereas before this was required for legacy:\r\n```\r\nmodule_defaults:\r\n  group/aws:\r\n    ...\r\ntasks:\r\n  - aws_s3: # which resolves to legacy, not the collection\r\n```\r\nNow someone can update everything to use fully qualified if panicked by the FQ-or-you're-doing-it-wrong messaging implied by the docs:\r\n```\r\nmodule_defaults:\r\n  group/ansible.legacy.aws:\r\n    ...\r\ntasks:\r\n  - ansible.legacy.aws_s3:  # which resolves to legacy, not the collection\r\n```\r\nIf I'm removing the mod_args stuff, then I think it would also make sense to remove the support for `group/ansible.legacy.<name>` from this PR.",
+        "createdAt" : "2021-04-21T21:09:00Z",
+        "updatedAt" : "2021-04-26T14:18:05Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e19f6b9f-e54e-4f84-af33-95c66f9672a1",
+        "parentId" : "a06000ce-b7ba-44c8-9997-b0f0957fb710",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "This is the bit that's resolving the action_groups if they aren't using fully qualified action/group names on line 417 in _resolve_group: \r\n```\r\n            # The collection may or may not use the fully qualified name.\r\n            # If not, it's part of the current collection.\r\n```",
+        "createdAt" : "2021-04-22T12:37:37Z",
+        "updatedAt" : "2021-04-26T14:18:05Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "828ca4a3-1418-4d5a-bfb0-0eedef27b7c9",
+        "parentId" : "a06000ce-b7ba-44c8-9997-b0f0957fb710",
+        "authorId" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "body" : "Supporting `ansible.legacy` prefixing in module_defaults is fine, but at least in the case of groups, the behavior should be identical to `ansible.builtin`, since there's no concept of a non-collection action_group plugin (which is where `legacy` differs from `builtin`). \r\n\r\nAs for the behavior inside action_groups, that's the part I wish I had a time machine for. Defaulting unqualified groups to `ansible.legacy` doesn't make much sense for new groups going forward, but we're kinda stuck with at least some form of it, because that's how the collections that have inherited the groups built their metadata. We've propagated `ansible.legacy` into (IMO) too many places in the name of backward-compatible flexibility that very few people are using. Let me know if you need a refresher on why it exists, if you think that'll help.",
+        "createdAt" : "2021-04-26T16:14:37Z",
+        "updatedAt" : "2021-04-26T16:14:38Z",
+        "lastEditedBy" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e38579f9-5f80-4032-9bf3-83c678ff783b",
+        "parentId" : "a06000ce-b7ba-44c8-9997-b0f0957fb710",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "I removed the 'ansible.legacy' prefixing for groups and addressed the second part by removing the implicit ansible.legacy module inclusion and noting it in the changelog.\r\n\r\nI'm going to rebase so I can update the second collection loader too since it blows up on the 'metadata' dict.",
+        "createdAt" : "2021-05-12T21:09:39Z",
+        "updatedAt" : "2021-05-12T21:09:39Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9bff1f6c9a72449840c3683feb811fd855820779",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +364,368 @@            validated_defaults_dict = {}\n            for defaults_entry, defaults in defaults_dict.items():\n                # module_defaults do not use the 'collections' keyword, so actions and\n                # action_groups that are not fully qualified are part of the 'ansible.legacy'\n                # collection. Update those entries here, so module_defaults contains"
+  },
+  {
+    "id" : "ebc2d0d7-5b75-46cc-98f7-219ee880c354",
+    "prId" : 74039,
+    "prUrl" : "https://github.com/ansible/ansible/pull/74039#pullrequestreview-695363444",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "98f2761c-a104-4d45-bc98-4be7aeb0d40e",
+        "parentId" : null,
+        "authorId" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "body" : "Feels like this validation stuff should be in a utility method (if not in a separate file); the validation code seems to dwarf the actual working code in the loop and obscures the \"important\" parts, and I'm guessing the McCabe number for this file is not in a happy place right now ;)",
+        "createdAt" : "2021-06-29T00:00:40Z",
+        "updatedAt" : "2021-06-29T00:07:26Z",
+        "lastEditedBy" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "316f0777-abbd-4fe7-b24c-eff129a68407",
+        "parentId" : "98f2761c-a104-4d45-bc98-4be7aeb0d40e",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "I was not sure where to stick new general collection utilities. What do you think about lib/ansible/utils/collection_loader/_collection_meta.py?",
+        "createdAt" : "2021-06-29T17:04:20Z",
+        "updatedAt" : "2021-06-29T17:04:20Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f99bc5e2-077f-4192-b0ab-d5137f2d9fea",
+        "parentId" : "98f2761c-a104-4d45-bc98-4be7aeb0d40e",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "Moved it back into the base class, just as a standalone function",
+        "createdAt" : "2021-06-29T18:19:50Z",
+        "updatedAt" : "2021-06-29T18:19:50Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9bff1f6c9a72449840c3683feb811fd855820779",
+    "line" : 164,
+    "diffHunk" : "@@ -1,1 +448,452 @@        include_groups = []\n\n        found_group_metadata = False\n        for action in action_group:\n            # Everything should be a string except the metadata entry"
   }
 ]
