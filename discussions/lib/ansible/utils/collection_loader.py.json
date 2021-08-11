@@ -1,0 +1,156 @@
+[
+  {
+    "id" : "abdc17fb-4e7a-4baf-925f-27459c5e5973",
+    "prId" : 52194,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52194#pullrequestreview-211981914",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5188bce1-fe63-4d68-9540-b9b9d7087521",
+        "parentId" : null,
+        "authorId" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "body" : "Could this do additional checking here, for ex, some of the path based checking currently in load_modules? Do we have enough info to verify that the paths where that module could live exist?\r\n\r\nIf we can detect that earlier, I think it may improve some of the error handling for import errors. And potentially avoid some cases of needing to load modules that are partial matches.",
+        "createdAt" : "2019-03-07T19:57:41Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cc0f2894e4da105f153cfd0e190ca4e602775d",
+    "line" : 86,
+    "diffHunk" : "@@ -1,1 +84,88 @@        # this loader is only concerned with items under the Ansible Collections namespace hierarchy, ignore others\n        if fullname.startswith('ansible_collections.') or fullname == 'ansible_collections':\n            return self\n\n        return None"
+  },
+  {
+    "id" : "4547abd3-680a-4a85-bf5a-38fda9db4ec7",
+    "prId" : 52194,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52194#pullrequestreview-211981914",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "147320ab-a3b4-4b5a-9312-903ee19e1d4b",
+        "parentId" : null,
+        "authorId" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "body" : "Seems like there are (at least) two levels to loading an ansible plugin:\r\n- a python module loader step\r\n- finding/creating an instance of a plugin class \r\n\r\nAnd since this code finds/loads code, but doesn't load/deserialize any of the collections content or metadata (like it's galaxy.yml, etc)\r\n\r\nI think of collection_loader.AnsibleCollectionLoader more as of CollectionPythonModuleLoader. Or maybe CollectionPythonModuleImporter (python docs and PEP302 uses loader/importer interchangeably so no help there).\r\n\r\nAnd ansible.plugins.loader.PluginLoader as more like a AnsiblePluginInstanceLoader \r\nsince it is finding a matching class from a loaded python module, instantiating it [1], and returning it.\r\n\r\nThose are just names, but maybe it would make the distinction more clear in the future? \r\nPreviously, PluginLoader intertwined a module importer and the AnsiblePlugin instance creator, but\r\nsince this pr starts pulling the ideas apart maybe it is a good time to make the names more specific.\r\n\r\n[1] excluding 'class_only'",
+        "createdAt" : "2019-03-07T22:22:28Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cc0f2894e4da105f153cfd0e190ca4e602775d",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +34,38 @@\n\n# FIXME: exception handling/error logging\nclass AnsibleCollectionLoader(object):\n    def __init__(self):"
+  },
+  {
+    "id" : "a7ba38ee-aabd-437a-8663-57e9700329ac",
+    "prId" : 52194,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52194#pullrequestreview-212311390",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9f6a7e0c-654a-48d8-8172-c138f565bb70",
+        "parentId" : null,
+        "authorId" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "body" : "Might be useful to extract each of the module constructing clauses below into their own methods. \r\nie, one for 'map', 'flatmap', and 'pkg_only'. \r\n\r\nAmong other things, that would make it easier to unit test each of those.\r\n\r\nSuppose it could have a types.ModuleType subclass for these cases, but that may be overboard.",
+        "createdAt" : "2019-03-08T14:43:13Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cc0f2894e4da105f153cfd0e190ca4e602775d",
+    "line" : 114,
+    "diffHunk" : "@@ -1,1 +112,116 @@        synpkg_def = _SYNTHETIC_PACKAGES.get(fullname)\n\n        # FIXME: collapse as much of this back to on-demand as possible (maybe stub packages that get replaced when actually loaded?)\n        if synpkg_def:\n            pkg_type = synpkg_def.get('type')"
+  },
+  {
+    "id" : "78e163b1-0fab-4367-a3a0-7ea19ec9dded",
+    "prId" : 52194,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52194#pullrequestreview-212316711",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fc40e7c4-df9c-471f-8c91-8eab7ada6b33",
+        "parentId" : null,
+        "authorId" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "body" : "Wondering if it would be useful to get the resolved info (the map of what ansible_collections.* import ended up resolving to) into a serializable form?\r\n\r\nIf there is support for serializing that, and support for creating an AnsibleCollectionLoader from that data structure, that could be used to implement persisting that info. \r\n\r\nIf that info can be persisted, it could be used for: \r\n - caching between invocations\r\n - saving the results for use in debugging/troubleshooting/support/auditing\r\n - reproducing ansible executions (either for repeatability in use, or for reproducing issues)\r\n - Allowing a very specific manifest of collections/plugins to be loaded, potentially tweaked edited by hands/tooling\r\n   (sort of a collection 'virtualenv' or lockfile)\r\n - Potentially useful for figuring out the minimal deps a particular playbook invocation needs, so a min content root\r\n   can be constructed. For ex, building a custom 'meta' collection that has exact deps on all the collections used. ",
+        "createdAt" : "2019-03-08T14:54:05Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cc0f2894e4da105f153cfd0e190ca4e602775d",
+    "line" : 192,
+    "diffHunk" : "@@ -1,1 +190,194 @@\n        # FIXME: need to handle the \"no dirs present\" case for at least the root and synthetic internal collections like ansible.builtin\n\n        return None\n"
+  },
+  {
+    "id" : "64752b22-49dd-4fe1-8e4d-dc181c438ece",
+    "prId" : 52194,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52194#pullrequestreview-219209593",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "befb71ec-57f6-43f5-930c-5cb270753d7e",
+        "parentId" : null,
+        "authorId" : "4ffac6b8-d7eb-449a-8c43-463d9fd5587a",
+        "body" : "Why not \r\n```suggestion\r\n        added_paths = set(playbook_paths)\r\n        self._playbook_paths = [to_native(p) for p in added_paths]\r\n```",
+        "createdAt" : "2019-03-20T19:27:28Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "4ffac6b8-d7eb-449a-8c43-463d9fd5587a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34083b5e-fd4b-41a8-b10a-bf99e1e57143",
+        "parentId" : "befb71ec-57f6-43f5-930c-5cb270753d7e",
+        "authorId" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "body" : "It's to support a corner case: we need to preserve the original order of playbook dirs in case there are duplicate collections across them (first one wins), and we don't have an OrderedSet datatype. I've added a comment as such...",
+        "createdAt" : "2019-03-26T23:32:48Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cc0f2894e4da105f153cfd0e190ca4e602775d",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +75,79 @@\n        # track visited paths; we have to preserve the dir order as-passed in case there are duplicate collections (first one wins)\n        added_paths = set()\n\n        # de-dupe and ensure the paths are native strings (Python seems to do this for package paths etc, so assume it's safe)"
+  },
+  {
+    "id" : "c64d8065-141c-4b98-bf02-a995f758947a",
+    "prId" : 52194,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52194#pullrequestreview-219212167",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a2db9897-fe71-4f52-a00d-72fd2dd9ed2d",
+        "parentId" : null,
+        "authorId" : "4ffac6b8-d7eb-449a-8c43-463d9fd5587a",
+        "body" : "could be just \r\n```suggestion\r\n                else:\r\n```",
+        "createdAt" : "2019-03-20T19:33:23Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "4ffac6b8-d7eb-449a-8c43-463d9fd5587a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1753905d-a31f-4b1e-8641-33145850e16e",
+        "parentId" : "a2db9897-fe71-4f52-a00d-72fd2dd9ed2d",
+        "authorId" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "body" : "I tend to avoid for-else unless it saves me a lot of typing, since I usually also end up having to add a comment explaining what it does for people who don't know. In this case by the time I've added the comment, I'm in the hole on characters... ;)",
+        "createdAt" : "2019-03-26T23:43:51Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cc0f2894e4da105f153cfd0e190ca4e602775d",
+    "line" : 169,
+    "diffHunk" : "@@ -1,1 +167,171 @@                    break\n\n                if not location:\n                    continue\n"
+  }
+]

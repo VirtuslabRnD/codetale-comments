@@ -163,5 +163,115 @@
     "commit" : "41c50df0a1412daeb17a48794df55b5d80260b9e",
     "line" : 27,
     "diffHunk" : "@@ -1,1 +443,447 @@        #       additional directories to be added later, it is buggy.\n        for path in (p for p in self._get_paths() if p not in self._searched_paths and os.path.isdir(p)):\n            display.debug('trying %s' % path)\n            try:\n                full_paths = (os.path.join(path, f) for f in os.listdir(path))"
+  },
+  {
+    "id" : "080789a0-f101-4975-a760-b7501a4ee551",
+    "prId" : 52194,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52194#pullrequestreview-212336400",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e5cad4a6-0f98-4ed9-9837-9563b021a4d0",
+        "parentId" : null,
+        "authorId" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "body" : "Instead of doing this at module load time, it may be more predictable to just call it early in the app entry points (possibly main or somewhere in cli/ ?). The ordering of when/how the ansible.* modules gets loaded can easily change and change collection loading behavior. Those sort of bugs can be very hard to debug.\r\n\r\nFolks importing ansible code in other apps would need to add the call to _configure_collection_loader() to their startup if they want the collection loader. ",
+        "createdAt" : "2019-03-07T23:19:41Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2f47acb5-5f4e-47ab-a74b-730d28d3d705",
+        "parentId" : "e5cad4a6-0f98-4ed9-9837-9563b021a4d0",
+        "authorId" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "body" : "I think the places it would need to be called explicitly are:\r\n - cli app startup (bin/ansible? ansible.cli.*?)\r\n - ansiballZ startup\r\n - worker process startup? (not require, but possibly useful)\r\n\r\nFor worker process, I dont think they _have_ to resetup the collection loader,\r\nbut if they did create a new AnsibleCollectionLoader (and replace the one in sys.metapath\r\nfor the process if needed), that would help isolate workers from potentially altering\r\nthe controllers collection loader.\r\n\r\nFor ansiballz, with an explicit _configure_collection_loader() and AnsibleCollectionLoader creation,\r\nit could use a different config and potentially offer a place to add/tweak python module loading on the remote\r\nside. However, the interaction between PluginLoader, module_common, and ansiballZ imports is already\r\nvery complicated, unless using CollectionLoader could simplify that it's probably not worth changing.\r\n ",
+        "createdAt" : "2019-03-08T15:33:48Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cc0f2894e4da105f153cfd0e190ca4e602775d",
+    "line" : 217,
+    "diffHunk" : "@@ -1,1 +820,824 @@_PLUGIN_FILTERS = _load_plugin_filter()\n\n_configure_collection_loader()\n\n# doc fragments first"
+  },
+  {
+    "id" : "b0edac56-a9cd-4fa2-96ce-55901dd08a8e",
+    "prId" : 52194,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52194#pullrequestreview-219768930",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4ac1164a-7077-49dd-8ed6-6e5e439fa9e6",
+        "parentId" : null,
+        "authorId" : "4ffac6b8-d7eb-449a-8c43-463d9fd5587a",
+        "body" : "Catching exceptions wholesale is bad. Can we narrow it down to something more specific?",
+        "createdAt" : "2019-03-20T19:07:07Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "4ffac6b8-d7eb-449a-8c43-463d9fd5587a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22c97920-7ed9-4131-9c6d-4830976078a0",
+        "parentId" : "4ac1164a-7077-49dd-8ed6-6e5e439fa9e6",
+        "authorId" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "body" : "Potentially a nasty game of whack-a-mole if I don't; I've seen about 5 different exceptions just from the import side across various Python versions (we're subject to whatever exception any Python loader we might encounter feels like throwing, /me glares at `ZipLoader`)... We could improve the logging to serialize tracebacks, but if we let an unexpected exception fly, it could potentially break existing stuff on the legacy path due to one of those \"who cares\" failures in the collections path. (believe me, I get it; I don't like overly-broad exception handlers)",
+        "createdAt" : "2019-03-27T23:08:16Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cc0f2894e4da105f153cfd0e190ca4e602775d",
+    "line" : 117,
+    "diffHunk" : "@@ -1,1 +403,407 @@                    if p:\n                        return p\n                except Exception as ex:\n                    errors.append(to_native(ex))\n"
+  },
+  {
+    "id" : "c3fd8759-edcb-4958-941c-4b1ee3912b9d",
+    "prId" : 52194,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52194#pullrequestreview-219613650",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bcebe1f6-031b-428c-a4b2-3d95a5f0978b",
+        "parentId" : null,
+        "authorId" : "30fc1801-f8f1-4cc4-9690-e31e203f4f6d",
+        "body" : "pyi?",
+        "createdAt" : "2019-03-27T00:44:55Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "30fc1801-f8f1-4cc4-9690-e31e203f4f6d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d6bd71a6-5b2c-4a5a-995a-3df9c0b058bb",
+        "parentId" : "bcebe1f6-031b-428c-a4b2-3d95a5f0978b",
+        "authorId" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "body" : "probably a bunch of things we *should* add to this list, but doesn't really need to be part of collections (we're already doing this elsewhere, would be nice to get rid of all of it together)- primary concern here is to exclude things that interpreters can shove in at runtime",
+        "createdAt" : "2019-03-27T08:02:24Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "311820dd-fcb9-46df-a201-9c0e7d6fac58",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ecd2cee-76c0-40d5-bd6f-d990c7882003",
+        "parentId" : "bcebe1f6-031b-428c-a4b2-3d95a5f0978b",
+        "authorId" : "4ffac6b8-d7eb-449a-8c43-463d9fd5587a",
+        "body" : "`*.so`?",
+        "createdAt" : "2019-03-27T17:24:14Z",
+        "updatedAt" : "2019-03-28T14:30:33Z",
+        "lastEditedBy" : "4ffac6b8-d7eb-449a-8c43-463d9fd5587a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "31cc0f2894e4da105f153cfd0e190ca4e602775d",
+    "line" : 79,
+    "diffHunk" : "@@ -1,1 +356,360 @@\n        # look for any matching extension in the package location (sans filter)\n        ext_blacklist = ['.pyc', '.pyo']\n        found_files = [f for f in glob.iglob(os.path.join(pkg_path, resource) + '.*') if os.path.isfile(f) and os.path.splitext(f)[1] not in ext_blacklist]\n"
   }
 ]
