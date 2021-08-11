@@ -20,5 +20,82 @@
     "commit" : "1170c72027c851a4c876b43161a224c5c9ad3be2",
     "line" : 39,
     "diffHunk" : "@@ -1,1 +134,138 @@\n        assert caplog.records[0].levelname == 'INFO'\n        assert caplog.records[0].msg == 'Loading %d plugin(s) took %.2f seconds'\n\n    def test_should_warning_about_incompatible_plugins(self, caplog):"
+  },
+  {
+    "id" : "87316acc-44f9-4a49-bfd8-f25eb37bb401",
+    "prId" : 12788,
+    "prUrl" : "https://github.com/apache/airflow/pull/12788#pullrequestreview-544347170",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7f19d3ed-de0a-4e60-8621-973c057286ed",
+        "parentId" : null,
+        "authorId" : "169e4528-b5eb-4c44-a5c0-f889a1241a79",
+        "body" : "`integrate_macros_plugins()` has the side-effect that it modifies the `airflow.macros` module. Do we need to add additional cleanup logic to reset the contents of `airflow.macros` through a finalizer here?",
+        "createdAt" : "2020-12-03T17:44:38Z",
+        "updatedAt" : "2020-12-07T16:02:47Z",
+        "lastEditedBy" : "169e4528-b5eb-4c44-a5c0-f889a1241a79",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22ac9ca1-6f8c-43ff-81f8-a8355c7e2bcc",
+        "parentId" : "7f19d3ed-de0a-4e60-8621-973c057286ed",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "Will [``importlib.reload``](https://docs.python.org/3/library/importlib.html#importlib.reload) help?",
+        "createdAt" : "2020-12-03T18:11:23Z",
+        "updatedAt" : "2020-12-07T16:02:47Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "940b5b22-31c6-4846-ac29-7505830738cb",
+        "parentId" : "7f19d3ed-de0a-4e60-8621-973c057286ed",
+        "authorId" : "169e4528-b5eb-4c44-a5c0-f889a1241a79",
+        "body" : "Simply reloading the module using `importlib.reload()` will not be sufficient as the module's symbol table (dictionary) is [retained](https://docs.python.org/3/library/importlib.html#importlib.reload).\r\n\r\n> When a module is reloaded, its dictionary (containing the module’s global variables) is retained. Redefinitions of names will override the old definitions, so this is generally not a problem. If the new version of a module does not define a name that was defined by the old version, the old definition remains.\r\n\r\nI think we'll have to delete the module from `sys.modules` and import it again in order to properly remove the entries that are being added by this test case.",
+        "createdAt" : "2020-12-03T19:17:56Z",
+        "updatedAt" : "2020-12-07T16:02:47Z",
+        "lastEditedBy" : "169e4528-b5eb-4c44-a5c0-f889a1241a79",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8da373ae-21a9-4bb6-9fe2-14dbdb19be2f",
+        "parentId" : "7f19d3ed-de0a-4e60-8621-973c057286ed",
+        "authorId" : "169e4528-b5eb-4c44-a5c0-f889a1241a79",
+        "body" : "I've implemented this in https://github.com/apache/airflow/pull/12788/commits/c2b5354addb6051f689061eeb9d7ea4d6d8965e3 -- I'm curious to your thoughts.",
+        "createdAt" : "2020-12-03T19:33:24Z",
+        "updatedAt" : "2020-12-07T16:02:47Z",
+        "lastEditedBy" : "169e4528-b5eb-4c44-a5c0-f889a1241a79",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c35d64a-6d46-48a7-87ee-6317925f6d62",
+        "parentId" : "7f19d3ed-de0a-4e60-8621-973c057286ed",
+        "authorId" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "body" : "I love this change.😻  I'm just wondering if it's worth moving this code to the context manager mock_plugins_manager. This allows us to limit the side effects in other tests as well. What do you think?",
+        "createdAt" : "2020-12-03T19:38:22Z",
+        "updatedAt" : "2020-12-07T16:02:47Z",
+        "lastEditedBy" : "07638d17-cc8b-40a4-abdc-7b39759362ab",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "079e4811-459a-4910-bdd5-6624877dddac",
+        "parentId" : "7f19d3ed-de0a-4e60-8621-973c057286ed",
+        "authorId" : "169e4528-b5eb-4c44-a5c0-f889a1241a79",
+        "body" : "I considered doing this, but the `__doc__` comment on the `mock_plugin_manager` seems to suggest that the scope of that mock is limited to the `airflow.plugins` module.\r\n\r\nWhile that mock does in fact clear out the `macros_modules` variable in `airflow.plugins`, it does not actually attempt to reverse any (side) effects that are caused by invoking `integrate_macros_plugins()`. I did a bit of searching through the code base, and it doesn't really appear that there is any test coverage for this function beyond the test I've just added.\r\n\r\nBecause I want to avoid scope creep for the `mock_plugin_manager` fixture, and this is the only test case that actually appears to have to deal with side effects cause by calling `integrate_macros_plugins()`, I'm a bit hesitant to make changes beyond what's being proposed here.",
+        "createdAt" : "2020-12-03T19:52:22Z",
+        "updatedAt" : "2020-12-07T16:02:47Z",
+        "lastEditedBy" : "169e4528-b5eb-4c44-a5c0-f889a1241a79",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cb64e9683e834293df3f003e30d88b415689581b",
+    "line" : 51,
+    "diffHunk" : "@@ -1,1 +253,257 @@            # this plugin, this is necessary in order to allow the plugin's macros to be used when\n            # rendering templates.\n            assert hasattr(macros, MacroPlugin.name)\n\n"
   }
 ]
