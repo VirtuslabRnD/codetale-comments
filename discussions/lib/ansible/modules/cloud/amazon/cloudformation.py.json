@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "770e3b15-697c-425f-955d-a288418e9d29",
+    "prId" : 27907,
+    "prUrl" : "https://github.com/ansible/ansible/pull/27907#pullrequestreview-55304116",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "78bc9bbf-73c7-4730-aadd-054139185e09",
+        "parentId" : null,
+        "authorId" : "91c63cfe-0504-4f72-afa0-80b301c25eca",
+        "body" : "I'm not super-enthused with the need to wrap calls like this, it seems difficult to keep in sync when we add calls to various cloudformation verbs. Thoughts?",
+        "createdAt" : "2017-08-09T15:27:12Z",
+        "updatedAt" : "2017-08-09T15:27:21Z",
+        "lastEditedBy" : "91c63cfe-0504-4f72-afa0-80b301c25eca",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95b122c0-2073-4c97-8d58-f54a1604b56a",
+        "parentId" : "78bc9bbf-73c7-4730-aadd-054139185e09",
+        "authorId" : "d8e2780d-212c-448c-b9b5-f32188ce565a",
+        "body" : "I'm not a huge fan either but the alternative looks pretty nasty as well and requires a significant amount of refactoring. Any method that currently has a `try: catch Exception:` block will be \"immune\" to retry decorators as the throttling exception never gets the chance to bubble up.\r\n\r\nWe end up needing to be very explicit in how we write functions or end up creating wrapped functions for each call that we want to make retry-able.\r\n\r\n```python\r\n# We can't add retries via decorators to methods that handle exceptions like this\r\ndef some_method():\r\n    try:\r\n        cfn.describe_stack_events(args)\r\n    except Exception as e:\r\n        module_fail(...)\r\n``` \r\n\r\n```python\r\n# we could do something like this\r\n@AWSRetry.jittered_backoff(retries=10, delay=3, max_delay=30)\r\ndef describe_stacks(stack_name):\r\n    return cfn.describe_stacks(StackName=stack_name)\r\n```\r\n\r\n```python\r\n# potential solution that doesn't monkey patch anything and lets us retry requests\r\nbackoff_wrapper = AWSRetry.jittered_backoff(retries=10, delay=3, max_delay=30)\r\ndescribe_stacks = backoff_wrapper(cfn.describe_stacks)\r\n\r\ndef some_method():\r\n    try:\r\n        describe_stacks(StackName=stack_name)\r\n    except Exception as e:\r\n        module_fail(...)\r\n```",
+        "createdAt" : "2017-08-09T16:53:15Z",
+        "updatedAt" : "2017-08-09T16:55:18Z",
+        "lastEditedBy" : "d8e2780d-212c-448c-b9b5-f32188ce565a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b63de99-0f38-4118-a3f9-08c153f0b993",
+        "parentId" : "78bc9bbf-73c7-4730-aadd-054139185e09",
+        "authorId" : "91c63cfe-0504-4f72-afa0-80b301c25eca",
+        "body" : "Gotcha. I'm glad you've thought it through. There's a slight advantage to the last suggestion you gave- if the describe_stacks wrapper init was kept inside `some_method`, it's very clear what was wrapped and reduces the chance of \"hey, my Ansible module method doesn't retry even though other parts of the module do\".\r\n\r\nUp to you though, since it's a bigger issue than the few modules I try to own.",
+        "createdAt" : "2017-08-09T16:59:45Z",
+        "updatedAt" : "2017-08-09T16:59:45Z",
+        "lastEditedBy" : "91c63cfe-0504-4f72-afa0-80b301c25eca",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "76460f1bca0f1b655e6e035fbcd56514c581a207",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +511,515 @@    backoff_wrapper = AWSRetry.jittered_backoff(retries=10, delay=3, max_delay=30)\n    cfn.describe_stack_events = backoff_wrapper(cfn.describe_stack_events)\n    cfn.create_stack = backoff_wrapper(cfn.create_stack)\n    cfn.list_change_sets = backoff_wrapper(cfn.list_change_sets)\n    cfn.create_change_set = backoff_wrapper(cfn.create_change_set)"
+  }
+]
