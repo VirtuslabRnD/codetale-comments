@@ -31,5 +31,137 @@
     "commit" : "a3d65e59998793748a4cde5c37a202f5b54a3feb",
     "line" : 18,
     "diffHunk" : "@@ -1,1 +102,106 @@                'iam',\n                'redshift',\n                'cursor',\n            ]:\n                conn_args[arg_name] = arg_val"
+  },
+  {
+    "id" : "2ad110bd-968a-4d71-940d-eede3d10e99b",
+    "prId" : 17423,
+    "prUrl" : "https://github.com/apache/airflow/pull/17423#pullrequestreview-724287755",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "parentId" : null,
+        "authorId" : "2b57321e-ffa6-49a5-a626-e83c2595de23",
+        "body" : "Instead, maybe this:\r\n```suggestion\r\n        if not hasattr(self, \"schema\"):\r\n            self.schema: Optional[str] = kwargs.pop(\"schema\", None)\r\n```\r\n\r\nThat should work for core both pre and post 2.2.0 and wouldn't break behavior of `get_uri` either like doing `__schema` does.",
+        "createdAt" : "2021-08-04T21:02:33Z",
+        "updatedAt" : "2021-08-04T21:02:33Z",
+        "lastEditedBy" : "2b57321e-ffa6-49a5-a626-e83c2595de23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f408dd27-a22e-4118-bc89-cec0d7441a91",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "The problem is that having `schema` as attribute in DBApiHook will encourage people to use it in their other Hooks deriving from DBApiHook. It will be rather difficult to make sure that everyone is using it in \"hasattr\" way. Even if we two remember it now, we will forget about it and other committers who are not involved will not even know about this. We could potentially automate a pre-commit check if the \"DBApiHook's schema\" is accessed with hasattr, but I think we will never be able to do it with 100% accuracy and I think it's simply not worth it for that single field, that can be simply replaced with single line for each operator that wants to use it (in __init__):\r\n\r\n```\r\n        self.schema: Optional[str] = kwargs.pop(\"schema\", None)\r\n```\r\n\r\nI think we should think about DBApiHook as \"Public\" API of Airflow and any change to it should be very, very carefully considered.\r\n\r\nAnother option would be to add `>=Airflow 2.2` limitation to Postgres operator (and any other operator that uses it), but again I think sacrificing backwards compatibility in this case is simply not worth it.",
+        "createdAt" : "2021-08-04T21:17:15Z",
+        "updatedAt" : "2021-08-04T21:18:20Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "77d0e3a0-a133-4893-9484-077dccf768e7",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Ah actually I see an error .in my solution.. I should not do \"pop\" in the args :)",
+        "createdAt" : "2021-08-04T21:19:33Z",
+        "updatedAt" : "2021-08-04T21:19:33Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95ea0b37-42b3-4264-a2dd-aed1150a1e0e",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Removed \"pop\"  from DBApi to leave it for other hooks. \r\n\r\nActually I just realized the way it was implemented before - with pop() had undesired side effect for Hooks that already used  kwargs.pop() .The side effect was that kwargs.pop() in DBApiHook would remove the `schema` from kwargs in derived classes and their `self.schema = kwargs.pop(\"schema\", None)` would override the schema to None (!)\r\n\r\nExample: mysql:\r\n \r\nhttps://github.com/apache/airflow/blob/main/airflow/providers/mysql/hooks/mysql.py#L61\r\n\r\nSo in fact, the original change (not yet released luckily) in DBApiHook was even more disruptive than the failed `PostgresHook`. I am actually glad it was uncovered now, as it would be far more disruptive it was released in Airflow.\r\n\r\nThat's why we should be **extremely** careful with changing DBApiHook (and BaseHook and similar).\r\n",
+        "createdAt" : "2021-08-04T21:49:59Z",
+        "updatedAt" : "2021-08-04T21:51:04Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "654e0a35-021f-4435-8afe-cb833749325c",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "😱 🙀 \r\n",
+        "createdAt" : "2021-08-04T21:52:24Z",
+        "updatedAt" : "2021-08-04T21:52:25Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a45c548-35f5-49db-9a1f-b13d7d460db2",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "2b57321e-ffa6-49a5-a626-e83c2595de23",
+        "body" : "Good catch. One thing I don't love is now we possibly have both `__schema` and `schema` being used. It's particularly ugly if one wanted to change the schema after init. What if we just let the hooks also set `schema`?",
+        "createdAt" : "2021-08-04T21:58:54Z",
+        "updatedAt" : "2021-08-04T21:58:54Z",
+        "lastEditedBy" : "2b57321e-ffa6-49a5-a626-e83c2595de23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0d4120e6-2fbf-469d-a5de-ccc4cea60897",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "I think this is unlikely edge case (much less likely than use of schema when it will be defined in DBApiHook as public field). I hardly see the use for that. Why somone would like to define a DBApi -derived hook and pass a 'schema' parameter to it while also changing it in it's own `__init__`? Seems extremely unlikely, also It feels natural that in such case the change should be done before `super.__init__()` rather than after.   \r\n\r\nWe can assume that \"schema\" is our convention for kwarg para that we should use for all DB Hooks.  We can standardise it (it's already commonly used)  and release in Airflow 3 DBApiHook I think. \r\n\r\nFor now we might want to add some more docs/comments explaining it and some Airflow 3 notice about it. WDYT? ",
+        "createdAt" : "2021-08-04T22:25:59Z",
+        "updatedAt" : "2021-08-04T22:27:01Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "79519bde-9edb-4238-8811-dda054518a4c",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "2b57321e-ffa6-49a5-a626-e83c2595de23",
+        "body" : "Sorry, I should have included an example. This is what I meant:\r\n\r\n```\r\nh = SomeHook(schema=\"foo\")\r\nh.get_uri() # uses foo\r\nh.schema = \"bar\"\r\nh.get_uri() # still uses foo because of __schema\r\n```\r\n\r\nThat's why I'm thinking letting both `DbApiHook` and any derived hooks both set `schema` might be the best of both worlds here? Then the derived hooks could stop setting `schema` in Airflow 3 (or the next time they get a min core version bump really).",
+        "createdAt" : "2021-08-04T22:49:32Z",
+        "updatedAt" : "2021-08-04T22:49:32Z",
+        "lastEditedBy" : "2b57321e-ffa6-49a5-a626-e83c2595de23",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fef8bf82-43f3-4197-a9c2-351456e8fba9",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Right - I think i fiigured out better way of doing it. I've added the 'schema' argument explicitly as optional kwarg to DBApiHook and made a comment about the \"change schema value\" in the description of the parameter.\r\n\r\nI think it's much better - it makes schema an explicit part of the DBHookAPI hook's API, it is fully backwards compatible and it makes it very easy for Airflow 3 change - we will simply make the self.schema public and convert all the operators that use it in the \"old\" way.  See the latest fixup.",
+        "createdAt" : "2021-08-04T22:56:42Z",
+        "updatedAt" : "2021-08-04T22:56:42Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0175b4ee-6812-48f1-af12-f85c6ca0bb8b",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "> That's why I'm thinking letting both DbApiHook and any derived hooks both set schema might be the best of both worlds here? Then the derived hooks could stop setting schema in Airflow 3 (or the next time they get a min core version bump really).\r\n\r\nThe problem with this is - that it has already happened that we overlooked that the `DBApiHook.schema` object has been accessed directly by a provider, which made it backwards incompatible with Airflow 2.1. We do not have any mechanism to prevents this is in the future again, if we have it as a public field in DBApiHook. This is a bit of a problem that DBAPiHook is \"public API\" part and by making a public field in this class, we change the API.\r\n\r\nThe way I proposed - in the last fixup, `schema` becomes part of the DBApiHook 'initialization' API. If any other hook stores the schema field as self.schema - so be it, it is \"its own responsibiliity\" - we make it clear now in the constructor of the DBApiHook that passing \"schema\" as kwargs is THE way how to override the schema, and by not having a public field, we clearly say that the deriving hook cannot expect that it can change it and expect \"DBApiHook\" getUri() method will use it.",
+        "createdAt" : "2021-08-04T23:09:26Z",
+        "updatedAt" : "2021-08-04T23:10:16Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01042163-4920-4dcb-a770-e7e5a1e54261",
+        "parentId" : "44f5469f-661c-4404-b595-6c4e2156ec38",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "Any other  comments? I think We will not release an out-of-band Postgres operator, so this is something we will have to solve mid-August, but would be good to get some opinions :)",
+        "createdAt" : "2021-08-06T12:06:29Z",
+        "updatedAt" : "2021-08-06T12:06:30Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b9801ec75798bf12c13e342203be54d634eea14f",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +71,75 @@        self.connection: Optional[Connection] = kwargs.pop(\"connection\", None)\n        self.conn: connection = None\n        self.schema: Optional[str] = kwargs.pop(\"schema\", None)\n\n    def _get_cursor(self, raw_cursor: str) -> CursorType:"
   }
 ]
