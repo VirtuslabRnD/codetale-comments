@@ -1824,5 +1824,104 @@
     "commit" : "c7874c6f09f4f2b2dd2b34593d6a99ce28e7e7fc",
     "line" : 47,
     "diffHunk" : "@@ -1,1 +1301,1305 @@        except Exception:  # pylint: disable=broad-except\n            self.log.exception(\"Exception when executing SchedulerJob._run_scheduler_loop\")\n            raise\n        finally:\n            try:"
+  },
+  {
+    "id" : "4772b4d4-a718-444d-bb58-1f65f543e6ab",
+    "prId" : 14321,
+    "prUrl" : "https://github.com/apache/airflow/pull/14321#pullrequestreview-601188369",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ef45f32f-2582-45e3-b355-4dbf46135776",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "I wonder what was the old behaviour in 1.10.x -- skip vs failed\r\n\r\nWe should add a test for it too.\r\n\r\ncc @ashb ",
+        "createdAt" : "2021-02-23T11:59:26Z",
+        "updatedAt" : "2021-03-01T14:10:43Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f5c0ff36-132c-455d-992a-0ab69969d89f",
+        "parentId" : "ef45f32f-2582-45e3-b355-4dbf46135776",
+        "authorId" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "body" : "I believe setting the task instance state to failed will have the same effect. It just has to be a state in `State.finished`. I chose skipped, because I figured the tasks didn’t even get a chance to run. ",
+        "createdAt" : "2021-02-24T14:31:23Z",
+        "updatedAt" : "2021-03-01T14:10:43Z",
+        "lastEditedBy" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0782927b-3fea-4774-b527-6c3f61f50d34",
+        "parentId" : "ef45f32f-2582-45e3-b355-4dbf46135776",
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "Sounds good, can you add a test please to cover this case",
+        "createdAt" : "2021-02-24T15:13:39Z",
+        "updatedAt" : "2021-03-01T14:10:43Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "628cb515-6e25-4b93-a638-436fe0c91d9d",
+        "parentId" : "ef45f32f-2582-45e3-b355-4dbf46135776",
+        "authorId" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "body" : "Sure thing!",
+        "createdAt" : "2021-02-27T14:01:25Z",
+        "updatedAt" : "2021-03-01T14:10:43Z",
+        "lastEditedBy" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "565c83ed-6f91-4af8-b2de-1ea5e42eeb3f",
+        "parentId" : "ef45f32f-2582-45e3-b355-4dbf46135776",
+        "authorId" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "body" : "@kaxil Would it be bad to use `time.sleep` to force a timeout in the test? I'm not sure there's a way to otherwise indicate a dag run has timed out.",
+        "createdAt" : "2021-02-28T01:56:35Z",
+        "updatedAt" : "2021-03-01T14:10:43Z",
+        "lastEditedBy" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7443b60c-311f-457e-b7cf-2bb34b76e100",
+        "parentId" : "ef45f32f-2582-45e3-b355-4dbf46135776",
+        "authorId" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "body" : "E.g:\r\n\r\n``` python\r\ndef test_do_schedule_max_active_runs_dag_timed_out(self):\r\n    \"\"\"Test that tasks are set to a finished state when their DAG times out\"\"\"\r\n\r\n    dag = DAG(\r\n        dag_id='test_max_active_run_with_dag_timed_out',\r\n        start_date=DEFAULT_DATE,\r\n        schedule_interval='@once',\r\n        max_active_runs=1,\r\n        catchup=True,\r\n    )\r\n    dag.dagrun_timeout = datetime.timedelta(seconds=1)\r\n\r\n    with dag:\r\n        task1 = BashOperator(\r\n            task_id='task1',\r\n            bash_command=' for((i=1;i<=600;i+=1)); do sleep \"$i\";  done',\r\n        )\r\n\r\n    session = settings.Session()\r\n    dagbag = DagBag(\r\n        dag_folder=os.devnull,\r\n        include_examples=False,\r\n        read_dags_from_db=True,\r\n    )\r\n    \r\n    dagbag.bag_dag(dag=dag, root_dag=dag)\r\n    dagbag.sync_to_db(session=session)\r\n\r\n    run1 = dag.create_dagrun(\r\n        run_type=DagRunType.SCHEDULED,\r\n        execution_date=DEFAULT_DATE,\r\n        state=State.RUNNING,\r\n        session=session,\r\n    )\r\n    run1_ti = run1.get_task_instance(task1.task_id, session)\r\n    run1_ti.state = State.RUNNING\r\n\r\n    sleep(1)\r\n\r\n    run2 = dag.create_dagrun(\r\n        run_type=DagRunType.SCHEDULED,\r\n        execution_date=DEFAULT_DATE + timedelta(seconds=10),\r\n        state=State.RUNNING,\r\n        session=session,\r\n    )\r\n\r\n    dag.sync_to_db(session=session)\r\n\r\n    job = SchedulerJob(subdir=os.devnull)\r\n    job.executor = MockExecutor()\r\n    job.processor_agent = mock.MagicMock(spec=DagFileProcessorAgent)\r\n\r\n    num_queued = job._do_scheduling(session)\r\n\r\n    assert run1.state == State.FAILED\r\n    assert run1_ti.state == State.SKIPPED\r\n    assert run2.state == State.RUNNING\r\n\r\n    num_queued = job._do_scheduling(session)\r\n    run2_ti = run2.get_task_instance(task1.task_id, session)\r\n    assert run2_ti.state == State.QUEUED    ",
+        "createdAt" : "2021-02-28T02:03:56Z",
+        "updatedAt" : "2021-03-01T14:10:43Z",
+        "lastEditedBy" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "838eb466-3500-4cc8-8030-f076f0666f2d",
+        "parentId" : "ef45f32f-2582-45e3-b355-4dbf46135776",
+        "authorId" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "body" : "Test seems to be successful with a 1 second sleep. Just pushed a commit including a test for this scenario",
+        "createdAt" : "2021-02-28T22:46:49Z",
+        "updatedAt" : "2021-03-01T14:10:43Z",
+        "lastEditedBy" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "239fa10d-b7f8-4c2b-9d84-bd7b7e6a250f",
+        "parentId" : "ef45f32f-2582-45e3-b355-4dbf46135776",
+        "authorId" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "body" : "@kaxil i think the CI failed due to a transient error again...",
+        "createdAt" : "2021-03-01T21:36:22Z",
+        "updatedAt" : "2021-03-01T21:36:23Z",
+        "lastEditedBy" : "c87812d2-2deb-42f7-899a-384516cce6c9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ffd4c11f436e03f680237a5d078662cb8303999f",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +1705,1709 @@            )\n            for task_instance in unfinished_task_instances:\n                task_instance.state = State.SKIPPED\n                session.merge(task_instance)\n            session.flush()"
   }
 ]
