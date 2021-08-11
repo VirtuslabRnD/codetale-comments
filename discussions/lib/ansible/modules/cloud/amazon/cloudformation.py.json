@@ -64,5 +64,49 @@
     "commit" : "3894bfe5e471deda05dd8fd6f2914443a975a349",
     "line" : 52,
     "diffHunk" : "@@ -1,1 +618,622 @@            if 'use_previous_value' in v and bool(v['use_previous_value']):\n                param['UsePreviousValue'] = True\n                param.pop('ParameterValue', None)\n\n            stack_params['Parameters'].append(param)"
+  },
+  {
+    "id" : "d01a3eea-12e1-42fb-88c4-7e5a7750624e",
+    "prId" : 41840,
+    "prUrl" : "https://github.com/ansible/ansible/pull/41840#pullrequestreview-131668409",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3534ad99-a14e-4445-be29-8648a9b119a9",
+        "parentId" : null,
+        "authorId" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "body" : "I think it makes sense to only limit the number of events when the `token_filter` isn't passed. That way, if an actual edit was made then all the events resulting from that edit would be returned. CloudFormation has a max number of resource per stack, so there's a natural cap on the number of events per operation. \r\n\r\nWhat do you think about only having the limit for non-single-op events? ",
+        "createdAt" : "2018-06-22T14:23:42Z",
+        "updatedAt" : "2018-06-25T16:03:13Z",
+        "lastEditedBy" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d62a9f56-f02f-4ddb-856d-8e9a128cfa44",
+        "parentId" : "3534ad99-a14e-4445-be29-8648a9b119a9",
+        "authorId" : "c7c4abd3-5843-4b28-8d14-5ed7c8351fe2",
+        "body" : "I digged a bit more in the code and I don't think that this could help us here.\r\n\r\nThe [DescribeStackEvents API call](https://docs.aws.amazon.com/AWSCloudFormation/latest/APIReference/API_DescribeStackEvents.html) does not allow any kind of server side filter which would allow for limiting the returned events to a specific stack action. Also the Boto Paginator will need to iterate over all pages first before filtering happens client side when using [JMESPath Filtering](https://boto3.readthedocs.io/en/latest/guide/paginators.html#filtering-results-with-jmespath).\r\n\r\nMoreover it seems like the `ClientRequestToken` is generated and passed downstream through all function invocations for every action that is not related to CFN Changesets. So I assume that we would actually end up with a set `token_filter` in the `get_stack_events` function every time.\r\n\r\nAm I right with my assumptions?\r\n\r\nFor us it would also be fine having to configure the limit manually and don't provide a default value. We know that our use case is actually a rare one. 😄 ",
+        "createdAt" : "2018-06-22T15:15:20Z",
+        "updatedAt" : "2018-06-25T16:03:13Z",
+        "lastEditedBy" : "c7c4abd3-5843-4b28-8d14-5ed7c8351fe2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10ed492c-7cef-4ec0-a659-abbaac626251",
+        "parentId" : "3534ad99-a14e-4445-be29-8648a9b119a9",
+        "authorId" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "body" : "Yup, that's sensible to have a default limit since we'll be (typically) filtering out most of the historical events with that ClientRequestToken setting. ",
+        "createdAt" : "2018-06-25T15:44:47Z",
+        "updatedAt" : "2018-06-25T16:03:13Z",
+        "lastEditedBy" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc46d5f2186b8abd068f0ef66ef8ec64d56374c6",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +291,295 @@        ).paginate(\n            StackName=stack_name,\n            PaginationConfig={'MaxItems': events_limit}\n        )\n        if token_filter is not None:"
   }
 ]
