@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "f2da3a30-aaf5-4d8d-8a85-ec3fd8c9e822",
+    "prId" : 26307,
+    "prUrl" : "https://github.com/ansible/ansible/pull/26307#pullrequestreview-49343415",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0ce19adb-9eda-4fb9-94ca-d03840c3f97b",
+        "parentId" : null,
+        "authorId" : "7c547162-2334-4e33-a627-e146840da9ec",
+        "body" : "Hey @andrewsaraceni I've just had another look at this and have a concern around the SID lookup function you have.\r\n\r\nYou might want to check this with a domain joined computer and validate the SID it returns when the local user also exists in the domain. I believe if you specify only the `username` argument to `NTAccount` and that username exists as both a local and domain user it will return the domain user. In this case it will return the SID for the domain user when in fact you want the local user. The trouble is that for local groups you can't set the `hostname` argument or it would fail.\r\n\r\nI went a similar route for determining the SID for a new module https://github.com/jborean93/ansible/blob/e3c728e3229b117501a1109dbeb050f3b680ee83/lib/ansible/modules/windows/win_user_right.ps1#L51-L113. I unfortunately don't have access to my test domain environment so can't 100% verify it.",
+        "createdAt" : "2017-07-10T22:36:40Z",
+        "updatedAt" : "2017-07-10T22:53:16Z",
+        "lastEditedBy" : "7c547162-2334-4e33-a627-e146840da9ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0099aa70-a539-47cd-87aa-2d05b1d7a4af",
+        "parentId" : "0ce19adb-9eda-4fb9-94ca-d03840c3f97b",
+        "authorId" : "5e3d6c9c-691c-44ba-a67e-30f3ab8fded1",
+        "body" : "Hey @jborean93, thanks for looking into this.  I just tested this on a domain joined machine, and my testing actually shows the opposite.  It looks like when a user exists only in the domain, and NTAccount/SID translation is performed with only `username`, the domain user is returned.  However, upon the creation/existence of a local account with same username as the domain user sAMAccountName, it instead returns the local user.\r\n\r\nHere's a test script I used:\r\n```powershell\r\nfunction Test-SidResolution {\r\n    param($UserToTest)\r\n    $sid_check_args = @($UserToTest)\r\n    $user_object = New-Object -TypeName System.Security.Principal.NTAccount -ArgumentList $sid_check_args\r\n    return $user_object.Translate([System.Security.Principal.SecurityIdentifier]).Value\r\n}\r\n\r\n# test user - only exists in domain initially...\r\n$user = \"testuser\"\r\n$val1 = Test-SidResolution -UserToTest $user\r\n\r\n# create local user with same username (e.g. same as domain sAMAccountName)\r\n$objOu = [ADSI]”WinNT://$env:COMPUTERNAME“\r\n$objUser = $objOU.Create(“User“, $user)\r\n$objUser.SetInfo()\r\n\r\n# test user again after creating locally\r\n$val2 = Test-SidResolution -UserToTest $user\r\n\r\n\"`n$val1`n\" | Write-Output\r\n\"`n$val2`n\" | Write-Output\r\n\r\nS-1-5-21-<domain>-17761\r\n\r\n\r\nS-1-5-21-<localComputer>-1008\r\n```\r\n\r\nWith that being said, I could see a case where a false positive occurs with the current code.  e.g. A lookup is done for (an intended) local user, and only using `username` it returns the user exists, however they exist only in the domain and not locally.  I think removing the conditional argument building in 89-96, and simply instantiating NTAccount with `domain` and `username` every time (including when domain is `$env:COMPUTERNAME`) would solve this.\r\n\r\nWindows doesn't allow nesting of local groups - and therefore, this module doesn't - so excluding that case, doing SID resolution for users (local and domain), groups (domain) and service accounts should be possible in every case with domain and username.\r\n\r\nLet me know what you think.  If that makes sense to you, I could change this.",
+        "createdAt" : "2017-07-11T00:49:04Z",
+        "updatedAt" : "2017-07-11T00:49:04Z",
+        "lastEditedBy" : "5e3d6c9c-691c-44ba-a67e-30f3ab8fded1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2ac44b1-4aaa-4d98-9a0d-575ef579a516",
+        "parentId" : "0ce19adb-9eda-4fb9-94ca-d03840c3f97b",
+        "authorId" : "7c547162-2334-4e33-a627-e146840da9ec",
+        "body" : "Thanks for the info, I'll have to retest my function and see what happens there but I have a feeling it is because I was running it on a DC which would change how things work but will verify later. \r\n\r\nThe only trouble with removing lines 89-96 is for special accounts like `SYSTEM` when someone doesn't specify the prefix `NT AUTHORITY\\`. Because of this reason I have a check in my code when the domain isn't set to first search if the local user exists. If it does then initialise `NTAccount` with domain being `$env:COMPUTERNAME`. If it doesn't then it is a special account like `SYSTEM` and initialise `NTAccount` without the domain parameter.\r\n\r\nAgreed about the local group side, didn't think of that fact.",
+        "createdAt" : "2017-07-11T01:18:27Z",
+        "updatedAt" : "2017-07-11T01:18:27Z",
+        "lastEditedBy" : "7c547162-2334-4e33-a627-e146840da9ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76827484-43de-4b65-a764-dc0f64c4a34f",
+        "parentId" : "0ce19adb-9eda-4fb9-94ca-d03840c3f97b",
+        "authorId" : "5e3d6c9c-691c-44ba-a67e-30f3ab8fded1",
+        "body" : "Yeah, I haven't tested this on a DC, so that's a good point.\r\n\r\nI had pretty much figured service accounts would be added (for this module) with the `NT AUTHORITY\\` prefix - that's what I wrote as a requirement in the documentation for the description for `members`.  If that isn't sufficient, still removing 89-96 and doing a more extensive check around 53-76 should catch that case, like another elseif before the else on 72:\r\n```powershell\r\nelseif ($GroupMember -in @(\"SYSTEM\", \"NETWORK SERVICE\", \"LOCAL SERVICE\")) {\r\n    # Service account w/o domain specified, e.g. SYSTEM\r\n    $parsed_member.domain = \"NT AUTHORITY\"\r\n    $parsed_member.username = $GroupMember\r\n}\r\n```\r\nOtherwise, it'd probably be a heavier refactoring to do something like you did for `win_user_right`, sans some of the logic for handling/checking local groups.  Do you have a particular preference?",
+        "createdAt" : "2017-07-11T03:20:08Z",
+        "updatedAt" : "2017-07-11T03:56:49Z",
+        "lastEditedBy" : "5e3d6c9c-691c-44ba-a67e-30f3ab8fded1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fdf96ef9-3449-425e-9494-a0e7153ba2d9",
+        "parentId" : "0ce19adb-9eda-4fb9-94ca-d03840c3f97b",
+        "authorId" : "7c547162-2334-4e33-a627-e146840da9ec",
+        "body" : "I can confirm running on a DC means it favours the DC principals, makes sense why as it is a DC. I'm not a fan having a check in place that checks well know usernames as Microsoft tends to add more NT AUTHORITY accounts in new Windows releases and I wouldn't want to maintain a static list. I'll add it to the agenda for the Windows working group to discuss but I think handling people putting in `SYSTEM` is something we should have as other modules currently do it.\r\n\r\nFor some background we have quite a few modules that convert usernames to SID's and when the modular powershell utils is implemented we will be looking for a way to standardise the process which means handling local groups would be required. I am hoping that this module would be either a drop dead replacement of close to it when that happens.",
+        "createdAt" : "2017-07-11T04:57:54Z",
+        "updatedAt" : "2017-07-11T05:03:23Z",
+        "lastEditedBy" : "7c547162-2334-4e33-a627-e146840da9ec",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "698d4063-a3af-4e36-8c0a-97b9364e7f8a",
+        "parentId" : "0ce19adb-9eda-4fb9-94ca-d03840c3f97b",
+        "authorId" : "5e3d6c9c-691c-44ba-a67e-30f3ab8fded1",
+        "body" : "Got it, that makes sense.  I may be able to join the working group discussion in IRC for a bit.  In any case, it's good to see this getting discussed.\r\n\r\nDepending on the outcome of that discussion, but also generally, I'll look into improving this for handling service accounts more liberally, and tackling the false positive case I mentioned before.",
+        "createdAt" : "2017-07-11T10:50:43Z",
+        "updatedAt" : "2017-07-11T10:50:43Z",
+        "lastEditedBy" : "5e3d6c9c-691c-44ba-a67e-30f3ab8fded1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d27dc5ab-737d-47c5-a10a-3965bf02ec31",
+        "parentId" : "0ce19adb-9eda-4fb9-94ca-d03840c3f97b",
+        "authorId" : "5e3d6c9c-691c-44ba-a67e-30f3ab8fded1",
+        "body" : "@jborean93  Something else I just realized...\r\n\r\nFor the purpose of this module, and the way the ADSI class/accelerator seems to work in general (based on my testing), service accounts have to be added and removed from groups with an ADsPath including the NT AUTHORITY prefix, e.g. `WinNT://NT AUTHORITY/SYSTEM`.\r\n\r\nIf someone wanted to pass only say `SYSTEM` without the `NT AUTHORITY\\` prefix to the module, though we'd be able to do a SID translation, we'd still have to flag it as a service account and add NT AUTHORITY as the domain/hostname identifier before we work with it.  This again comes back to ideas like the static array of account names, or ideally a better option if it exists (e.g. WMI lookup, a native .NET enum check).\r\n\r\nWhether of not that logic has to live within the `Test-GroupMember` function, or a PowerShell module utils version of it is definitely up for debate, but just something to consider.",
+        "createdAt" : "2017-07-11T14:37:45Z",
+        "updatedAt" : "2017-07-11T14:37:45Z",
+        "lastEditedBy" : "5e3d6c9c-691c-44ba-a67e-30f3ab8fded1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38de4932-f1d2-4f9f-ba91-c3ada6581e0a",
+        "parentId" : "0ce19adb-9eda-4fb9-94ca-d03840c3f97b",
+        "authorId" : "7c547162-2334-4e33-a627-e146840da9ec",
+        "body" : "@andrewsaraceni we discussed this in the meeting and the consensus was it would be good to handle specifying service accounts like SYSTEM without the NT AUTHORITY prefix. I understand that this won't work with your process in the current setup and think we should just merge as is and refactor it later to support this behaviour.",
+        "createdAt" : "2017-07-11T22:05:23Z",
+        "updatedAt" : "2017-07-11T22:05:23Z",
+        "lastEditedBy" : "7c547162-2334-4e33-a627-e146840da9ec",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "81aad37186b4b20fe244bf47e67b84853aa1f151",
+    "line" : 91,
+    "diffHunk" : "@@ -1,1 +89,93 @@    if ($parsed_member.domain -eq $env:COMPUTERNAME) {\n        $sid_check_args = @($parsed_member.username)\n        $parsed_member.combined = \"{0}\" -f $parsed_member.username\n    }\n    else {"
+  }
+]
