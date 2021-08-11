@@ -53,5 +53,159 @@
     "commit" : "004992230f7d1fd4458aa936f0b2f8614a7fd479",
     "line" : 10,
     "diffHunk" : "@@ -1,1 +67,71 @@            - Each value in the list specifies the path to a specific property in VM object.\n            type: list\n            default: [ 'name', 'config.cpuHotAddEnabled', 'config.cpuHotRemoveEnabled',\n                       'config.instanceUuid', 'config.hardware.numCPU', 'config.template',\n                       'config.name', 'guest.hostName', 'guest.ipAddress',"
+  },
+  {
+    "id" : "e8b625e2-ed8a-4c5b-935a-010f694b3f9c",
+    "prId" : 63938,
+    "prUrl" : "https://github.com/ansible/ansible/pull/63938#pullrequestreview-307590944",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "84ba7af9-aaf8-46b0-b4af-93972be632b5",
+        "parentId" : null,
+        "authorId" : "c9a04bdd-c38b-40d6-b9b2-c6523afdcced",
+        "body" : "I believe change has to be done in injector.py file instead of here.\r\nWhat if other clients are using this env variable? I did search for VMWARE_USERNAME, found these references https://github.com/ansible/ansible/search?q=VMWARE_USERNAME&unscoped_q=VMWARE_USERNAME ",
+        "createdAt" : "2019-10-25T07:09:59Z",
+        "updatedAt" : "2019-10-28T17:08:41Z",
+        "lastEditedBy" : "c9a04bdd-c38b-40d6-b9b2-c6523afdcced",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3cc72e92-8e6c-4b79-a17a-499faf1b32a9",
+        "parentId" : "84ba7af9-aaf8-46b0-b4af-93972be632b5",
+        "authorId" : "d3b1b103-94af-408f-ae94-4f3396e119e8",
+        "body" : "@AlanCoding @wenottingham looking at `job_env` on an inventory update I see \r\n```\r\n        \"VMWARE_USER\": \"administrator@vsphere.local\",\r\n        \"VMWARE_PASSWORD\": \"**********\",\r\n        \"VMWARE_HOST\": \"65.215.200.2\",\r\n        \"VMWARE_VALIDATE_CERTS\": \"False\",\r\n```\r\nbeyond that I'm not sure how Tower is handling the default VMware credential and where a change would be needed ",
+        "createdAt" : "2019-10-25T13:43:17Z",
+        "updatedAt" : "2019-10-28T17:08:41Z",
+        "lastEditedBy" : "d3b1b103-94af-408f-ae94-4f3396e119e8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "212429fe-1490-4ec0-836a-0ce184fd3f82",
+        "parentId" : "84ba7af9-aaf8-46b0-b4af-93972be632b5",
+        "authorId" : "38b7d9c4-df1f-44d2-a0a2-539900170fbe",
+        "body" : "AWX does not yet use this inventory plugin. When we do, obviously we will want to use the most future-proof parameters. For current vmware inventory imports we use the script, and its config follows this pattern:\r\n\r\nhttps://github.com/ansible/ansible/blob/devel/contrib/inventory/vmware.ini\r\n\r\nYou can see we put the host/username/password in that config file\r\n\r\nhttps://github.com/ansible/awx/blob/4a1c1217922570dc8361d33efd3b14d74529e645/awx/main/models/inventory.py#L2455\r\n\r\nThis will be going away entirely as the plugin replaces it.\r\n\r\nHowever, this is how credentials are applied for _job_ (playbook) runs:\r\n\r\nhttps://github.com/ansible/awx/blob/4a1c1217922570dc8361d33efd3b14d74529e645/awx/main/models/credential/injectors.py#L68-L72\r\n\r\nThat uses `VMWARE_HOST` that you mention.\r\n\r\nAWX _can_ use different environment variables for inventory updates versus playbook runs. But why should we? Is it not reasonable to expect that inventory plugins accept credentials by the same environment variables as the modules?\r\n\r\nSo to answer what we _should_ do, we should look to the vmware modules for example.\r\n\r\nhttps://docs.ansible.com/ansible/2.6/modules/vmware_guest_module.html#vmware-guest-module\r\n\r\n> If the value is not specified in the task, the value of environment variable VMWARE_HOST will be used instead.\r\n\r\nThis inventory script used VMWARE_HOST\r\n\r\nhttps://github.com/ansible/ansible/blob/devel/contrib/inventory/vmware.py\r\n\r\nBut _this_ inventory script (the one used by AWX) uses VMWARE_SERVER\r\n\r\nhttps://github.com/ansible/ansible/blob/devel/contrib/inventory/vmware_inventory.py\r\n\r\nThere might be a reason for this. Maybe they server different purposes, and the server vs. host refers to different things. But maybe not, I don't know.",
+        "createdAt" : "2019-10-25T14:14:11Z",
+        "updatedAt" : "2019-10-28T17:08:41Z",
+        "lastEditedBy" : "38b7d9c4-df1f-44d2-a0a2-539900170fbe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e26abab7-bd30-4caa-9c43-afe2f08e2bea",
+        "parentId" : "84ba7af9-aaf8-46b0-b4af-93972be632b5",
+        "authorId" : "d3b1b103-94af-408f-ae94-4f3396e119e8",
+        "body" : "Added `VMWARE_HOST` as environment variable to match value used by tower and vmware_* modules",
+        "createdAt" : "2019-10-27T19:43:20Z",
+        "updatedAt" : "2019-10-28T17:08:41Z",
+        "lastEditedBy" : "d3b1b103-94af-408f-ae94-4f3396e119e8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7326f5710e08b55ad87a9982371b6a4f4e663ef3",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +34,38 @@              - name: VMWARE_HOST\n              - name: VMWARE_SERVER\n        username:\n            description: Name of vSphere admin user.\n            required: True"
+  },
+  {
+    "id" : "5af81fdf-9941-4f62-9670-3e8120af1ebd",
+    "prId" : 63938,
+    "prUrl" : "https://github.com/ansible/ansible/pull/63938#pullrequestreview-307590944",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "52db15e9-72bf-4266-a789-48166170803a",
+        "parentId" : null,
+        "authorId" : "4b69a0b5-ac6f-45e9-9507-dd1385182f29",
+        "body" : "These env vars cannot be simply changed, both would need supported, potentially deprecating another.",
+        "createdAt" : "2019-10-25T13:53:48Z",
+        "updatedAt" : "2019-10-28T17:08:41Z",
+        "lastEditedBy" : "4b69a0b5-ac6f-45e9-9507-dd1385182f29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e71f4496-ac9c-473f-aa7f-3add9278e68e",
+        "parentId" : "52db15e9-72bf-4266-a789-48166170803a",
+        "authorId" : "d3b1b103-94af-408f-ae94-4f3396e119e8",
+        "body" : "Added VMWARE_USER as environment variable to match value used by tower and vmware_* modules",
+        "createdAt" : "2019-10-27T19:44:01Z",
+        "updatedAt" : "2019-10-28T17:08:41Z",
+        "lastEditedBy" : "d3b1b103-94af-408f-ae94-4f3396e119e8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7326f5710e08b55ad87a9982371b6a4f4e663ef3",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +38,42 @@            required: True\n            env:\n              - name: VMWARE_USER\n              - name: VMWARE_USERNAME\n        password:"
+  },
+  {
+    "id" : "8f6558b9-8371-4bad-9176-0e4fc8585f05",
+    "prId" : 63938,
+    "prUrl" : "https://github.com/ansible/ansible/pull/63938#pullrequestreview-307590944",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "14ecb0e6-c169-400e-b506-92d7c586d3d8",
+        "parentId" : null,
+        "authorId" : "d3b1b103-94af-408f-ae94-4f3396e119e8",
+        "body" : "If `verify_file` is required, I've updated to allow `vmware_vm_inventory.yml|yaml` to be consistent with naming convention of other inventory plugins",
+        "createdAt" : "2019-10-27T19:45:22Z",
+        "updatedAt" : "2019-10-28T17:08:41Z",
+        "lastEditedBy" : "d3b1b103-94af-408f-ae94-4f3396e119e8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7326f5710e08b55ad87a9982371b6a4f4e663ef3",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +316,320 @@        valid = False\n        if super(InventoryModule, self).verify_file(path):\n            if path.endswith(('vmware.yaml', 'vmware.yml', 'vmware_vm_inventory.yaml', 'vmware_vm_inventory.yml')):\n                valid = True\n"
+  },
+  {
+    "id" : "02d5abb1-fed1-4188-bfa2-2717b16e0f57",
+    "prId" : 63938,
+    "prUrl" : "https://github.com/ansible/ansible/pull/63938#pullrequestreview-307994038",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "51100c80-7c97-47db-b3e3-bc8db596a203",
+        "parentId" : null,
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "When `auto` is used, `verify_file` is minimally helpful. But if someone has whitelisted this inventory plugin it will be more efficient than just trying to use it to parse all files which exist and are accessible (which is what the [base class `verify_file`](https://github.com/ansible/ansible/blob/devel/lib/ansible/plugins/inventory/__init__.py#L181) does).\r\n\r\nPlease update the documentation `- Uses any file which ends with vmware.yml or vmware.yaml as a YAML configuration file.` with these new file endings that are supported in 2.10+",
+        "createdAt" : "2019-10-28T16:47:27Z",
+        "updatedAt" : "2019-10-28T17:08:41Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7326f5710e08b55ad87a9982371b6a4f4e663ef3",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +316,320 @@        valid = False\n        if super(InventoryModule, self).verify_file(path):\n            if path.endswith(('vmware.yaml', 'vmware.yml', 'vmware_vm_inventory.yaml', 'vmware_vm_inventory.yml')):\n                valid = True\n"
+  },
+  {
+    "id" : "f675c39a-49d7-4821-9c89-e842d9260fe5",
+    "prId" : 63938,
+    "prUrl" : "https://github.com/ansible/ansible/pull/63938#pullrequestreview-307994038",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ebf3fc8c-4e40-4a7a-bde8-84bf277a0642",
+        "parentId" : null,
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "Minor nit - if someone had both `VMWARE_SERVER`, and `VMWARE_HOST` set, VMWARE_SERVER was used. Now `VMWARE_HOST` has a higher precedence (last one wins). You could reorder to ensure compatibility:\r\n```\r\n            env:\r\n              - name: VMWARE_HOST\r\n              - name: VMWARE_SERVER\r\n```\r\nProbably unlikely to affect anyone, but perhaps worth mentioning.",
+        "createdAt" : "2019-10-28T16:47:46Z",
+        "updatedAt" : "2019-10-28T17:08:41Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7326f5710e08b55ad87a9982371b6a4f4e663ef3",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +32,36 @@            required: True\n            env:\n              - name: VMWARE_HOST\n              - name: VMWARE_SERVER\n        username:"
   }
 ]
