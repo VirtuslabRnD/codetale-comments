@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "115b1375-0833-4741-be6f-58952a93eac7",
+    "prId" : 54098,
+    "prUrl" : "https://github.com/ansible/ansible/pull/54098#pullrequestreview-219292170",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e8fb4657-d45e-4090-9a7a-c9a9d916bbe2",
+        "parentId" : null,
+        "authorId" : "4eab8c18-153b-451b-aabd-78dd41738e08",
+        "body" : "Is there a way to see if enabled nsps are present?",
+        "createdAt" : "2019-03-22T10:26:56Z",
+        "updatedAt" : "2019-03-27T08:36:10Z",
+        "lastEditedBy" : "4eab8c18-153b-451b-aabd-78dd41738e08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "925fb91a-a6c2-4fa3-b2af-988182f62cea",
+        "parentId" : "e8fb4657-d45e-4090-9a7a-c9a9d916bbe2",
+        "authorId" : "eb6c40cc-7ad5-4e08-a6c6-ea43d9411d80",
+        "body" : "@dpassante currently not but I'm thinking about something like this:\r\n\r\n```diff\r\ndiff --git a/lib/ansible/modules/cloud/cloudstack/cs_physical_network.py b/lib/ansible/modules/cloud/cloudstack/cs_physical_network.py\r\nindex 6fe7b6f54c..9699f6fccb 100644\r\n--- a/lib/ansible/modules/cloud/cloudstack/cs_physical_network.py\r\n+++ b/lib/ansible/modules/cloud/cloudstack/cs_physical_network.py\r\n@@ -195,6 +195,52 @@ domain:\r\n   returned: success\r\n   type: str\r\n   sample: domain1\r\n+nsps:\r\n+  description: Mapping of enabled or disabled Network Service Providers\r\n+  type: complex\r\n+  returned: on enabling/disabling of Network Service Providers\r\n+  contains:\r\n+    enabled:\r\n+      description: Network Service Providers that were enabled\r\n+      returned: on Network Service Provider enabling\r\n+      type: dict\r\n+      sample:\r\n+      {\r\n+        \"VirtualRouter\": {\r\n+          \"canenableindividualservice\": true,\r\n+          \"id\": \"ed593eb9-3ba3-4f77-a5c9-72f28c86a156\",\r\n+          \"name\": \"VirtualRouter\",\r\n+          \"physicalnetworkid\": \"e54a4ee0-b1ee-4622-8f91-09048cee8315\",\r\n+          \"servicelist\": [\r\n+            \"Vpn\",\r\n+            \"Dhcp\",\r\n+            \"Dns\",\r\n+            \"Gateway\",\r\n+            \"Firewall\",\r\n+            \"Lb\",\r\n+            \"SourceNat\",\r\n+            \"StaticNat\",\r\n+            \"PortForwarding\",\r\n+            \"UserData\"\r\n+          ],\r\n+          \"state\": \"Enabled\"\r\n+        }\r\n+      }\r\n+    disabled:\r\n+      description: Network Service Providers that were disabled\r\n+      returned: on Network Service Provider disabling\r\n+      type: dict\r\n+      sample:\r\n+      {\r\n+        \"InternalLbVm\": {\r\n+          \"canenableindividualservice\": true,\r\n+          \"id\": \"26604aa3-ee87-4826-8572-04b7a25aaa3a\",\r\n+          \"name\": \"InternalLbVm\",\r\n+          \"physicalnetworkid\": \"e54a4ee0-b1ee-4622-8f91-09048cee8315\",\r\n+          \"servicelist\": [\"Lb\"],\r\n+          \"state\": \"Enabled\"\r\n+        }\r\n+      }\r\n '''\r\n \r\n from ansible.module_utils.basic import AnsibleModule\r\n@@ -437,14 +483,15 @@ def main():\r\n     state = module.params.get('state')\r\n     nsps_disabled = module.params.get('nsps_disabled', [])\r\n     nsps_enabled = module.params.get('nsps_enabled', [])\r\n+    nsps_result = dict()\r\n \r\n     if state in ['absent']:\r\n         network = acs_network.absent_network()\r\n     else:\r\n         network = acs_network.present_network()\r\n     if nsps_disabled is not None:\r\n-        for name in nsps_disabled:\r\n-            acs_network.update_nsp(name=name, state='Disabled')\r\n+        for nsp_name in nsps_disabled:\r\n+            nsps_result['disabled'][nsp_name] = acs_network.update_nsp(name=nsp_name, state='Disabled')\r\n \r\n     if nsps_enabled is not None:\r\n         for nsp_name in nsps_enabled:\r\n@@ -453,10 +500,11 @@ def main():\r\n             elif nsp_name == 'InternalLbVm':\r\n                 acs_network.set_loadbalancer_element_state(enabled=True, nsp_name=nsp_name)\r\n \r\n-            acs_network.update_nsp(name=nsp_name, state='Enabled')\r\n+            nsps_result['enabled'][nsp_name] = acs_network.update_nsp(name=nsp_name, state='Enabled')\r\n \r\n     result = acs_network.get_result(network)\r\n-\r\n+    if nsps_result:\r\n+        result['nsps'] = nsps_result\r\n     module.exit_json(**result)\r\n \r\n \r\ndiff --git a/test/integration/targets/cs_physical_network/tasks/main.yml b/test/integration/targets/cs_physical_network/tasks/main.yml\r\nindex 66b8c755ab..72864a8cbf 100644\r\n--- a/test/integration/targets/cs_physical_network/tasks/main.yml\r\n+++ b/test/integration/targets/cs_physical_network/tasks/main.yml\r\n@@ -126,6 +126,7 @@\r\n       - pn.zone == cszone.name\r\n       - pn.vlan == '100-200,300-400'\r\n       - pn.state == 'Enabled'\r\n+      - pn.nsps.enabled.InternalLbVm.physicalnetworkid == pn.id\r\n \r\n - name: ensure a network is disabled\r\n   cs_physical_network:\r\n\r\n```\r\n\r\nThoughts?\r\n",
+        "createdAt" : "2019-03-26T10:14:58Z",
+        "updatedAt" : "2019-03-27T08:36:10Z",
+        "lastEditedBy" : "eb6c40cc-7ad5-4e08-a6c6-ea43d9411d80",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a768d7d-0f06-4c4b-a44b-ce00f6ea485b",
+        "parentId" : "e8fb4657-d45e-4090-9a7a-c9a9d916bbe2",
+        "authorId" : "4eab8c18-153b-451b-aabd-78dd41738e08",
+        "body" : "It seems a bit too verbose, not knowing if all this information will be useful. However, it would be nice to have at least one list of nsps enabled / disabled.\r\nI'm wondering if `nsps_enabled` and` nsps_disabled` only returning a list of nsps would not be sufficient.",
+        "createdAt" : "2019-03-26T12:18:07Z",
+        "updatedAt" : "2019-03-27T08:36:10Z",
+        "lastEditedBy" : "4eab8c18-153b-451b-aabd-78dd41738e08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "009511d7-59c6-406e-8601-43281e40799a",
+        "parentId" : "e8fb4657-d45e-4090-9a7a-c9a9d916bbe2",
+        "authorId" : "eb6c40cc-7ad5-4e08-a6c6-ea43d9411d80",
+        "body" : "Yeah, I think I slightly overdid it.\r\n\r\nThis should work:\r\n\r\n```diff\r\ndiff --git a/lib/ansible/modules/cloud/cloudstack/cs_physical_network.py b/lib/ansible/modules/cloud/cloudstack/cs_physical_network.py\r\nindex 6fe7b6f54c..1d37322bbc 100644\r\n--- a/lib/ansible/modules/cloud/cloudstack/cs_physical_network.py\r\n+++ b/lib/ansible/modules/cloud/cloudstack/cs_physical_network.py\r\n@@ -195,6 +195,24 @@ domain:\r\n   returned: success\r\n   type: str\r\n   sample: domain1\r\n+nsps_enabled:\r\n+  description: list of Network Service Providers that were enabled\r\n+  returned: on Network Service Provider enabling\r\n+  type: list\r\n+  sample:\r\n+   - VirtualRouter\r\n+nsps_disabled:\r\n+  description: list of Network Service Providers that were disabled\r\n+  returned: on Network Service Provider disabling\r\n+  type: list\r\n+  sample:\r\n+   - InternalLbVm\r\n '''\r\n \r\n from ansible.module_utils.basic import AnsibleModule\r\n@@ -452,11 +471,13 @@ def main():\r\n                 acs_network.set_vrouter_element_state(enabled=True, nsp_name=nsp_name)\r\n             elif nsp_name == 'InternalLbVm':\r\n                 acs_network.set_loadbalancer_element_state(enabled=True, nsp_name=nsp_name)\r\n\r\n             acs_network.update_nsp(name=nsp_name, state='Enabled')\r\n \r\n\r\n     result = acs_network.get_result(network)\r\n+    result['nsps_enabled'] = nsps_enabled\r\n+    result['nsps_disabled'] = nsps_disabled\r\n\r\n     module.exit_json(**result)\r\n \r\n \r\ndiff --git a/test/integration/targets/cs_physical_network/tasks/main.yml b/test/integration/targets/cs_physical_network/tasks/main.yml\r\nindex 66b8c755ab..5394963b31 100644\r\n--- a/test/integration/targets/cs_physical_network/tasks/main.yml\r\n+++ b/test/integration/targets/cs_physical_network/tasks/main.yml\r\n@@ -126,6 +126,7 @@\r\n       - pn.zone == cszone.name\r\n       - pn.vlan == '100-200,300-400'\r\n       - pn.state == 'Enabled'\r\n+      - 'InternalLbVm' in pn.nsps_enabled\r\n \r\n - name: ensure a network is disabled\r\n   cs_physical_network:\r\n```\r\n\r\n",
+        "createdAt" : "2019-03-26T12:50:34Z",
+        "updatedAt" : "2019-03-27T08:36:10Z",
+        "lastEditedBy" : "eb6c40cc-7ad5-4e08-a6c6-ea43d9411d80",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc7bd2c6-3342-4130-98d1-1fd5ae54a22a",
+        "parentId" : "e8fb4657-d45e-4090-9a7a-c9a9d916bbe2",
+        "authorId" : "4eab8c18-153b-451b-aabd-78dd41738e08",
+        "body" : "LGTM",
+        "createdAt" : "2019-03-26T13:22:36Z",
+        "updatedAt" : "2019-03-27T08:36:10Z",
+        "lastEditedBy" : "4eab8c18-153b-451b-aabd-78dd41738e08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4a6ae26-0a71-4bf4-88c3-eb6229359318",
+        "parentId" : "e8fb4657-d45e-4090-9a7a-c9a9d916bbe2",
+        "authorId" : "eb6c40cc-7ad5-4e08-a6c6-ea43d9411d80",
+        "body" : "Done.",
+        "createdAt" : "2019-03-27T06:59:18Z",
+        "updatedAt" : "2019-03-27T08:36:10Z",
+        "lastEditedBy" : "eb6c40cc-7ad5-4e08-a6c6-ea43d9411d80",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d7e79108b41a5710bc5833735bb5f3c320217989",
+    "line" : 153,
+    "diffHunk" : "@@ -1,1 +151,155 @@      - pn.zone == cszone.name\n      - pn.vlan == '100-200,300-400'\n      - pn.state == 'Enabled'\n      - \"'internallbvm' in pn.nsps_enabled\"\n      - \"'virtualrouter' in pn.nsps_enabled\""
+  }
+]
