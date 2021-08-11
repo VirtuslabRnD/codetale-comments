@@ -482,5 +482,104 @@
     "commit" : "f12c617983102c94b95bc2e5cd68a679d3b7ad1b",
     "line" : 4,
     "diffHunk" : "@@ -1,1 +319,323 @@  ini:\n  - {key: warn, section: colors}\nCONDITINAL_BARE_VARS:\n  name: Allow bare variable evaluation in conditionals\n  default: True"
+  },
+  {
+    "id" : "c3a22881-1427-46d7-886e-e0b8c0cb9eda",
+    "prId" : 52748,
+    "prUrl" : "https://github.com/ansible/ansible/pull/52748#pullrequestreview-210277875",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b00dc67c-1cc0-4503-9627-05b7614497e1",
+        "parentId" : null,
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "If a customer has any non \"-\" invalid characters in their inventory groups this won't provide backwards compatibility for the ec2/azure inventory plugins with the scripts, since the scripts would have replaced those non \"-\" invalid characters with underscores. Tags with invalid characters or IPv6 are possible examples.\r\n\r\nThe gce script doesn't sanitize, so a blanket toggle like this would keep the gce inventory plugin groups compatible",
+        "createdAt" : "2019-02-27T20:40:47Z",
+        "updatedAt" : "2019-03-05T21:19:39Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "124f40e6-c775-4a31-a2e8-8d5801de99d4",
+        "parentId" : "b00dc67c-1cc0-4503-9627-05b7614497e1",
+        "authorId" : "30fc1801-f8f1-4cc4-9690-e31e203f4f6d",
+        "body" : "the default is false, but will give users a deprecation notice now, once we toggle to 'true' it will 'autotransform' with a warning for those plugins that don't already do the transform themselves\r\n",
+        "createdAt" : "2019-02-27T21:00:09Z",
+        "updatedAt" : "2019-03-05T21:19:39Z",
+        "lastEditedBy" : "30fc1801-f8f1-4cc4-9690-e31e203f4f6d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c012fc7e-bce1-4666-b2de-78ab2d6910ff",
+        "parentId" : "b00dc67c-1cc0-4503-9627-05b7614497e1",
+        "authorId" : "38b7d9c4-df1f-44d2-a0a2-539900170fbe",
+        "body" : "It sounds like you are assuming that some scripts like `ec2.py` sanitize group names. It has a setting for sanitizing group names, yes. But that doesn't mean that it works. I talked about this here:\r\n\r\nhttps://github.com/ansible/ansible/issues/40581#issuecomment-467990027\r\n\r\nI can file a bug if you'd like. I have found the behavior to be highly reproducible, and have dived in a little what values it has in code. It appears that `self.replace_dash_in_groups` does take the \"True\" value (meaning it should sanitize), but I think that either the regex was wrong, or the method `to_safe` was never called.",
+        "createdAt" : "2019-02-27T21:02:13Z",
+        "updatedAt" : "2019-03-05T21:19:39Z",
+        "lastEditedBy" : "38b7d9c4-df1f-44d2-a0a2-539900170fbe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e3b6ce2-475c-49f6-8aa4-460929a9003c",
+        "parentId" : "b00dc67c-1cc0-4503-9627-05b7614497e1",
+        "authorId" : "30fc1801-f8f1-4cc4-9690-e31e203f4f6d",
+        "body" : "no, assuming the opposite, those using the script plugin will now get a deprecation warning when trying to pass invalid group names",
+        "createdAt" : "2019-02-27T21:06:39Z",
+        "updatedAt" : "2019-03-05T21:19:39Z",
+        "lastEditedBy" : "30fc1801-f8f1-4cc4-9690-e31e203f4f6d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "60431e0a-beb2-4b5a-886b-c029d92cd91e",
+        "parentId" : "b00dc67c-1cc0-4503-9627-05b7614497e1",
+        "authorId" : "38b7d9c4-df1f-44d2-a0a2-539900170fbe",
+        "body" : "@s-hertel I can safely say that in the `ec2.py` script, `to_safe` is not called on the relevant group names, and that the group name `us-east-2` is returned with either `replace_dash_in_groups = True` or `replace_dash_in_groups = False` (with the config loaded correctly, that is ruled out). I can get you more information on this if you want.",
+        "createdAt" : "2019-02-27T21:18:55Z",
+        "updatedAt" : "2019-03-05T21:19:39Z",
+        "lastEditedBy" : "38b7d9c4-df1f-44d2-a0a2-539900170fbe",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bb5a9a7c-b002-493b-8e30-43782130ea53",
+        "parentId" : "b00dc67c-1cc0-4503-9627-05b7614497e1",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "@AlanCoding I'm not sure if you're understanding me. EC2 script *always* sanitizes, just to varying degrees. Here's my test case. Try adding a bad character in a tag. For instance, host has tags: {'bad:idea': 'here:too'}. Using the script on devel that creates the group `tag_bad_idea_here_too`. Those `:` are replaced by `_` (entirely regardless of replace_dash_in_groups). A filter is being used for bad characters, just not necessarily `-`. So now if you port to using the plugin, you're not going to be able to replicate that behavior while also creating groups with *some* invalid characters (i.e. `-`) because it's all or nothing, no partial sanitization (the group will become `tag_bad:idea:here:too` if you're using the toggle to create groups like `us-east-1`). Anyway, I don't use it and ripping off the bandaid is probably good. I'm not going to fight for it, just pointing out the deficiency and to have something to point to later if users run into the corner case while trying to replicate the behavior of the script via the plugin. Hopefully no one is doing that but... ¯\\_ツ_/¯",
+        "createdAt" : "2019-03-04T17:16:27Z",
+        "updatedAt" : "2019-03-05T21:19:39Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "45af0313-df0f-44c3-a599-f8e8f16877b6",
+        "parentId" : "b00dc67c-1cc0-4503-9627-05b7614497e1",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "Related, a global solution like this also poses problems for combining different plugins per playbook run as you may want some plugins to filter and not others.",
+        "createdAt" : "2019-03-04T17:18:12Z",
+        "updatedAt" : "2019-03-05T21:19:39Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7337454a-5f7c-4c0e-a173-dd544bd5ed87",
+        "parentId" : "b00dc67c-1cc0-4503-9627-05b7614497e1",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "@AlanCoding Ah, btw, replace_dash_in_groups is a [tag specific option](https://github.com/ansible/ansible/blob/devel/contrib/inventory/ec2.ini#L122). Poorly named, doesn't work on general groups but works great for tags.",
+        "createdAt" : "2019-03-04T17:45:43Z",
+        "updatedAt" : "2019-03-05T21:19:39Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5269f28c2f3a448dfc55155851a11912401cec09",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +1445,1449 @@  description:\n    - Make ansible transform invalid characters in group names supplied by inventory sources.\n    - If 'false' it will allow for the group name but warn about the issue.\n    - When 'true' it will replace any invalid charachters with '_' (underscore).\n  env: [{name: ANSIBLE_TRANSFORM_INVALID_GROUP_CHARS}]"
   }
 ]
