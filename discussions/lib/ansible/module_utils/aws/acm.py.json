@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "175e8eb5-d8e4-4929-abd6-80e4aced7135",
+    "prId" : 60552,
+    "prUrl" : "https://github.com/ansible/ansible/pull/60552#pullrequestreview-311423377",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f4c08c90-f7ab-41f9-86f4-4e00d1c48f18",
+        "parentId" : null,
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "Both of these keys are not guaranteed to exist.",
+        "createdAt" : "2019-08-27T23:42:15Z",
+        "updatedAt" : "2019-11-04T23:33:50Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d478348-4552-42b1-b070-65e5dcad27ba",
+        "parentId" : "f4c08c90-f7ab-41f9-86f4-4e00d1c48f18",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "modifying to use response.get('Certificate') etc seems to fix test issues.",
+        "createdAt" : "2019-08-28T01:50:22Z",
+        "updatedAt" : "2019-11-04T23:33:50Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25992d75-7484-445f-95c1-03ec4e594dd8",
+        "parentId" : "f4c08c90-f7ab-41f9-86f4-4e00d1c48f18",
+        "authorId" : "e40e8913-d330-443f-be2c-a938bb5a4fe6",
+        "body" : "What issue did you see?\r\n\r\n[The Boto Docs](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/acm.html#ACM.Client.get_certificate) don't say they may be omitted.\r\n\r\nIf the certificate doesn't exist or some other failure happens, boto will throw an exception, so we wouldn't get to the lines where the keys are referenced.\r\n\r\nUnder what circumstances do these keys not exist?",
+        "createdAt" : "2019-08-28T02:29:50Z",
+        "updatedAt" : "2019-11-04T23:33:50Z",
+        "lastEditedBy" : "e40e8913-d330-443f-be2c-a938bb5a4fe6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a93b4c28-bd2a-4f4d-843a-3dbb4f274532",
+        "parentId" : "f4c08c90-f7ab-41f9-86f4-4e00d1c48f18",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "Yeah, the documentation doesn't. I just ran into it with your integration test suite. I don't know the underlying cause. Perhaps the module needs a waiter if both keys are always expected. I didn't test it to see if it would make a difference. Here's the traceback (Certificate did not exist but CertificateChain did):\r\n```\r\n  File \"/tmp/ansible_aws_acm_info_payload_2_c1vcul/ansible_aws_acm_info_payload.zip/ansible/module_utils/aws/acm.py\", line 115, in get_certificates\r\n  File \"/tmp/ansible_aws_acm_info_payload_2_c1vcul/ansible_aws_acm_info_payload.zip/ansible/module_utils/cloud.py\", line 153, in retry_func\r\n  File \"/tmp/ansible_aws_acm_info_payload_2_c1vcul/ansible_aws_acm_info_payload.zip/ansible/module_utils/cloud.py\", line 140, in retry_func\r\n  File \"/tmp/ansible_aws_acm_info_payload_2_c1vcul/ansible_aws_acm_info_payload.zip/ansible/module_utils/aws/acm.py\", line 77, in get_certificate_with_backoff\r\nKeyError: 'Certificate'\r\n```",
+        "createdAt" : "2019-08-28T10:33:49Z",
+        "updatedAt" : "2019-11-04T23:33:50Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1d8bfd1b-03b8-4f09-b6c9-dbe758be83bf",
+        "parentId" : "f4c08c90-f7ab-41f9-86f4-4e00d1c48f18",
+        "authorId" : "e40e8913-d330-443f-be2c-a938bb5a4fe6",
+        "body" : "If I use `.get` instead of `[]`, it will return `None`. That doesn't really fix the problem. It just means we'll run into the problem later, in a way that's harder to debug.\r\n\r\nI have added `KeyError` to the `Except` clause in the function which calls this one. Then it throws an error nicely with `module`. Is that acceptable?",
+        "createdAt" : "2019-08-29T13:23:18Z",
+        "updatedAt" : "2019-11-04T23:33:50Z",
+        "lastEditedBy" : "e40e8913-d330-443f-be2c-a938bb5a4fe6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e16adf9-1c3a-4de2-a8f0-162a0d59d546",
+        "parentId" : "f4c08c90-f7ab-41f9-86f4-4e00d1c48f18",
+        "authorId" : "87bf94e6-6a9f-420a-b644-aac039f6409f",
+        "body" : "Since we don't know for sure why this happens, and we can't keep testing until we resolve the quota issue, it would be nicer to have a waiter function in case it's just a matter of us being too fast for the API.  That would be in:\r\nhttps://github.com/ansible/ansible/tree/devel/lib/ansible/module_utils/aws/waiters.py\r\nAnd you would add something like `CertificateExists` that checks for both the `Certificate` and `CertificateChain` keys to exist.\r\nThen you could use it like https://github.com/ansible/ansible/tree/devel/lib/ansible/modules/cloud/amazon/ec2_vpc_vpn.py#L474 to retry a few times until the keys are available - and if both keys are not returned before the waiter hits `MaxAttempts`, then the `KeyError` exception would handle it.\r\n",
+        "createdAt" : "2019-09-18T18:58:48Z",
+        "updatedAt" : "2019-11-04T23:33:50Z",
+        "lastEditedBy" : "87bf94e6-6a9f-420a-b644-aac039f6409f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37c317dc-5e73-4c26-ad81-485236822d54",
+        "parentId" : "f4c08c90-f7ab-41f9-86f4-4e00d1c48f18",
+        "authorId" : "e40e8913-d330-443f-be2c-a938bb5a4fe6",
+        "body" : "Marking as resolved. Line 117 fixes this issue.",
+        "createdAt" : "2019-11-04T23:25:27Z",
+        "updatedAt" : "2019-11-04T23:33:50Z",
+        "lastEditedBy" : "e40e8913-d330-443f-be2c-a938bb5a4fe6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "14fefd9d56540a61748a672746613a542ec2f325",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +76,80 @@        response = client.get_certificate(CertificateArn=certificate_arn)\n        # strip out response metadata\n        return {'Certificate': response['Certificate'],\n                'CertificateChain': response['CertificateChain']}\n"
+  }
+]
