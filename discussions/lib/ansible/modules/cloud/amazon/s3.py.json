@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "df2808fd-6741-4649-9e4a-0af584ba3d79",
+    "prId" : 21529,
+    "prUrl" : "https://github.com/ansible/ansible/pull/21529#pullrequestreview-55797531",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "35d0a472-8af5-45a9-a05a-3c645c394f5d",
+        "parentId" : null,
+        "authorId" : "183d9a20-6a5e-4432-9fe9-9fd6fe9514fb",
+        "body" : "This function seems to be much more complicated than it needs to be. Does anything call this function with non-trivial values for prefix, marker or max_keys? (I'm guessing previously the function called itself to get the next page).\r\n\r\nI would argue for using paginator with build_full_result in list_keys_with_backoff and then the calling functions (`delete_keys` etc.) can just use that directly rather than having to manage the page combination themselves.\r\n\r\n",
+        "createdAt" : "2017-08-09T23:27:28Z",
+        "updatedAt" : "2017-08-11T12:40:57Z",
+        "lastEditedBy" : "183d9a20-6a5e-4432-9fe9-9fd6fe9514fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0dba73c-d9f6-4f04-9e0b-fb36473a7408",
+        "parentId" : "35d0a472-8af5-45a9-a05a-3c645c394f5d",
+        "authorId" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "body" : "Hrm... I'm not sure if I understand what I should be changing.\r\n\r\nThe user can specify whatever they want for marker or prefix or max_keys, right? I'm not sure what a non-trivial value would be. Previously this function did not call itself to get the next page - pagination wasn't supported at all. So it's true this function has become more complicated. If there's a more elegant way though I'd definitely like to understand.\r\n\r\nIf I use build_full_result() then I'll have to iterate through that anyway and pull out all the keys so it doesn't seem very different than what I'm doing now. I will implement that if you have a strong preference, but I'm not sure what the benefit is.\r\n\r\nI'm a little confused about the comment about delete_keys. list_keys() and delete_bucket() are calling a function that does the pagination. Is the issue that I'm only getting all the keys rather than all the contents?",
+        "createdAt" : "2017-08-11T12:43:26Z",
+        "updatedAt" : "2017-08-11T12:45:28Z",
+        "lastEditedBy" : "6b7e4265-ae86-4269-9bd7-f8ffa9085df6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6e1af12d-c836-4199-98bb-dfe5db3ba5f1",
+        "parentId" : "35d0a472-8af5-45a9-a05a-3c645c394f5d",
+        "authorId" : "183d9a20-6a5e-4432-9fe9-9fd6fe9514fb",
+        "body" : "By non-trivial I just mean values that aren't None or empty strings. I'm not sure how much user control we expect over those settings but I might not have read the parameters carefully enough.\r\n\r\nThe following untested somewhat pseudocode illustrates the simpler approach:\r\n\r\n```\r\n@AWSRetry(**backoff_params)\r\ndef list_keys_with_backoff(connection, bucket):\r\n     pg = connection.get_paginator('list_objects_v2')    \r\n     return [obj['Key'] for obj in pg.paginate(Bucket=bucket).build_full_result()['Objects']]\r\n\r\ndef list_keys(connection, bucket):\r\n    try:\r\n        return list_keys_with_backoff(connection, bucket)\r\n    except botocore.exceptions.ClientError as e:\r\n        etc...\r\n```\r\n",
+        "createdAt" : "2017-08-11T13:38:18Z",
+        "updatedAt" : "2017-08-11T13:38:18Z",
+        "lastEditedBy" : "183d9a20-6a5e-4432-9fe9-9fd6fe9514fb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c69d003f63e57d5486edd45b32cc6feeafdc7e5d",
+    "line" : 313,
+    "diffHunk" : "@@ -1,1 +332,336 @@\n\ndef list_keys(module, s3, bucket, prefix, marker, max_keys):\n    pagination_params = {'Bucket': bucket}\n    for param_name, param_value in (('Prefix', prefix), ('StartAfter', marker), ('MaxKeys', max_keys)):"
+  }
+]
