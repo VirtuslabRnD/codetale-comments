@@ -834,5 +834,49 @@
     "commit" : "ece92d7c6a9626935e8e8f8399bb711f33830bee",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +27,31 @@\nenv:\n  AIRFLOW_COMMITERS: ${{ secrets.AIRFLOW_COMMITERS }}\n  MOUNT_SELECTED_LOCAL_SOURCES: \"false\"\n  FORCE_ANSWER_TO_QUESTIONS: \"yes\""
+  },
+  {
+    "id" : "317c0b07-4f29-4d85-a7c6-d2e16c2df6bc",
+    "prId" : 14996,
+    "prUrl" : "https://github.com/apache/airflow/pull/14996#pullrequestreview-621083736",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bd5c7095-b69d-4d9c-9fd2-f951abe3e237",
+        "parentId" : null,
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "Why not just the following:\r\n\r\n```suggestion\r\n    if: needs.build-info.outputs.image-build == 'true' && github.ref == 'refs/heads/master'\r\n```",
+        "createdAt" : "2021-03-25T00:56:36Z",
+        "updatedAt" : "2021-03-25T16:14:29Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dfbb415d-b758-40a0-acc1-0ba3dbb151a1",
+        "parentId" : "bd5c7095-b69d-4d9c-9fd2-f951abe3e237",
+        "authorId" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "body" : "OK. You asked this question, be prepared for the answer :). It's long, sorry, but GitHub did NOT make it easy.\r\n\r\nBeware. It's long even if the question is simple.\r\n\r\nThe problem is that if you are running direct push (i.e. merge to master) you have the actual master branch in `github.ref`, indeed, however it looks completely differently in other workflows.\r\n\r\nWhen you run `pull_request` workflow, github ref is something like `refs/pull/14996/merge`. In this case you should look for ``github.base_ref`` instead:\r\n```\r\ngithub.base_ref\tstring\tThe base_ref or target branch of the pull request in a workflow run. This property is\r\n only available when the event that triggers a workflow run is a pull_request.\r\n```\r\nAnd - of course - it is not documented. \r\n\r\nAnd  ... wait for it ..  base_ref is NOT set in direct pushes at all (i.e. when you merge) so if you would like to use this information, your condition will start looking like:\r\n\r\n```\r\nif github.event != 'pull_request' && github.base_ref == 'master' || github.ref == 'master'  \r\n```\r\n\r\nBut, unfortunately, this is just a beginning. I am not 100% sure if we are covered here because `github.ref` behaviour for`pull_request` workflows is not documented (many of the values in GitHub context are poorly documented or not documented at all and I had to reverse-engineer them). \r\n\r\nWhat's more - in `workflow_run`  workflow you have no information whatsoever what was the base branch (and for a change `workflow_run` for every push and every PR runs always with `master` github.ref, no matter what is the target branch. Not even when you query the \"source_run\" directly via GitHub API you can find the base branch. This is because (surprise-surprise) when you query the \"triggering\" workflow from the \"triggered\" one - you have no access to the \"context\" of the triggering run (obviously). You only can see whatever the API returns you and the last time when I checked there was no information about the \"base_branch\" there. It could have changed since though.\r\n\r\nSo what you have to do (I did not find a better way) is that you have to find the original PR via GitHub API and retrieve information from there. But in order to retrieve the information from there you need to iterate through open PRs and match the PR by branch + repo (I am already doing it to be able to push \"Status checks\" to the PR. Yes. I know, it is insane. But I could not find another way.\r\n\r\nIf you are adventurous and want to look yourself - in every job we have this step starting from \"Event \" ... where I dump the context - this makes reverse-engineering much easier (but none more pleasant).\r\n\r\nAFAIK there is no sane way to get the 'base\" branch.\r\n\r\nThat's why we have DEFAULT_BRANCH in _initialization.sh that we keep different in every branch and I am using it. And exposing it as \"output\" seems like much simpler thing to do.\r\n\r\nI would be super happy if you could find an easier way here.\r\n\r\n\r\n",
+        "createdAt" : "2021-03-25T01:41:40Z",
+        "updatedAt" : "2021-03-25T16:14:29Z",
+        "lastEditedBy" : "e8563344-32ea-4c07-9731-a2fed8d2edf2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49b3ae04-dca5-4e54-a83c-62c58ef08f97",
+        "parentId" : "bd5c7095-b69d-4d9c-9fd2-f951abe3e237",
+        "authorId" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "body" : "At this point, I just hope GH Api become more mature and provide detailed info for use in workflows, any who as we don't know when it would happen let's merge this one in",
+        "createdAt" : "2021-03-25T13:03:56Z",
+        "updatedAt" : "2021-03-25T16:14:29Z",
+        "lastEditedBy" : "c25957e2-1132-4c48-a536-3824307fd862",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3bc0a119cef2317a9bd9119cc93a25d91924509",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +506,510 @@      matrix:\n        package-format: ['wheel', 'sdist']\n    if: needs.build-info.outputs.image-build == 'true' && needs.build-info.outputs.default-branch == 'master'\n    steps:\n      - name: \"Checkout ${{ github.ref }} ( ${{ github.sha }} )\""
   }
 ]
