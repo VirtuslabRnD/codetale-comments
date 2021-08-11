@@ -20,5 +20,60 @@
     "commit" : "ae801aaf5bfd1da34577a7c081f5f2eb7e644b9d",
     "line" : 13,
     "diffHunk" : "@@ -1,1 +230,234 @@            if vendor_name in ['VMware Virtual Platform', 'VMware7,1']:\n                virtual_facts['virtualization_type'] = 'VMware'\n                virtual_facts['virtualization_role'] = 'guest'\n\n        # If none of the above matches, return 'NA' for virtualization_type"
+  },
+  {
+    "id" : "b44b3397-ea56-4a0f-8bf0-99b481344f76",
+    "prId" : 34925,
+    "prUrl" : "https://github.com/ansible/ansible/pull/34925#pullrequestreview-118919410",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bd84d168-300b-4cd8-82ed-1aa9ae2e101a",
+        "parentId" : null,
+        "authorId" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "body" : "Patch looks good as is. So :shipit: for me.\r\n\r\nBut was thinking it might be a good time to move this to a helper method, since then it could return early and lose a few indention levels if you wanted to.\r\n\r\n``` python\r\n\r\ndef _collect_dmi(self):\r\n    dmi_virt_facts = {}\r\n\r\n    dmi_bin = self.module.get_bin_path('dmidecode')\r\n    \r\n    if not dmi_bin:\r\n        return dmi_virt_facts\r\n    \r\n    (rc, out, err) = self.module.run_command('%s -s system-product-name' % dmi_bin)\r\n    \r\n    if rc != 0:\r\n        return dmi_virt_facts\r\n\r\n    # I might split this into two methods, one for finding and running dmi, and another for parsing it.\r\n    # and passing in the dmidecode output to the parsing method\r\n    # that would make the parsing code easy to test\r\n    vendor_name = ''.join([line.strip() for line in out.splitlines() if not line.startswith('#')])\r\n    \r\n    if vendor_name in ['VMware Virtual Platform', 'VMware7,1']:\r\n        dmi_virt_facts['virtualization_type'] = 'VMware'\r\n        dmi_virt_facts['virtualization_role'] = 'guest'\r\n\r\n    return dmi_virt_facts\r\n\r\n```\r\n\r\nwith\r\n``` python\r\n\r\ndmi_virt_facts = self._collect_dmi()\r\nvirtual_facts.update(dmi_virt_facts)\r\n\r\n```\r\n\r\nor if split into two\r\n\r\n``` python\r\n\r\ndmi_bin_output = self._run_dmidecode()\r\ndmi_virt_facts = self._collect_dmi(dmi_bin_output)\r\nvirtual_facts.update(dmi_virt_facts)",
+        "createdAt" : "2018-01-16T16:36:30Z",
+        "updatedAt" : "2018-01-22T01:06:37Z",
+        "lastEditedBy" : "fa0144fc-7424-474a-9ab5-059de28814b7",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff9d1698-df5a-4719-b163-1e56b669a610",
+        "parentId" : "bd84d168-300b-4cd8-82ed-1aa9ae2e101a",
+        "authorId" : "96aeecbb-c275-402c-b904-a795c82efb48",
+        "body" : "I have one more suggestion, it would be good to replace\r\n\r\n```\r\nif vendor_name in ['VMware Virtual Platform', 'VMware7,1']:\r\n```\r\n\r\nwith \r\n\r\n```\r\nif vendor_name.startwith('VMware'):\r\n```\r\n\r\nI am not sure about `VMware 7,1` uniqueness on other ESXi version. (I missed this in last commit)",
+        "createdAt" : "2018-01-16T16:53:50Z",
+        "updatedAt" : "2018-01-22T01:06:37Z",
+        "lastEditedBy" : "96aeecbb-c275-402c-b904-a795c82efb48",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6444e89f-37fe-49ba-a6bb-a8fbb85cf40b",
+        "parentId" : "bd84d168-300b-4cd8-82ed-1aa9ae2e101a",
+        "authorId" : "ad25e713-c244-4a27-8df9-08334e22a5f9",
+        "body" : "@alikins IMHO that would only make sense if all the collections would follow the same logic in separate functions \r\n@Akasurde I agree and have updated the patch",
+        "createdAt" : "2018-01-20T22:21:29Z",
+        "updatedAt" : "2018-01-22T01:06:37Z",
+        "lastEditedBy" : "ad25e713-c244-4a27-8df9-08334e22a5f9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a906a5e-a0b7-4b37-8e34-6cdadaae9e97",
+        "parentId" : "bd84d168-300b-4cd8-82ed-1aa9ae2e101a",
+        "authorId" : "8bf05bc8-b303-4660-87dd-7386c9e00648",
+        "body" : "This introduced a regression, it's called start**s**with in Python.\r\nAlso this doesn't (and didn't) return early like all the other branches, so the VMware result would always be overwritten by NAs (see https://github.com/ansible/ansible/pull/34132#pullrequestreview-91756340).",
+        "createdAt" : "2018-05-09T21:57:52Z",
+        "updatedAt" : "2018-05-09T21:57:53Z",
+        "lastEditedBy" : "8bf05bc8-b303-4660-87dd-7386c9e00648",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "325088ad5f658d6162c2bd66b3017a1744680325",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +224,228 @@        # dmidecode is the safest option to parse virtualization related values\n        dmi_bin = self.module.get_bin_path('dmidecode')\n        # We still want to continue even if dmidecode is not available\n        if dmi_bin is not None:\n            (rc, out, err) = self.module.run_command('%s -s system-product-name' % dmi_bin)"
   }
 ]
