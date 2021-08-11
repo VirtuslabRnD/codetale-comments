@@ -196,5 +196,104 @@
     "commit" : "b5bdf3cdd0483b497aec1837a3276567bc2bb3cf",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +241,245 @@        # and sometimes includes both 'processor' and 'Processor'.\n        # Always use 'processor' count for ARM systems\n        if collected_facts.get('ansible_architecture', '').startswith(('armv', 'aarch')):\n            i = processor_occurence\n"
+  },
+  {
+    "id" : "f7d6a668-ded4-4233-a2c7-ec762e40bf34",
+    "prId" : 66569,
+    "prUrl" : "https://github.com/ansible/ansible/pull/66569#pullrequestreview-378388452",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2207a102-29d6-4873-9ddd-201fadc952ab",
+        "parentId" : null,
+        "authorId" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "body" : "It's great that Python has this capability, but it's not always avaialble. In this conext (Python >=3 on Linux systems) it _should_ be available, but it's probably best to catch `AttributeError` just in case it's not available.",
+        "createdAt" : "2020-01-29T19:30:10Z",
+        "updatedAt" : "2020-05-14T21:19:26Z",
+        "lastEditedBy" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa86527d-c6f3-4782-a74f-ed90c5edacdb",
+        "parentId" : "2207a102-29d6-4873-9ddd-201fadc952ab",
+        "authorId" : "b9f03b8a-e334-43af-98f1-47fe344d3087",
+        "body" : "Hm, I'd find it odd to not trust in what the docs of the standard library say. The docs do not state platform-dependent availability of the method.\r\nBut I totally see your point and checked when this method has been introduced. In 3.3. ([search in 3.2.6 docs with no results](https://docs.python.org/release/3.2.6/search.html?q=affinity), [search in 3.3.0 docs with results](https://docs.python.org/release/3.3.0/search.html?q=affinity)) and made the version check more accurate. Hence, I couldn't use ``PY3`` or is there another way to check for minor version numbers using ``six``?",
+        "createdAt" : "2020-01-30T09:30:01Z",
+        "updatedAt" : "2020-05-14T21:19:26Z",
+        "lastEditedBy" : "b9f03b8a-e334-43af-98f1-47fe344d3087",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5def4e8e-bf3e-4e4c-a3de-f1dedf9e11d3",
+        "parentId" : "2207a102-29d6-4873-9ddd-201fadc952ab",
+        "authorId" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "body" : "> The docs do not state platform-dependent availability of the method.\r\n\r\nIn particular, this isn't available on macOS. I found this caveat in the Python docs [here](https://docs.python.org/3/library/os.html#interface-to-the-scheduler):\r\n> They are only available on some Unix platforms.\r\n\r\nAgain, probably not a big deal since Ansible should only be using this file on Linux where it should be available. But I like to be overly cautious.\r\n\r\n> ...introduced. In 3.3. ... and made the version check more accurate.\r\n\r\nAnsible only supports Python >= 3.5, so testing for `PY3` is sufficient.",
+        "createdAt" : "2020-01-30T17:36:03Z",
+        "updatedAt" : "2020-05-14T21:19:26Z",
+        "lastEditedBy" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd70ecdf-ff41-4858-8dd3-cdfbc68198d4",
+        "parentId" : "2207a102-29d6-4873-9ddd-201fadc952ab",
+        "authorId" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "body" : "I think this approach is good. Exceptions in Python are not as expensive as in other languages so I don't see a problem with this approach. I would suggest reworking this a bit to make it easier for the reader, namely returning early when possible and eliminating the need for a conditional.\r\n\r\n```python\r\n                # Default value unless we find something better\r\n                cpu_facts['processor_nproc'] = processor_occurence\r\n\r\n                try:\r\n                     cpu_facts['processor_nproc'] = len(\r\n                         os.sched_getaffinity(0)\r\n                     )\r\n                except AttributeError:\r\n                    # in Python < 3.3 and MacOS (shouldn't happen here,\r\n                    # but to be safe) ``sched_getaffinity`` is not available\r\n                    try:\r\n                        cmd = get_bin_path('nproc')\r\n                    except ValueError:\r\n                        return cpu_facts\r\n\r\n                    rc, out, _err = self.module.run_command(cmd)\r\n                    if rc == 0:\r\n                        cpu_facts['processor_nproc'] = int(out)\r\n```\r\n\r\nThe `cpu_facts.setdefault()` line can be omitted with this approach. This may be more lines of code, but I think it's a bit easier to follow. Just my opinion.",
+        "createdAt" : "2020-02-04T16:42:48Z",
+        "updatedAt" : "2020-05-14T21:19:26Z",
+        "lastEditedBy" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e5e9881-a48c-42d1-93c6-50c20ab19c8d",
+        "parentId" : "2207a102-29d6-4873-9ddd-201fadc952ab",
+        "authorId" : "b9f03b8a-e334-43af-98f1-47fe344d3087",
+        "body" : "Moving the assignment of the default value up is fine with me.\r\n\"Replacing\" the `else` of the `try … except` with a `return` wouldn't increase readability for me.\r\nAlso, if code needs to be added below the computation of `processor_nproc`, it is probably easier if we do not return in corner cases but keep going.\r\nBut if you insist, I wouldn't veto.",
+        "createdAt" : "2020-02-05T10:55:04Z",
+        "updatedAt" : "2020-05-14T21:19:26Z",
+        "lastEditedBy" : "b9f03b8a-e334-43af-98f1-47fe344d3087",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3aae56dc-f9f3-43b7-9db4-4f3ac5452b88",
+        "parentId" : "2207a102-29d6-4873-9ddd-201fadc952ab",
+        "authorId" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "body" : "Ok, let's move the default assignment up and keep the `else` without returning early. The main way I think this should read is \"start with `processor_occurence` and use something better if we can\".",
+        "createdAt" : "2020-02-05T16:44:34Z",
+        "updatedAt" : "2020-05-14T21:19:26Z",
+        "lastEditedBy" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b7117bc-30d9-4dc0-bdf2-546b95c43d2a",
+        "parentId" : "2207a102-29d6-4873-9ddd-201fadc952ab",
+        "authorId" : "b9f03b8a-e334-43af-98f1-47fe344d3087",
+        "body" : "So just as the PR is right now, no?",
+        "createdAt" : "2020-02-05T23:16:05Z",
+        "updatedAt" : "2020-05-14T21:19:26Z",
+        "lastEditedBy" : "b9f03b8a-e334-43af-98f1-47fe344d3087",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c4986861-5c16-4514-b877-c5917e89b823",
+        "parentId" : "2207a102-29d6-4873-9ddd-201fadc952ab",
+        "authorId" : "b9f03b8a-e334-43af-98f1-47fe344d3087",
+        "body" : "> So just as the PR is right now, no?\r\n\r\nIs this resolved? Any obligations left for a merge?",
+        "createdAt" : "2020-03-20T10:59:08Z",
+        "updatedAt" : "2020-05-14T21:19:26Z",
+        "lastEditedBy" : "b9f03b8a-e334-43af-98f1-47fe344d3087",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1a9d1f48adc6d309f92e39ba1c11bbe9ea7b8a80",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +284,288 @@                try:\n                    cpu_facts['processor_nproc'] = len(\n                        os.sched_getaffinity(0)\n                    )\n                except AttributeError:"
   }
 ]
