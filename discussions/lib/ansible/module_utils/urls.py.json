@@ -317,5 +317,71 @@
     "commit" : "a52524602ce78feaf25e593101d5d1f0e0de9db9",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +1129,1133 @@\n        data = to_bytes(data, nonstring='passthru')\n        request = RequestWithMethod(url, method, data)\n\n        # add the custom agent header, to help prevent issues"
+  },
+  {
+    "id" : "a23edf94-5365-41e5-a0f7-0237f21cf30c",
+    "prId" : 55953,
+    "prUrl" : "https://github.com/ansible/ansible/pull/55953#pullrequestreview-244391870",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a8a7a7e3-77af-4c00-ba4f-68095318c6f1",
+        "parentId" : null,
+        "authorId" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "body" : "I can rework the [cleanup function](https://github.com/ansible/ansible/pull/56532/files#diff-2bbdfb98f5cef18b20f2bec519a4bfe3R109) I have in #56532 so you can use that if that is helpful.",
+        "createdAt" : "2019-05-31T15:53:06Z",
+        "updatedAt" : "2019-05-31T15:53:06Z",
+        "lastEditedBy" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5bc735ae-eca5-4999-b4ab-3d7e0a96bfcb",
+        "parentId" : "a8a7a7e3-77af-4c00-ba4f-68095318c6f1",
+        "authorId" : "4b69a0b5-ac6f-45e9-9507-dd1385182f29",
+        "body" : "I think in the end we would need separate functions.  One for use in \"core\" and one for use by modules.  For now keeping it here I think is fine. We can DRY it up at a time when that becomes a necessity.",
+        "createdAt" : "2019-05-31T15:57:59Z",
+        "updatedAt" : "2019-05-31T15:57:59Z",
+        "lastEditedBy" : "4b69a0b5-ac6f-45e9-9507-dd1385182f29",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df126cac-cec4-4ed2-87c9-955a31acc8c7",
+        "parentId" : "a8a7a7e3-77af-4c00-ba4f-68095318c6f1",
+        "authorId" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "body" : "Ok. Sounds good.",
+        "createdAt" : "2019-05-31T16:06:39Z",
+        "updatedAt" : "2019-05-31T16:06:40Z",
+        "lastEditedBy" : "2f8132dc-12f8-44dc-8b97-1cf4c1616b68",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "165428a2c60e9933d6420a8b2e8d9ef79692a7e5",
+    "line" : 76,
+    "diffHunk" : "@@ -1,1 +765,769 @@\n\ndef atexit_remove_file(filename):\n    if os.path.exists(filename):\n        try:"
+  },
+  {
+    "id" : "e6a1c1e2-ee86-4d93-9c00-fbf23ddc6682",
+    "prId" : 55953,
+    "prUrl" : "https://github.com/ansible/ansible/pull/55953#pullrequestreview-263835245",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1d800268-1570-4239-a3ca-858799ec10a4",
+        "parentId" : null,
+        "authorId" : "393844a9-4fb8-4f8e-b77a-f63750dfb29d",
+        "body" : "Is this code working as expected?\r\n\r\n`maybe_add_ssl_handler(url, validate_certs, ca_path=ca_path)` creates a `SSLValidationHandler` with a possible not-`None` `ca_path`.\r\n\r\nIf `ca_path` within the handler is not `None`, the `cadata` will be created and returned by `get_ca_certs()` and but then when its passed in here it won't be used, so what's the point in creating the `cadata` at all?\r\n\r\nI ask because I was having TLS validation issues with 2.7.0, 2.8.1, 2.8.2, and `devel` on MacOS Mojave. Turns out it was just an issue where my python installation wasn't using the OpenSSL I installed via homebrew.\r\n\r\nRegardless, I was entertaining the idea of having ansible use `certifi` if it is installed, it would use that for the `ca_path` by default:\r\n\r\n```\r\ntry:\r\n    import certifi\r\n    HAS_CERTIFI = True\r\nexcept ImportError:\r\n    HAS_CERTIFI = False\r\n\r\n# ...\r\nclass SSLValidationHandler(urllib_request.BaseHandler):\r\n   # ...\r\n    def __init__(self, hostname, port, ca_path=None):\r\n        self.hostname = hostname\r\n        self.port = port\r\n        self.ca_path = ca_path\r\n\r\n        if self.ca_path is None and HAS_CERTIFI\r\n            self.ca_path = certifi.where()\r\n```\r\n\r\nbut `ssl.PEM_cert_to_DER_cert` doesn't like the comments in the cacert.pem file `certifi` provides. Also if you look at the source for that method:\r\n\r\n```\r\ndef PEM_cert_to_DER_cert(pem_cert_string):\r\n    \"\"\"Takes a certificate in ASCII PEM format and returns the\r\n    DER-encoded version of it as a byte sequence\"\"\"\r\n\r\n    if not pem_cert_string.startswith(PEM_HEADER):\r\n        raise ValueError(\"Invalid PEM encoding; must start with %s\"\r\n                         % PEM_HEADER)\r\n    if not pem_cert_string.strip().endswith(PEM_FOOTER):\r\n        raise ValueError(\"Invalid PEM encoding; must end with %s\"\r\n                         % PEM_FOOTER)\r\n    d = pem_cert_string.strip()[len(PEM_HEADER):-len(PEM_FOOTER)]\r\n    return base64.decodestring(d.encode('ASCII', 'strict'))\r\n```\r\n\r\nit only rips out the beginning and ending header, so it doesn't seem like it was designed for CA bundles but my code works (once I removed the header validation in  `PEM_cert_to_DER_cert`) which had me questioning if `cadata` is ever even used. I can report this as a bug if need be, but wanted to double check first.",
+        "createdAt" : "2019-07-18T18:34:32Z",
+        "updatedAt" : "2019-07-19T04:20:51Z",
+        "lastEditedBy" : "393844a9-4fb8-4f8e-b77a-f63750dfb29d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "165428a2c60e9933d6420a8b2e8d9ef79692a7e5",
+    "line" : 208,
+    "diffHunk" : "@@ -1,1 +916,920 @@    def make_context(self, cafile, cadata):\n        cafile = self.ca_path or cafile\n        if self.ca_path:\n            cadata = None\n        else:"
   }
 ]
