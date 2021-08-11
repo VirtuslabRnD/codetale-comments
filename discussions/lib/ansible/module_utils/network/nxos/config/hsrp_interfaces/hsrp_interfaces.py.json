@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "ac25ca15-0c53-4a49-96b2-9e8e8e45920d",
+    "prId" : 61498,
+    "prUrl" : "https://github.com/ansible/ansible/pull/61498#pullrequestreview-283110185",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "53bba7ce-2587-42fe-b84b-0f85ba2f6105",
+        "parentId" : null,
+        "authorId" : "284bb4ad-6403-4762-bb03-b2a921d26492",
+        "body" : "Why is bfd set to`disable` explicitly if the default state is disable. ",
+        "createdAt" : "2019-08-29T06:01:49Z",
+        "updatedAt" : "2019-10-08T19:42:24Z",
+        "lastEditedBy" : "284bb4ad-6403-4762-bb03-b2a921d26492",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29e3faba-05f9-469c-92f4-3ba272234798",
+        "parentId" : "53bba7ce-2587-42fe-b84b-0f85ba2f6105",
+        "authorId" : "1c9ec37a-2f71-44e7-8b02-5bff03b1111d",
+        "body" : "\r\nIt's a workaround due to a problem I saw with `merged`, as a result of setting `'default': 'disable'` in the argspec.\r\n\r\nConsider:\r\n\r\nDevice:\r\n```\r\n    interface Ethernet1/1\r\n      hsrp bfd\r\n    interface Ethernet1/2\r\n      hsrp bfd\r\n```\r\n\r\nPlaybook:\r\n```\r\n      nxos_hsrp_interfaces:\r\n        config:\r\n        - name: Ethernet1/1\r\n          # NO HSRP ATTRS SPECIFIED\r\n```\r\n\r\nResult when default in argspec: the `want` dict sets Eth1/1's `bfd` to disabled, and with `merged` it turns off `hsrp bfd` on the device. But the playbook doesn't specify the attribute so the device state should not be changed.\r\n\r\nBut by not setting the default in argspec it causes an issue with `overridden`, in which case the `bfd` state is set to `None` for interfaces not shown in the playbook, which results in an idempotency issue. Therefore I needed to be able to set the state set to default (`disabled`) somehow to get overridden to work correctly. That's what the explicit `disable` is doing.\r\n",
+        "createdAt" : "2019-08-29T15:28:18Z",
+        "updatedAt" : "2019-10-08T19:42:24Z",
+        "lastEditedBy" : "1c9ec37a-2f71-44e7-8b02-5bff03b1111d",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e91a0aec-fb26-4032-a8e2-c82e152138a2",
+        "parentId" : "53bba7ce-2587-42fe-b84b-0f85ba2f6105",
+        "authorId" : "284bb4ad-6403-4762-bb03-b2a921d26492",
+        "body" : "@chrisvanheuveln Since the default state of bfd itself is `disabled`, the device will set the state to `disabled` in running-config on removal of config  for overridden. Also since `remove_empties` in facts will remove any null valued parameter from the dictionary so in this case `bfd` parameter won't be present. It's the coding logic that needs to modified. Please refer to nxos_vlans module code. ",
+        "createdAt" : "2019-08-29T15:54:14Z",
+        "updatedAt" : "2019-10-08T19:42:24Z",
+        "lastEditedBy" : "284bb4ad-6403-4762-bb03-b2a921d26492",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73a901bb-75d4-4a08-a3b6-e8468b797bed",
+        "parentId" : "53bba7ce-2587-42fe-b84b-0f85ba2f6105",
+        "authorId" : "1c9ec37a-2f71-44e7-8b02-5bff03b1111d",
+        "body" : "The nxos_vlans module is not a valid comparison because it doesn't have any defaults specified in argspec. However, I looked at nxos_interfaces which does (`'enable'` has a default to `True`) and in fact I see the same failure condition for that attribute when I try the same kind of test case (using nxos_interfaces). I'll send you a unit test diff through email that you can try which will demonstrate the failure.\r\n\r\nAlso, I think I may have confused you so let me clarify. There are two issues but only one is present at a time:\r\n\r\nIssue 1. When I set `'default':'disable'` in argspec it breaks the `merged` case. Overridden does work in this case.\r\n\r\nIssue 2. When I do NOT set `'default':'disable'` in argspec everything works except for `overridden`, which is why I added the workaround method to handle that.",
+        "createdAt" : "2019-09-03T16:16:53Z",
+        "updatedAt" : "2019-10-08T19:42:24Z",
+        "lastEditedBy" : "1c9ec37a-2f71-44e7-8b02-5bff03b1111d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9aa9fb04798fa7b6c7c59a19fb890f0c70c47793",
+    "line" : 214,
+    "diffHunk" : "@@ -1,1 +212,216 @@        # Set dict None values to default states\n        if 'bfd' in want and want['bfd'] is None:\n            want['bfd'] = 'disable'\n        return want\n"
+  }
+]
