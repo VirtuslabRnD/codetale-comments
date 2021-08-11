@@ -97,5 +97,104 @@
     "commit" : "041e1979c40725b55bbf9735e26fcaaea5cdec9f",
     "line" : 24,
     "diffHunk" : "@@ -1,1 +147,151 @@            elif boto3 and HAS_BOTO3:\n                # here we don't need to make an additional call, will default to 'us-east-1' if the below evaluates to None.\n                region = botocore.session.get_session().get_config_variable('region')\n            elif boto3 and not HAS_BOTO3:\n                module.fail_json(\"Boto3 is required for this module. Please install boto3 and try again\")"
+  },
+  {
+    "id" : "70602954-d5cd-4669-97ce-d784b125ec57",
+    "prId" : 30622,
+    "prUrl" : "https://github.com/ansible/ansible/pull/30622#pullrequestreview-64728904",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab884028-31be-4515-801c-8d703c6bf9fe",
+        "parentId" : null,
+        "authorId" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "body" : "I think we could just ignore these parameters entirely, and assume we'll need to try both all the time. It would simplify this code, and let us list those params as deprecated. ",
+        "createdAt" : "2017-09-21T19:06:53Z",
+        "updatedAt" : "2017-09-21T19:06:57Z",
+        "lastEditedBy" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73b8c57c-19fb-4c2e-86c1-9ca93cb269c3",
+        "parentId" : "ab884028-31be-4515-801c-8d703c6bf9fe",
+        "authorId" : "8e448afa-36a6-4325-b7c1-0522cb01977c",
+        "body" : "I'm not sure I understand this.  When you say 'we'll need to try both all the time', both what?\r\n\r\nI think we need these parameters because there are multiple variations that AWS use for tag key names, not just `value` or `Value`.",
+        "createdAt" : "2017-09-22T00:07:15Z",
+        "updatedAt" : "2017-09-22T00:10:23Z",
+        "lastEditedBy" : "8e448afa-36a6-4325-b7c1-0522cb01977c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "97facc7b-16de-415b-b3ae-381860c9a99d",
+        "parentId" : "ab884028-31be-4515-801c-8d703c6bf9fe",
+        "authorId" : "183d9a20-6a5e-4432-9fe9-9fd6fe9514fb",
+        "body" : "I've just checked the source, and we don't actually pass the keyword parameters to `boto3_tag_list_to_ansible_dict` anywhere at present!\r\n\r\nIs this a practical concern or a theoretical concern - are there any services that don't use `[{'Key': tag_key, 'Value': tag_value}]` ?\r\n\r\nI know that using the way the return result of `compare_aws_tags` is used does greatly depend on the service in question, but really don't know if there are similar concerns here.\r\n\r\n**Edit**:\r\n\r\nMy first search was wrong. There are places the extra args are used, but only for `key` or `Key`\r\n\r\n```\r\n$ git grep 'boto3_tag_list.*[kK]ey'\r\nlib/ansible/module_utils/ec2.py:def boto3_tag_list_to_ansible_dict(tags_list, tag_name_key_name='Key', tag_value_key_name='Value'):\r\nlib/ansible/module_utils/ec2.py:def ansible_dict_to_boto3_tag_list(tags_dict, tag_name_key_name='Key', tag_value_key_name='Value'):\r\nlib/ansible/modules/cloud/amazon/ec2_group_facts.py:        security_group['tags'] = boto3_tag_list_to_ansible_dict(security_group.get('tags', {}), tag_name_key_name='key', tag_value_key_name='value')\r\nlib/ansible/modules/cloud/amazon/ec2_instance_facts.py:        instance['tags'] = boto3_tag_list_to_ansible_dict(instance.get('tags', []), 'key', 'value')\r\nlib/ansible/modules/cloud/amazon/ec2_snapshot_facts.py:            snapshot['tags'] = boto3_tag_list_to_ansible_dict(snapshot['tags'], 'key', 'value')\r\nlib/ansible/modules/cloud/amazon/ec2_vpc_dhcp_option_facts.py:                        'Tags': boto3_tag_list_to_ansible_dict(dhcp_option.get('Tags', [{'Value': '', 'Key': 'Name'}]))}\r\nlib/ansible/modules/cloud/amazon/ec2_vpc_nacl_facts.py:            nacl['tags'] = boto3_tag_list_to_ansible_dict(nacl['tags'], 'key', 'value')\r\nlib/ansible/modules/cloud/amazon/ec2_vpc_vpn.py:        current_tags = ec2_utils.boto3_tag_list_to_ansible_dict(current_attrs['tags'], u'key', u'value')\r\ntest/units/modules/cloud/amazon/test_ec2_vpc_vpn.py:    correct_changes = boto3_tag_list_to_ansible_dict([{'Key': 'Three', 'Value': 'three'}, {'Key': 'Four', 'Value': 'four'}])\r\n```",
+        "createdAt" : "2017-09-22T00:15:57Z",
+        "updatedAt" : "2017-09-22T00:19:38Z",
+        "lastEditedBy" : "183d9a20-6a5e-4432-9fe9-9fd6fe9514fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "867208f1-c080-46ac-a307-eb7264ed0bea",
+        "parentId" : "ab884028-31be-4515-801c-8d703c6bf9fe",
+        "authorId" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "body" : "The way I'm thinking about it, we have the choice between:\r\n\r\nA: trying and falling back on a known alternative (lower-case `key`), thus *not* adding parameters to this function and avoiding more surface area\r\n\r\nB: adding these params to handle a case we don't have an example of\r\n\r\nTo me, option A seems like the way to go if we're able to get away with it, and we can just remove the usage of these kwargs in those instance/snapshot/etc modules. Does that make sense to y'all? ",
+        "createdAt" : "2017-09-22T14:10:38Z",
+        "updatedAt" : "2017-09-22T14:10:43Z",
+        "lastEditedBy" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c12994e-3b5b-4ad4-9712-d11cc027fb6b",
+        "parentId" : "ab884028-31be-4515-801c-8d703c6bf9fe",
+        "authorId" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "body" : "Ah, mild issue: since this is also going to be a backport, we shouldn't remove the kwarg usage entirely, just ignore the parameters for same effect. ",
+        "createdAt" : "2017-09-22T14:11:49Z",
+        "updatedAt" : "2017-09-22T14:11:49Z",
+        "lastEditedBy" : "06ab4cf8-4a18-478e-93ee-69929f4bffc6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3eb3c4f-e269-492e-9c85-a129951f07fb",
+        "parentId" : "ab884028-31be-4515-801c-8d703c6bf9fe",
+        "authorId" : "8e448afa-36a6-4325-b7c1-0522cb01977c",
+        "body" : "This is weird. I definitely remember coding a module that didn't use Key or key. I thought it was merged but maybe not. \r\n\r\nWe definitely need to keep the parameters to specify. Previously this module did what is proposed as (a) but I changed it because it doesn't satisfy all cases",
+        "createdAt" : "2017-09-22T18:48:49Z",
+        "updatedAt" : "2017-09-22T18:48:49Z",
+        "lastEditedBy" : "8e448afa-36a6-4325-b7c1-0522cb01977c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fd24e2a3-44a5-4d6d-8286-3627c0ae2486",
+        "parentId" : "ab884028-31be-4515-801c-8d703c6bf9fe",
+        "authorId" : "183d9a20-6a5e-4432-9fe9-9fd6fe9514fb",
+        "body" : "Any objections to just merging this as is then?",
+        "createdAt" : "2017-09-23T00:02:19Z",
+        "updatedAt" : "2017-09-23T00:02:19Z",
+        "lastEditedBy" : "183d9a20-6a5e-4432-9fe9-9fd6fe9514fb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b49e3ffb-1cbd-4121-b6a8-8207e16e5bde",
+        "parentId" : "ab884028-31be-4515-801c-8d703c6bf9fe",
+        "authorId" : "8e448afa-36a6-4325-b7c1-0522cb01977c",
+        "body" : "LGTM",
+        "createdAt" : "2017-09-23T01:56:51Z",
+        "updatedAt" : "2017-09-23T01:56:51Z",
+        "lastEditedBy" : "8e448afa-36a6-4325-b7c1-0522cb01977c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9962ed1c9c3ceafd9ab03587ed53a8cc19e11f70",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +460,464 @@    \"\"\"\n\n    if tag_name_key_name and tag_value_key_name:\n        tag_candidates = {tag_name_key_name: tag_value_key_name}\n    else:"
   }
 ]
