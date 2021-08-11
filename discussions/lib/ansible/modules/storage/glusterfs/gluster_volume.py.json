@@ -1,0 +1,200 @@
+[
+  {
+    "id" : "f5b4889a-48e7-41a1-a7e9-34122ff9d9c8",
+    "prId" : 38269,
+    "prUrl" : "https://github.com/ansible/ansible/pull/38269#pullrequestreview-171448019",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2422c6d7-66cd-437c-bacc-50e70626a963",
+        "parentId" : null,
+        "authorId" : "41736ed5-89b6-4393-a35e-7b7d907729c9",
+        "body" : "Shouldn't there be a validation on the number of bricks being removed? @sac @devyanikota ?\r\nFor instance, if replica count =3, then 3 bricks need to be removed, if removing a sub-volume. Otherwise, replica count needs to be reduced..etc. Is remove-brick supported for plain distribute - shouldn't data migration be triggered?",
+        "createdAt" : "2018-10-04T06:46:59Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "41736ed5-89b6-4393-a35e-7b7d907729c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "47d4d63f-675d-4a1b-8dad-e3a0fe84e676",
+        "parentId" : "2422c6d7-66cd-437c-bacc-50e70626a963",
+        "authorId" : "aa05b07a-403f-4129-a994-dd5a01bd2bb8",
+        "body" : "@sabose we do not validate the bricks since validation is done by gluster. We'd be duplicating the efforts.\r\nPlain distribute is supported, data migration is triggered when we remove the brick. However, commit is tried 12 times with 10 second gap. If the data migration is not complete by then, we give up and it is upto the user to commit. This is because depending on the data migrated it might sometimes take days together to complete.",
+        "createdAt" : "2018-10-04T10:55:43Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "aa05b07a-403f-4129-a994-dd5a01bd2bb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "46dc626d-62fc-4e93-8cb5-9688c57adc1b",
+        "parentId" : "2422c6d7-66cd-437c-bacc-50e70626a963",
+        "authorId" : "41736ed5-89b6-4393-a35e-7b7d907729c9",
+        "body" : "Isn't there a difference in how remove-brick is called for replica vs distribute? For distribute volume types - it's remove-brick start followed by remove-brick commit. However if reducing replica count, there's no need for data migration, and hence it's remove-brick force. Does the module account for it? (I'm not sure of the logic of disperse volume types - please check that as well)",
+        "createdAt" : "2018-10-04T11:18:13Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "41736ed5-89b6-4393-a35e-7b7d907729c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41211488-ed58-4136-a233-9f4a809103dc",
+        "parentId" : "2422c6d7-66cd-437c-bacc-50e70626a963",
+        "authorId" : "b40e2a11-e7ab-4930-ac70-5081cb14e023",
+        "body" : "I tested the remove-brick operation on various gluster volume types(replicated, distributed, arbiter, disperse).\r\nI was able to successfully remove bricks from the volumes as long as the number of bricks to be removed were of the correct configuration(a multiple of the brick config) of the respective volume type.\r\n@sac @sabose ^^\r\nResources used:\r\n[Gluster_Admin_guide](https://access.redhat.com/documentation/en-US/Red_Hat_Storage/2.0/html/Administration_Guide/sect-User_Guide-Managing_Volumes-Shrinking.html)\r\n[Gluster docs](https://docs.gluster.org/en/v3/Administrator%20Guide/Managing%20Volumes/#shrinking-volumes)\r\n\r\n",
+        "createdAt" : "2018-10-18T12:03:45Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "b40e2a11-e7ab-4930-ac70-5081cb14e023",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "78bf3b3a-8efd-408f-a531-94fb9a251854",
+        "parentId" : "2422c6d7-66cd-437c-bacc-50e70626a963",
+        "authorId" : "41736ed5-89b6-4393-a35e-7b7d907729c9",
+        "body" : "ok! @devyanikota so there's no need for the module to append force based on volume types? It's handled  by gluster?",
+        "createdAt" : "2018-11-05T07:02:31Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "41736ed5-89b6-4393-a35e-7b7d907729c9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61fa2857-efc4-4769-ba3b-6bf0883cb633",
+        "parentId" : "2422c6d7-66cd-437c-bacc-50e70626a963",
+        "authorId" : "b40e2a11-e7ab-4930-ac70-5081cb14e023",
+        "body" : "@sabose since its a destructive operation, while discussing the same @sac had suggested mandating force, so that we do not lose any data accidentally. Here the 'force' variable is a check to allow the operation to be executed.\r\nThe command for neither of the volumes will include force. Within the retries limit and on the basis of the returned 'status', the 'commit' operation is executed, and the respective gluster message(/error) is returned.",
+        "createdAt" : "2018-11-05T08:24:31Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "b40e2a11-e7ab-4930-ac70-5081cb14e023",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6c1166752a2e8f640d2e24df5c2b6c2311967f01",
+    "line" : 122,
+    "diffHunk" : "@@ -1,1 +558,562 @@                changed = True\n\n            if removed_bricks:\n                if replicas and int(replicas) < int(volumes[volume_name]['replicas']):\n                    reduce_config(volume_name, removed_bricks, str(replicas), force)"
+  },
+  {
+    "id" : "2b13d340-538b-49df-8e17-c5c59ea36b49",
+    "prId" : 38269,
+    "prUrl" : "https://github.com/ansible/ansible/pull/38269#pullrequestreview-176767559",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "82785a77-d6e8-45fd-b9a9-11350621acf4",
+        "parentId" : null,
+        "authorId" : "aa05b07a-403f-4129-a994-dd5a01bd2bb8",
+        "body" : "When reducing the replica count, the force option is mandatory. This will fail if force is not set.\r\nAlso for remove brick can you check there are not pending heals. \r\n\r\nIf we are removing a brick from a volume which has pending heals and if that brick had the only good copy, we have data loss.\r\n\r\n",
+        "createdAt" : "2018-11-20T10:58:58Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "aa05b07a-403f-4129-a994-dd5a01bd2bb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff6bf58d-c378-4ea2-9b59-252dc0319b03",
+        "parentId" : "82785a77-d6e8-45fd-b9a9-11350621acf4",
+        "authorId" : "b40e2a11-e7ab-4930-ac70-5081cb14e023",
+        "body" : "@sac thanks for pointing it out. I have added checks for self-heal status before executing the remove-brick operation when reducing the cluster configuration.\r\nThanks.",
+        "createdAt" : "2018-11-20T13:37:38Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "b40e2a11-e7ab-4930-ac70-5081cb14e023",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6c1166752a2e8f640d2e24df5c2b6c2311967f01",
+    "line" : 89,
+    "diffHunk" : "@@ -1,1 +426,430 @@    else:\n        module.fail_json(msg=\"Force option is mandatory\")\n    run_gluster(args)\n\n"
+  },
+  {
+    "id" : "0adc12a4-7408-4898-9cd9-93a9d58e1032",
+    "prId" : 38269,
+    "prUrl" : "https://github.com/ansible/ansible/pull/38269#pullrequestreview-177068444",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b6f02dfb-0fb9-4176-a613-9b4041062e0e",
+        "parentId" : null,
+        "authorId" : "aa05b07a-403f-4129-a994-dd5a01bd2bb8",
+        "body" : "Shouldn't an argument replicas be somewhere here?",
+        "createdAt" : "2018-11-21T04:25:14Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "aa05b07a-403f-4129-a994-dd5a01bd2bb8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6c1166752a2e8f640d2e24df5c2b6c2311967f01",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +163,167 @@      - 10.70.42.85\n    force: true\n  run_once: true\n\n- name: Reduce cluster configuration"
+  },
+  {
+    "id" : "8f896c0b-c85c-403e-97b1-3e0cf2bbe39d",
+    "prId" : 38269,
+    "prUrl" : "https://github.com/ansible/ansible/pull/38269#pullrequestreview-177199747",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a52de998-359a-4e54-818b-a9dcf54a970b",
+        "parentId" : null,
+        "authorId" : "aa05b07a-403f-4129-a994-dd5a01bd2bb8",
+        "body" : "Add an example for removing bricks in case of replica as well. With replica option. ",
+        "createdAt" : "2018-11-21T04:46:18Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "aa05b07a-403f-4129-a994-dd5a01bd2bb8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0359a4b2-71c8-4f49-9764-c0a86953a254",
+        "parentId" : "a52de998-359a-4e54-818b-a9dcf54a970b",
+        "authorId" : "b40e2a11-e7ab-4930-ac70-5081cb14e023",
+        "body" : "@sac Added an example to reduce cluster configuration.",
+        "createdAt" : "2018-11-21T11:47:39Z",
+        "updatedAt" : "2018-11-22T06:31:30Z",
+        "lastEditedBy" : "b40e2a11-e7ab-4930-ac70-5081cb14e023",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6c1166752a2e8f640d2e24df5c2b6c2311967f01",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +163,167 @@      - 10.70.42.85\n    force: true\n  run_once: true\n\n- name: Reduce cluster configuration"
+  },
+  {
+    "id" : "28f5bda3-3742-4479-a87c-003ed82990e5",
+    "prId" : 38269,
+    "prUrl" : "https://github.com/ansible/ansible/pull/38269#pullrequestreview-240923271",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "439d8f2b-1f8d-4109-aa68-0daa5c3956e6",
+        "parentId" : null,
+        "authorId" : "e51bfd99-76bb-44a1-8fd0-3916c7cbd6bb",
+        "body" : "Here is comparison of int and list: `len(all_bricks) < bricks_in_volume`.\r\n`Ansible error: The error was: TypeError: '<' not supported between instances of 'int' and 'list'`",
+        "createdAt" : "2019-05-22T22:06:35Z",
+        "updatedAt" : "2019-05-22T22:06:35Z",
+        "lastEditedBy" : "e51bfd99-76bb-44a1-8fd0-3916c7cbd6bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04f0bb6c-6c31-4d9a-b251-d7f40acb402c",
+        "parentId" : "439d8f2b-1f8d-4109-aa68-0daa5c3956e6",
+        "authorId" : "02e74335-a6fd-48e7-acea-88529c13164d",
+        "body" : "@valentinsiryk please file a bug on that.",
+        "createdAt" : "2019-05-22T23:10:24Z",
+        "updatedAt" : "2019-05-22T23:10:24Z",
+        "lastEditedBy" : "02e74335-a6fd-48e7-acea-88529c13164d",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6c1166752a2e8f640d2e24df5c2b6c2311967f01",
+    "line" : 113,
+    "diffHunk" : "@@ -1,1 +549,553 @@                        new_bricks.append(brick)\n\n            if not new_bricks and len(all_bricks) < bricks_in_volume:\n                for brick in bricks_in_volume:\n                    if brick not in all_bricks:"
+  }
+]
