@@ -42,5 +42,93 @@
     "commit" : "ab3c0436cf659dd6f76b2b6b5360d327bad385bb",
     "line" : 21,
     "diffHunk" : "@@ -1,1 +179,183 @@                              final StateDirectory stateDirectory,\n                              final long cacheSizeBytes,\n                              final StreamsMetricsImpl streamsMetrics,\n                              final Time time,\n                              final String threadClientId,"
+  },
+  {
+    "id" : "795aa432-4309-4433-af7e-d31f08cf9789",
+    "prId" : 9487,
+    "prUrl" : "https://github.com/apache/kafka/pull/9487#pullrequestreview-531536276",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fd76831c-5f6b-4a1f-b2d4-7e64c419749b",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "It seems like we shouldn't both handle the exception in the catch block AND shut down the client in the finally block. If the new handler is used, then we've already shut down the client or possibly started to shut down the whole application. It's tricky, though, because if the old handler was used then we _do_ want to make sure that the global thread is all cleaned up before rethrowing the exception. \r\nSeems like we need some way to detect whether we're using the old or the new handler after all. But I think you can do it without too many changes, since basically the rule is \"if they set a new handler at all OR didn't set either handler, then use the new one\". So maybe you can just make the `StreamsUncaughtExceptionHandler` a local field instead of the `Consumer<>`, and leave it as `null` to indicate that the old handler should be used and therefore this shutdown logic should be invoked. Otherwise just call the new handler directly. Or something like that...you'd know this code better than me, WDYT?",
+        "createdAt" : "2020-11-13T04:26:45Z",
+        "updatedAt" : "2020-11-18T03:39:14Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "848f3cdd-1a37-4685-a446-cc049823904e",
+        "parentId" : "fd76831c-5f6b-4a1f-b2d4-7e64c419749b",
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "There is a logic to use the old handler if the conditions you laid out are true. The odd series of casts of exception types in `handleStreamsUncaughtExceptionDefaultWrapper` are what makes this happen. \r\n\r\nThis is a bit tricky but I think we want to close the client either way. As we don't have plans to replace the global thread and shutting  down the application is best effort. We talked about this a while back and we decided the global handler was mainly for information and the return type we would try to follow but we need to make sure we at least close the client.",
+        "createdAt" : "2020-11-13T17:07:04Z",
+        "updatedAt" : "2020-11-18T03:39:14Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6afa6ea0-6d5a-43af-86dc-d0c1aa9c4a58",
+        "parentId" : "fd76831c-5f6b-4a1f-b2d4-7e64c419749b",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Ah ok I thought we executed this cleanup logic in the GlobalStreamThread's `shutdown` method but now I see that's not true. Sorry for the confusion there.\r\nI do see some minor outstanding issues here, mainly around the state diagram. Let's say the user opts to `SHUTDOWN_CLIENT` in the new handler: the intended semantics are to end up in `NOT_RUNNING` \r\nBut I think what would happen is that from the global thread we would immediately call `KafkaStreams#close` , which kicks off a shutdown thread to wait for all threads to join and then sets the state to `NOT_RUNNING`. Then when the handler returns, it would transition the global thread to `PENDING_SHUTDOWN` and then finally to `DEAD`. And during the transition to `DEAD`, we would actually end up transitioning the KafkaStreams instance to `ERROR`, rather than `NOT_RUNNING` as intended. So probably, we just need to update the `onChange` method in KafkaStreams.\r\nThis also reminds me of another thing, we need to update the FSM diagram and allowed transitions in KafkaStreams to reflect the new semantics we decided on for ERROR (which IIRC is basically just to make it a terminal state). Does that sound right to you?",
+        "createdAt" : "2020-11-14T00:47:17Z",
+        "updatedAt" : "2020-11-18T03:39:14Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "061a505a-5aee-423a-9b6f-5da40a2a97b7",
+        "parentId" : "fd76831c-5f6b-4a1f-b2d4-7e64c419749b",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I suspect the tests didn't catch this because we would still transition out of ERROR to PENDING_SHUTDOWN and finally NOT_RUNNING in this case. But really, we shouldn't transition to ERROR in the first place",
+        "createdAt" : "2020-11-14T00:47:52Z",
+        "updatedAt" : "2020-11-18T03:39:14Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a9664e81-7c2a-40aa-952b-9c2aa0c626cf",
+        "parentId" : "fd76831c-5f6b-4a1f-b2d4-7e64c419749b",
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "I don't think it will actually transition to `ERROR` because the handler will call close before the global thread is dead, which will transition to PEDING_SHUTDOWN, there is no transition to ERROR from either PENDING_SHUTDOWN or NOT_RUNNING.\r\n\r\nthe FSM will be part of the add thread work as it doesn't really make sense to remove the change to error until we can add threads",
+        "createdAt" : "2020-11-14T01:32:21Z",
+        "updatedAt" : "2020-11-18T03:39:14Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3a0ecc0-7ecf-439b-9899-4c013ee0e6c7",
+        "parentId" : "fd76831c-5f6b-4a1f-b2d4-7e64c419749b",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Oh you're totally right, sorry for letting my paranoia start spreading conspiracy theories here 🙂  Given all this I'd still claim that the FSM is in need to being cleaned up a bit (or a lot), but if you'd prefer to hold off on that until the add thread work then I'm all good here. Thanks for humoring me and explaining the state of things. I just wanted/want to make sure we don't overlook anything, since there's a lot going on.\r\n\r\nFor example in the current code, if the global thread dies with the old handler still in use then we'll transition to ERROR. However the user still has to be responsible for closing the client themselves, and it will ultimately transition from ERROR to NOT_RUNNING. Whereas if we transition to ERROR as the result of a SHUTDOWN_APPLICATION error code, the user should NOT try to invoke close themselves, and the ERROR state will be terminal. That's pretty confusing eg for users who use a state listener and wait for the transition to ERROR to call close(). We should make sure that ERROR has the same semantics across the board by the end of all this work.\r\n\r\nAnyways I'm just thinking out loud here, to reiterate I'm perfectly happy to merge this as-is. But for reasons like the above, I think it's important to tackle the FSM in the next PR and make sure it all gets sorted out by the next AK release",
+        "createdAt" : "2020-11-14T04:45:56Z",
+        "updatedAt" : "2020-11-18T03:39:14Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d3f1a9c1-9c90-489f-bcb1-ecdef69e0661",
+        "parentId" : "fd76831c-5f6b-4a1f-b2d4-7e64c419749b",
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "+1 to sorting out FSM before next release, I have a ticket to track the work. I started to change it and it ballooned out to be much more expansive than I thought. This PR is already complicated enough, so we can add is later.",
+        "createdAt" : "2020-11-16T17:17:31Z",
+        "updatedAt" : "2020-11-18T03:39:14Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "35dc69a461be58624c13ce4a252ed483d1f4c65d",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +317,321 @@            this.streamsUncaughtExceptionHandler.accept(e);\n        } catch (final Exception e) {\n            this.streamsUncaughtExceptionHandler.accept(e);\n        } finally {\n            // set the state to pending shutdown first as it may be called due to error;"
   }
 ]

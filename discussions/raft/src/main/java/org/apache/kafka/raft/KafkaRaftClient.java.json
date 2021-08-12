@@ -31,5 +31,423 @@
     "commit" : "bceb07ff9233d969d13108c3d15fefbe665ed873",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +194,198 @@        highWatermarkOpt.ifPresent(highWatermark -> {\n            long newHighWatermark = Math.min(endOffset().offset, highWatermark);\n            if (state.updateHighWatermark(OptionalLong.of(newHighWatermark))) {\n                updateHighWatermark(state, currentTimeMs);\n            }"
+  },
+  {
+    "id" : "7021160c-96d7-481a-9571-30c883bf3efa",
+    "prId" : 9418,
+    "prUrl" : "https://github.com/apache/kafka/pull/9418#pullrequestreview-514199988",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "66b24ed4-7f17-4a1b-8b0c-0f65a5697256",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "For now since we only have a single thread processing all incoming req/resp, this is okay; but when we multi-thread processing requests this would no longer be safe, since it is possible that some batches gets replicated and committed while not being flushed locally yet.",
+        "createdAt" : "2020-10-21T00:37:10Z",
+        "updatedAt" : "2020-10-27T03:04:10Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7542e12a-9532-4162-b949-d035159253be",
+        "parentId" : "66b24ed4-7f17-4a1b-8b0c-0f65a5697256",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Yes, I agree with you. Of course it is ok if unflushed data gets replicated. The main thing we need to protect is incrementing the high watermark.",
+        "createdAt" : "2020-10-21T21:29:00Z",
+        "updatedAt" : "2020-10-27T03:04:10Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fac5c0a9507f9f40f99dac017242d12500a97d5d",
+    "line" : 289,
+    "diffHunk" : "@@ -1,1 +1533,1537 @@                    appendBatch(state, batch, currentTimeMs);\n                }\n                flushLeaderLog(state, currentTimeMs);\n            } finally {\n                // Release and discard any batches which failed to be appended"
+  },
+  {
+    "id" : "7832ff60-a69b-4f13-a4a5-a9d7fdf7cd19",
+    "prId" : 9418,
+    "prUrl" : "https://github.com/apache/kafka/pull/9418#pullrequestreview-517316390",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1245a0d3-6281-407f-99ca-2cce95785be8",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Why return MAX_VALUE instead of null here? If we want to use `null` to indicate `memory full` and use `MAX_VALUE` to indicate `not leader`, the javadoc should reflecting this.\r\n\r\nAnyways, I think returning sth like a `combo(Offset, ErrorCode, backoffMs)` would be preferred in the end state.",
+        "createdAt" : "2020-10-21T00:39:31Z",
+        "updatedAt" : "2020-10-27T03:04:10Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d28d9ad2-6554-41c4-9217-ef0e7dd2f9e3",
+        "parentId" : "1245a0d3-6281-407f-99ca-2cce95785be8",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Yeah, see my comment above about the handling of `Long.MAX_VALUE`. This is an attempt to reduce the error handling in the state machine. The model that we are working toward here is the following:\r\n\r\n1) the state machine gets notified that the node has become leader in some epoch\r\n2) the state machine can schedule appends with this epoch and it will get back the expected append offset\r\n3) the state machine treats scheduled appends as uncommitted until the call to `handleCommit`\r\n4) if the node resigns its leadership, the state machine will get notified and it will be expected to drop uncommitted data\r\n\r\nBy using a sort of impossible offset sentinel, the state machine just needs to wait for the notification that the leader has resigned.",
+        "createdAt" : "2020-10-21T21:35:44Z",
+        "updatedAt" : "2020-10-27T03:04:10Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fd81abb1-bc00-41b0-87cc-998d06028919",
+        "parentId" : "1245a0d3-6281-407f-99ca-2cce95785be8",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Sounds good.",
+        "createdAt" : "2020-10-27T03:06:21Z",
+        "updatedAt" : "2020-10-27T03:06:21Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fac5c0a9507f9f40f99dac017242d12500a97d5d",
+    "line" : 424,
+    "diffHunk" : "@@ -1,1 +1713,1717 @@        BatchAccumulator<T> accumulator = this.accumulator;\n        if (accumulator == null) {\n            return Long.MAX_VALUE;\n        }\n"
+  },
+  {
+    "id" : "3bcd3157-a0bc-4960-bd56-00f82e7c43cb",
+    "prId" : 9418,
+    "prUrl" : "https://github.com/apache/kafka/pull/9418#pullrequestreview-521187510",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d966055-82ea-4f89-be43-629405a2cf0c",
+        "parentId" : null,
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "@hachikuji Should we move this state to `LeaderState`? We can delegate `maybeCloseAccumulator` to the `transitionTo...` functions.\r\n\r\nI have a similar requirements for snapshot. I am currently adding a `SnapshotWriter` to `FollowerState` to track this state. I haven't implemented it yet but I am thinking of making `FollowerState` `Closeable` which will handle the cleanup. The `transitionTo...` functions have the additional responsibility of calling `close` if necessary.\r\n\r\nWhat do you think?",
+        "createdAt" : "2020-11-01T02:32:40Z",
+        "updatedAt" : "2020-11-01T02:32:40Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fac5c0a9507f9f40f99dac017242d12500a97d5d",
+    "line" : 178,
+    "diffHunk" : "@@ -1,1 +301,305 @@        kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);\n\n        accumulator = new BatchAccumulator<>(\n            quorum.epoch(),\n            log.endOffset().offset,"
+  },
+  {
+    "id" : "81445f84-8443-446b-a14b-6352fc6f54e4",
+    "prId" : 9482,
+    "prUrl" : "https://github.com/apache/kafka/pull/9482#pullrequestreview-515089413",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ae6bf6a5-513b-4b7e-a9d5-c34338a30d6b",
+        "parentId" : null,
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "Does this mean that in practice, follower will have at most two batches in flight?\r\n1. The one that they are currently processing\r\n2. If they read the last message/record in the batch then the next batch in the log?",
+        "createdAt" : "2020-10-22T19:28:11Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4cb5779f-824e-4d89-8ab3-0fa36128c0ae",
+        "parentId" : "ae6bf6a5-513b-4b7e-a9d5-c34338a30d6b",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "When catching up from the log, yes. However, I have implemented an optimization for writes from the leader. We save the original batch in memory so that it can be sent back to the state machine after the write is committed. In this case, we know the last offset of the batch, so we can have multiple inflight batches sent to the controller. This is nice because it means the elected controller will not have to read from disk.",
+        "createdAt" : "2020-10-22T20:22:12Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65494771be58190214d67d2d27bdd3f853fdaa6c",
+    "line" : 484,
+    "diffHunk" : "@@ -1,1 +1835,1839 @@         * inflight data until it has been processed by the state machine. In this case,\n         * we delay sending additional data until the state machine has read to the\n         * end and the last offset is determined.\n         */\n        public synchronized OptionalLong nextExpectedOffset() {"
+  },
+  {
+    "id" : "c8015acd-16f5-4575-8b38-8691a0f60d82",
+    "prId" : 9482,
+    "prUrl" : "https://github.com/apache/kafka/pull/9482#pullrequestreview-520043870",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ebec9c34-992e-45fe-8d63-062b0a77811b",
+        "parentId" : null,
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "It looks a bit weird to have two versions of fire handle commit, could we name them differently or comment about their distinctive logics for determining when to fire commit callback?",
+        "createdAt" : "2020-10-29T17:48:13Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd1f0237-b3b0-4923-b1bf-36eeb56e492e",
+        "parentId" : "ebec9c34-992e-45fe-8d63-062b0a77811b",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "The only difference is the input. I will add some comments to try and clarify the usage.",
+        "createdAt" : "2020-10-29T20:12:18Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65494771be58190214d67d2d27bdd3f853fdaa6c",
+    "line" : 173,
+    "diffHunk" : "@@ -1,1 +280,284 @@    }\n\n    private void maybeFireHandleCommit(long baseOffset, int epoch, List<T> records) {\n        for (ListenerContext listenerContext : listenerContexts) {\n            OptionalLong nextExpectedOffsetOpt = listenerContext.nextExpectedOffset();"
+  },
+  {
+    "id" : "fc10849c-e352-4dbf-9d68-8383c7239ea1",
+    "prId" : 9482,
+    "prUrl" : "https://github.com/apache/kafka/pull/9482#pullrequestreview-521078117",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4e96f4cb-edcf-46ad-9e80-32e3096f4129",
+        "parentId" : null,
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Why would this work? If the flush wasn't successful, could the fetched records be invalidated later?",
+        "createdAt" : "2020-10-29T17:54:30Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "241381ab-95aa-4796-9bde-875200e0ba83",
+        "parentId" : "4e96f4cb-edcf-46ad-9e80-32e3096f4129",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Yeah, it's ok for followers to see uncommitted or even unflushed data. The main thing is that we avoid advancing the high watermark until the fsync completes. Note that this is the main reason that we had to do KAFKA-10527. Without this fix, it was possible for the leader to continue in the same epoch after a start, which means that it could lose and overwrite unflushed data.",
+        "createdAt" : "2020-10-29T20:16:16Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ee8bc8e3-d452-45c7-aaeb-2f4b73b88a62",
+        "parentId" : "4e96f4cb-edcf-46ad-9e80-32e3096f4129",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "Yeah. You want to force an epoch change in the case that the old leader stays leader and partially replicated data was lost. This would force followers to truncate to the new leader's log state.",
+        "createdAt" : "2020-10-30T23:31:36Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65494771be58190214d67d2d27bdd3f853fdaa6c",
+    "line" : 226,
+    "diffHunk" : "@@ -1,1 +388,392 @@\n    private void flushLeaderLog(LeaderState state, long currentTimeMs) {\n        // We update the end offset before flushing so that parked fetches can return sooner\n        updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);\n        log.flush();"
+  },
+  {
+    "id" : "84115041-4fc6-46c7-ad60-a92b4c4d24a5",
+    "prId" : 9482,
+    "prUrl" : "https://github.com/apache/kafka/pull/9482#pullrequestreview-519993857",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7780d3c2-fa49-419d-8477-72e197c2bf87",
+        "parentId" : null,
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Do we anticipate use cases to add listeners on the fly? Right now I could only see one case in static context from test raft server.",
+        "createdAt" : "2020-10-29T17:59:30Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "866a1fdf-8e10-4e66-9d44-fa73876dd720",
+        "parentId" : "7780d3c2-fa49-419d-8477-72e197c2bf87",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I doubt we would use it in practice, though I guess it would open the door to changing roles dynamically, which might be interesting in the future. That said, it was simple to add and useful in testing since it gave me an easy way to initialize a state where a listener had not caught up.",
+        "createdAt" : "2020-10-29T19:14:10Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65494771be58190214d67d2d27bdd3f853fdaa6c",
+    "line" : 418,
+    "diffHunk" : "@@ -1,1 +1694,1698 @@    private void pollListeners() {\n        // Register any listeners added since the last poll\n        while (!pendingListeners.isEmpty()) {\n            Listener<T> listener = pendingListeners.poll();\n            listenerContexts.add(new ListenerContext(listener));"
+  },
+  {
+    "id" : "f9e8f330-9535-40f8-8ae8-295284b2d6a2",
+    "prId" : 9482,
+    "prUrl" : "https://github.com/apache/kafka/pull/9482#pullrequestreview-521189070",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2adeeedb-ede6-425d-b865-d1631c0c5cfc",
+        "parentId" : null,
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Should we call `pollListeners` after `pollCurrentState` to get more recent updates quicker?",
+        "createdAt" : "2020-10-29T18:05:17Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "691f65ff-02cb-42ba-b254-6dbb0fd70f8e",
+        "parentId" : "2adeeedb-ede6-425d-b865-d1631c0c5cfc",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm, that's a fair question. I think the listeners will tend to get new data in two cases: 1) high watermark advanced, or 2) a previous read completes. In the first case, the high watermark only advances in response to a request, so there should be no delay. In the second case, we call `wakeup()` to take us out of the network poll, so I think there also should be no delay. Can you think of a case where there would be a delay?",
+        "createdAt" : "2020-10-29T21:41:03Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "307ad0d8-4b54-4879-9477-76b02c0a502a",
+        "parentId" : "2adeeedb-ede6-425d-b865-d1631c0c5cfc",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "That looks correct to me with the clarification that \"in response to a request\" has two cases:\r\n\r\n1. The leader handles a fetch request. This implementation calls \"update high watermark\r\n2. The follower handle a fetch response. This implementation calls \"update high watermark\"\r\n\r\nI think that `pollListeners` should only fire a `Listener::handleCommit` for new listeners in `pendingListeners`.",
+        "createdAt" : "2020-10-31T00:36:35Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "009218db-f0c3-4a86-adb9-4f9688f97fd9",
+        "parentId" : "2adeeedb-ede6-425d-b865-d1631c0c5cfc",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Sounds fair.",
+        "createdAt" : "2020-11-01T03:16:27Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65494771be58190214d67d2d27bdd3f853fdaa6c",
+    "line" : 443,
+    "diffHunk" : "@@ -1,1 +1719,1723 @@            pollShutdown(gracefulShutdown);\n        } else {\n            pollListeners();\n\n            long currentTimeMs = time.milliseconds();"
+  },
+  {
+    "id" : "6dc69b8c-a31e-4dcd-b6cd-981fd629875e",
+    "prId" : 9482,
+    "prUrl" : "https://github.com/apache/kafka/pull/9482#pullrequestreview-521865650",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5e248a22-6fcd-4bbc-8dad-e56c195e8fb2",
+        "parentId" : null,
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "Is this needed because users of `KafkaRaftClient` can call `::register` before `::initizalize`? When else would this result on a call to `Listener::handleCommit`?",
+        "createdAt" : "2020-10-31T00:10:50Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49bff349-77cd-41c3-9b90-4eb5136193fc",
+        "parentId" : "5e248a22-6fcd-4bbc-8dad-e56c195e8fb2",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "Never mind. I think this can happens when the replica changes state from follower to leader.\r\n\r\nI was having an issue if doing this would cause both `appendPurgatory.maybeComplete` and `maybeFireHandleCommit` to fire `Listener.handleCommit` for the same listener.\r\n\r\nI don't think this can happened based on how `ListenerContext` is managing the `nextExpectedOffset`. If `appendPurgator.maybeComplete` fires then that means that `nextExpectedOffset` is greater that the high watermark. Since the `nextExpectedOffset` is greater than the high watermark then `maybeFireHandleCommit` will not fire.\r\n\r\nI actually think that this order is important. Should we write a comment on the code explaining this if you agree with my analysis?",
+        "createdAt" : "2020-10-31T00:19:44Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e92971ee-ba82-4325-bfc9-c3147c74e342",
+        "parentId" : "5e248a22-6fcd-4bbc-8dad-e56c195e8fb2",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I will add a comment. I agree it is a subtle point.",
+        "createdAt" : "2020-11-02T17:51:50Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65494771be58190214d67d2d27bdd3f853fdaa6c",
+    "line" : 147,
+    "diffHunk" : "@@ -1,1 +257,261 @@            // for the first time following the leader election, so we need\n            // to give lagging listeners an opportunity to catch up as well\n            maybeFireHandleCommit(highWatermark.offset);\n        });\n    }"
+  },
+  {
+    "id" : "b28bd40f-6a67-4122-b5aa-b67a54e0810d",
+    "prId" : 9482,
+    "prUrl" : "https://github.com/apache/kafka/pull/9482#pullrequestreview-521078117",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b62ed00f-df79-4ae3-bb5d-0a7f677342cd",
+        "parentId" : null,
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "I would document that `synchronized` is protecting `lastSent` and `lastAckedOffset`.\r\n\r\n`claimedEpoch` is okay because it is only used by the thread calling `RaftClient::poll`.",
+        "createdAt" : "2020-10-31T00:44:13Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65494771be58190214d67d2d27bdd3f853fdaa6c",
+    "line" : 464,
+    "diffHunk" : "@@ -1,1 +1815,1819 @@        // and are protected through synchronization on this `ListenerContext` instance\n        private BatchReader<T> lastSent = null;\n        private long lastAckedOffset = 0;\n\n        private ListenerContext(Listener<T> listener) {"
+  },
+  {
+    "id" : "9bdaefa1-0e53-49a5-8d40-34265f2a5b6a",
+    "prId" : 9482,
+    "prUrl" : "https://github.com/apache/kafka/pull/9482#pullrequestreview-522110287",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "72448b36-d595-41bb-b057-87531ffeeb7c",
+        "parentId" : null,
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "This applies to all of the `listener.handle...` on this file.\r\n\r\nWhat are your thoughts on the `Listener` throwing an exception? I think with this implementation it will unwind all the way until `KafakRaftClient::poll`. Should we catch all non-fatal exceptions here and log an error instead?",
+        "createdAt" : "2020-10-31T01:21:38Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71d18c45-42b7-444b-8075-d3e600ee365b",
+        "parentId" : "72448b36-d595-41bb-b057-87531ffeeb7c",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm... That's a good question. I guess the issue is that the listener will then be in an unknown state. Should the IO thread keep sending it updates or should it mark it as failed? This comes back to something I have been wondering in the KIP-500 world. Do we want the process to stay active if either the controller or broker listeners have failed or would it be better to shutdown? At the moment, I am leaning toward the latter. In any case, I suggest we let the errors propagate for now and file a jira to reconsider once we are closer to integration. Does that sound fair?",
+        "createdAt" : "2020-11-02T18:16:45Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "277bfe9a-0780-4695-888e-7d9899f2a9ad",
+        "parentId" : "72448b36-d595-41bb-b057-87531ffeeb7c",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : ">  At the moment, I am leaning toward the latter. In any case, I suggest we let the errors propagate for now and file a jira to reconsider once we are closer to integration. Does that sound fair?\r\n\r\nSounds fair to create a Jira and revisit this later.",
+        "createdAt" : "2020-11-02T18:31:50Z",
+        "updatedAt" : "2020-11-02T18:54:18Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "290c8766-3bd2-4114-980e-799a525a1eb6",
+        "parentId" : "72448b36-d595-41bb-b057-87531ffeeb7c",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Filed https://issues.apache.org/jira/browse/KAFKA-10676.",
+        "createdAt" : "2020-11-02T23:45:26Z",
+        "updatedAt" : "2020-11-02T23:45:26Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "65494771be58190214d67d2d27bdd3f853fdaa6c",
+    "line" : 528,
+    "diffHunk" : "@@ -1,1 +1879,1883 @@                this.lastSent = reader;\n            }\n            listener.handleCommit(reader);\n        }\n"
   }
 ]

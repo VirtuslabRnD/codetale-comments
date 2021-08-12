@@ -537,5 +537,60 @@
     "commit" : "ffbe9a3ee73bc65253c0b319cf08b923dcce6138",
     "line" : 36,
     "diffHunk" : "@@ -1,1 +576,580 @@                                .stream()\n                                .map(e -> new ProduceResponse.RecordError(e.batchIndex(), e.batchIndexErrorMessage()))\n                                .collect(Collectors.toList()),\n                            p.errorMessage());\n                    ProducerBatch batch = batches.get(tp);"
+  },
+  {
+    "id" : "1590b432-ca39-4e87-af68-022473009ad0",
+    "prId" : 9406,
+    "prUrl" : "https://github.com/apache/kafka/pull/9406#pullrequestreview-514016190",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "68716083-6d63-40fb-94dc-b2f9a58216e6",
+        "parentId" : null,
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Looking at this branch again, sorry :). I was comparing it with the previous behavior and I have noticed that we would request a refresh of the metadata when the same conditions were met. That happened here:\r\n```\r\n    private void maybeFindCoordinatorAndRetry(TransactionManager.TxnRequestHandler nextRequestHandler) {\r\n        if (nextRequestHandler.needsCoordinator()) {\r\n            transactionManager.lookupCoordinator(nextRequestHandler);\r\n        } else {\r\n            // For non-coordinator requests, sleep here to prevent a tight loop when no node is available\r\n            time.sleep(retryBackoffMs);\r\n            metadata.requestUpdate();\r\n        }\r\n\r\n        transactionManager.retry(nextRequestHandler);\r\n    }\r\n```\r\nWhen no node is available and `coordinatorType != null`, we ended up in the else branch here. I wonder if not doing `metadata.requestUpdate()` in our new implementation could be problematic and I also wonder if we could just swap that `time.sleep(retryBackoffMs)` by `client.poll(retryBackoffMs, time.milliseconds())` to achieve the same goal. The difference is that another metadata request would be sent in our particular case.\r\n\r\nHave you noticed this small difference?  \r\n",
+        "createdAt" : "2020-10-21T13:01:08Z",
+        "updatedAt" : "2020-10-21T13:01:08Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ad0e932-0dfb-47ac-9869-cd8f4c6cb681",
+        "parentId" : "68716083-6d63-40fb-94dc-b2f9a58216e6",
+        "authorId" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "body" : "@dajac Yes, I was thinking about this earlier when adding the retry. We get to this `else` path when leastLoadedNode is null. For the other cases, we would have taken one of the other paths, which retain existing behaviour (unless I missed something, again!) When least loaded node is null, the old behaviour didn't quite work because you have to poll to change that state. And you don't have anywhere to send metadata requests to. So just polling seemed to be sufficient for this case. What do you think?",
+        "createdAt" : "2020-10-21T13:42:04Z",
+        "updatedAt" : "2020-10-21T13:42:04Z",
+        "lastEditedBy" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43b94177-11c1-436c-b14c-ee3cd2390c44",
+        "parentId" : "68716083-6d63-40fb-94dc-b2f9a58216e6",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I agree polling seems sufficient. We will still have an opportunity to refresh metadata if the current connection fails for some reason.",
+        "createdAt" : "2020-10-21T17:03:44Z",
+        "updatedAt" : "2020-10-21T17:12:35Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4cb3777a-476b-42ef-b79b-190829574f14",
+        "parentId" : "68716083-6d63-40fb-94dc-b2f9a58216e6",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "@rajinisivaram Yeah, I do agree. Polling seems sufficient in this case. Thanks for the clarification. ",
+        "createdAt" : "2020-10-21T17:43:12Z",
+        "updatedAt" : "2020-10-21T17:43:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3e36ffe76440f978f99c2a44dd975f90546879f8",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +463,467 @@                transactionManager.retry(nextRequestHandler);\n                client.poll(retryBackoffMs, time.milliseconds());\n                return true;\n            }\n"
   }
 ]
