@@ -801,5 +801,93 @@
     "commit" : "f047cd9bea88a4ffc88ce2b4f82946d52202c539",
     "line" : 751,
     "diffHunk" : "@@ -1,1 +901,905 @@                        \"previous tasks than it has capacity for during this assignment, falling back to interleaved \" +\n                        \"assignment since a realance is inevitable.\");\n                    return Collections.emptyMap();\n                }\n"
+  },
+  {
+    "id" : "995d5564-b9ae-4c0e-be5d-660c16aeb08c",
+    "prId" : 7419,
+    "prUrl" : "https://github.com/apache/kafka/pull/7419#pullrequestreview-295300832",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5307005b-79f5-4605-b6fd-c863910acaea",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Here's the change if the source topic is a repartition topic, drop into a new block to check if the repartition topic has a partition count available.  If not we don't throw an `Exception`, as we will only throw when a non-internal topic reports no partition count available.",
+        "createdAt" : "2019-09-30T16:23:48Z",
+        "updatedAt" : "2019-09-30T16:23:53Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e4269fe-4c9a-446c-92aa-4cb9b84e54ce",
+        "parentId" : "5307005b-79f5-4605-b6fd-c863910acaea",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@bbejeck @vvcephei I checked the code that right now we use linked-hashmap for the node-groups / topic-groups construction, whose order is preserved. I think that means that assuming the topology is a DAG with no cycles, one pass from sub-topology 1 is arguably sufficient. However, once case that we did not handle today which is also why we are still doing a while-loop here is, e.g. (numbers are sub-topology indices):\r\n\r\n```\r\n1 -> 2,\r\n1 -> 3,\r\n3 -> 2\r\n```\r\n\r\nAnd if we loop over the order of 1,2,3, then when we are processing 2 since 3's not set yet we do no have the num.partitions for the repartition topic between 3 -> 2.\r\n\r\nLooking at `InternalTopologyBuilder#makeNodeGroups`, I think it is possible that we ensure it ordered as \r\n\r\n```\r\n1 -> 3,\r\n1 -> 2,\r\n3 -> 3\r\n```\r\n\r\nso that we can make one pass without the while loop, and can also assume that the parent sub-topologies sink/repartition topic num.partitions are set when processing this, WDYT?",
+        "createdAt" : "2019-09-30T19:15:18Z",
+        "updatedAt" : "2019-09-30T19:17:21Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "972b14d0-9a6e-4668-a209-50933bf3089c",
+        "parentId" : "5307005b-79f5-4605-b6fd-c863910acaea",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Basically, when ordering the non-source node groups we do not rely on `Utils.sorted(nodeFactories.keySet()` but rely on some specific logic that those non-source sub-topologies with all parents as source sub-topologies gets indexed first.",
+        "createdAt" : "2019-09-30T19:16:57Z",
+        "updatedAt" : "2019-09-30T19:17:21Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7566c3d7-557c-4cd3-a183-7974a08408e8",
+        "parentId" : "5307005b-79f5-4605-b6fd-c863910acaea",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks for the idea @guozhangwang . If I understand right, it sounds like you're suggesting to propagate the partition count from (external) sources all the way through the topology, in topological order. If the partition count is purely determined by the external source topics, then it should indeed work to do this in topological order in one pass.\r\n\r\nWhat I'm wondering now is whether there's any situation where some of the repartition topics might already exist with a specific number of partitions. An easy strawman is, \"what if the operator has pre-created some of the internal topics?\", which may or may not be allowed. Another is \"what if the topology has changed slightly to add a new repartition topic early in the topology?\" Maybe there are some other similar scenarios. I'm not sure if any of these are real possibilities, or if they'd affect the outcome, or if we want to disallow them anyway to make our lives easier.\r\n\r\nWDYT?",
+        "createdAt" : "2019-09-30T19:40:35Z",
+        "updatedAt" : "2019-09-30T19:40:35Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1e98e156-251b-49b4-bb28-cfea1f3197c5",
+        "parentId" : "5307005b-79f5-4605-b6fd-c863910acaea",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Those are good points, making a one-pass num.partition decision is not critical in our framework, and I think it's more or less a brainstorming with you guys to see if it is possible :) To me as long as we would not be stuck infinitely in the while loop it should be fine.\r\n\r\nIf user pre-create the topic with the exact `xx-repartition` name, then yes I think that could make things tricker. Also with KIP-221 the repartition hint, I'm not sure how that would affect this as well.",
+        "createdAt" : "2019-09-30T23:18:47Z",
+        "updatedAt" : "2019-09-30T23:18:47Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f77e2eb4d1a075cd9ac0890966765c65859a3447",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +389,393 @@                                    // map().join().join(map())\n                                    if (repartitionTopicMetadata.containsKey(sourceTopicName)) {\n                                        if (repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().isPresent()) {\n                                            numPartitionsCandidate = repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().get();\n                                        }"
+  },
+  {
+    "id" : "cd4d21e8-62c5-4bd9-9b40-f7a192f581a4",
+    "prId" : 7419,
+    "prUrl" : "https://github.com/apache/kafka/pull/7419#pullrequestreview-295185237",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ae283881-74c7-44e9-bc49-7da9773abb23",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This dates before this PR, but while reviewing it I realized that line 898 in prepareTopic:\r\n\r\n```\r\ntopic.setNumberOfPartitions(numPartitions.get());\r\n```\r\n\r\nis not necessary since the `numPartitions` is read from the topic.",
+        "createdAt" : "2019-09-30T19:00:16Z",
+        "updatedAt" : "2019-09-30T19:17:21Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f77e2eb4d1a075cd9ac0890966765c65859a3447",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +391,395 @@                                        if (repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().isPresent()) {\n                                            numPartitionsCandidate = repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().get();\n                                        }\n                                    } else {\n                                        final Integer count = metadata.partitionCountForTopic(sourceTopicName);"
   }
 ]
