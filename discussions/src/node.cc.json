@@ -405,5 +405,115 @@
     "commit" : "921d2b080e810dff89c78db7d7f4c2e9e92f57ec",
     "line" : 69,
     "diffHunk" : "@@ -1,1 +1343,1347 @@  // the two contexts need not be the same.\n  EscapableHandleScope handle_scope(isolate);\n  Environment* env = Environment::GetCurrent(callback->CreationContext());\n  Context::Scope context_scope(env->context());\n  return handle_scope.Escape("
+  },
+  {
+    "id" : "d6cdfcd1-8dca-4e29-a1e5-a7ae98bd35a4",
+    "prId" : 12028,
+    "prUrl" : "https://github.com/nodejs/node/pull/12028#pullrequestreview-29299957",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "70d6de2c-839e-4792-bf6f-da49d2ffda92",
+        "parentId" : null,
+        "authorId" : "cdbfdd98-a076-42e4-be0f-41821df495e4",
+        "body" : "Personally, I'd rather that C++ std lib classes are used to avoid all the manual allocations.  And you shouldn't have to worry about if the C++ std lib is available on a certain platform.  And you don't need to rely on the non-reentrant legacy c `strtok`.\r\n\r\n```c++\r\n  std::vector<std::string> env_args;\r\n  std::string::size_type pos = 0, pos_next = 0;\r\n  while (pos_next < nodeopt.size())\r\n  {\r\n    pos_next = nodeopt.find(\" \", pos);\r\n    if (pos_next == std::string::npos)\r\n    {\r\n      pos_next = nodeopt.size();\r\n    }\r\n\r\n    if (pos_next > pos)\r\n    {\r\n      env_args.push_back(nodeopt.substr(pos, pos_next - pos));\r\n    }\r\n\r\n    pos = pos_next + 1;\r\n  }\r\n\r\n  std::vector<const char *> argv_from_env;\r\n  argv_from_env.reserve(args.size() + 2);\r\n  argv_from_env.push_back(argv[0]);\r\n  for (size_t i = 0; i < args.size(); i++)\r\n  {\r\n    argv_from_env.push_back(env_args[i].c_str());\r\n  }\r\n  argv_from_env.push_back(nullptr);\r\n```\r\n\r\nand now you can call `ProcessArgv`:\r\n\r\n```c++\r\n    ProcessArgv(&argc_from_env, &argv_from_env[0], &exec_argc_, &exec_argv_, true );\r\n```\r\n",
+        "createdAt" : "2017-03-27T20:57:31Z",
+        "updatedAt" : "2017-04-25T17:00:15Z",
+        "lastEditedBy" : "cdbfdd98-a076-42e4-be0f-41821df495e4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2282bb812860284035d2a2ed8ac7074bf84cb50",
+    "line" : 199,
+    "diffHunk" : "@@ -1,1 +4345,4349 @@    delete[] exec_argv_;\n    delete[] argv_from_env;\n    free(cstr);\n  }\n#endif"
+  },
+  {
+    "id" : "d197a469-d530-4796-986c-800cc0850b7e",
+    "prId" : 12028,
+    "prUrl" : "https://github.com/nodejs/node/pull/12028#pullrequestreview-33808142",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1f798d8e-c36b-4a2e-ada8-7353bb46aa42",
+        "parentId" : null,
+        "authorId" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "body" : "While I like the simplicity of this, it's not the most performant approach. Would like to see this optimized more.",
+        "createdAt" : "2017-04-18T14:39:34Z",
+        "updatedAt" : "2017-04-25T17:00:15Z",
+        "lastEditedBy" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4ce8863-ba52-4dab-b668-3609ca4c3b11",
+        "parentId" : "1f798d8e-c36b-4a2e-ada8-7353bb46aa42",
+        "authorId" : "e75ae5b4-0256-4743-b9d9-8adee03098da",
+        "body" : "Any suggestions?\r\n\r\nNote:\r\n- The conditional is copied verbatim from the existing code, it is how all command line options are currently matched.\r\n- It would be more efficient to inline the checks into the actual options parsing so the comparison would be done once, but I was requested to refactor that blacklisting approach into a whitelisting approach so no one could accidentally add an option and forget to blacklist it.\r\n- None of this code runs unless `NODE_OPTIONS` is actually used.",
+        "createdAt" : "2017-04-18T18:18:28Z",
+        "updatedAt" : "2017-04-25T17:00:15Z",
+        "lastEditedBy" : "e75ae5b4-0256-4743-b9d9-8adee03098da",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "633689fa-3a08-4478-b965-4d79716ccf72",
+        "parentId" : "1f798d8e-c36b-4a2e-ada8-7353bb46aa42",
+        "authorId" : "e75ae5b4-0256-4743-b9d9-8adee03098da",
+        "body" : "not sure what to do",
+        "createdAt" : "2017-04-19T21:09:02Z",
+        "updatedAt" : "2017-04-25T17:00:15Z",
+        "lastEditedBy" : "e75ae5b4-0256-4743-b9d9-8adee03098da",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0643f2c-9952-4aaf-a2d2-a4062cc2e6f8",
+        "parentId" : "1f798d8e-c36b-4a2e-ada8-7353bb46aa42",
+        "authorId" : "af50f08e-2bc7-4f86-8ca4-431b9929bc48",
+        "body" : "A couple of options I can think of include:\r\n\r\n1) using a hash table, problem might be that cost of building the hashtable outweighs the benefits\r\n2) have 26 whitelist arrays (or 2 dimention array) so that we can quickly cut down the list by the first letter in the option and then only search the subset for that list.  This would reduce the search time, while being 0 cost in terms of startup time.  The main drawback is that is does require us to make sure things go into the right array.",
+        "createdAt" : "2017-04-20T15:39:08Z",
+        "updatedAt" : "2017-04-25T17:00:15Z",
+        "lastEditedBy" : "af50f08e-2bc7-4f86-8ca4-431b9929bc48",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "226cdbe1-467c-49da-8627-4eaab9da8d0a",
+        "parentId" : "1f798d8e-c36b-4a2e-ada8-7353bb46aa42",
+        "authorId" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "body" : "Yeah, the code ends up being a bit more complicated but the amount of time it takes to go through the various options is much shorter.",
+        "createdAt" : "2017-04-20T15:45:21Z",
+        "updatedAt" : "2017-04-25T17:00:15Z",
+        "lastEditedBy" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2282bb812860284035d2a2ed8ac7074bf84cb50",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +3684,3688 @@    if (strlen(allowed) == arglen && strncmp(allowed, arg, arglen) == 0)\n      return;\n  }\n\n  fprintf(stderr, \"%s: %s is not allowed in NODE_OPTIONS\\n\", exe, arg);"
+  },
+  {
+    "id" : "5b870515-d02c-4584-9247-2ee8a6cecd2c",
+    "prId" : 12028,
+    "prUrl" : "https://github.com/nodejs/node/pull/12028#pullrequestreview-34137395",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a8194f1a-52c4-4eba-a971-3a548b0229d8",
+        "parentId" : null,
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "This just makes me happy...",
+        "createdAt" : "2017-04-21T22:52:51Z",
+        "updatedAt" : "2017-04-25T17:00:15Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2282bb812860284035d2a2ed8ac7074bf84cb50",
+    "line" : 99,
+    "diffHunk" : "@@ -1,1 +4220,4224 @@\n\nvoid ProcessArgv(int* argc,\n                 const char** argv,\n                 int* exec_argc,"
   }
 ]
