@@ -31,5 +31,60 @@
     "commit" : "bb1bd7639554766a88b8f7aef8891bf8249e613e",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +105,109 @@  Environment* env = Environment::GetCurrent(args);\n  Local<Function> init_fn = env->async_hooks_init_function();\n  if (init_fn.IsEmpty() || !init_fn->IsFunction())\n    return env->ThrowTypeError(\"init callback is not assigned to a function\");\n  env->async_hooks()->set_enable_callbacks(1);"
+  },
+  {
+    "id" : "f982d8c3-7570-417c-8fe6-0dba8ad3fd5a",
+    "prId" : 4507,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d95fd2a-4b03-4f55-9e7f-6a3fe5741b00",
+        "parentId" : null,
+        "authorId" : "7885009b-14c8-46d1-a915-0c610839ac69",
+        "body" : "It may be worth mentioning in a comment that this early return is very important because of the way `node::FatalException` is called when no `TryCatch` instance is present in this stack frame.\n\nWithout a `TryCatch` instance, `node::FatalException` will be called after this function returns, and thus exiting the current active domain if an error is thrown from the JavaScript function `cb` would exit the active domain _before_ its error handler had a chance to run.\n",
+        "createdAt" : "2016-02-09T19:26:42Z",
+        "updatedAt" : "2016-02-12T21:04:06Z",
+        "lastEditedBy" : "7885009b-14c8-46d1-a915-0c610839ac69",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8374279-081e-4556-8308-dfdd4913fddb",
+        "parentId" : "3d95fd2a-4b03-4f55-9e7f-6a3fe5741b00",
+        "authorId" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "body" : "Good call. I'll add it to both locations.\n",
+        "createdAt" : "2016-02-09T21:31:22Z",
+        "updatedAt" : "2016-02-12T21:04:06Z",
+        "lastEditedBy" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df229fbb-04c6-4c98-af18-86b841a0562c",
+        "parentId" : "3d95fd2a-4b03-4f55-9e7f-6a3fe5741b00",
+        "authorId" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "body" : "@misterdjules actually I'm a little confused. without the `TryCatch` `node::FatalException` is run immediately after \"cb\". Even before the AsyncWrap post callback has a chance to run. Meaning the domain stack will have already been cleared before we get to `domain.exit()`. I'm just returning early to save us a call to JS.\n",
+        "createdAt" : "2016-02-09T23:29:56Z",
+        "updatedAt" : "2016-02-12T21:04:06Z",
+        "lastEditedBy" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e140d03-8d79-4fc9-94d8-b9268c63db70",
+        "parentId" : "3d95fd2a-4b03-4f55-9e7f-6a3fe5741b00",
+        "authorId" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "body" : "Verified this by placing the early return after the domain exit call and tested with the following:\n\n``` js\n'use strict';\n\nconst domain = require('domain');\nconst d = domain.create();\nconst async_wrap = process.binding('async_wrap');\n\nasync_wrap.setupHooks(function() {\n}, function() {\n  process._rawDebug('before');\n}, function() {\n  process._rawDebug('after');\n});\nasync_wrap.enable();\n\nd.on('error', function() {\n  process._rawDebug('d errored');\n});\n\nd.run(function() {\n  require('crypto').randomBytes(1024, function() {\n    throw new Error('crap');\n  });\n});\n```\n",
+        "createdAt" : "2016-02-09T23:32:50Z",
+        "updatedAt" : "2016-02-12T21:04:06Z",
+        "lastEditedBy" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ab6fe5998a625af68b58ccc63b230ef37c054af7",
+    "line" : 64,
+    "diffHunk" : "@@ -1,1 +219,223 @@  }\n\n  if (ret.IsEmpty()) {\n    return Undefined(env()->isolate());\n  }"
   }
 ]
