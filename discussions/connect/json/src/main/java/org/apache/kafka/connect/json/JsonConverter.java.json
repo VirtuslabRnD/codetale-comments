@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "3bb69756-4b40-4bf5-8ff1-323fe67d03d1",
+    "prId" : 7354,
+    "prUrl" : "https://github.com/apache/kafka/pull/7354#pullrequestreview-292112071",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f0f08154-6fcd-47bd-8d0a-2f3a99160ae5",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "By returning here, we're losing the logic immediately following this line that checks for a null schema. For example, if this method is called with a `BigDecimal` value, then the `logicalConverter.toJson(...)` call will ultimately result in calling `Decimal.fromLogical(...)` with a null schema that will result in a NPE when that method attempts to get the scale of the decimal schema. We should always avoid NPEs, but also the KIP says that a `DataException` will be thrown in this case.\r\n\r\nBTW, we should have test cases where the JsonConverter is called with a null schema (i.e., the schemaless case) to verify the behavior in the KIP.",
+        "createdAt" : "2019-09-23T15:58:12Z",
+        "updatedAt" : "2019-10-01T20:16:50Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d59095f0-1731-47fd-b55a-f99892a8dfcf",
+        "parentId" : "f0f08154-6fcd-47bd-8d0a-2f3a99160ae5",
+        "authorId" : "c1d8c456-76f0-40c1-8f33-97bb2067c9ea",
+        "body" : "> By returning here, we're losing the logic immediately following this line that checks for a null schema.\r\n\r\nThis is within a branch that specifies `if (schema != null && schema.name() != null)`. If we're already in this branch, then the schema will not be null.\r\n\r\n> BTW, we should have test cases where the JsonConverter is called with a null schema (i.e., the schemaless case) to verify the behavior in the KIP.\r\n\r\nI will add this. ",
+        "createdAt" : "2019-09-23T23:48:15Z",
+        "updatedAt" : "2019-10-01T20:16:50Z",
+        "lastEditedBy" : "c1d8c456-76f0-40c1-8f33-97bb2067c9ea",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9e3db9b265141feec7eb47c0aadd7f5f100e1ac",
+    "line" : 240,
+    "diffHunk" : "@@ -1,1 +604,608 @@            LogicalTypeConverter logicalConverter = LOGICAL_CONVERTERS.get(schema.name());\n            if (logicalConverter != null)\n                return logicalConverter.toJson(schema, value, config);\n        }\n"
+  },
+  {
+    "id" : "a528f697-d484-4b1b-9502-d61482618b41",
+    "prId" : 7354,
+    "prUrl" : "https://github.com/apache/kafka/pull/7354#pullrequestreview-292112181",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f43acd4d-631a-42e5-a478-80d9b5695731",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Note that this is currently a non-trivial method invocation that cannot be inlined. See my comment above for a way to resolve that.",
+        "createdAt" : "2019-09-23T16:08:23Z",
+        "updatedAt" : "2019-10-01T20:16:50Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "50c426ea-4fb8-4583-bf35-03e339b4c01e",
+        "parentId" : "f43acd4d-631a-42e5-a478-80d9b5695731",
+        "authorId" : "c1d8c456-76f0-40c1-8f33-97bb2067c9ea",
+        "body" : "I implemented your suggestion, thanks!",
+        "createdAt" : "2019-09-23T23:48:42Z",
+        "updatedAt" : "2019-10-01T20:16:50Z",
+        "lastEditedBy" : "c1d8c456-76f0-40c1-8f33-97bb2067c9ea",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9e3db9b265141feec7eb47c0aadd7f5f100e1ac",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +200,204 @@\n                final BigDecimal decimal = (BigDecimal) value;\n                switch (config.decimalFormat()) {\n                    case NUMERIC:\n                        return JsonNodeFactory.instance.numberNode(decimal);"
+  },
+  {
+    "id" : "a3d8fec1-83fc-4f32-b6ad-34dbd770eaa3",
+    "prId" : 7354,
+    "prUrl" : "https://github.com/apache/kafka/pull/7354#pullrequestreview-292112614",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "172758d6-f497-4f02-9ccb-2a5734e4cbea",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Isn't it possible that `schema` is null here for schemaless usage?",
+        "createdAt" : "2019-09-23T16:09:04Z",
+        "updatedAt" : "2019-10-01T20:16:50Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8996ef5-9da1-40ac-8eb3-ae163115412e",
+        "parentId" : "172758d6-f497-4f02-9ccb-2a5734e4cbea",
+        "authorId" : "c1d8c456-76f0-40c1-8f33-97bb2067c9ea",
+        "body" : "I don't think this is possible. We only call the logical converters if we have a logical schema to figure out. If there is no schema supplied, it will throw a `DataException` when it can't figure out the type using `ConnectSchema#schemaType` (currently on line 604). I will add unit tests to describe this.",
+        "createdAt" : "2019-09-23T23:50:20Z",
+        "updatedAt" : "2019-10-01T20:16:50Z",
+        "lastEditedBy" : "c1d8c456-76f0-40c1-8f33-97bb2067c9ea",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c9e3db9b265141feec7eb47c0aadd7f5f100e1ac",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +204,208 @@                        return JsonNodeFactory.instance.numberNode(decimal);\n                    case BASE64:\n                        return JsonNodeFactory.instance.binaryNode(Decimal.fromLogical(schema, decimal));\n                    default:\n                        throw new DataException(\"Unexpected \" + JsonConverterConfig.DECIMAL_FORMAT_CONFIG + \": \" + config.decimalFormat());"
+  }
+]

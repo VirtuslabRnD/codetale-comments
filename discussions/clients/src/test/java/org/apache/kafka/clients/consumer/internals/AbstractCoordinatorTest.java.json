@@ -20,5 +20,137 @@
     "commit" : "ab085e9764aa35dece48891a8d707b743b5bf711",
     "line" : 61,
     "diffHunk" : "@@ -1,1 +96,100 @@    private DummyCoordinator coordinator;\n\n    private final String memberId = \"memberId\";\n    private final String leaderId = \"leaderId\";\n    private final int defaultGeneration = -1;"
+  },
+  {
+    "id" : "2797f1f2-9012-45d2-b15d-a45a7eb75ac0",
+    "prId" : 7347,
+    "prUrl" : "https://github.com/apache/kafka/pull/7347#pullrequestreview-290051861",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1ee6e911-7bfb-48ca-8f72-a2ae23aa8bf8",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "In this test, you verify if you register the metrics with the correct name, but you do not verify if the `MeasureableStat`s are correct. Similar is true for the `ConsumerCoordinatorTest`.  You can find an example of how to verify that in `StreamsMetricsImplTest#shouldAddAmountRateAndSum()`.",
+        "createdAt" : "2019-09-18T00:26:15Z",
+        "updatedAt" : "2019-09-21T00:48:46Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e28a53f-078b-46af-a386-8e76ed92fb0b",
+        "parentId" : "1ee6e911-7bfb-48ca-8f72-a2ae23aa8bf8",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I think I agree with you. But looking at the other unit tests I think instead of adding the logic of test recording behavior in a single `testMetrics` we'd better adding the logic in each individual test case, e.g. during different rebalance scenarios test failed-rebalance and callback trigger rates, etc. And it should be a rather big effort adding this coverage in different modules.\r\n\r\nHow about I create a JIRA ticket for doing this as a separate task?",
+        "createdAt" : "2019-09-18T01:56:27Z",
+        "updatedAt" : "2019-09-21T00:48:46Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "137aebb3-798e-4742-9b40-456cf40b2c0e",
+        "parentId" : "1ee6e911-7bfb-48ca-8f72-a2ae23aa8bf8",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "I am not sure if I completely follow what your are saying. Looking again at the code, I think, it would suffice to pass a mock `Metrics` object to `AbstractCoordinator`. The mock would return a `Sensor` mock for a call to `sensor()`, with which you can verify if the parameter passed to `add()` is an object of class `Avg` (or whatever `MeasurableStat` is used). This should be possible with `PowerMock`. We have to use `PowerMock` since `Sensor` is `final`.\r\n\r\nIf you think, it is too much work given the upcoming release, I am fine with creating a Jira and postpone.   ",
+        "createdAt" : "2019-09-18T15:42:02Z",
+        "updatedAt" : "2019-09-21T00:48:46Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d17799bf-9551-492c-8177-50bf4cceceda",
+        "parentId" : "1ee6e911-7bfb-48ca-8f72-a2ae23aa8bf8",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Yes, I'm thinking about using `MockMetricsReporter`, e.g. the pattern in `KafkaStreamsTest#testInitializesAndDestroysMetricsReporters`. What I was saying is that I'd like to just add this checking logic in each of the existing test function than doing that in a single `testMetrics` function for all scenarios, e.g. different patterns of rebalance failures where `failed-rebalance` should be recorded -- basically each test function within `ConsumerCoordinatorTest` that described a normal or abnormal path. And looking at other modules that have an embedded metrics model, we actually do not test whether the recording behavior is expected as-is or not in most of them, and I think having a single task of adding such test coverage on all such modules by:\r\n\r\n1) using a mock metrics reporter,\r\n2) check the corresponding metrics are correctly recorded under different scenarios.\r\n\r\nAnd it would touch on Selector, Sender, ConsumerNetworkClient, Fetcher, Abstract/ConsumerCoordinator, NetworkClient which all have a corresponding `XXXTest` but they do not have metrics recording in place.",
+        "createdAt" : "2019-09-18T16:34:45Z",
+        "updatedAt" : "2019-09-21T00:48:46Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "89dc784c146b285afe3d52bd19ed6b6ddbad7434",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +147,151 @@\n    @Test\n    public void testMetrics() {\n        setupCoordinator();\n"
+  },
+  {
+    "id" : "e904d52c-d1d7-4946-9f8c-f09ec76262d8",
+    "prId" : 7347,
+    "prUrl" : "https://github.com/apache/kafka/pull/7347#pullrequestreview-291441949",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "097918ba-ad0e-402c-bb70-ea0ba1ade9b3",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Should we `assertNull` for all three before anything is recorded to check that they are created lazily? (similar below)",
+        "createdAt" : "2019-09-20T23:19:23Z",
+        "updatedAt" : "2019-09-21T00:48:46Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4bfa5a0-7b94-409e-afc4-bf5a47c05281",
+        "parentId" : "097918ba-ad0e-402c-bb70-ea0ba1ade9b3",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Also, does the below `assertEquals` not subsume the `assortNotNull` ? Seems redundant to check for not-null first.",
+        "createdAt" : "2019-09-20T23:20:43Z",
+        "updatedAt" : "2019-09-21T00:48:46Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b11cbe18-7b00-4acd-aecb-d61c8168a7da",
+        "parentId" : "097918ba-ad0e-402c-bb70-ea0ba1ade9b3",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "The metrics are actually created eagerly :) And ack on the ordering of the record calls.",
+        "createdAt" : "2019-09-21T00:45:51Z",
+        "updatedAt" : "2019-09-21T00:48:46Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "89dc784c146b285afe3d52bd19ed6b6ddbad7434",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +152,156 @@        assertNotNull(getMetric(\"heartbeat-response-time-max\"));\n        assertNotNull(getMetric(\"heartbeat-rate\"));\n        assertNotNull(getMetric(\"heartbeat-total\"));\n        assertNotNull(getMetric(\"last-heartbeat-seconds-ago\"));\n        assertNotNull(getMetric(\"join-time-avg\"));"
+  },
+  {
+    "id" : "c8a1a1cb-594e-4a95-bb60-bf943ccde079",
+    "prId" : 7347,
+    "prUrl" : "https://github.com/apache/kafka/pull/7347#pullrequestreview-291441726",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "12353df7-5607-4539-8c98-d5ccfbea918f",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Why is rate `0.1d` ?",
+        "createdAt" : "2019-09-20T23:23:18Z",
+        "updatedAt" : "2019-09-21T00:48:46Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "42c180fd-1edc-40ba-a2b9-48c6a4901acb",
+        "parentId" : "12353df7-5607-4539-8c98-d5ccfbea918f",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is dependent on the window size: the rate value is calculated by the current count and the elapsed time proportional to the window size.",
+        "createdAt" : "2019-09-21T00:42:40Z",
+        "updatedAt" : "2019-09-21T00:48:46Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "89dc784c146b285afe3d52bd19ed6b6ddbad7434",
+    "line" : 67,
+    "diffHunk" : "@@ -1,1 +175,179 @@\n        assertEquals(6.0d, getMetric(\"heartbeat-response-time-max\").metricValue());\n        assertEquals(0.1d, getMetric(\"heartbeat-rate\").metricValue());\n        assertEquals(3.0d, getMetric(\"heartbeat-total\").metricValue());\n"
   }
 ]

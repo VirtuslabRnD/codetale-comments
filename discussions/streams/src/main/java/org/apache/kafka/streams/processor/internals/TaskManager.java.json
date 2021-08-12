@@ -174,5 +174,148 @@
     "commit" : "912a45642a92f4298d203d5c4eda6a1678208c05",
     "line" : 20,
     "diffHunk" : "@@ -1,1 +244,248 @@        // for those restoring and still assigned tasks, they will be re-created\n        // in addStreamTasks.\n        firstException.compareAndSet(null, active.closeAllRestoringTasks());\n        changelogReader.reset();\n"
+  },
+  {
+    "id" : "a41809f3-78d6-451c-b62b-ad84c1d42d4b",
+    "prId" : 7321,
+    "prUrl" : "https://github.com/apache/kafka/pull/7321#pullrequestreview-291486026",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "294c4f97-377a-4c8f-afaf-e8d7c4baa1fb",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "In our current code we check `if (assignment.containsAll(partitions)) {` and if the passed in partitions does not include all the partitions of the task, we treat it as `log.warn(\"Task {} owned partitions {} are not contained in the assignment {}\", taskId, partitions, assignment);` and create it as new (but I think the existing code did not close the old tasks from suspended, which is a bug..).\r\n\r\nPondering on it now, I'm not sure what would be the best solution to this, since such things would only happen if 1) users changed the partition-grouper, which is very rare and we are deprecating that API, and 2) users changed their code hence changed the topology, in which case `taskA_B` no longer mean the same thing at all. In either case, we are facing a much more severe issue than resuming suspended tasks.\r\n\r\nMaybe for now it's better to still log a WARN and not resume the task?",
+        "createdAt" : "2019-09-20T17:31:33Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3a8ff6c-fd84-48e5-b920-fcd06b3751c9",
+        "parentId" : "294c4f97-377a-4c8f-afaf-e8d7c4baa1fb",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yeah the implications of changing the task -> partition mapping seem pretty hairy (hence wanting to deprecate PartitionGrouper ASAP -- thanks @mjsax 😉)\r\nI was a bit worried about throwing an exception here, but if you follow the code path it really shouldn't be possible for a partition not to be found. The partition -> task and task -> partition maps are created at the same time from the assigned partitions list. There's no way for a task to be assigned partitions that aren't in the assignment.\r\nIf the mapping does change, we catch this in `maybeResumeSuspenedTask` and close/recreate the task",
+        "createdAt" : "2019-09-22T01:47:32Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c3935aa6be7cc55911bb4e24332557df24d01f18",
+    "line" : 405,
+    "diffHunk" : "@@ -1,1 +574,578 @@    private Set<TaskId> partitionsToTaskSet(final Collection<TopicPartition> partitions) {\n        final Set<TaskId> taskIds = new HashSet<>();\n        for (final TopicPartition tp : partitions) {\n            final TaskId id = partitionsToTaskId.get(tp);\n            if (id != null) {"
+  },
+  {
+    "id" : "ea867a60-2ac6-442a-814f-b46db53adda8",
+    "prId" : 7321,
+    "prUrl" : "https://github.com/apache/kafka/pull/7321#pullrequestreview-292743295",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "74c0ad2f-e194-49b2-a16f-8b073baa07a9",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Related to my other comments: if we assume that the same thread never have active and standby of the same task at the same time then we can simplify this a bit: first we can check inside `onAssignment` to make sure it is indeed the case, and if not treat it as a fatal error. Then we can be ensured that the partitions do not have any overlaps and we can just \"blindly\" remove partitions as we remove standbys since if they are not assigned yet, the removal would be safely a no-op. The only usage of this would be line 124 below.",
+        "createdAt" : "2019-09-20T18:00:19Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fc58d8f8-f8d2-42b1-b4a4-50160f010630",
+        "parentId" : "74c0ad2f-e194-49b2-a16f-8b073baa07a9",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Not sure I follow, why does it help us to check this in `onAssignment`? We should be confident there is no overlap (unless there is a bug, might be good to verify somewhere I suppose) -- `restoreConsumerAssignedStandbys` is meant as a flag whether it's assigned standby OR active, ie this would be false if it is assigned any active.",
+        "createdAt" : "2019-09-22T01:51:15Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ebc89809-dd22-4189-834b-5028cb0f3a8b",
+        "parentId" : "74c0ad2f-e194-49b2-a16f-8b073baa07a9",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Technically it should always be safe to remove any revoked standby or actives since its a no-op if not assigned them anyway. This is what the PR was doing originally, which was \"accidentally correct\" since I wasn't aware it was only assigned one or the other.",
+        "createdAt" : "2019-09-22T01:52:30Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "780ea210-ba71-444b-b0e2-db6862261d59",
+        "parentId" : "74c0ad2f-e194-49b2-a16f-8b073baa07a9",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "My only motivation is to simplify the usage of the flag a bit :) I feel that some conditions on this flag is not necessary.",
+        "createdAt" : "2019-09-23T17:13:20Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "42d3614f-2d3d-4440-a576-8305c64d6150",
+        "parentId" : "74c0ad2f-e194-49b2-a16f-8b073baa07a9",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I was thinking of it more as a slight optimization to avoid making a copy of the assignment and re-assigning, but maybe it's better to play it safe & decrease complexity by just always removing the partitions",
+        "createdAt" : "2019-09-24T00:15:06Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "484a791c-a76f-4047-a335-61736d9e82a2",
+        "parentId" : "74c0ad2f-e194-49b2-a16f-8b073baa07a9",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Moved the removing changelogs from restore consumer into a separate method. I left in the check for whether its assigned/removing standbys or active but (I think) I simplified it a bit -- happy to take it out if you feel strongly though (note we can't get rid of it entirely as we need to check eg whether to unsubscribe all if its reading standbys and there are new restoring tasks",
+        "createdAt" : "2019-09-24T00:23:54Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3277192c-48a1-4884-a3bf-c0989f7815d4",
+        "parentId" : "74c0ad2f-e194-49b2-a16f-8b073baa07a9",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@ableegoldman this part of the code seems not changing to me?",
+        "createdAt" : "2019-09-24T21:07:28Z",
+        "updatedAt" : "2019-09-24T21:07:29Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e2eb74e8-c23d-4cbd-aeb2-c98747239221",
+        "parentId" : "74c0ad2f-e194-49b2-a16f-8b073baa07a9",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Sorry, what seems not changed?\r\n`restoreConsumerAssigneStandbys` is now used in only two places, first to determine whether it should unsubscribe all in case there are new restoring tasks, and second in `removeChangelogsFromRestoreConsumer` where we skip removing partitions if they weren't what it was assigned to (to avoid overhead of copying assignment)",
+        "createdAt" : "2019-09-24T21:16:44Z",
+        "updatedAt" : "2019-09-24T21:16:44Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f531d2f3-b68c-49ed-8ab0-5db15558bd9e",
+        "parentId" : "74c0ad2f-e194-49b2-a16f-8b073baa07a9",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Ah I think I was looking at an old commit :P LGTM now.",
+        "createdAt" : "2019-09-24T22:30:54Z",
+        "updatedAt" : "2019-09-24T22:30:54Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c3935aa6be7cc55911bb4e24332557df24d01f18",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +63,67 @@\n    // the restore consumer is only ever assigned changelogs from restoring tasks or standbys (but not both)\n    private boolean restoreConsumerAssignedStandbys = false;\n\n    // following information is updated during rebalance phase by the partition assignor"
   }
 ]

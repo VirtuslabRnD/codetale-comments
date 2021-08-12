@@ -1,0 +1,145 @@
+[
+  {
+    "id" : "bed36c42-c8fc-4c2b-bd0e-ffbc5b495eb6",
+    "prId" : 7321,
+    "prUrl" : "https://github.com/apache/kafka/pull/7321#pullrequestreview-286979175",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c2137b81-07de-4e3e-a4ba-03388919f344",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "We can infer which rebalance protocol is used by reading on the `UPGRADE_FROM` config at the caller (i.e. at the StreamThread). See my other comments.",
+        "createdAt" : "2019-09-11T18:48:10Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c3935aa6be7cc55911bb4e24332557df24d01f18",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +36,40 @@    private final Logger log;\n\n    StreamsRebalanceListener(final Time time,\n        final TaskManager taskManager,\n        final StreamThread streamThread,"
+  },
+  {
+    "id" : "af74be39-0e14-4530-8d66-76ea72c9a77a",
+    "prId" : 7321,
+    "prUrl" : "https://github.com/apache/kafka/pull/7321#pullrequestreview-288292448",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "60c8094a-68e8-4328-88b8-8d239a1ebadc",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "We cannot rely on the rebalance protocol from `setRebalanceProtocol` in task manager to determine the logic, since during a rebalance, one can send with two supported protocol but the `EAGER` protocol is still used --- only the leader knows which protocol is used when doing the assignment.\r\n\r\nAt the moment it is almost impossible to let the listener know which protocol was exactly used (not what protocol was supported); but on the other hand I feel may be it is not necessary as well: If the COOPERATIVE protocol is used, then we are effectively suspend tasks in onPartitionRevoked, and then immediately close those suspended tasks in onPartitionsAssigned since they are called consecutively in `onJoinComplete`, and no one would ever be resumed at all (i.e. that `resumeSuspended` call would always be no-op with no passed in task parameters).\r\n\r\nSo I'd suggest we make the listener to also be agnostic to the rebalance protocol, and just follow the current logic of suspending resuming, and we can even see if we could in later releases remove the whole suspending/resuming all together regardless of the protocols.",
+        "createdAt" : "2019-09-11T20:27:02Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9fa1184a-2cc2-43b9-bb73-9d7895e4377c",
+        "parentId" : "60c8094a-68e8-4328-88b8-8d239a1ebadc",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Resolving this, refactored to make the listener and taskManager protocol agnostic",
+        "createdAt" : "2019-09-13T23:48:58Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c3935aa6be7cc55911bb4e24332557df24d01f18",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +47,51 @@\n    @Override\n    public void onPartitionsAssigned(final Collection<TopicPartition> assignedPartitions) {\n        log.debug(\"Current state {}: assigned partitions {} at the end of consumer rebalance.\\n\" +\n                \"\\tpreviously assigned active tasks: {}\\n\" +"
+  },
+  {
+    "id" : "0833205a-055e-46b6-981d-bd54a28baf1c",
+    "prId" : 7321,
+    "prUrl" : "https://github.com/apache/kafka/pull/7321#pullrequestreview-292075683",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "68980ead-80cc-4ddd-9e36-dbb85d5b99f2",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "Are there unit tests for the `StreamsRebalanceListener`? If yes, it would make sense to extract them to its own class `StreamsRebalanceListenerTest`.",
+        "createdAt" : "2019-09-12T10:24:27Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26acc53b-cbdd-485c-a2c6-fc0d516303e3",
+        "parentId" : "68980ead-80cc-4ddd-9e36-dbb85d5b99f2",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "It doesn't really make sense to test the rebalance listener on its own, ie outside the context of a StreamThread and TaskManager, so it's pretty much covered in TaskManagerTest and StreamThreadTest (plus some system tests, ie for version probing)",
+        "createdAt" : "2019-09-16T21:08:13Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e9349802-046a-437d-83ee-845dba2ecd4c",
+        "parentId" : "68980ead-80cc-4ddd-9e36-dbb85d5b99f2",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "I cannot see how a unit test for the rebalance listener does not make sense. I would rather unit test the listener in isolation and then mock it in the other unit tests.",
+        "createdAt" : "2019-09-19T17:52:22Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "828c5005-8788-46c9-93be-6e3dd7db1e71",
+        "parentId" : "68980ead-80cc-4ddd-9e36-dbb85d5b99f2",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "There may be further changes to the rebalance listener once we turn on cooperative, if it is alright I'll add the tests in the follow-up PR",
+        "createdAt" : "2019-09-23T21:53:52Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c3935aa6be7cc55911bb4e24332557df24d01f18",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +29,33 @@import org.slf4j.Logger;\n\npublic class StreamsRebalanceListener implements ConsumerRebalanceListener {\n\n    private final Time time;"
+  },
+  {
+    "id" : "ddc1b738-52fd-42b8-a719-0c4d45c2b208",
+    "prId" : 7321,
+    "prUrl" : "https://github.com/apache/kafka/pull/7321#pullrequestreview-288988060",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "51043e0d-21bc-47ef-99c7-ca426ce064f7",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "See my other comment: I feel it's cleaner to execute `closeSuspendedActiveTasks` that and `closeStandbyTasks` differently.",
+        "createdAt" : "2019-09-13T22:03:43Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aab2721c-0f7f-43fb-814a-4effeee7ab39",
+        "parentId" : "51043e0d-21bc-47ef-99c7-ca426ce064f7",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Done",
+        "createdAt" : "2019-09-17T02:17:44Z",
+        "updatedAt" : "2019-09-24T05:45:47Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c3935aa6be7cc55911bb4e24332557df24d01f18",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +81,85 @@                revokedStandbyPartitions = taskManager.closeRevokedStandbyTasks();\n                taskManager.closeRevokedSuspendedTasks();\n                taskManager.createTasks(assignedPartitions);\n            }\n        } catch (final Throwable t) {"
+  }
+]
