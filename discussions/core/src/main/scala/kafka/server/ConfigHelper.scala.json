@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "a1aaa281-855e-4d29-98e1-b207e3ed86f6",
+    "prId" : 9990,
+    "prUrl" : "https://github.com/apache/kafka/pull/9990#pullrequestreview-599092529",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f8ed2fd0-41c0-4982-a73f-0fb1b89950a4",
+        "parentId" : null,
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Hmm... this change doesn't seem correct.  null does not mean the same thing as empty.\r\n\r\nThis is how `ConfigurationKeys` is described in the schema:\r\n```\r\n      { \"name\": \"ConfigurationKeys\", \"type\": \"[]string\", \"versions\": \"0+\", \"nullableVersions\": \"0+\",\r\n        \"about\": \"The configuration keys to list, or null to list all configuration keys.\" }\r\n```\r\nIt doesn't say \"null or empty to list all configuration keys.\"  Just null.  Also, I looked at the code from the 2.7 release and it does not treat empty the same as null.",
+        "createdAt" : "2021-02-23T18:31:43Z",
+        "updatedAt" : "2021-02-23T18:41:17Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f954fd9b-144e-42e4-929f-61dfce9c6e3a",
+        "parentId" : "f8ed2fd0-41c0-4982-a73f-0fb1b89950a4",
+        "authorId" : "8752f2d5-1895-482a-aa14-16113cda1c69",
+        "body" : "I agree with this. However it seems treating empty as null is de facto behavior at the moment (before the fix). To be more precise, here\r\nhttps://github.com/apache/kafka/blob/e2a0d0c90e1916d77223a420e3595e8aba643001/core/src/main/scala/kafka/server/ConfigHelper.scala#L53-L55\r\n`resource.configurationKeys` being empty means `true` for each element of `configs`, so effectively no filtering. Which, in turn, is equivalent to `resource.configurationKeys == null`.\r\n\r\nFor example, `testDescribeConfigsWithDocumentation` and `testDescribeConfigsWithEmptyConfigurationKeys` in `ZkAdminManagerTest` break after the fix if treating empty as null is not kept.\r\n\r\nI guess it originates from that the default constructor of `DescribeConfigsResource` makes `configurationKeys` an empty array.\r\n\r\nWe can either 1) keep the current behavior (the current approach); or 2) stick to the spec (also potentially adding `\"default\": \"null\"` to the field description). I'd prefer 2. What do you think, @cmccabe?",
+        "createdAt" : "2021-02-25T05:43:08Z",
+        "updatedAt" : "2021-02-25T05:43:27Z",
+        "lastEditedBy" : "8752f2d5-1895-482a-aa14-16113cda1c69",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c4ba5d38-ebc4-4c73-bf15-83b0dea16d7e",
+        "parentId" : "f8ed2fd0-41c0-4982-a73f-0fb1b89950a4",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "As you said earlier, the code in 2.7 is broken.  So we should't be going based off of that. The correct code in 2.6 does not special-case the empty string.",
+        "createdAt" : "2021-02-25T22:23:51Z",
+        "updatedAt" : "2021-02-26T20:06:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "30bcb206f8d58f1a37db73ce8b05022a6dd541f6",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +48,52 @@      def createResponseConfig(configs: Map[String, Any],\n                               createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {\n        val filteredConfigPairs = if (resource.configurationKeys == null || resource.configurationKeys.isEmpty)\n          configs.toBuffer\n        else"
+  },
+  {
+    "id" : "ca992ff3-88bb-4786-a1a8-d55dabc20624",
+    "prId" : 9990,
+    "prUrl" : "https://github.com/apache/kafka/pull/9990#pullrequestreview-596678610",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7d7ab86e-6d88-4ecc-a7a3-d61b5f62b93c",
+        "parentId" : null,
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "I think this bug was introduced when `configurationKeys` went from being an `Option[something]` to being a non-optional type in 2.7.  \r\n\r\nThe code in 2.6 explains the \"cleverness\" here-- `forall` always returns true if we're dealing with `None`.  The code in 2.7 drops the comment and the `Option` and introduces the bug.  So we'll need to fix it in that branch too.",
+        "createdAt" : "2021-02-23T18:42:09Z",
+        "updatedAt" : "2021-02-23T18:43:23Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "30bcb206f8d58f1a37db73ce8b05022a6dd541f6",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +52,56 @@        else\n          configs.filter { case (configName, _) =>\n            resource.configurationKeys.asScala.contains(configName)\n          }.toBuffer\n"
+  }
+]

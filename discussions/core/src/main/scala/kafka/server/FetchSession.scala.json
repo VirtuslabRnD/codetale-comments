@@ -130,5 +130,93 @@
     "commit" : "accca8208544725928f00dda822d160c1f4be048",
     "line" : 4,
     "diffHunk" : "@@ -1,1 +77,81 @@                      var fetchOffset: Long,\n                      var highWatermark: Long,\n                      var leaderEpoch: Optional[Integer],\n                      var fetcherLogStartOffset: Long,\n                      var localLogStartOffset: Long)"
+  },
+  {
+    "id" : "68b6f775-e1ad-48fa-9ba3-5fb3aa9ecf87",
+    "prId" : 9944,
+    "prUrl" : "https://github.com/apache/kafka/pull/9944#pullrequestreview-653843087",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "05ec1685-424e-4a2e-bb73-cd7a385a00a9",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Hmm, it seems that we can't pass in an empty topicIds since partition iterator is not empty?",
+        "createdAt" : "2021-05-03T23:43:56Z",
+        "updatedAt" : "2021-05-06T01:32:07Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5f1cbd93-b8a8-44e2-88eb-98fa68dc2d73",
+        "parentId" : "05ec1685-424e-4a2e-bb73-cd7a385a00a9",
+        "authorId" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "body" : "ah good catch on this.",
+        "createdAt" : "2021-05-06T02:01:20Z",
+        "updatedAt" : "2021-05-06T02:01:20Z",
+        "lastEditedBy" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b1dfc600-c8d6-42da-9d32-849a43e30c9c",
+        "parentId" : "05ec1685-424e-4a2e-bb73-cd7a385a00a9",
+        "authorId" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "body" : "Ah wait. The iterator is empty here. We create a new one `(new FetchSession.RESP_MAP).entrySet.iterator` and do not use `updates`. This is because the session is an error one.",
+        "createdAt" : "2021-05-06T19:58:26Z",
+        "updatedAt" : "2021-05-06T19:58:27Z",
+        "lastEditedBy" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a47290d9a46db70b9ed3273ddafedbc8827e8da",
+    "line" : 217,
+    "diffHunk" : "@@ -1,1 +336,340 @@\n  override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {\n    FetchResponse.sizeOf(versionId, (new FetchSession.RESP_MAP).entrySet.iterator, Collections.emptyMap())\n  }\n"
+  },
+  {
+    "id" : "6c89acaf-5105-4d04-ac56-4f29d0f29f1c",
+    "prId" : 9944,
+    "prUrl" : "https://github.com/apache/kafka/pull/9944#pullrequestreview-686913535",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "28e38256-6e91-48ba-a11b-b3ba0ecdf1b7",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Should we include topicId in hashCode() and equals()?",
+        "createdAt" : "2021-06-11T00:09:33Z",
+        "updatedAt" : "2021-06-14T22:25:42Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "00c4d4ba-dad0-4ccc-9dbd-39cce37420cd",
+        "parentId" : "28e38256-6e91-48ba-a11b-b3ba0ecdf1b7",
+        "authorId" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "body" : "I thought about this, and originally we compared the topic IDs in the session by grabbing cached partitions and comparing to the IDs in the request. Since we have a new mechanism (the topic ID map) we may no longer need to do this and I can add the ID to the hashcode and equals methods.",
+        "createdAt" : "2021-06-15T17:03:49Z",
+        "updatedAt" : "2021-06-15T17:03:50Z",
+        "lastEditedBy" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3d1fa7c0-56da-4fc0-98d7-ee26b002fcfd",
+        "parentId" : "28e38256-6e91-48ba-a11b-b3ba0ecdf1b7",
+        "authorId" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "body" : "Ah, I found another use -- we lookup partitions toForget using the hashCode. Right now, toForget is a list of topic partitions and we don't directly use the ID provided in the request. We could look up the topic ID from the topic ID map and use it (we could also remove from the session map if we do remove the topic)",
+        "createdAt" : "2021-06-17T23:06:25Z",
+        "updatedAt" : "2021-06-17T23:06:25Z",
+        "lastEditedBy" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a47290d9a46db70b9ed3273ddafedbc8827e8da",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +72,76 @@  */\nclass CachedPartition(val topic: String,\n                      val topicId: Uuid,\n                      val partition: Int,\n                      var maxBytes: Int,"
   }
 ]
