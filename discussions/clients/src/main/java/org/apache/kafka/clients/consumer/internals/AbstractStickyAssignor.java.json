@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "7de4672b-06c8-4a6d-819c-ea2404551531",
+    "prId" : 7130,
+    "prUrl" : "https://github.com/apache/kafka/pull/7130#pullrequestreview-274578503",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c651222b-da4b-47ca-99db-bcf1d36c42a7",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "@guozhangwang Just to confirm: this case should not happen for cooperative mode given the new `onPartitionsLost` protocol, right? ie this corresponds to a metadata change where the partition no longer exists, and after Pt. 3 it will be removed from `ownedPartitions`?",
+        "createdAt" : "2019-08-07T19:41:33Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db3d2f8f-8493-4a4b-8ac7-6cebc672b908",
+        "parentId" : "c651222b-da4b-47ca-99db-bcf1d36c42a7",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Actually I'm thinking about not triggering `onPartitionsLost` on metadata change aggressively since we do not have a good way to track metadata freshness, and upon stale metadata we could incorrectly give away partitions as lost..",
+        "createdAt" : "2019-08-08T05:46:56Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ae85cdd-f9a2-4e56-96e3-4e22202bd176",
+        "parentId" : "c651222b-da4b-47ca-99db-bcf1d36c42a7",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yeah, as discussed we may trigger unnecessary follow-up rebalances on metadata change because of this. What if `ConsumerCoordinator` checks metadata and only sets `needsRejoin` if it is revoking partitions that actually exist and must be getting reassigned? ",
+        "createdAt" : "2019-08-08T21:49:42Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "77309ede-9183-4dd3-9c17-98eb502810e7",
+        "parentId" : "c651222b-da4b-47ca-99db-bcf1d36c42a7",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "We don't want to actually call `onPartitionsLost` instead of `onPartitionsRevoked` but we should still distinguish the two cases w.r.t triggering another rebalance.",
+        "createdAt" : "2019-08-08T21:50:39Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc10a911-7c0c-440c-8fa9-ae4630794034",
+        "parentId" : "c651222b-da4b-47ca-99db-bcf1d36c42a7",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "`rejoinNeededOrPending` logic is a bit different for leader and other members: for normal members we would only return true if it has been requested, or if our subscription has changed (either new topics added, or existing topics removed). In this case we would not revoke anything.\r\n\r\nFor leader though, it can additionally returns true if the metadata has been changed since its last assign procedure. And also we are relying on leader's metadata as the source-of-truth (which may actually not always be up-to-date, but we do this to avoid split-brain) to determine which partitions should be revoked. And then normal members upon receiving the assignment would call `revoke`.\r\n\r\nWhat I originally added the `onPartitionsLost` is only to the leader's additional check on metadata, but as we discussed, calling it aggressively is not safe given that our metadata is not guaranteed to be out-of-date.\r\n\r\nBut I think even with this, we COULD still avoid the extra rebalance, if we add back the error code from leader. I.e. if leader realized that some assignment would be taken away but due to the fact that they no longer exist, it can set the error code still as `none` and the members would then not trigger another rebalance even after they have revoked non-empty partition set. This is more aligned with our current semantics I think: since we are relying on the leader as the sole source-of-truth, we should probably let the leader to indicate whether new rebalance should be needed rather than letting each member to decide? cc @hachikuji ",
+        "createdAt" : "2019-08-08T22:13:51Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "32e07a83-063f-43ee-9c08-52709558ce20",
+        "parentId" : "c651222b-da4b-47ca-99db-bcf1d36c42a7",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Let's just create a ticket for this for now, and we can revisit the best way to avoid unnecessary rebalances later?",
+        "createdAt" : "2019-08-13T21:56:30Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2353e5a29fdd36b86160a8e63de90cd54f0d0825",
+    "line" : 126,
+    "diffHunk" : "@@ -1,1 +124,128 @@                    TopicPartition partition = partitionIter.next();\n                    if (!partition2AllPotentialConsumers.containsKey(partition)) {\n                        // if this topic partition of this consumer no longer exists remove it from currentAssignment of the consumer\n                        partitionIter.remove();\n                        currentPartitionConsumer.remove(partition);"
+  },
+  {
+    "id" : "e631a386-77e4-4ab4-8510-86455f930789",
+    "prId" : 7130,
+    "prUrl" : "https://github.com/apache/kafka/pull/7130#pullrequestreview-272873936",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7e509a76-7654-4d6c-9fe6-eb42686e6ad8",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "This is the one change to the sticky assignment algorithm -- in some rare cases the assignment logic will sacrifice stickiness for balance unnecessarily, triggering a third rebalance under cooperative mode (see [KAFKA-8767](https://issues.apache.org/jira/browse/KAFKA-8767) for more context).\r\nThis doesn't fix this entirely, but did reduce the occurrences by a factor of more than 2. I feel this is fine for now as the situation should be rare (mostly random subscription changes) and not too costly, and we can further optimize later.",
+        "createdAt" : "2019-08-07T21:54:34Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "49bf81ac-067b-4ed2-b6ff-f585a78ecfa4",
+        "parentId" : "7e509a76-7654-4d6c-9fe6-eb42686e6ad8",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Changing subscriptions in a random fashion should be rare, but I'm more curious of why the algorithm would fail to find the optimal solution, and if it is could be triggered by other even more common situations?\r\n\r\nBy reading the description of the sticky assignor from KIP-441, I think the root cause may be in the iterative balancing phase:\r\n\r\n```\r\nWhen considering the best move for a partition, it first checks to see if that partition is currently hosted on a consumer that is unbalanced with respect to the prior host of that partition. In this case, it just moves the partition back to the prior host. This is essentially a short-circuit for the case where a partition has become \"unstuck\" and restoring stickiness could actually improve balance. If we get past that short-circuit, then we just propose to move the partition to the consumer that can host it and has the smallest current assignment.\r\n```\r\n\r\nSuch random walks algorithm can only achieve sub-optimal solution indeed; maybe we can change this behavior to consider \"switching two partitions so that the total balance of the cluster does not change, but we can achieve better stickiness\" as a valid move before considering for convergence? Just a thought.",
+        "createdAt" : "2019-08-08T05:57:02Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f59b5801-4e1c-49a5-a1b8-6dccf2452bc2",
+        "parentId" : "7e509a76-7654-4d6c-9fe6-eb42686e6ad8",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yeah, I didn't see substantial improvement trying that but perhaps there is a more clever way to do so. I opened a ticket to look into this further but consider it an optimization as future work. Personally, I feel it's an interesting problem -- but doesn't merit blocking progress on 429.\r\n\r\nDoes that sound reasonable? I also think most use cases will not hit this -- and if they do, it's not incorrect just annoying :) ",
+        "createdAt" : "2019-08-08T22:11:17Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a488ee44-65de-4e64-bda7-d07e33b20284",
+        "parentId" : "7e509a76-7654-4d6c-9fe6-eb42686e6ad8",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Yeah as long as you feel that no other more common situations would hit this, then it should not block KIP-429.",
+        "createdAt" : "2019-08-08T22:41:57Z",
+        "updatedAt" : "2019-08-22T22:29:11Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2353e5a29fdd36b86160a8e63de90cd54f0d0825",
+    "line" : 474,
+    "diffHunk" : "@@ -1,1 +472,476 @@\n        // if we don't already need to revoke something due to subscription changes, first try to balance by only moving newly added partitions\n        if (!revocationRequired) {\n            performReassignments(unassignedPartitions, currentAssignment, prevAssignment, sortedCurrentSubscriptions,\n                consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);"
+  }
+]

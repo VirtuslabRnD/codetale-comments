@@ -812,5 +812,181 @@
     "commit" : "54e32f8ead515b4f8f82f25d5f63c0b53b3c45ed",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +1604,1608 @@          processStartup()\n        case ShutdownEventThread =>\n          // not handled here\n      }\n    } catch {"
+  },
+  {
+    "id" : "31008781-a60b-42ab-88cc-6072c5dfca48",
+    "prId" : 7128,
+    "prUrl" : "https://github.com/apache/kafka/pull/7128#pullrequestreview-267975719",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4314db97-aa85-4acd-a8ad-f35fe332ae2b",
+        "parentId" : null,
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "Just a quick comment to make things super clear:\r\n\r\nReassignment #1\r\n```\r\nORS = [1,2,3]\r\nTRS = [3,4,5]\r\n```\r\nReassignment #2 (overriding)\r\n```\r\nTRS = [3,5,6]\r\nOVRS = [5]\r\nURS = [4]\r\n```",
+        "createdAt" : "2019-07-29T18:55:58Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8538961c460c50be1828a050793f45d8558ea9b9",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +526,530 @@   *       (it is essentially (RS - ORS) - URS)\n   *\n   *   1 Set RS = ORS + OVRS, AR = OVRS, RS = [] in memory\n   *   2 Send LeaderAndIsr request with RS = ORS + OVRS, AR = [], RS = [] to all brokers in ORS + OVRS\n   *     (because the ongoing reassignment is in phase A, we know we wouldn't have a leader in URS"
+  },
+  {
+    "id" : "caf2577d-ee31-471b-975c-24059daae009",
+    "prId" : 7128,
+    "prUrl" : "https://github.com/apache/kafka/pull/7128#pullrequestreview-284448239",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "120d5111-b199-4ea7-a670-1df85cfc716f",
+        "parentId" : null,
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "Do we want to guarantee that if controllerContext.partitionReplicaAssignment(tp).isBeingReassigned then controllerContext.partitionsBeingReassigned(tp).isPresent?\r\nAt this point, I don't know if we should update the in-memory and ZK replica assignment to one that is not being reassigned. Since we remove the partition from the partitionsBeingReassigned collection, it seems to make sense to also update in-memory and ZK to truly treat the reassignment as failed.\r\nYet, do we need to send LeaderAndIsr requests if we change those?\r\n\r\nThe one scenario where this divergence could happen (controllerContext.partitionReplicaAssignment(tp).isBeingReassigned is true and controllerContext.partitionsBeingReassigned(tp).isPresent is not)\r\nis if we have an UNKNOWN_SERVER_ERROR during the reassignment (line 723)",
+        "createdAt" : "2019-07-29T18:57:18Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe9e21ba-c667-482c-aa2f-1a5dbdc9ae91",
+        "parentId" : "120d5111-b199-4ea7-a670-1df85cfc716f",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "I think we should try to avoid having an in-memory state that does not match the ZK state.  Can you think of a case where that might happen here?",
+        "createdAt" : "2019-09-04T21:41:13Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6012a3d7-81ee-4b37-a897-ec1117bf9648",
+        "parentId" : "120d5111-b199-4ea7-a670-1df85cfc716f",
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "I think that might happen if we throw an error somewhere inside `onPartitionReassignment` after it updates the in-memory state. This wasn't handled previously either\r\n\r\nThe question here is more about the two separate in-memory collections diverging - `partitionsBeingReassigned` and `partitionReplicaAssignment`. If we get an unknown error inside `onPartitionReassignment` we may have updated the in-memory `partitionReplicaAssignment` but in `maybeTriggerPartitionReassignment` we catch the error and remove the partition from `partitionsBeingReassigned`. So we may end up with an in-memory state indicating a reassignment but none scheduled due to some failure.\r\n\r\nI can't think of a great way to guard against this. It may be good to leave it as is",
+        "createdAt" : "2019-09-05T00:06:41Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "010f756f-f9ef-46b5-9acd-f63b98eff469",
+        "parentId" : "120d5111-b199-4ea7-a670-1df85cfc716f",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "It's difficult to handle arbitrary exceptions propagating from any line of code.  If we're confident that we've carefully checked the code in onPartitionReassignment, let's not block on this for now.",
+        "createdAt" : "2019-09-05T18:13:54Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8538961c460c50be1828a050793f45d8558ea9b9",
+    "line" : 316,
+    "diffHunk" : "@@ -1,1 +733,737 @@            error(s\"Ignoring request to reassign partition $tp that doesn't exist.\")\n            partitionsToBeRemovedFromReassignment.add(tp)\n            reassignmentResults.put(tp, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, \"The partition does not exist.\"))\n        }\n      }"
+  },
+  {
+    "id" : "1c1acec6-0e79-4568-8a28-8d1748760a39",
+    "prId" : 7128,
+    "prUrl" : "https://github.com/apache/kafka/pull/7128#pullrequestreview-283910297",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "145e1e33-df62-4bbf-a001-2b93bbeb050e",
+        "parentId" : null,
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "I've added in `assert()` calls throughout the code -- they helped me catch some bugs. I am wondering whether it's worth it to keep them for one AK release to catch issues we didn't expect or to remove them. I know we've had some before but I think I've heard we're moving away from them",
+        "createdAt" : "2019-07-30T17:22:07Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb80bb83-2419-4af7-aa13-bcf826ac9aa7",
+        "parentId" : "145e1e33-df62-4bbf-a001-2b93bbeb050e",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "`assert` is turned off by certain JVM flags.  So it's not really helpful for catching errors, since it is often turned off.\r\n\r\nConsidering that we already have this problem in the controller, it may be worth doing the conversion to something else en masse, rather than worrying about it in this PR.",
+        "createdAt" : "2019-09-04T21:36:55Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8538961c460c50be1828a050793f45d8558ea9b9",
+    "line" : 143,
+    "diffHunk" : "@@ -1,1 +585,589 @@      oldReplicas = oldReplicas,\n      newReplicas = reassignedPartitionContext.newReplicas)\n    assert(reassignedPartitionContext.newReplicas == partitionAssignment.targetReplicas,\n      s\"newReplicas ${reassignedPartitionContext.newReplicas} were not equal to the expected targetReplicas ${partitionAssignment.targetReplicas}\")\n    val targetReplicas = partitionAssignment.targetReplicas"
+  },
+  {
+    "id" : "ad28d9ae-9dca-42a8-9e68-056b1f8657b9",
+    "prId" : 7128,
+    "prUrl" : "https://github.com/apache/kafka/pull/7128#pullrequestreview-283909206",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e5cbe4c2-2157-465c-bd44-6d441c11067f",
+        "parentId" : null,
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "Come to think of it this would get called on API every reassignment so it may be worth to not log it?",
+        "createdAt" : "2019-07-30T17:45:15Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9db64d50-e209-48b3-8643-73f2caf5ebc9",
+        "parentId" : "e5cbe4c2-2157-465c-bd44-6d441c11067f",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "I think it's OK to keep the log.",
+        "createdAt" : "2019-09-04T21:34:19Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8538961c460c50be1828a050793f45d8558ea9b9",
+    "line" : 527,
+    "diffHunk" : "@@ -1,1 +1038,1042 @@  private def removePartitionsFromZkReassignment(partitionsToBeRemoved: Set[TopicPartition]): Unit = {\n    if (!zkClient.reassignPartitionsInProgress()) {\n      debug(s\"Cannot remove partitions $partitionsToBeRemoved from ZooKeeper because there is no ZooKeeper reassignment present\")\n      return\n    }"
+  },
+  {
+    "id" : "eeda4409-1e6e-4fe9-8b43-5ed542582b1d",
+    "prId" : 7128,
+    "prUrl" : "https://github.com/apache/kafka/pull/7128#pullrequestreview-285667222",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "40c83634-49c0-4203-b898-8ca95178d005",
+        "parentId" : null,
+        "authorId" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "body" : "nit: can `replicaAssignment.targetReplicas` be different than `targetReplicas`? If not this log statement might be a bit redundant.",
+        "createdAt" : "2019-09-09T15:38:12Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76a03605-f080-44e8-a000-685b0c6f6c44",
+        "parentId" : "40c83634-49c0-4203-b898-8ca95178d005",
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "Yes, that's the reason of the log. It is called when we are overriding an existing reassignment. i.e an on-going reassignment is happening (`replicaAssignment`) and we call the function to save a new reassignment (`targetReplicas`)\r\n\r\nThey can be the same, sure, if the user sends the same request twice in a row - but it is worth logging regardless. At the very least, it would help diagnose bugs easier. Besides that, I think it's a very useful log",
+        "createdAt" : "2019-09-09T17:32:47Z",
+        "updatedAt" : "2019-09-09T17:48:38Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8538961c460c50be1828a050793f45d8558ea9b9",
+    "line" : 708,
+    "diffHunk" : "@@ -1,1 +1675,1679 @@        if (reassignmentIsInProgress) {\n          info(s\"Overriding old reassignment for partition $partition \" +\n            s\"(with target replicas ${replicaAssignment.targetReplicas.mkString(\",\")}) \" +\n            s\"to new target replicas (${targetReplicas.mkString(\",\")})\")\n          assert(replicaAssignment.isBeingReassigned)"
   }
 ]
