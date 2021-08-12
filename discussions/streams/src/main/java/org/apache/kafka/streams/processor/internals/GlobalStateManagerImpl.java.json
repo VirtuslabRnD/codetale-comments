@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "d0794f99-2770-4b9a-8437-b7503f85e304",
+    "prId" : 5107,
+    "prUrl" : "https://github.com/apache/kafka/pull/5107#pullrequestreview-126543939",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7b129d1e-ae33-408e-8490-ec85f82851dc",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "This will return the value for `\"poll.ms\"` -- Should we check for `\"global.consumer.poll.ms\"` and user this value if present instead?",
+        "createdAt" : "2018-06-05T20:07:14Z",
+        "updatedAt" : "2018-06-08T15:17:39Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c72d7126-c2e3-4995-89d5-710537122ff2",
+        "parentId" : "7b129d1e-ae33-408e-8490-ec85f82851dc",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Hmm.. `poll.ms` is not a ConsumerConfig, but a StreamsConfig, so users are not expected to prefix it with the consumer.",
+        "createdAt" : "2018-06-05T21:18:36Z",
+        "updatedAt" : "2018-06-08T15:17:39Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1c931c0a-a18e-4415-b896-a9847af390ca",
+        "parentId" : "7b129d1e-ae33-408e-8490-ec85f82851dc",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I see what you mean. Still I am wondering if a single config for all consumers is smart. Also, the config is only used to pass into `Consumer#poll()` -- so even if it's not a config *parameter*, it's effectively still very similar to a \"consumer config\". I agree that it would required explicit documentation.",
+        "createdAt" : "2018-06-06T18:38:48Z",
+        "updatedAt" : "2018-06-08T15:17:39Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f2578846-fd8d-4a5b-9de5-ed50239407c9",
+        "parentId" : "7b129d1e-ae33-408e-8490-ec85f82851dc",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I agree it is generally better to allow different values for this; on the other hand, I felt it is too much of a lower-level details for people to really figure it out right. For example, today global consumers have two callers of `poll()`, restore consumer has two as well, and normal consumer has one. We can argue further that all these five calls may prefer different values for the reason we discussed in this PR, like whether it is call in the main loop or not.\r\n\r\nBesides, if want to allow prefix for this config we can rush it into 2.0, but it may be considered a public API change as well.",
+        "createdAt" : "2018-06-06T19:05:20Z",
+        "updatedAt" : "2018-06-08T15:17:39Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bc1562d9-c1cb-4def-9354-f7529af064a0",
+        "parentId" : "7b129d1e-ae33-408e-8490-ec85f82851dc",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Ack. I just convinced myself that it makes sense what you say. As you pointed out, we call poll() on different consumers with different purpose:\r\n\r\nnormale processing:\r\n - main-consumer\r\n - global-consumer (regular g-table update)\r\n\r\nupdating standby tasks:\r\n - restore-consumer\r\n\r\nrestoring:\r\n - main-consumer (that is still doing regular work)\r\n - restore-consumer\r\n - global-consumer\r\n\r\nApplying the same value `poll.ms` to main and global consumer in normal processing case makes sense to me. For updating standby-tasks, we hard-code \"zero\" already. Same for the main-consumer during restore phase, to speed up restoring. Both are reasonable choices. The last case, is the restore case for restore-consumer and global-consumer -- it might make sense to apply a different poll-time for thiscase, but I also think that using the same as for the normal processing case is fine.\r\n\r\nThus, long story short, iff we ever introduce a prefix for `poll.ms` parameters, it should be for \"normal processing phase\" and \"restore phase\" but should not be tied to the actual used consumer-instance. Thus, using the consumer prefix does not make sense.\r\n",
+        "createdAt" : "2018-06-06T20:34:17Z",
+        "updatedAt" : "2018-06-08T15:17:39Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b829d558490d21cf4350eb54a4f18880243744ba",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +79,83 @@        this.retries = config.getInt(StreamsConfig.RETRIES_CONFIG);\n        this.retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);\n        this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));\n    }\n"
+  }
+]
