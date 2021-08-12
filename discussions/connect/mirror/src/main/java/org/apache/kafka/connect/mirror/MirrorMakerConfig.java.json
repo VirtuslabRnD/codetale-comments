@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "81277786-5b87-4cc0-ac7b-90f1f10524bd",
+    "prId" : 9589,
+    "prUrl" : "https://github.com/apache/kafka/pull/9589#pullrequestreview-577932954",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "20259900-e8eb-4caa-b788-9108c6cda756",
+        "parentId" : null,
+        "authorId" : "0437327f-f1bc-4c4a-b258-4c8dd6851ac9",
+        "body" : "Question @twobeeb and @ryannedolan about this: is there a use case for which a cluster pair would be disabled yet its heartbeats enabled? I'm wondering because in the case someone disabled the cluster pair but didn't think to disable the heartbeats (since it defaults to true), these herders would still be created, but I'm not sure if it would be useful to have them created since there is no replication going on. Would it make more sense to just not create a herder if the cluster pair was disabled (instead of checking the heartbeats as well)? If not can we make sure to add documentation about this behavior?",
+        "createdAt" : "2021-01-26T23:30:53Z",
+        "updatedAt" : "2021-01-28T07:45:27Z",
+        "lastEditedBy" : "0437327f-f1bc-4c4a-b258-4c8dd6851ac9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "24cc84c9-61e0-4f9e-b6ef-ab55259c723f",
+        "parentId" : "20259900-e8eb-4caa-b788-9108c6cda756",
+        "authorId" : "8087bf2b-468e-4986-9559-ae6197c1fa25",
+        "body" : "That's actually the current behavior, all herders are created and the beats are emitted from the \"opposite\" herder  \r\n\r\nIf you have a replication flow from A to B **and you want heartbeats**, you need 2 herders :  \r\n- A->B for the MirrorSourceConnector \r\n- B->A for the MirrorHeartbeatConnector \r\n\r\nThe MirrorHeartbeatConnector on B->A emits beats into topic heartbeats on cluster A.\r\nThe MirrorSourceConnector on A->B then replicates whichever topic is configured as well as heartbeats.\r\n\r\nAll of this is fine with 2-3 clusters. It starts to make less sense when using 10+ clusters.\r\n\r\nBecause this is the current implementation, we decided to keep it as-is so as to not cause change in behavior, and add a new top-level property \"emit.heartbeats.enabled\" which defaults to \"true\".\r\n\r\nExisting users will not see any change and if they depend on these \"opposites\" herders for their monitoring, it will still work.  \r\nNew users with more complex use case can change this property and fine tune their heartbeat generation.",
+        "createdAt" : "2021-01-27T08:22:07Z",
+        "updatedAt" : "2021-01-28T07:45:27Z",
+        "lastEditedBy" : "8087bf2b-468e-4986-9559-ae6197c1fa25",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0569e28f-9e7f-410e-9f6f-c66cfaeaece7",
+        "parentId" : "20259900-e8eb-4caa-b788-9108c6cda756",
+        "authorId" : "0437327f-f1bc-4c4a-b258-4c8dd6851ac9",
+        "body" : "Thanks for the explanation @twobeeb, this makes sense. It would be good to add some comments explaining this in the code as this isn't immediately obvious. Other than that it looks good to me overall.",
+        "createdAt" : "2021-01-27T21:45:32Z",
+        "updatedAt" : "2021-01-28T07:45:27Z",
+        "lastEditedBy" : "0437327f-f1bc-4c4a-b258-4c8dd6851ac9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "149a4bad-09f6-4d2d-a01a-a80672be0495",
+        "parentId" : "20259900-e8eb-4caa-b788-9108c6cda756",
+        "authorId" : "8087bf2b-468e-4986-9559-ae6197c1fa25",
+        "body" : "Thanks for your review @skaundinya15.\r\nI'm having a hard time phrasing this properly, suggestions would be welcome.\r\nIs this comment proposition aligned with what you had in mind ?\r\n```suggestion\r\n                    // By default, all source->target Herder combinations are created even if `x->y.enabled=false`\r\n                    // Unless `emit.heartbeats.enabled=false` or `x->y.emit.heartbeats.enabled=false`\r\n                    // Reason for this behavior: for a given replication flow A->B with heartbeats, 2 herders are required :\r\n                    // B->A for the MirrorHeartbeatConnector (emits heartbeats into A)\r\n                    // A->B for the MirrorSourceConnector (actual replication flow)\r\n                    if (clusterPairEnabled || clusterPairHeartbeatsEnabled) {\r\n```",
+        "createdAt" : "2021-01-27T23:16:26Z",
+        "updatedAt" : "2021-01-28T07:45:27Z",
+        "lastEditedBy" : "8087bf2b-468e-4986-9559-ae6197c1fa25",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0debab14-4d84-4cfa-ae1b-1f41a639a83c",
+        "parentId" : "20259900-e8eb-4caa-b788-9108c6cda756",
+        "authorId" : "0437327f-f1bc-4c4a-b258-4c8dd6851ac9",
+        "body" : "```suggestion\r\n                    // By default, all source->target Herder combinations are created even if `x->y.enabled=false`\r\n                    // Unless `emit.heartbeats.enabled=false` or `x->y.emit.heartbeats.enabled=false`\r\n                    // Reason for this behavior: for a given replication flow A->B with heartbeats, 2 herders are required :\r\n                    // B->A for the MirrorHeartbeatConnector (emits heartbeats into A for monitoring replication health)\r\n                    // A->B for the MirrorSourceConnector (actual replication flow)\r\n                    if (clusterPairEnabled || clusterPairHeartbeatsEnabled) {\r\n```\r\nLooks good to me, just had a small tweak for the `B->A` comment. Thanks!",
+        "createdAt" : "2021-01-28T02:13:36Z",
+        "updatedAt" : "2021-01-28T07:45:27Z",
+        "lastEditedBy" : "0437327f-f1bc-4c4a-b258-4c8dd6851ac9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "14868a9cd0ed78c130c5460a1f770d3724d5e0e4",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +111,115 @@                    // B->A for the MirrorHeartbeatConnector (emits heartbeats into A for monitoring replication health)\n                    // A->B for the MirrorSourceConnector (actual replication flow)\n                    if (clusterPairEnabled || clusterPairHeartbeatsEnabled) {\n                        pairs.add(new SourceAndTarget(source, target));\n                    }"
+  }
+]

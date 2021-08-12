@@ -625,5 +625,82 @@
     "commit" : "8c20bcab28c5f75d8d380e4f7008e0282f790b49",
     "line" : 23,
     "diffHunk" : "@@ -1,1 +692,696 @@        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);\n        sender.wakeup();\n        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);\n    }\n"
+  },
+  {
+    "id" : "66b8b7d3-27bd-4012-b222-51b023166485",
+    "prId" : 9569,
+    "prUrl" : "https://github.com/apache/kafka/pull/9569#pullrequestreview-530590889",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "57f33998-5268-4033-aee7-8af2e6f4e121",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "For both these two functions: are we certain that InvalidProducerEpochException could be thrown directly from the call? For sendOffsetsToTransaction we are sending a commit-offset request to the consumer coordinator which should not get this error code, and for both AddPartitionsToTxn and EndTxn responses we should only have `INVALID_PRODUCER_EPOCH` error for version <= 1, right?\r\n\r\nEven if they are thrown, then we should add them in the `throws` as well similar to ProducerFencedException, right?",
+        "createdAt" : "2020-11-13T06:16:34Z",
+        "updatedAt" : "2020-11-17T23:15:10Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "561c37ac-38e5-42c1-8080-0c85360396ee",
+        "parentId" : "57f33998-5268-4033-aee7-8af2e6f4e121",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Yes, they would throw from `TransactionManager#maybeFailWithError` as user is not required to handle the send callback. As for `throws` block, I feel it's not necessary since we do have other fatal exceptions only declared in comment, which I believe is intentional to make the function signature concise.",
+        "createdAt" : "2020-11-13T17:20:16Z",
+        "updatedAt" : "2020-11-17T23:15:10Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "175c0fe5-dda4-4ac8-b975-9cd7c238d088",
+        "parentId" : "57f33998-5268-4033-aee7-8af2e6f4e121",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "In `maybeFailWithError` we only throw ProducerFenced directly if the lastError is ProducerFenced, otherwise we throw `KafkaException` which includes the lastError as its cause. That's also why we only throws `ProducerFenced` in the function signature.\r\n\r\nRegarding other exceptions: IllegalState / Interrupt / KafkaExceptions are all unchecked exceptions; Authorization / Timeout / UnsupportedVersionException are ApiExceptions but are common ones. Only ProducerFenced are the only producer-specific checked exceptions which we should add in throws.",
+        "createdAt" : "2020-11-13T21:06:36Z",
+        "updatedAt" : "2020-11-17T23:15:10Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b249821b-707c-44de-a345-2e95e09c99db",
+        "parentId" : "57f33998-5268-4033-aee7-8af2e6f4e121",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "I see your point. As of today, if we throw KafkaException then streams thread would die as we wrap it as `StreamsException` which is fatal. It's only gonna work if we throw InvalidEpoch exception directly and let stream catch and swallow it. Do you think that would be the correct way?",
+        "createdAt" : "2020-11-13T22:23:21Z",
+        "updatedAt" : "2020-11-17T23:15:10Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fbe3ba32-cbaf-4ddc-a0a9-22a6da054ceb",
+        "parentId" : "57f33998-5268-4033-aee7-8af2e6f4e121",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Well, as the javadoc said in producer\r\n\r\n```\r\nKafkaException if the producer has encountered a previous fatal or abortable error, or for any\r\n     *         other unexpected error\r\n```\r\n\r\nIt is not always a fatal, so the caller code , like Streams, should check for its root upon getting the KafkaException and then handle correspondingly: if its root is InvalidProducerEpoch, it should abort and begin new txn right?",
+        "createdAt" : "2020-11-13T23:05:00Z",
+        "updatedAt" : "2020-11-17T23:15:10Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f2da6b1a-f273-4a07-a467-11a104c5fc15",
+        "parentId" : "57f33998-5268-4033-aee7-8af2e6f4e121",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "I thought we would catch and rethrow as StreamsException:\r\n```\r\ncatch (final KafkaException error) {\r\n            throw new StreamsException(\r\n                formatException(\"Error encountered trying to commit a transaction\"),\r\n                error\r\n            );\r\n        }\r\n```\r\nwhich is a fatal one.",
+        "createdAt" : "2020-11-14T17:06:06Z",
+        "updatedAt" : "2020-11-17T23:15:10Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8def4510257b11cd1a4caaeb916944c44b3d0ec3",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +718,722 @@     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured\n     *         transactional.id is not authorized. See the exception for more details\n     * @throws org.apache.kafka.common.errors.InvalidProducerEpochException if the producer has attempted to produce with an old epoch\n     *         to the partition leader. See the exception for more details\n     * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any"
   }
 ]

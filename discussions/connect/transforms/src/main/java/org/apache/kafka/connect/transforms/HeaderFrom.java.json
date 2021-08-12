@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "c0e4fc0b-d2c0-46c3-a41f-73def73e95b1",
+    "prId" : 9549,
+    "prUrl" : "https://github.com/apache/kafka/pull/9549#pullrequestreview-530310784",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6055a100-586c-4d0a-a6f3-8422b4edfe95",
+        "parentId" : null,
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "Why duplicate headers here? According to the [Header class's Javadocs](https://kafka.apache.org/26/javadoc/org/apache/kafka/connect/header/Headers.html), the collection should be mutable.",
+        "createdAt" : "2020-11-09T19:12:07Z",
+        "updatedAt" : "2021-04-16T08:15:48Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "96753de2-5fa6-4488-851d-718dad842371",
+        "parentId" : "6055a100-586c-4d0a-a6f3-8422b4edfe95",
+        "authorId" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "body" : "I wasn't completely sure whether a transformation was allowed to mutate headers, since it has to create a new `ConnectRecord`. Take this code from `WorkerSourceTask` as an example:\r\n\r\n```java\r\n            final SourceRecord record = transformationChain.apply(preTransformRecord);\r\n            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);\r\n            if (producerRecord == null || retryWithToleranceOperator.failed()) {\r\n                counter.skipRecord();\r\n                commitTaskRecord(preTransformRecord, null);\r\n                continue;\r\n            }\r\n```\r\n\r\nSee how `preTransformRecord` can be used after the transformation chain has been applied? I think it would be incorrect for `commitTaskRecord` to commit the original record but with headers which had been mutated by transformations, right?",
+        "createdAt" : "2020-11-11T09:09:02Z",
+        "updatedAt" : "2021-04-16T08:15:48Z",
+        "lastEditedBy" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d620aac0-d029-4a17-acf1-04f8345ba834",
+        "parentId" : "6055a100-586c-4d0a-a6f3-8422b4edfe95",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "Ah, that's fair. Does seem to be the pattern followed by the other out-of-the-box transformations as well; probably best to continue to follow that pattern.\r\n\r\nI'm a little unnerved by this though, since as far as I can tell it's not publicly documented and so it's possible people writing their own transformations may be violating this implicit rule.\r\n\r\nOut of scope, so I've filed [KAFKA-10720](https://issues.apache.org/jira/browse/KAFKA-10720) to track the need for possible documentation improvements.",
+        "createdAt" : "2020-11-13T18:32:56Z",
+        "updatedAt" : "2021-04-16T08:15:48Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c7ef2dc934db78512a5192b1450edb38f9e4461f",
+    "line" : 120,
+    "diffHunk" : "@@ -1,1 +118,122 @@\n    private R applyWithSchema(R record, Object operatingValue, Schema operatingSchema) {\n        Headers updatedHeaders = record.headers().duplicate();\n        Struct value = Requirements.requireStruct(operatingValue, \"header \" + operation);\n        final Schema updatedSchema;"
+  },
+  {
+    "id" : "2680694b-27d7-4dce-87a0-0d071a955e36",
+    "prId" : 9549,
+    "prUrl" : "https://github.com/apache/kafka/pull/9549#pullrequestreview-636500992",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bcad2a33-dcef-48f5-b27b-8c0540fbd32c",
+        "parentId" : null,
+        "authorId" : "d31db46e-de6d-4fea-8dc5-6f7b17b636be",
+        "body" : "Even though I don't think it's reachable by users, should we have a message here?",
+        "createdAt" : "2021-04-15T09:32:50Z",
+        "updatedAt" : "2021-04-16T08:15:48Z",
+        "lastEditedBy" : "d31db46e-de6d-4fea-8dc5-6f7b17b636be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56a40a42-84c4-4766-b9db-6d694b09ec90",
+        "parentId" : "bcad2a33-dcef-48f5-b27b-8c0540fbd32c",
+        "authorId" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "body" : "It is impossible due to the `ConfigDef.ValidString.in(MOVE_OPERATION, COPY_OPERATION)`, so this is really an assertion failure. The line number in the stacktrace would be enough to track it down if it ever did happen due to a later refactoring, so imho an error message is of no value. But I'm happy to add one if you like.",
+        "createdAt" : "2021-04-15T09:49:38Z",
+        "updatedAt" : "2021-04-16T08:15:48Z",
+        "lastEditedBy" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2ea2d70a-640f-4843-a8fd-c71e2442e30a",
+        "parentId" : "bcad2a33-dcef-48f5-b27b-8c0540fbd32c",
+        "authorId" : "d31db46e-de6d-4fea-8dc5-6f7b17b636be",
+        "body" : "Ok, that's fair enough. Thanks",
+        "createdAt" : "2021-04-15T09:57:55Z",
+        "updatedAt" : "2021-04-16T08:15:48Z",
+        "lastEditedBy" : "d31db46e-de6d-4fea-8dc5-6f7b17b636be",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c7ef2dc934db78512a5192b1450edb38f9e4461f",
+    "line" : 90,
+    "diffHunk" : "@@ -1,1 +88,92 @@                    return COPY;\n                default:\n                    throw new IllegalArgumentException();\n            }\n        }"
+  }
+]

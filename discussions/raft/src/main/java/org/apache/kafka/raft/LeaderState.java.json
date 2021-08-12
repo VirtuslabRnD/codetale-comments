@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "1d9313d5-a4fc-458d-9144-78e9de415cf0",
+    "prId" : 9539,
+    "prUrl" : "https://github.com/apache/kafka/pull/9539#pullrequestreview-538723641",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "aafae846-532e-413c-8709-c78cf164b6aa",
+        "parentId" : null,
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "I think we have two options here. This class can contain either:\r\n```java\r\nprivate final Map<Integer, VoterState> voterReplicaStates = new HashMap<>(); \r\n```\r\nwhere we change this expression to `boolean hasEndorsedLeader = grantingVoters.contains(voterId);`\r\nand remove the field `private final Set<Integer> grantingVoters = new HashSet<>();`\r\n\r\nor:\r\n\r\n```java\r\nprivate final Set<Integer> voters = new HashSet<>(); \r\nprivate final Set<Integer> grantingVoters = new HashSet<>(); \r\n```\r\nand change a few of the methods here use these two sets instead of `voterReplicaStates`.\r\n\r\nI like the first option but it is up to you.",
+        "createdAt" : "2020-11-24T14:36:21Z",
+        "updatedAt" : "2020-12-08T02:56:30Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3878074d-343f-418e-8531-095891b0918a",
+        "parentId" : "aafae846-532e-413c-8709-c78cf164b6aa",
+        "authorId" : "dec739d0-c763-471c-b738-6b6f5b82e58e",
+        "body" : "@jsancio , even I would prefer option 1 but slightly confused on it. You suggest to check for endorsement using `boolean hasEndorsedLeader = grantingVoters.contains(voterId);` and then asking to remove the field `grantingVoters `. Am I missing something ?\r\n",
+        "createdAt" : "2020-11-25T14:04:46Z",
+        "updatedAt" : "2020-12-08T02:56:30Z",
+        "lastEditedBy" : "dec739d0-c763-471c-b738-6b6f5b82e58e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ed37e6b-5dad-4c48-afef-a1ae0b8df86c",
+        "parentId" : "aafae846-532e-413c-8709-c78cf164b6aa",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "Yes, that's correct. You will have to change the implementation of `grantingVoters()` to something like:\r\n\r\n```java\r\npublic Set<Integer> endorsingVoters() { \r\n    return voterReplicaStates\r\n        .values()\r\n        .stream()\r\n        .filter(voter -> voter.hasEndorsedLeader)\r\n        .map(voter -> voter.stateId)\r\n        .collect(Collectors.toSet()); \r\n}\r\n```\r\n\r\nNotice the change in the method name. We can also change `nonEndorsingFollowers` to `nonEndorsingVoters` for consistency.",
+        "createdAt" : "2020-11-25T17:37:11Z",
+        "updatedAt" : "2020-12-08T02:56:30Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "16432f8e9a89a11ffd862efe67f9ddc27a85642a",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +51,55 @@\n        for (int voterId : voters) {\n            boolean hasEndorsedLeader = voterId == localId;\n            this.voterReplicaStates.put(voterId, new VoterState(voterId, hasEndorsedLeader));\n        }"
+  },
+  {
+    "id" : "d054b6cd-e331-40bc-a5a2-4f614ed2ad9a",
+    "prId" : 9553,
+    "prUrl" : "https://github.com/apache/kafka/pull/9553#pullrequestreview-557337017",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e40a2fce-37d8-4baa-bf18-1089e1004e41",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Maybe we could add a default no-op implementation to EpochState?",
+        "createdAt" : "2020-12-22T17:01:29Z",
+        "updatedAt" : "2020-12-23T18:10:34Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0556f0fb-28e2-49d1-a8db-daf18409ad29",
+        "parentId" : "e40a2fce-37d8-4baa-bf18-1089e1004e41",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "I prefer to have each of the epoch states explicitly opt out of this `close` method. This makes it clear that this state doesn't have any resource that it wishes to clean/close during a transition. Instead of future code changes forgetting to override this method. What do you think?",
+        "createdAt" : "2020-12-22T20:05:20Z",
+        "updatedAt" : "2020-12-23T18:10:34Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "22133d1166394ea4ffbf111aeb8eb063c2182cd8",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +303,307 @@\n    @Override\n    public void close() {}\n\n}"
+  }
+]

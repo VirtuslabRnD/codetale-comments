@@ -944,5 +944,115 @@
     "commit" : "c37687893a08e3bb056f99cc9927a5c679f80d5d",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +128,132 @@\n        final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());\n        final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);\n\n        final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()"
+  },
+  {
+    "id" : "19b8e60a-8aff-4fc4-b0e1-0516143b2178",
+    "prId" : 9582,
+    "prUrl" : "https://github.com/apache/kafka/pull/9582#pullrequestreview-530135811",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "974427b0-0e33-4431-83ea-bd8cef776989",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "We could avoid the `instanceof` and the casting if we introduce a `RootGraphNode` with a method `sourceNodes()`. Since a root can only have source nodes and state stores as children, we could make the topology code in general a bit more type safe. As far as I can see that would need some additional changes outside the scope of this PR. So, feel free to not consider this comment for this PR and we can do another PR for that.",
+        "createdAt" : "2020-11-12T10:30:57Z",
+        "updatedAt" : "2020-11-13T19:28:46Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "395d4f5e-b347-42af-8c0a-afa3862f4ba2",
+        "parentId" : "974427b0-0e33-4431-83ea-bd8cef776989",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yeah I think that's a fair point but I would prefer to keep the scope of this PR as small as possible for now. Maybe @lct45 could pick this up on the side once this is merged?",
+        "createdAt" : "2020-11-13T00:24:41Z",
+        "updatedAt" : "2020-11-13T19:28:46Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38cb3f6e-5fdb-414b-8047-e74219987863",
+        "parentId" : "974427b0-0e33-4431-83ea-bd8cef776989",
+        "authorId" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "body" : "SGTM",
+        "createdAt" : "2020-11-13T15:03:10Z",
+        "updatedAt" : "2020-11-13T19:28:46Z",
+        "lastEditedBy" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cf32d6925b2ad8506179c2694595067cc26e1b43",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +329,333 @@        for (final StreamsGraphNode graphNode : root.children()) {\n            if (graphNode instanceof StreamSourceNode) {\n                final StreamSourceNode<?, ?> currentSourceNode = (StreamSourceNode<?, ?>) graphNode;\n\n                if (currentSourceNode.topicPattern() != null) {"
+  },
+  {
+    "id" : "8afce5c4-0dfd-4abe-9911-c61e4f081002",
+    "prId" : 9582,
+    "prUrl" : "https://github.com/apache/kafka/pull/9582#pullrequestreview-529854087",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d30c6e24-4bec-4116-9b80-cbc34b8fbb58",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "Just to be clear. This improves the situation but it is not a complete solution, right? Assume we have a topic `topicA`. Patterns `topic*` and `topi*` both  match `topicA` but they are different when compared with this comparator. In that case a `TopologyException` would be thrown in the `InternalTopologyBuilder`, right?",
+        "createdAt" : "2020-11-12T11:14:37Z",
+        "updatedAt" : "2020-11-13T19:28:46Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bad76fe4-3a57-4c99-89e2-b4fa743c94ce",
+        "parentId" : "d30c6e24-4bec-4116-9b80-cbc34b8fbb58",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yes to all of that: this PR improves some situations, but not all. Specifically you would still get a TopologyException if  (a) subscribing to overlapping but not equal collection of topics, (b) subscribing to a topic and to a pattern that matches said topic, and (c) subscribing to two (or more) patterns that match the same topic(s).\r\n\r\nCase (c) is what you described, I just wanted to list them all here for completion. Here's my take on what we can/should reasonably try to tackle:\r\n\r\n(a) this case is easily detected, easily worked around, and easy for us to fix. It results in a \"compile time\" exception (meaning when the topology is compiled, not the program) which users can quickly detect and work around if need be by rewriting the topology themselves. Fix is relatively straightforward but very low priority, so I plan to just file a followup ticket for this for now\r\n(b) is easily detected (you get a compile time exception) and possible to work around, but difficult to solve. I think in all cases a user could find a way around this issue by some combination of topology rewriting and Pattern manipulation or topic renaming, depending on what exactly they're trying to achieve. Of course there's no way for us to detect what an arbitrary user is trying to do in this case, so I don't see any path forwarding to making this case possible. No plans to file a followup ticket\r\n(c) is difficult to detect, might be possible to work around, and probably very complicated to actually fix. Unfortunately, in this case you only get a run-time exception, since there's no way of knowing which topics will or will not be created ahead of time. And I'm thinking that determining whether two regexes will both match any possible string may be unsolvable...so, no followup ticket planned for this. \r\nWDYT?",
+        "createdAt" : "2020-11-13T01:23:01Z",
+        "updatedAt" : "2020-11-13T19:28:46Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cfc4fd87-d78f-48f2-85c6-0f51a61536cd",
+        "parentId" : "d30c6e24-4bec-4116-9b80-cbc34b8fbb58",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "Thank you for the list of issues. I agree in all points.",
+        "createdAt" : "2020-11-13T08:14:09Z",
+        "updatedAt" : "2020-11-13T19:28:46Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cf32d6925b2ad8506179c2694595067cc26e1b43",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +325,329 @@        // string and flags to determine if two pattern subscriptions can be merged into a single source node\n        final Map<Pattern, StreamSourceNode<?, ?>> patternsToSourceNodes =\n            new TreeMap<>(Comparator.comparing(Pattern::pattern).thenComparing(Pattern::flags));\n\n        for (final StreamsGraphNode graphNode : root.children()) {"
+  },
+  {
+    "id" : "11625cca-6d03-4e5f-b004-84e5ee68af80",
+    "prId" : 9582,
+    "prUrl" : "https://github.com/apache/kafka/pull/9582#pullrequestreview-530354981",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b767d2c2-39fd-4913-9fc2-6b67d9a21b5a",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Filed https://issues.apache.org/jira/browse/KAFKA-10721",
+        "createdAt" : "2020-11-13T19:41:52Z",
+        "updatedAt" : "2020-11-13T19:41:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cf32d6925b2ad8506179c2694595067cc26e1b43",
+    "line" : 54,
+    "diffHunk" : "@@ -1,1 +347,351 @@                            // TODO we only merge source nodes if the subscribed topic(s) are an exact match, so it's still not\n                            // possible to subscribe to topicA in one KStream and topicA + topicB in another. We could achieve\n                            // this by splitting these source nodes into one topic per node and routing to the subscribed children\n                            if (!mainSourceNode.topicNames().equals(currentSourceNode.topicNames())) {\n                                LOG.error(\"Topic {} was found in  subscription for non-equal source nodes {} and {}\","
   }
 ]
