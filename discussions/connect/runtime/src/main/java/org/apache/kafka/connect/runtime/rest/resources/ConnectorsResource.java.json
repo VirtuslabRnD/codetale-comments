@@ -97,5 +97,71 @@
     "commit" : "27100a789ac7b44c8bc13a9e1e65713f340be9e0",
     "line" : 39,
     "diffHunk" : "@@ -1,1 +274,278 @@\n        // In all other cases, submit the async restart request and return connector state\n        FutureCallback<ConnectorStateInfo> cb = new FutureCallback<>();\n        herder.restartConnectorAndTasks(restartRequest, cb);\n        Map<String, String> queryParameters = new HashMap<>();"
+  },
+  {
+    "id" : "c1359d1c-3d29-4ab6-9f0a-a1043e009c7c",
+    "prId" : 11132,
+    "prUrl" : "https://github.com/apache/kafka/pull/11132#pullrequestreview-716024293",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "58779a7c-2fb2-4c2e-8c35-2a064d6e6cf9",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "This returns `204 No Content`, right? But doesn't the old code (prior to this feature) return `200 OK` with no content? \r\n\r\n[KIP-745](https://cwiki.apache.org/confluence/display/KAFKA/KIP-745%3A+Connect+API+to+restart+connector+and+tasks) mentions using `202 Accepted` for the new behavior, but keeps the `200 OK` behavior when `includeTasks=false` and `onlyFailed=false`. \r\n\r\nAre you suggesting that we can't return `200 OK` here if there is no response body and should therefore update the KIP, or can this line be left as is and we change the `RestClient` to properly handle a null content? The issue for this test failure ([KAFKA-111]()) mentions [this code](https://github.com/apache/kafka/blob/d89ea74918ce0a1f2309a09473c9500c52af3b10/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/rest/RestClient.java#L134-L136) in the `RestClient`, which handles all 200 to <300 status codes the same way, so could we just improve that?",
+        "createdAt" : "2021-07-26T22:30:59Z",
+        "updatedAt" : "2021-07-26T22:31:33Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d98adbb-b818-4afe-ad03-4ec02a384c4b",
+        "parentId" : "58779a7c-2fb2-4c2e-8c35-2a064d6e6cf9",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "Thanks for the review @rhauch. I had the same questions and concerns. \r\n\r\nActually, the current behavior for both connector and task restarts is to return `HTTP/1.1 204 No Content`. So this fix should retain this behavior for the connector restart. \r\n\r\nThis seemed the most appropriate thing to do for a POST request whose response would have an empty body given the description in the RFC:\r\nhttps://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.2.5\r\n\r\nI also think that an addendum to the KIP would be a good idea one we finish the review here. \r\nWdyt?",
+        "createdAt" : "2021-07-26T22:55:10Z",
+        "updatedAt" : "2021-07-26T22:59:05Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ccdc3eb0-d483-44a6-b0f0-1c24027433a3",
+        "parentId" : "58779a7c-2fb2-4c2e-8c35-2a064d6e6cf9",
+        "authorId" : "094f6954-1557-4cfd-9696-2d85b89e8fea",
+        "body" : "@rhauch and @kkonstantine  I confirm that from AK2.8 test the old behavior was returning 204, We would need to fix the documentation and KIP. Please see below\r\n\r\n> ➜  kafka_2.13-2.8.0 curl -v -X POST http://localhost:8083/connectors/local-file-source/restart\r\n> *   Trying ::1...\r\n> * TCP_NODELAY set\r\n> * Connected to localhost (::1) port 8083 (#0)\r\n> > POST /connectors/local-file-source/restart HTTP/1.1\r\n> > Host: localhost:8083\r\n> > User-Agent: curl/7.64.1\r\n> > Accept: */*\r\n> > \r\n> < HTTP/1.1 204 No Content\r\n> < Date: Mon, 26 Jul 2021 23:41:44 GMT\r\n> < Server: Jetty(9.4.39.v20210325)\r\n> < \r\n> * Connection #0 to host localhost left intact\r\n> * Closing connection 0\r\n> ➜  kafka_2.13-2.8.0",
+        "createdAt" : "2021-07-26T23:43:05Z",
+        "updatedAt" : "2021-07-26T23:44:36Z",
+        "lastEditedBy" : "094f6954-1557-4cfd-9696-2d85b89e8fea",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6597414a-dae2-4bd3-88a5-b5b06b87cce3",
+        "parentId" : "58779a7c-2fb2-4c2e-8c35-2a064d6e6cf9",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Awesome. Thanks, folks!",
+        "createdAt" : "2021-07-27T04:16:39Z",
+        "updatedAt" : "2021-07-27T04:16:40Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "420a0284-21ed-494d-8c85-b9c0f9a62d74",
+        "parentId" : "58779a7c-2fb2-4c2e-8c35-2a064d6e6cf9",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "I've corrected the KIP and sent an email describing this minor correction to the vote thread for the KIP.\r\n\r\nI've also added [a comment on KAFKA-13139](https://issues.apache.org/jira/browse/KAFKA-13139?focusedCommentId=17388116&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-17388116) that describes the root cause and the KIP correction.\r\n\r\nThanks, @kkonstantine and @kpatelatwork.",
+        "createdAt" : "2021-07-27T14:53:03Z",
+        "updatedAt" : "2021-07-27T14:53:04Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f6e4d3ac035a06801c93a7d024ee8863ea9bd1e2",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +270,274 @@            herder.restartConnector(connector, cb);\n            completeOrForwardRequest(cb, forwardingPath, \"POST\", headers, null, forward);\n            return Response.noContent().build();\n        }\n"
   }
 ]

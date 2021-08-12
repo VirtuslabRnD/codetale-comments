@@ -933,5 +933,38 @@
     "commit" : "e269e26c50d6e0aa61e9931c9cf3e160754e56a6",
     "line" : 205,
     "diffHunk" : "@@ -1,1 +267,271 @@        }\n\n        Collections.sort(unfilledMembersWithUnderMinQuotaPartitions);\n        Collections.sort(unfilledMembersWithExactlyMinQuotaPartitions);\n"
+  },
+  {
+    "id" : "ab44c265-0b3d-49b0-be84-8832e2c322ce",
+    "prId" : 11156,
+    "prUrl" : "https://github.com/apache/kafka/pull/11156#pullrequestreview-723765739",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7c6e0e4c-6f59-4905-af4c-5b77c837e136",
+        "parentId" : null,
+        "authorId" : "d520dc4e-6bae-4b0b-90d6-4c0a1cabb518",
+        "body" : "Small optimization here since if the partition size is huge, and we need to do this check for each partition in each consumer, this will have some cost for performance. \r\n\r\nFrom the java doc in `Map#put`  \r\n> Returns:\r\nthe previous value associated with key, or null if there was no mapping for key. (A null return can also indicate that the map previously associated null with key, if the implementation supports null values.)\r\n\r\nThat is, when put(insert) element into `Map`, we will do a key search, and then insert, and return `null`(not found) or previous value. So we can \"remove the `containsKey` check\" here, and use the return value to check if the key element had a value of not, because we'll never put `null` as the consumer value. \r\n\r\nAfter all, we can imagine, 99% cases will be normal case (i.e. 1 partition with only 1 owner). So originally:\r\n  - **multiple consumers claiming same partition case**: we'll do `containsKey` check only\r\n  - **normal case**: we'll do both `containsKey` and `put`\r\n\r\nAfter this change, we'll optimize for the `normal case`, which directly `put`, and have a lazy check for the key, by the return value from `put`.\r\n\r\n\r\n\r\nNote: there will be 1 case that will be a little different than before:\r\n - before: if there is a value for the key, we won't put the new value(consumer) into `allPreviousPartitionsToOwner`\r\n - after: we'll always put the new value(consumer) into `allPreviousPartitionsToOwner`. \r\n \r\nIt won't impact the result because \r\n  1. what we want to identify from `allPreviousPartitionsToOwner`, is if the partition was also owned by others. That is, we don't care it was owned by consumer A, or B, or C. \r\n  2. We'll do `consumerToOwnedPartitions.get(otherConsumer).remove(tp);` to remove the partition from the other parition owner. After this change, if there are 3 consumers owned the same partition, we'll do:\r\n     a. **consumer A**: `allPreviousPartitionsToOwner.put(tp, \"A\")`, and also add into its `ownedPartitions`\r\n     b. **consumer B**: `allPreviousPartitionsToOwner.put(tp, \"B\")`, and return \"A\" from the `put` method, found it was also owned by A, remove the partition from A's ownedPartition: `consumerToOwnedPartitions.get(\"A\").remove(tp);`\r\n     c. **consumer C**: `allPreviousPartitionsToOwner.put(tp, \"C\")`, and return \"B\" from the `put` method, found it was also owned by B, remove the partition from B's ownedPartition: `consumerToOwnedPartitions.get(\"B\").remove(tp);`. this remove will return false since it can't find this partition in B's owned partition, which is fine.",
+        "createdAt" : "2021-07-31T02:48:40Z",
+        "updatedAt" : "2021-07-31T03:50:55Z",
+        "lastEditedBy" : "d520dc4e-6bae-4b0b-90d6-4c0a1cabb518",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "430e69a4-e5f5-43b5-8230-6daf81eaab5e",
+        "parentId" : "7c6e0e4c-6f59-4905-af4c-5b77c837e136",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "New logic makes sense to me 👍 -- I agree it doesn't really matter if we overwrite the previous consumer in the map since the thing we really care about is whether or not there was one",
+        "createdAt" : "2021-08-05T20:25:04Z",
+        "updatedAt" : "2021-08-05T20:25:35Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a27f12091fd7f0af9c7ea8284136d59fac7218c",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +150,154 @@                            log.error(\"Found multiple consumers {} and {} claiming the same TopicPartition {} in the \"\n                                + \"same generation {}, this will be invalidated and removed from their previous assignment.\",\n                                     consumer, otherConsumer, tp, maxGeneration);\n                            consumerToOwnedPartitions.get(otherConsumer).remove(tp);\n                            partitionsWithMultiplePreviousOwners.add(tp);"
   }
 ]
