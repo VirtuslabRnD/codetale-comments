@@ -64,5 +64,170 @@
     "commit" : "b9aa6b1706e2e374c20d710567a64b0328fe3119",
     "line" : 39,
     "diffHunk" : "@@ -1,1 +164,168 @@    public void maybeRemoveFromInflightBatches(ProducerBatch batch) {\n        List<ProducerBatch> batches = inFlightBatches.get(batch.topicPartition);\n        if (batches != null) {\n            batches.remove(batch);\n            if (batches.isEmpty()) {"
+  },
+  {
+    "id" : "8456e9cf-de9b-4532-b224-d664e9443eb7",
+    "prId" : 5971,
+    "prUrl" : "https://github.com/apache/kafka/pull/5971#pullrequestreview-226519142",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2a5539ec-b9f5-4678-8da2-151458fa1453",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I feel `hasOngoingTransaction` might be the main thing we care about. The only request that could come outside of a transaction is the FindCoordinator request (I think) and we wouldn't want to block shutdown on that. Does that make sense?",
+        "createdAt" : "2019-03-07T21:50:20Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "98effaf1-4aaf-43ff-ab2c-3f61d01cc6ee",
+        "parentId" : "2a5539ec-b9f5-4678-8da2-151458fa1453",
+        "authorId" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "body" : "Yep, it does make sense. Will update the code to reflect this.",
+        "createdAt" : "2019-03-11T12:33:31Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "214d16b4-d77f-41ac-ae07-e1eb5c136251",
+        "parentId" : "2a5539ec-b9f5-4678-8da2-151458fa1453",
+        "authorId" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "body" : "On the other hand we'll block infinitely in `run()` if `hasPendingRequests` is not included here and there's no closure to the ongoing transaction. My plan here really was that after flipping the `running` flag to false to send out any transactional messages that are in the queue. There may be a commit (or abort) among them. If the user is blocking on one and there is no response then we'll fail those in forceClose as you suggested below.  ",
+        "createdAt" : "2019-03-12T08:39:00Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04596f4f-c1f8-4d44-8510-b042f6b6a5cb",
+        "parentId" : "2a5539ec-b9f5-4678-8da2-151458fa1453",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I'm not sure I follow. If there is a commit or abort that needs to be sent, then wouldn't `hasOngoingTransaction` return true?",
+        "createdAt" : "2019-04-04T22:05:39Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f0ab93a7-eb59-4975-aae0-ff9f31d724ef",
+        "parentId" : "2a5539ec-b9f5-4678-8da2-151458fa1453",
+        "authorId" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "body" : "So we're not interested in sending out FindCoordinator or InitProducerId requests when closing. Moreover `KafkaProducerTest.testInitTransactionTimeout` demonstrates an edge case where the execution is stuck in the \r\n```\r\n        while (!forceClose && ((this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0) || hasPendingTransactionalRequests())) {\r\n            try {\r\n                run(time.milliseconds());\r\n            } catch (Exception e) {\r\n                log.error(\"Uncaught error in kafka producer I/O thread: \", e);\r\n            }\r\n        }\r\n```\r\nloop as `TxnRequestHandler.onComplete` would reenqueue it. I was thinking about introducing an `isShuttingDown` flag in `TxnRequestHandler` to work this around but I then thought we wouldn't need to send out those requests anyway.",
+        "createdAt" : "2019-04-15T08:46:20Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e9e027171422c2f5af6d9602429702a58939036",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +225,229 @@\n    private boolean hasPendingTransactionalRequests() {\n        return transactionManager != null && transactionManager.hasPendingRequests() && transactionManager.hasOngoingTransaction();\n    }\n"
+  },
+  {
+    "id" : "1e689e76-dbbc-48d7-9c23-55e374976007",
+    "prId" : 5971,
+    "prUrl" : "https://github.com/apache/kafka/pull/5971#pullrequestreview-213306191",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ca08c396-8c4e-4825-9066-ec53b6a0cbd3",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm.. I was looking into how the producer handles various operations after the call to close(). Unsurprisingly, there is a bunch of inconsistency. For send(), as far as I can tell, the logic looks like this:\r\n\r\n1. Check whether the sender thread is closed and raise an error if it is\r\n2. Refresh metadata if needed\r\n3. Check if the accumulator is closed\r\n\r\nTo be honest, I don't know why we don't just check if the sender thread has begun shutdown, but perhaps that's a separate issue. For transactional requests, it seems we don't currently do any checking to see whether the producer has been shutdown. At least I couldn't find any checks in `commitTransaction()`. \r\n\r\nTo make this solution work, I think we should have those checks. Basically the user should see some kind of error indicating that the producer has already begun shutdown and the operation is no longer allowed. As it is, they would probably see an illegal state error indicating the transaction already began aborting or something. This could be a simple check in `TransactionManager` if we add a `close()` method as suggested elsewhere.",
+        "createdAt" : "2019-03-07T22:21:32Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cfefb57f-e8ad-40a6-a6a4-2f83be0c5eb8",
+        "parentId" : "ca08c396-8c4e-4825-9066-ec53b6a0cbd3",
+        "authorId" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "body" : "I think I'll make that change with checking if the producer is closed. `throwIfProducerClosed` is currently only used in doSend and as I see changing it to check the sender won't have very dramatic changes in behavior. Besides I could reuse it in the transactional methods.",
+        "createdAt" : "2019-03-12T10:18:25Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16655d07-6705-485d-9539-e0f70dd1a4bd",
+        "parentId" : "ca08c396-8c4e-4825-9066-ec53b6a0cbd3",
+        "authorId" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "body" : "Regarding the second part I'll put in a close method in TransactionManager what you were referring to:\r\n```\r\n    synchronized void abortPendingTransactionalRequests() {\r\n        pendingRequests.forEach(handler ->\r\n                handler.fatalError(new KafkaException(\"The producer closed forcefully\")));\r\n    }\r\n```\r\nThis would fail the requests. The name or the exception thrown might be debatable :). I would apply this in the forceClose part of the sender. So if aborting the transaction normally wasn't successful we just fail them on force close.",
+        "createdAt" : "2019-03-12T10:33:22Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e9e027171422c2f5af6d9602429702a58939036",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +260,264 @@            if (!transactionManager.isCompleting()) {\n                log.info(\"Aborting incomplete transaction due to shutdown\");\n                transactionManager.beginAbort();\n            }\n            try {"
+  },
+  {
+    "id" : "15c80929-b15a-49a3-9068-10ead07fd942",
+    "prId" : 5971,
+    "prUrl" : "https://github.com/apache/kafka/pull/5971#pullrequestreview-226516259",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2e86eba9-d050-4af6-a379-f87597f8a812",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "No need to fix it in this patch, but these null checks get a bit vexing. Should we create a NoOpTransactionManager or something?",
+        "createdAt" : "2019-04-04T22:10:26Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "39ef4f10-b3b0-4d0b-adbd-15ae095e2144",
+        "parentId" : "2e86eba9-d050-4af6-a379-f87597f8a812",
+        "authorId" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "body" : "Indeed. Searched for it and there are 24 checks for this, so probably worth to do it sometime.",
+        "createdAt" : "2019-04-15T08:40:26Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e9e027171422c2f5af6d9602429702a58939036",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +272,276 @@            // We need to fail all the incomplete transactional requests and batches and wake up the threads waiting on\n            // the futures.\n            if (transactionManager != null) {\n                log.debug(\"Aborting incomplete transactional requests due to forced shutdown\");\n                transactionManager.close();"
+  },
+  {
+    "id" : "12a3f83e-c3be-458b-8be2-cfe0cbca9d52",
+    "prId" : 5971,
+    "prUrl" : "https://github.com/apache/kafka/pull/5971#pullrequestreview-223022128",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "57a419d1-6187-4849-9078-beedccdecced",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "By the way, we should probably document this behavior in `KafkaProducer.close()`.",
+        "createdAt" : "2019-04-04T22:11:28Z",
+        "updatedAt" : "2019-04-15T13:56:56Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e9e027171422c2f5af6d9602429702a58939036",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +260,264 @@            if (!transactionManager.isCompleting()) {\n                log.info(\"Aborting incomplete transaction due to shutdown\");\n                transactionManager.beginAbort();\n            }\n            try {"
   }
 ]
