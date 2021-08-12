@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "f8073033-34d4-47b7-b477-15d30a97942f",
+    "prId" : 4663,
+    "prUrl" : "https://github.com/apache/kafka/pull/4663#pullrequestreview-103270139",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a7f99e40-a935-40f4-a9ac-d4c850ab4218",
+        "parentId" : null,
+        "authorId" : "0c73d886-f3da-4107-8045-92d8e3c8fb75",
+        "body" : "There may be more than one entry in logsToBeDeleted.\r\nCan we pick an entry whose wait time is short so that the efficiency of the while loop is higher ?",
+        "createdAt" : "2018-03-12T19:10:26Z",
+        "updatedAt" : "2018-03-13T01:02:28Z",
+        "lastEditedBy" : "0c73d886-f3da-4107-8045-92d8e3c8fb75",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d533bc29-c777-46d3-ba83-3618d129ce52",
+        "parentId" : "a7f99e40-a935-40f4-a9ac-d4c850ab4218",
+        "authorId" : "220f032c-6592-42d9-9042-aed276632816",
+        "body" : "@tedyu Thanks for the comment. This is a FIFO queue and each log should be deleted with the same delay. So the first element in the queue should always have the smallest wait time.",
+        "createdAt" : "2018-03-13T01:05:42Z",
+        "updatedAt" : "2018-03-13T01:05:51Z",
+        "lastEditedBy" : "220f032c-6592-42d9-9042-aed276632816",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3f0cd959e9a7c641b1f9bb35a027d347d6ec60d5",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +715,719 @@            val waitingTimeMs = scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.milliseconds()\n            if (waitingTimeMs > 0)\n              Thread.sleep(waitingTimeMs)\n            removedLog.delete()\n            info(s\"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.\")"
+  },
+  {
+    "id" : "a10d2909-ee78-4fee-bfe8-faf07dec84e4",
+    "prId" : 4663,
+    "prUrl" : "https://github.com/apache/kafka/pull/4663#pullrequestreview-103264577",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8b7631f8-e0f5-4b7a-a3e8-d19f452b35ae",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Hmm, if you look at the code in line 726. We already have the logic of delaying the deletion by currentDefaultConfig.fileDeleteDelayMs. So, it's kind of weird to delay it again here.\r\n\r\nI am also not sure if this completely solves the problem since people may customize fileDeleteDelayMs. It would be useful to have a solution regardless of fileDeleteDelayMs and the flush time.",
+        "createdAt" : "2018-03-12T23:00:46Z",
+        "updatedAt" : "2018-03-13T01:02:28Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c1b08028-40dd-4065-8354-c57710645ffa",
+        "parentId" : "8b7631f8-e0f5-4b7a-a3e8-d19f452b35ae",
+        "authorId" : "220f032c-6592-42d9-9042-aed276632816",
+        "body" : "@junrao Thanks for the comment Jun. The line 726 determines when broker tries to delete files next time. It is still possible that a file is scheduled for deletion right before the next task is run. And then the file will be deleted immediately instead of waiting for `file.delete.delay.ms`. So it may be reasonable to make this change to correctly enforce `file.delete.delay.ms` according to its Java doc.\r\n\r\nYeah the delay does not completely solve the problem. In the rare cases that log.flush takes more than 60 seconds, broker will still see IOException. In order to prevent this completely, we can either use a flag to avoid IOException, or grab the lock when flushing the log. If we have time, I would recommend we do the performance test with the lock-based approach -- in general we need to do such performance benchmark for each major release anyway. If we don't have time, and we think it is important to completely prevent this (after we have the 60 seconds delay), I will implement the flag-based approach. What do you think?",
+        "createdAt" : "2018-03-12T23:16:44Z",
+        "updatedAt" : "2018-03-13T01:02:28Z",
+        "lastEditedBy" : "220f032c-6592-42d9-9042-aed276632816",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "719ca1e3-1006-4438-b592-818dc81f87bb",
+        "parentId" : "8b7631f8-e0f5-4b7a-a3e8-d19f452b35ae",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@lindong28 : Thanks for the explanation. It makes sense. In the interest of time, we can just take what you had for now and work on a more complete fix in a separate jira. ",
+        "createdAt" : "2018-03-13T00:48:03Z",
+        "updatedAt" : "2018-03-13T01:02:28Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3f0cd959e9a7c641b1f9bb35a027d347d6ec60d5",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +713,717 @@        if (removedLog != null) {\n          try {\n            val waitingTimeMs = scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.milliseconds()\n            if (waitingTimeMs > 0)\n              Thread.sleep(waitingTimeMs)"
+  }
+]

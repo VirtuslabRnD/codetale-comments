@@ -42,5 +42,49 @@
     "commit" : "5902a645c8eb9fc9f25f3c7076a0acc7d1e5def3",
     "line" : 80,
     "diffHunk" : "@@ -1,1 +1099,1103 @@        if (oldState == State.CREATED) {\n            // Start so that we shutdown on the thread\n            this.start();\n        }\n    }"
+  },
+  {
+    "id" : "5be4b37b-86f5-460e-baa5-af0a95a3a5e9",
+    "prId" : 4636,
+    "prUrl" : "https://github.com/apache/kafka/pull/4636#pullrequestreview-123532297",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "93331a55-a64a-4ef0-90af-9e7153b31699",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I'm probably missing something and brought this up before, but above in `onPartitionsAssigned` we create tasks with the `assignment` when _not_ version probing.  But in `onPartitionsRevoked` if we are version probing we flip the version probing flag, hence on assignment we create tasks.  Why don't we flip the version probing flag in `onPartitionedAssigned` as an else statement on line 270 so we are only every suspending and creating tasks during non-version probing rebalances?",
+        "createdAt" : "2018-05-25T19:38:11Z",
+        "updatedAt" : "2018-05-31T03:24:33Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5f52f736-e2fe-44cb-9d03-1938e4a86824",
+        "parentId" : "93331a55-a64a-4ef0-90af-9e7153b31699",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "`onPartitionsAssigned`: if version probing flag is set, it means assignment is empty and we want to trigger a new rebalance. If we call `taskManager.createTasks(assignment);`, we would close suspended task and that is what we do not want to do at this point, because we hope to get those task assigned after the second rebalance.\r\n\r\n`onPartitionsRevoked`: if version probing flag is set, we don't want to suspend tasks either. Tasks are already suspended but if we call `taskManager.suspendTasksAndState();` again, we loose the information about currently suspended tasks (but we need to keep this information; ie, we avoid an incorrect internal metadata update here).\r\n\r\nThe flow is the following:\r\n - trigger first rebalance\r\n - onPartitionsRevoke -> version probing flag not set: suspend tasks regularly\r\n - onPartitionAssigned -> version probing flag set by StreamsPartitionsAssignor: we skip task creation as we will rebalance again (we cannot reset the flag here, because we need it in the next step)\r\n - trigger second rebalance\r\n - onPartitionsRevoke -> version probing flag is still set; we can reset the flag and skip suspending tasks to preserve metadata\r\n - onPartitionAssigned -> version probing flag not set: we do regular assignment and start processing\r\n\r\nDoes this make sense?",
+        "createdAt" : "2018-05-25T22:29:51Z",
+        "updatedAt" : "2018-05-31T03:24:33Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62dd3643-53d4-4354-980a-e91080891a1e",
+        "parentId" : "93331a55-a64a-4ef0-90af-9e7153b31699",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "yep - thanks for the clarification",
+        "createdAt" : "2018-05-25T22:57:15Z",
+        "updatedAt" : "2018-05-31T03:24:33Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0a87bd5254155a9d60ba479371305ddaae99282d",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +305,309 @@                        streamThread.versionProbingFlag.set(false);\n                    } else {\n                        taskManager.suspendTasksAndState();\n                    }\n                } catch (final Throwable t) {"
   }
 ]
