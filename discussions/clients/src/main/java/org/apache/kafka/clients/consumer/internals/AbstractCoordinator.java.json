@@ -185,5 +185,82 @@
     "commit" : "29f668ef1a9b2ee5939791b9bd5b89bf1a1660bb",
     "line" : 22,
     "diffHunk" : "@@ -1,1 +551,555 @@            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {\n                future.raise(new GroupAuthorizationException(groupId));\n            } else if (error == Errors.MEMBER_ID_REQUIRED) {\n                // Broker requires a concrete member id to be allowed to join the group. Update member id\n                // and send another join group request in next cycle."
+  },
+  {
+    "id" : "422f0622-d73b-43a2-aa1e-841968a7c679",
+    "prId" : 6163,
+    "prUrl" : "https://github.com/apache/kafka/pull/6163#pullrequestreview-198714870",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f5d08771-300e-4471-84ba-7205752ccb0a",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "If we have to handle this separately, maybe we could move the check to the top level like the `GROUP_AUTHORIZATION` check.",
+        "createdAt" : "2019-01-24T17:32:34Z",
+        "updatedAt" : "2019-02-01T23:36:21Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "da8bc85d-8437-4977-857f-a2db885c5d56",
+        "parentId" : "f5d08771-300e-4471-84ba-7205752ccb0a",
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "I think it would be good to have the log\r\n```\r\nlog.error(\"Attempt to join group failed due to fatal error: {}\", error.message());\r\n```\r\n\r\nMaybe we could move the `GROUP_AUTHORIZATION` to this level?",
+        "createdAt" : "2019-01-31T17:21:39Z",
+        "updatedAt" : "2019-02-01T23:36:21Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1421a43a3fcf28c99477bea7a1499a8fa17e50d9",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +551,555 @@                    || error == Errors.GROUP_MAX_SIZE_REACHED) {\n                log.error(\"Attempt to join group failed due to fatal error: {}\", error.message());\n                if (error == Errors.GROUP_MAX_SIZE_REACHED) {\n                    future.raise(new GroupMaxSizeReachedException(groupId));\n                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {"
+  },
+  {
+    "id" : "15b17f5b-ec5e-4c47-a00f-cd492082c063",
+    "prId" : 6177,
+    "prUrl" : "https://github.com/apache/kafka/pull/6177#pullrequestreview-229169855",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "71c219b2-938d-4808-9c49-01432f1a5bc7",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm.. This method is also called when a call to `unsubscribe()` is made. Would we not want a static member to leave in this case?",
+        "createdAt" : "2019-04-09T22:22:41Z",
+        "updatedAt" : "2019-04-26T15:12:49Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62d91cfa-f892-44ab-9bf4-3bfa23f9a84e",
+        "parentId" : "71c219b2-938d-4808-9c49-01432f1a5bc7",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "I quickly checked `unsubscribe()` use cases, and there are mainly two:\r\n1. illegal topic/partition data, i.e empty topic partitions to subscribe\r\n2. consumer self managed membership (subscription)\r\n\r\nI think it makes sense to make static member behavior consistent in these two cases, because the effect of leaving is minimal.",
+        "createdAt" : "2019-04-11T05:50:52Z",
+        "updatedAt" : "2019-04-26T15:12:49Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9490d1fa-ee8e-4cc5-8b79-577afe028cd4",
+        "parentId" : "71c219b2-938d-4808-9c49-01432f1a5bc7",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I've thought about this a bit more, and also searched in github: https://github.com/search?l=Java&q=%22consumer.unsubscribe%22&type=Code\r\n\r\nI think a third common case is to use a temporary consumer for its APIs, like get offset by timestamp, get log end offset etc; generally speaking for temporary consumer case, they should not use static members (and by default it would not be the case). \r\n\r\nSo I think it really boils down to: for static members, do we consider the admin request kicking it out of the group be the only appropriate way for it to leave in time or not? I.e. even if the consumer shuts down itself, it should not be considered as \"I want to leave\" but another request has to be made to effectively kick him out.",
+        "createdAt" : "2019-04-22T17:59:41Z",
+        "updatedAt" : "2019-04-26T15:12:49Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "932118542844c01e3caf657e2eee9c16dfd269d7",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +830,834 @@     */\n    public synchronized void maybeLeaveGroup() {\n        // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,\n        // consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,\n        // and the membership expiration is only controlled by session timeout."
   }
 ]

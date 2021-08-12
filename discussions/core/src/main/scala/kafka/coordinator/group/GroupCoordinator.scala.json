@@ -152,5 +152,137 @@
     "commit" : "29f668ef1a9b2ee5939791b9bd5b89bf1a1660bb",
     "line" : 177,
     "diffHunk" : "@@ -1,1 +231,235 @@\n          case Stable =>\n            val member = group.get(memberId)\n            if (group.isLeader(memberId) || !member.matches(protocols)) {\n              // force a rebalance if a member has changed metadata or if the leader sends JoinGroup."
+  },
+  {
+    "id" : "d8e0fc98-ccb0-4c16-8159-85241ee5f157",
+    "prId" : 6163,
+    "prUrl" : "https://github.com/apache/kafka/pull/6163#pullrequestreview-194603468",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7b7f3c2d-49b2-459b-9715-65d0596937ee",
+        "parentId" : null,
+        "authorId" : "979e3650-ce20-4720-a0da-e44d283b558b",
+        "body" : "Do we really need to shrink? If we detect a size issue and force a rebalance, everyone is forced to re-join and then the \"group too large\" logic in the JoinGroup path will kick in.\r\n\r\nPersonally, I'd leave existing groups alone. If the size causes issues, they'll timeout and rebalance themselves anyway. And if there are no issues, why introduce new issues.\r\n\r\n@hachikuji should probably check the logic here, since reloading of groups has a bunch of logic (including transactions) that I'm not comfortable with.\r\n\r\n",
+        "createdAt" : "2019-01-17T19:05:10Z",
+        "updatedAt" : "2019-02-01T23:36:21Z",
+        "lastEditedBy" : "979e3650-ce20-4720-a0da-e44d283b558b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "647b2f6b-be07-421b-993c-e3a9f97badeb",
+        "parentId" : "7b7f3c2d-49b2-459b-9715-65d0596937ee",
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "Yeah, this is the trickiest part of the KIP. My naive initial reasoning was that we might want to maintain the same leader but now that I think of it that is more or less pointless (unless it loads some state in its initial PartitionAssignor) and we most likely will pick another leader from the subsequent rebalance",
+        "createdAt" : "2019-01-18T11:47:50Z",
+        "updatedAt" : "2019-02-01T23:36:21Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9943fbc-2cd9-4506-8a2b-53b589063f73",
+        "parentId" : "7b7f3c2d-49b2-459b-9715-65d0596937ee",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "It's not a bad idea to preserve the leader, but I think Gwen's suggestion seems simpler. I think the main thing I was hoping is that the resizing could be graceful. The existing members should be able to commit their offsets before getting kicked out. It seems like we don't get that with this approach since we are forcefully removing some members.",
+        "createdAt" : "2019-01-18T23:56:45Z",
+        "updatedAt" : "2019-02-01T23:36:21Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b541dfe-f81e-460e-b4e0-6e065663162d",
+        "parentId" : "7b7f3c2d-49b2-459b-9715-65d0596937ee",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "By kicking out the extra members, like Jason said those members lose their opportunities to commit the last batch. However on the other hand, this should only happen when the server operator believes that an absurd group size is configured that should be prevented. In this sense, the group is interpreted as `over capacity`, so allowing rest of consumers take over the jobs should be very light lifting, which I don't see an obvious negative impact. Thoughts?",
+        "createdAt" : "2019-01-20T07:01:51Z",
+        "updatedAt" : "2019-02-01T23:36:21Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "93b49433-913e-4750-867f-87462e0d9729",
+        "parentId" : "7b7f3c2d-49b2-459b-9715-65d0596937ee",
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "> In this sense, the group is interpreted as over capacity, so allowing rest of consumers take over the jobs should be very light lifting\r\nSorry, I couldn't understand this exactly. Do you mean that it's reasonable to \"shrink\" the group in one way or another and not let it continue over capacity?\r\n\r\nMy thinking is to go with a forced rebalance",
+        "createdAt" : "2019-01-21T13:39:44Z",
+        "updatedAt" : "2019-02-01T23:36:21Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1421a43a3fcf28c99477bea7a1499a8fa17e50d9",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +660,664 @@      info(s\"Loading group metadata for ${group.groupId} with generation ${group.generationId}\")\n      assert(group.is(Stable) || group.is(Empty))\n      if (groupIsOverCapacity(group)) {\n        prepareRebalance(group, s\"Freshly-loaded group is over capacity ($groupConfig.groupMaxSize). Rebalacing in order to give a chance for consumers to commit offsets\")\n      }"
+  },
+  {
+    "id" : "9e3805c8-305d-4b40-b232-8f1972565910",
+    "prId" : 6177,
+    "prUrl" : "https://github.com/apache/kafka/pull/6177#pullrequestreview-225334147",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6b3fdf4e-285f-4a6c-9a51-ac5a100b3130",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Hmm... this is not what I was thinking. Maybe we can elaborate a bit more on the KIP wiki?",
+        "createdAt" : "2019-03-28T18:23:53Z",
+        "updatedAt" : "2019-04-26T15:12:49Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3b054691-3b09-4e70-b0a7-b18b9d0bd709",
+        "parentId" : "6b3fdf4e-285f-4a6c-9a51-ac5a100b3130",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Yea, updated explicitly in the KIP",
+        "createdAt" : "2019-04-11T05:35:38Z",
+        "updatedAt" : "2019-04-26T15:12:49Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "932118542844c01e3caf657e2eee9c16dfd269d7",
+    "line" : 129,
+    "diffHunk" : "@@ -1,1 +241,245 @@        responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))\n      } else if (group.isPendingMember(memberId)) {\n        // A rejoining pending member will be accepted. Note that pending member will never be a static member.\n        if (groupInstanceId.isDefined) {\n          throw new IllegalStateException(s\"the static member $groupInstanceId was unexpectedly to be assigned \" +"
+  },
+  {
+    "id" : "ca724c4f-54b6-4701-ae5b-37af41e27cfd",
+    "prId" : 6177,
+    "prUrl" : "https://github.com/apache/kafka/pull/6177#pullrequestreview-220841470",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8b5f0e9b-02ce-4d23-b0da-926ac35b3628",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "What if two consumers joining with the same instance id and member id?",
+        "createdAt" : "2019-03-28T18:26:51Z",
+        "updatedAt" : "2019-04-26T15:12:49Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8c2387d-bfcc-4ebd-9fca-465c5f3eeb15",
+        "parentId" : "8b5f0e9b-02ce-4d23-b0da-926ac35b3628",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "As we have discussed, we shall generate a new member id each time the static member rejoins. So the former consumer will not have the same member.id as the previous one",
+        "createdAt" : "2019-03-30T23:46:18Z",
+        "updatedAt" : "2019-04-26T15:12:49Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "932118542844c01e3caf657e2eee9c16dfd269d7",
+    "line" : 153,
+    "diffHunk" : "@@ -1,1 +261,265 @@            // it reset its member id and retry.\n          responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))\n        } else {\n          val member = group.get(memberId)\n"
   }
 ]

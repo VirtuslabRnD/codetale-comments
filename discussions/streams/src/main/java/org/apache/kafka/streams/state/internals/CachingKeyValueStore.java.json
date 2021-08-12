@@ -75,5 +75,148 @@
     "commit" : "7d4508cb22d8a270c237c831850939b788e0b577",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +62,66 @@    public void init(final ProcessorContext context, final StateStore root) {\n        initInternal(context);\n        underlying.init(context, root);\n        // save the stream thread as we only ever want to trigger a flush\n        // when the stream thread is the current thread."
+  },
+  {
+    "id" : "f7feca63-0ffe-4e81-aa60-283623d181ba",
+    "prId" : 6147,
+    "prUrl" : "https://github.com/apache/kafka/pull/6147#pullrequestreview-192831329",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b7cfbc18-c227-440e-9cf8-0a43d3bfccc5",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "part of the fix: we now also forward the timestamp on eviction",
+        "createdAt" : "2019-01-15T19:47:53Z",
+        "updatedAt" : "2019-01-18T03:06:14Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "30b8447f5ca42f0be25ab3144de9a68b532e9924",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +101,105 @@                    serdes.valueFrom(entry.newValue()),\n                    oldValue,\n                    entry.entry().context().timestamp());\n            } else {\n                underlying.put(entry.key(), entry.newValue());"
+  },
+  {
+    "id" : "8f295c31-ae45-437a-b3a1-f7f94e0b1a94",
+    "prId" : 6191,
+    "prUrl" : "https://github.com/apache/kafka/pull/6191#pullrequestreview-198401210",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fd371460-952a-4d66-ad52-d8ac21ece754",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is an optimization that I did for all three caching stores:\r\n\r\n1. get the new bytes from cache, read the old bytes from underlying store.\r\n2. if either old / new bytes are not null, go to 3) below; otherwise skip so that we do not need to deserialize.\r\n3. deserialize to objects, and apply flush listener to downstream.",
+        "createdAt" : "2019-01-31T02:29:42Z",
+        "updatedAt" : "2019-02-13T06:01:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8fef77ba1a948117f4218a8ae8b96a8cd924e8e7",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +87,91 @@                                    final InternalProcessorContext context) {\n        if (flushListener != null) {\n            final byte[] newValueBytes = entry.newValue();\n            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? underlying.get(entry.key()) : null;\n"
+  },
+  {
+    "id" : "244f716d-c04d-41ab-8220-45dc03161ebd",
+    "prId" : 6191,
+    "prUrl" : "https://github.com/apache/kafka/pull/6191#pullrequestreview-202434903",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "38d0cecb-bff2-4661-8e6d-d529079d200a",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Can we apply deMorgan's rule and flip the conditional (with an empty body) here?\r\n\r\nIt seems easier to understand:\r\n```\r\nif (newValueBytes == null && oldValueBytes == null) {\r\n  // no need to flush or write to underlying store\r\n} else {\r\n  ... the rest of the code\r\n}\r\n```\r\n\r\nIn other words, the empty \"skip\" block is more self-documenting than the preceeding comment explaining the algorithm.\r\n\r\nWhich actually makes me wonder: is there a more general optimization that we can skip desserialization, flush, and write any time the new and old values are identical?",
+        "createdAt" : "2019-02-01T18:15:58Z",
+        "updatedAt" : "2019-02-13T06:01:27Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e38c1ac6-7126-4b69-ad73-c08aaf099727",
+        "parentId" : "38d0cecb-bff2-4661-8e6d-d529079d200a",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I think we cannot generally do this optimization if oldBytes == newBytes, since the timestamp may be updated for `flushListener.apply`.",
+        "createdAt" : "2019-02-09T00:01:05Z",
+        "updatedAt" : "2019-02-13T06:01:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9fab171b-acc1-4152-ad63-b4e77dd4eb11",
+        "parentId" : "38d0cecb-bff2-4661-8e6d-d529079d200a",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I think an empty then-body would be bad code style.",
+        "createdAt" : "2019-02-10T08:03:10Z",
+        "updatedAt" : "2019-02-13T06:01:27Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0014a807-7a8c-4783-a6a2-05fe9110b3cf",
+        "parentId" : "38d0cecb-bff2-4661-8e6d-d529079d200a",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Hey folks, I'm slightly modifying this logic to NOT always blindly read from the underlying store, but do sth. like this:\r\n\r\n```\r\n            final byte[] newValueBytes = entry.newValue();\r\n            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? underlying.get(entry.key()) : null;\r\n\r\n            if (newValueBytes != null || oldValueBytes != null) {\r\n                    ....\r\n            }\r\n```\r\n\r\nThe main motivation is that, for session stores, the likelihood of `newValueBytes == null` could be high while for other two types, the likelihood would be low. As a result, for other two types we would fail the above condition and if `sendOldValues == false` we would not need to read the old bytes for this optimization since it is doomed to not happen.",
+        "createdAt" : "2019-02-12T01:13:11Z",
+        "updatedAt" : "2019-02-13T06:01:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8fef77ba1a948117f4218a8ae8b96a8cd924e8e7",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +92,96 @@            // this is an optimization: if this key did not exist in underlying store and also not in the cache,\n            // we can skip flushing to downstream as well as writing to underlying store\n            if (newValueBytes != null || oldValueBytes != null) {\n                final K key = serdes.keyFrom(entry.key().get());\n                final V newValue = newValueBytes != null ? serdes.valueFrom(newValueBytes) : null;"
+  },
+  {
+    "id" : "c9c57f50-553f-4f1b-9577-9eb6c087b639",
+    "prId" : 6191,
+    "prUrl" : "https://github.com/apache/kafka/pull/6191#pullrequestreview-202852839",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "18c37df1-ba50-4ae5-94d4-14c1ce5ec9f2",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Do we need to check `sendOldValues` here?",
+        "createdAt" : "2019-02-12T01:03:10Z",
+        "updatedAt" : "2019-02-13T06:01:27Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "097b5840-c5fc-467a-88f5-9e88f66b8983",
+        "parentId" : "18c37df1-ba50-4ae5-94d4-14c1ce5ec9f2",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Good point, since I've add the check above I can remove it here. Ditto elsewhere.",
+        "createdAt" : "2019-02-12T18:28:55Z",
+        "updatedAt" : "2019-02-13T06:01:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f9cf5347-b98e-4e73-9778-eec8ed330cd7",
+        "parentId" : "18c37df1-ba50-4ae5-94d4-14c1ce5ec9f2",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@mjsax Actually, it is not correct: when `sendOldValues` is false, we should never send old values downstreams. So suppose `newValueBytes != null`, and hence we read the underlying store, we still need to have the check here so that we can have `oldValue` as null.",
+        "createdAt" : "2019-02-12T19:07:26Z",
+        "updatedAt" : "2019-02-13T06:01:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8fef77ba1a948117f4218a8ae8b96a8cd924e8e7",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +95,99 @@                final K key = serdes.keyFrom(entry.key().get());\n                final V newValue = newValueBytes != null ? serdes.valueFrom(newValueBytes) : null;\n                final V oldValue = sendOldValues && oldValueBytes != null ? serdes.valueFrom(oldValueBytes) : null;\n                // we need to get the old values if needed, and then put to store, and then flush\n                underlying.put(entry.key(), entry.newValue());"
   }
 ]

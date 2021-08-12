@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "fcdd2319-96a4-46dd-be33-f7b26765890b",
+    "prId" : 6134,
+    "prUrl" : "https://github.com/apache/kafka/pull/6134#pullrequestreview-191914962",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d70df838-15ba-4db1-ac05-474bc467c83f",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is the fix for 2).",
+        "createdAt" : "2019-01-12T00:38:44Z",
+        "updatedAt" : "2019-01-18T20:03:25Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42006bdeb3e5a33c41f7e9e583ad72efb4b086e8",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +50,54 @@    public Bytes upperRange(final Bytes key, final long to) {\n        final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)\n            // the end timestamp can be as large as possible as long as it's larger than start time\n            .putLong(Long.MAX_VALUE)\n            // this is the start timestamp"
+  },
+  {
+    "id" : "8c2c9272-e5fe-4521-8098-b23f5b3db5d9",
+    "prId" : 6134,
+    "prUrl" : "https://github.com/apache/kafka/pull/6134#pullrequestreview-193462555",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "342f9127-0bad-474c-91b7-eb7305062620",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "@guozhangwang as I'm reading this PR and getting my head around how this operates for my understanding I'm going to rephrase the issue that this line fixes.\r\n\r\nThe core issue is that by setting the upper range to `(to, to)` caused us to find an \"endTime\"  earlier than it should, due to fact that we store session windows as `endTime, startTime`  hence we ended up missing sessions to retrieve which ended up causing more issues down the line.  \r\n\r\nIs that a fair statement?",
+        "createdAt" : "2019-01-16T16:48:00Z",
+        "updatedAt" : "2019-01-18T20:03:25Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d0c8301f-3f53-40a6-9d8d-7bb87b9e2262",
+        "parentId" : "342f9127-0bad-474c-91b7-eb7305062620",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "That is right. Note that the names here are a bit confusing, since the semantics of the findSessions is `earliestEndTime` (named `from` here) and `latestStartTime` (named `to` here). And going back to my single-key range example in https://github.com/apache/kafka/pull/6134#issuecomment-453702517 but extending a bit to multi-key range the current code use [latestStartTime, latestStartTime] as the max-suffix to apply with key-to. This is an issue if `latestStartTime` is smaller than `earliestEndTime`: note in our aggregation it would never be the case, but for other users it is okay to call, e.g. `findSessions(100, 1)` which would use `[1,1]` as the suffix with key-to which would be missing entries.\r\n\r\nI'll adjust the existing unit test to expose this bug as well.",
+        "createdAt" : "2019-01-17T05:12:09Z",
+        "updatedAt" : "2019-01-18T20:03:25Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42006bdeb3e5a33c41f7e9e583ad72efb4b086e8",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +51,55 @@        final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)\n            // the end timestamp can be as large as possible as long as it's larger than start time\n            .putLong(Long.MAX_VALUE)\n            // this is the start timestamp\n            .putLong(to)"
+  },
+  {
+    "id" : "a3dc6de7-6dc8-478f-a2ae-f600fc9f94a0",
+    "prId" : 6134,
+    "prUrl" : "https://github.com/apache/kafka/pull/6134#pullrequestreview-193286263",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a27cc217-93d7-4b02-9feb-edda6e8785ce",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Since `OrderedBytes#upperRange` chops off the key at the first key-byte that's smaller than the first suffix-byte, it seems like setting the \"end timestamp\" to max long would be counterproductive, since it'll result in chopping off the key at the first non-max-value byte? Maybe it would be better to use the first successor of the \"to key\"? Actually, we can consider just using https://github.com/facebook/rocksdb/blob/master/java/src/main/java/org/rocksdb/util/BytewiseComparator.java#L73\r\n\r\nFor example, if our search is:\r\n```\r\nkey: 0xf000 0001 to: 0x0000 0000 0000 0000\r\n=>\r\nkey: 0xf000 0001 suffix: 0x7fff ffff ffff ffff 0000 0000 0000 0000\r\n```\r\nThen, `upperRange` will trim our query to:\r\n```\r\n0xf 7fff ffff ffff ffff 0000 0000 0000 0000\r\n```\r\nwhich is *way* more permissive than the first successor to the key:\r\n```\r\n0xf000 0002\r\n```\r\n(It permits `max_int - 2 = 2,147,483,645` more keys)\r\n\r\nPlease scrutinize my math, I might have made an error.\r\n\r\nIf there's no error, though, I think it might pay off to inline `upperRange` here, since the interactions between the methods are so important in determining what key we actually get.",
+        "createdAt" : "2019-01-16T18:29:09Z",
+        "updatedAt" : "2019-01-18T20:03:25Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42006bdeb3e5a33c41f7e9e583ad72efb4b086e8",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +51,55 @@        final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)\n            // the end timestamp can be as large as possible as long as it's larger than start time\n            .putLong(Long.MAX_VALUE)\n            // this is the start timestamp\n            .putLong(to)"
+  },
+  {
+    "id" : "84627041-3b8c-4c7e-9d1e-02216c8b531d",
+    "prId" : 6161,
+    "prUrl" : "https://github.com/apache/kafka/pull/6161#pullrequestreview-193785382",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2732982-6bf2-48e1-80f0-37f0c0c22c2e",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is just some refactoring of the code to 1) merge the logic into a single function and 2) do Bytes.wrap internally so that callers do not need to call.",
+        "createdAt" : "2019-01-17T07:47:33Z",
+        "updatedAt" : "2019-01-31T01:30:38Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "092957d8-9b8c-4299-b2b4-e0fa2a542e65",
+        "parentId" : "e2732982-6bf2-48e1-80f0-37f0c0c22c2e",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "nice addition!",
+        "createdAt" : "2019-01-17T19:17:15Z",
+        "updatedAt" : "2019-01-31T01:30:38Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f4bcfd8a8650fee88171642e5b5eec9fd96fb27c",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +144,148 @@    }\n\n    public static Bytes toBinary(final Bytes key,\n                                 final long startTime,\n                                 final long endTime) {"
+  }
+]

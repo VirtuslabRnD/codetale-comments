@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "1cbfab94-4a34-4ed6-89e8-39ef85337698",
+    "prId" : 6195,
+    "prUrl" : "https://github.com/apache/kafka/pull/6195#pullrequestreview-196734736",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "35c0548d-fff3-4fa9-b7e7-cb67603203d7",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Sounds good.\r\n\r\nActually I've seen the same situation for our current caching layer flushing logic as well: e.g. `put(A, v)` -> `delete(A)` and both only hit the cache layer. When flushing we tried to read the old value and found its null bytes, so we know nothing was flushed for `A` and nothing written to downstream before so we can skip putting a tombstone to underlying store as well as downstream.\r\n\r\nFor suppression buffer though, it is harder since you do not have an underlying store to fetch the old value, and of course reading the whole changelog to see if there's any updates on this key `A` costs you everything. But suppose we always have a persistent buffer, this may be an easier task.",
+        "createdAt" : "2019-01-25T18:14:37Z",
+        "updatedAt" : "2019-01-25T18:46:32Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e20611ce-d77d-4214-abcc-848135b550f5",
+        "parentId" : "35c0548d-fff3-4fa9-b7e7-cb67603203d7",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks @guozhangwang ,\r\n\r\nYes, I think that's why the record cache keeps a set of \"dirty keys\", just like the suppression buffer. If you have a dirty-key, but don't find any value for it, then you know it was a delete and you can send a tombstone.\r\n\r\nIt is indeed harder for the suppression buffer, since we try not to completely duplicate all the data. I guess it's not _all_ the data, but it is all the keys at least. For example, let's say we store the data as the heterogeneous type `[nonTombstoneValueHasBeenEmittedFlag] | [nonTombstoneValueHasBeenEmittedFlag, valueToBeEmitted]`. Then, when we get a tombstone, if the pre-existing value has `nonTombstoneValueHasBeenEmittedFlag == true`, we know we must emit the tombstone. If there is no value, or if `nonTombstoneValueHasBeenEmittedFlag == false`, we know that we don't need to send the tombstone. Upon sending the tombstone, we would simply delete the record from the store. Upon emitting a non-tombstone value, we would drop the value from the store and only store `[nonTombstoneValueHasBeenEmittedFlag := true]`.\r\n\r\nNot sure I would do this in memory, but as you point out, it could be an option for the persistent version. I guess if you think the whole \"live\" key space would fit in memory (plus one bit per key for the flag), then in-memory would work too.",
+        "createdAt" : "2019-01-25T19:03:26Z",
+        "updatedAt" : "2019-01-25T19:03:27Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cea30b90-5911-4a2b-8889-ffc5e1d40308",
+        "parentId" : "35c0548d-fff3-4fa9-b7e7-cb67603203d7",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Right. But note that the current dirty-key in cache is not enough determining if we have, **ever**, write for a key to the underlying store which is not deleted yet: dirty-key only contains the dirty-keys since last flush, i.e. the key not in the dirty-key is only a necessary, not sufficient condition. And that's why we can only consider not writing the tombstone if the read on this key returns null-bytes, indicating nothing was there.",
+        "createdAt" : "2019-01-25T21:21:47Z",
+        "updatedAt" : "2019-01-25T21:21:47Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "52ec6e21-3fbf-4b54-8e67-8b135570e5d9",
+        "parentId" : "35c0548d-fff3-4fa9-b7e7-cb67603203d7",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Oh, right, I guess we would need to do something like what I described above, or some equivalent solution...",
+        "createdAt" : "2019-01-25T22:19:03Z",
+        "updatedAt" : "2019-01-25T22:19:04Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e8d56d77b4ffd00fdbe87b99dc60223f0b11efc",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +40,44 @@     *                             desirable in the output stream, though, hence the ability to drop them.\n     *\n     *                             A alternative is to remember whether a result has previously been emitted\n     *                             for a key and drop tombstones in that case, but it would be a little complicated to\n     *                             figure out when to forget the fact that we have emitted some result (currently, the"
+  }
+]

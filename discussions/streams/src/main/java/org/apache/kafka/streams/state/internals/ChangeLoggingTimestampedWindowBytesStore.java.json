@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "bc041568-9b8a-461f-a67a-3b38ba7426c8",
+    "prId" : 6173,
+    "prUrl" : "https://github.com/apache/kafka/pull/6173#pullrequestreview-212067954",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27075fbe-5d4c-4251-8c2a-b9a33e461a75",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is not specifically related to this line of code but when I read about this, I was thinking about some correlated topic: when we call `kvStore.delete` and `sessionStore.remove`, we will pass `null` as ValueAndTimestamp and hence the timestamp field will also be null. Whereas in `windowStore` we do not have a delete api, but users can call `put(k, null)` or `put(k, null, timestamp)` in which case the timestamp field will not be null actually. Hence there's a discrepancy between the first two and the latter one, right?",
+        "createdAt" : "2019-03-07T01:42:56Z",
+        "updatedAt" : "2019-03-07T22:13:34Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cde8b2ba-c20f-44a8-be81-ef311edd6514",
+        "parentId" : "27075fbe-5d4c-4251-8c2a-b9a33e461a75",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "`WindowStore#put(k, null, timestamp)` is more or less the same as `put(k, null)` (the later actually calls the former and used `context.timestamp()` as third parameter) -- note that the timestamp that is passed is the `windowStartTimestamp` (not the timestamp that is associated with the value for the timestamped store).\r\n\r\nIn fact, we plan to deprecate and remove `put(k, null)`, because it does not make sense semantically, to put something into a window store without specifying the window start timestamp (and `context.timestamp()` is not a good default value). Thus, for `put(k, null, timestamp)` the provided timestamp would be ignored anyway.\r\n\r\nAlso note, that for timestamped-store, the call would be `put(key, valueAndTimestamp, windowStartTimestamp)` and the timestamp in the value is not related to the window-start-timestamp (that will be part of the key in the store).\r\n\r\nI agree that calling `put(key, null, timestamp)` to delete a window would be weird. However, in the DSL we would never delete a window anyway and don't need this. Not sure if PAPI uses would want a proper `remove(key)` method.",
+        "createdAt" : "2019-03-07T02:41:57Z",
+        "updatedAt" : "2019-03-07T22:13:34Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ee8c032-e9e2-4be0-bd9b-5baebe684057",
+        "parentId" : "27075fbe-5d4c-4251-8c2a-b9a33e461a75",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I am just adding my 2 cents here.  I understand what you are saying @mjsax, but I think if we should have a follow-up PR to update the docs to fully explain the semantic operations and differences between (`kvStore`, `sessionStore`) and the `windowStore`. ",
+        "createdAt" : "2019-03-07T17:47:24Z",
+        "updatedAt" : "2019-03-07T22:13:34Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d52cfab2-da1c-4ca9-b575-9270f52a17bb",
+        "parentId" : "27075fbe-5d4c-4251-8c2a-b9a33e461a75",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "We have many gaps in store documentation, and I agree it would be worth to do a follow up for this.\r\n\r\nI also think I understand now why `WindowStore#put(k, v)` was added in the first place. For stream-steam join, we use windowed stores (with \"allow duplicates\" enabled) to store each individual record and thus there is not really a notion of a window (we use it more like a key-value store that allows for time-range queried plus retention time), and we use the record timestamp as \"window start timestamp\" (ie, we can use this shortcut method). Still think, we should remove it though.",
+        "createdAt" : "2019-03-07T22:05:51Z",
+        "updatedAt" : "2019-03-07T22:13:34Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d9047c3-60b6-4f62-8ebe-a85a301b195d",
+        "parentId" : "27075fbe-5d4c-4251-8c2a-b9a33e461a75",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Thanks for the explanation @mjsax , yes we were trying to \"reuse\" the window store for stream-stream windowed join, which, as an after-thought is not a very good design.\r\n\r\nI think we do not need to make any code changes atm (as for doc changes maybe we can track those as a separate ticket / PR).",
+        "createdAt" : "2019-03-07T23:02:08Z",
+        "updatedAt" : "2019-03-07T23:02:08Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5a3613b4a03c0e0caa683f19026aca726248d191",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +36,40 @@            changeLogger.logChange(key, rawValue(valueAndTimestamp), timestamp(valueAndTimestamp));\n        } else {\n            changeLogger.logChange(key, null);\n        }\n    }"
+  }
+]

@@ -31,5 +31,38 @@
     "commit" : "4a1c01bb974b8f155c94c1149c554ed95bf6cf94",
     "line" : 197,
     "diffHunk" : "@@ -1,1 +350,354 @@                    nodeName, workerId, taskId, spec, e);\n            }\n            throw e.getCause();\n        }\n    }"
+  },
+  {
+    "id" : "83239568-0437-4cf3-9c33-f3941e6d513e",
+    "prId" : 6133,
+    "prUrl" : "https://github.com/apache/kafka/pull/6133#pullrequestreview-192915266",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "46f5d10c-a803-4f08-b536-e68471e314d4",
+        "parentId" : null,
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "If we execute the `haltFuture` path above of (line: 343)\r\n```\r\nstateChangeExecutor.submit(new HandleWorkerHalting(worker, errorString, false));\r\nreturn null;\r\n```\r\nI don't think we will ever call `transitionToDone()`, therefore leaving the `--exec` call hanging for some time.\r\n\r\nI guess we will once the task expires via:\r\n```\r\nvoid transitionToRunning() {\r\n            state = State.RUNNING;\r\n            timeoutFuture = scheduler.schedule(stateChangeExecutor,\r\n                new StopWorker(workerId, false),\r\n                Math.max(0, spec.endMs() - time.milliseconds()));\r\n        }\r\n```\r\nbut it would be better to have it be faster and work on tasks with huge duration times.\r\n\r\nCould you verify this?",
+        "createdAt" : "2019-01-14T11:38:27Z",
+        "updatedAt" : "2019-01-18T22:11:26Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "198174fa-5fc1-4b94-805d-fe588a806841",
+        "parentId" : "46f5d10c-a803-4f08-b536-e68471e314d4",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "I don't think this is accurate.  `HandleWorkerHalting` is supposed to get the worker to `DONE`.  For example, if the problem is that the worker halted during startup, it just calls `transitionToDone` directly.  If the worker halted after startup, then it will have to go through other states like `CANCELLING` or `STOPPING` first, but it will arrive at `DONE` eventually.",
+        "createdAt" : "2019-01-15T23:32:10Z",
+        "updatedAt" : "2019-01-18T22:11:26Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "79faa3ad9e3e56e76643b08e2df267e00889990f",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +353,357 @@            }\n            stateChangeExecutor.submit(new FinishCreatingWorker(worker));\n            return worker.doneFuture;\n        } catch (ExecutionException e) {\n            if (e.getCause() instanceof RequestConflictException) {"
   }
 ]
