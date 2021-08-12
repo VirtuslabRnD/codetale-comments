@@ -1,0 +1,178 @@
+[
+  {
+    "id" : "0bf44bd2-33b0-4d66-847f-b8821ba2fcbf",
+    "prId" : 10252,
+    "prUrl" : "https://github.com/apache/kafka/pull/10252#pullrequestreview-603179536",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c4d45c6f-11ba-448f-b2e5-36847e801cfb",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "just curious, why we don't wrap values of `newNameMap` to immutable map? It seems `MetadataPartitionsBuilder#set(MetadataPartition)`is able to cause change after making metadata image.",
+        "createdAt" : "2021-03-03T09:10:19Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "51859efd-07ba-40c9-895f-add9f4a99980",
+        "parentId" : "c4d45c6f-11ba-448f-b2e5-36847e801cfb",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "That's a fair point. Maybe it would be better to raise an exception in `set` after the image had been built.",
+        "createdAt" : "2021-03-03T17:50:19Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85c26fab544a58ad390d69130b5635c2ca7ef56e",
+    "line" : 135,
+    "diffHunk" : "@@ -1,1 +252,256 @@  def build(): MetadataPartitions = {\n    val result = new MetadataPartitions(newNameMap, newIdMap, newReverseIdMap)\n    newNameMap = Collections.unmodifiableMap(newNameMap)\n    newIdMap = Collections.unmodifiableMap(newIdMap)\n    newReverseIdMap = Collections.unmodifiableMap(newReverseIdMap)"
+  },
+  {
+    "id" : "5d4bd575-9376-4dc2-8a9d-8eb758908fa9",
+    "prId" : 10252,
+    "prUrl" : "https://github.com/apache/kafka/pull/10252#pullrequestreview-602626714",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4aaaae7c-08f7-43d3-b62c-b5b66a0cdc8e",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "How about using `new util.HashMap[String, Uuid](reverseIdMap)`?",
+        "createdAt" : "2021-03-03T09:11:05Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85c26fab544a58ad390d69130b5635c2ca7ef56e",
+    "line" : 158,
+    "diffHunk" : "@@ -1,1 +287,291 @@  }\n\n  def copyReverseIdMap(): util.Map[String, Uuid] = {\n    new util.HashMap(reverseIdMap)\n  }"
+  },
+  {
+    "id" : "4b7c3715-c4a7-41ff-a427-0671bb610752",
+    "prId" : 10252,
+    "prUrl" : "https://github.com/apache/kafka/pull/10252#pullrequestreview-605754427",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8354c1d9-f2c1-4986-a339-b883118af0a4",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "Is it possible that `newReverseIdMap` has no related id? For example, `PartitionRecord` is processed before `TopicRecord` or `TopicRecord` was discarded (due to error)?",
+        "createdAt" : "2021-03-04T06:12:40Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c79d34f5-67c4-45ce-813e-a8649dde28f3",
+        "parentId" : "8354c1d9-f2c1-4986-a339-b883118af0a4",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "For another, could it be replaced by `prevPartitions.contains(partition.topicName)`? It seems all we want to check is the existence of topic name in previous image.",
+        "createdAt" : "2021-03-04T06:32:54Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43f83c7d-110c-445b-aa1e-b8cc8f154aba",
+        "parentId" : "8354c1d9-f2c1-4986-a339-b883118af0a4",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "The intent is to only return the change in `_localRemoved` if the topic existed in the previous image. If we only check topic name, then successive deletions and recreations might leave some partitions in `_localRemoved` that were not in the previous image.\r\n\r\nIt's worth noting that this is strictly more defensive than the current replay logic requires. A new image is built for each batch of records from the controller, and we would never see a topic deleted and recreated (or vice versa) in the same batch. This is an implicit contract though and not protected by the builder API, so I thought we might as well try to make the logic more resilient.",
+        "createdAt" : "2021-03-04T21:49:07Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf9f5deb-cc5a-4fc0-8437-3a25330baf8e",
+        "parentId" : "8354c1d9-f2c1-4986-a339-b883118af0a4",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "Thanks for nice explanation. I have another question for this check. It seems to me three collections in `prevPartitions` should be consistent. For example: a topic which exists one of collection should also exists in other two (vice versa). If above comment is right, why we need this `if-else`? Calling `prevPartitions.contains(partition.topicName)` appears to be enough?",
+        "createdAt" : "2021-03-06T12:45:49Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85c26fab544a58ad390d69130b5635c2ca7ef56e",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +211,215 @@  private def maybeAddToLocalRemoved(partition: MetadataPartition): Unit = {\n    if (partition.isReplicaFor(brokerId)) {\n      val currentTopicId = newReverseIdMap.get(partition.topicName)\n      val prevImageHasTopic = if (currentTopicId != null) {\n        prevImageHasTopicId(currentTopicId)"
+  },
+  {
+    "id" : "5c480cf0-c693-4bb8-8534-ab8e7fcf9070",
+    "prId" : 10252,
+    "prUrl" : "https://github.com/apache/kafka/pull/10252#pullrequestreview-606515688",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab2759c1-f988-4684-bd9d-7b06cabbcd4c",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "Is it redundant to add this partition to `_localChanged` if the broker is already the replica of that partition?",
+        "createdAt" : "2021-03-06T13:27:24Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f4c1417-ea03-4e86-b9ae-124e001c5f4e",
+        "parentId" : "ab2759c1-f988-4684-bd9d-7b06cabbcd4c",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "We depend on changes to the `_localChanged` set in order to receive new leader and isr state.",
+        "createdAt" : "2021-03-08T17:11:03Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85c26fab544a58ad390d69130b5635c2ca7ef56e",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +202,206 @@    val prevPartition = newPartitionMap.put(partition.partitionIndex, partition)\n    if (partition.isReplicaFor(brokerId)) {\n      _localChanged.add(partition)\n    } else if (prevPartition != null) {\n      maybeAddToLocalRemoved(prevPartition)"
+  },
+  {
+    "id" : "1910991e-0b17-4cb7-a3ba-7659ce125661",
+    "prId" : 10252,
+    "prUrl" : "https://github.com/apache/kafka/pull/10252#pullrequestreview-606519841",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "80cef6ff-74dd-4bac-9b13-c2546e4f7e67",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "Is it worth checking consistency of those collections? It can produce quick failure if we are going to build invalid image.",
+        "createdAt" : "2021-03-06T13:38:11Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "178d621a-daf9-4d00-8675-7fd18a48ad9d",
+        "parentId" : "80cef6ff-74dd-4bac-9b13-c2546e4f7e67",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I would say yes if there was a cheap way to do it. However, I don't think it's unreasonable to depend on internally maintained invariants here.",
+        "createdAt" : "2021-03-08T17:15:23Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85c26fab544a58ad390d69130b5635c2ca7ef56e",
+    "line" : 134,
+    "diffHunk" : "@@ -1,1 +251,255 @@\n  def build(): MetadataPartitions = {\n    val result = new MetadataPartitions(newNameMap, newIdMap, newReverseIdMap)\n    newNameMap = Collections.unmodifiableMap(newNameMap)\n    newIdMap = Collections.unmodifiableMap(newIdMap)"
+  }
+]

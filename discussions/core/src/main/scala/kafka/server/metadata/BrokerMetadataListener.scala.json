@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "2c398769-a15b-4175-960b-890d872f8a0a",
+    "prId" : 10252,
+    "prUrl" : "https://github.com/apache/kafka/pull/10252#pullrequestreview-603282070",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a774071c-8ed7-4ce1-a00b-98cf681d23f9",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "It seems to me removing config should be called even if topic id does not exist since we set config without checking existence of topic.",
+        "createdAt" : "2021-03-03T09:24:32Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7315ef3-3c00-43c4-9b53-7d0a4afd5f4e",
+        "parentId" : "a774071c-8ed7-4ce1-a00b-98cf681d23f9",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I see what you mean. The `RemoveTopic` schema does not include the topic name, so our hands are tied here at the moment. The `Config` schema, on the other hand, uses topic name, which is a consequence of the way that we treat configs. Probably `RemoveTopic` should also indicate the topic name. I will file a separate JIRA to think about this.",
+        "createdAt" : "2021-03-03T19:45:40Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85c26fab544a58ad390d69130b5635c2ca7ef56e",
+    "line" : 85,
+    "diffHunk" : "@@ -1,1 +225,229 @@        val removedPartitions = imageBuilder.partitionsBuilder().removeTopicById(record.topicId())\n        groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq)\n        configRepository.remove(new ConfigResource(ConfigResource.Type.TOPIC, topicName))\n    }\n  }"
+  },
+  {
+    "id" : "d354d70d-45c5-40c0-ad49-e270949127a6",
+    "prId" : 10252,
+    "prUrl" : "https://github.com/apache/kafka/pull/10252#pullrequestreview-605464558",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c4dbb3d4-d6ef-4989-8c79-255d3dc04413",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "Do we \"assume\" `PartitionRecord` is processed after `TopicRecord`? [BrokerMetadataListener#handlePartitionRecord](https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/server/metadata/BrokerMetadataListener.scala#L188) check existence of topic id first. It can throw exception if `PartitionRecord` is processed \"before\" `TopicRecord` (previous image has no related data as it is new topic).\r\n\r\nOn the other hand, [RaftMetadataCache#updateMetadata](https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/server/metadata/RaftMetadataCache.scala#L364) sets partition info before updating topic info.",
+        "createdAt" : "2021-03-04T06:26:53Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "692897ff-e1c5-4fb6-969e-5c5a4c557e65",
+        "parentId" : "c4dbb3d4-d6ef-4989-8c79-255d3dc04413",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Ordering assumptions are fair when it comes to the metadata log and the topic record is indeed created before the partition records. Interestingly, the topic config records come before the topic record. Although it seems safe with the current logic, I think a more intuitive order would be:\r\n \r\n1. TopicRecord\r\n2. ConfigRecord(s)\r\n3. PartitionRecord(s)\r\n\r\nLet me file a JIRA about this.",
+        "createdAt" : "2021-03-04T21:59:45Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b099c71-cecb-4b45-a9e9-df0c130800b3",
+        "parentId" : "c4dbb3d4-d6ef-4989-8c79-255d3dc04413",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "FYI: https://issues.apache.org/jira/browse/KAFKA-12433",
+        "createdAt" : "2021-03-05T17:51:39Z",
+        "updatedAt" : "2021-03-08T17:16:27Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85c26fab544a58ad390d69130b5635c2ca7ef56e",
+    "line" : 61,
+    "diffHunk" : "@@ -1,1 +153,157 @@      case rec: UnfenceBrokerRecord => handleUnfenceBrokerRecord(imageBuilder, rec)\n      case rec: TopicRecord => handleTopicRecord(imageBuilder, rec)\n      case rec: PartitionRecord => handlePartitionRecord(imageBuilder, rec)\n      case rec: PartitionChangeRecord => handlePartitionChangeRecord(imageBuilder, rec)\n      case rec: RemoveTopicRecord => handleRemoveTopicRecord(imageBuilder, rec)"
+  }
+]

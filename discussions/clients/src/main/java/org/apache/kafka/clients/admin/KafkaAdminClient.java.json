@@ -1813,5 +1813,181 @@
     "commit" : "ae6aaf1fe59520e516b8115f16c0cdaf4fad3660",
     "line" : 22,
     "diffHunk" : "@@ -1,1 +4610,4614 @@\n    @Override\n    public DecommissionBrokerResult decommissionBroker(int brokerId, DecommissionBrokerOptions options) {\n        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();\n        final long now = time.milliseconds();"
+  },
+  {
+    "id" : "f9ce002e-f929-4ce1-b168-d356bc2a4c8f",
+    "prId" : 10281,
+    "prUrl" : "https://github.com/apache/kafka/pull/10281#pullrequestreview-616761633",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7a526b79-8a38-4ff9-a88b-2f13471e52aa",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Maybe I am missing something here. Why do we need to continue? Do we not support multiple in-flight requests? If not, then why does `callsInFlight` map to a list?",
+        "createdAt" : "2021-03-12T02:33:08Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b33c4708-febf-42d1-b155-6a97bca00201",
+        "parentId" : "7a526b79-8a38-4ff9-a88b-2f13471e52aa",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Notice that we set `maxInFlightRequestsPerConnection` to 1 when constructing the `NetworkClient`.  We don't support sending multiple requests to a single node on a single connection in `AdminClient`.  I think we could add this support, but we'd have to check how the server handled it since we've never done it before.  Maybe there should be a JIRA.\r\n\r\nAlso, if we do choose to add this support for multiple outstanding requests per node per socket we'd need some way to distinguish between \"waiting for a chance to use this connection\" from \"waiting for this connection to be opened\" in NetworkClient.  Currently ready just returns a boolean, which isn't enough information to distinguish these two cases.  We could probably add a new method that returned an enum or something.",
+        "createdAt" : "2021-03-17T00:40:50Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6c4fe4e9-e30e-4a82-a298-8763ee2b5144",
+        "parentId" : "7a526b79-8a38-4ff9-a88b-2f13471e52aa",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Oh, and on the question of why inflight requests has a list, it was done for future-proofing",
+        "createdAt" : "2021-03-17T00:41:57Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a2c0759-7ac2-488c-a54c-d4b30148ea92",
+        "parentId" : "7a526b79-8a38-4ff9-a88b-2f13471e52aa",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Ok. I think we might as well simplify the type since we already have logic which assumes one inflight request. It doesn't feel like we're buying ourselves much in terms of future-proofing.",
+        "createdAt" : "2021-03-17T20:49:14Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5400c4bc-2a4c-40af-bb70-2dcec4e43510",
+        "parentId" : "7a526b79-8a38-4ff9-a88b-2f13471e52aa",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "ok.  I changed it to just `Map<String, Call>`",
+        "createdAt" : "2021-03-19T20:14:54Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a00c1d8f12fcfcc3306d93f86f031d9f596871b",
+    "line" : 143,
+    "diffHunk" : "@@ -1,1 +1110,1114 @@                    log.trace(\"Still waiting for other calls to finish on node {}.\", node);\n                    nodeReadyDeadlines.remove(node);\n                    continue;\n                }\n                if (!client.ready(node, now)) {"
+  },
+  {
+    "id" : "2fca27a5-bf9f-4aba-bfd7-736513e0814a",
+    "prId" : 10281,
+    "prUrl" : "https://github.com/apache/kafka/pull/10281#pullrequestreview-613831649",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dd6c3cf1-98b5-4fb1-a91a-ddcc79ddb75a",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "It seems like it would be quite intuitive to use `socket.connection.setup.timeout.ms`. Is it because of the complexity of `socket.connection.setup.timeout.max.ms` that we don't do this? Basically we don't know how long the network client itself is planning to wait for the connection to be established.",
+        "createdAt" : "2021-03-12T02:50:50Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88f5149e-7c02-4ff2-97bd-03cabeb7c97f",
+        "parentId" : "dd6c3cf1-98b5-4fb1-a91a-ddcc79ddb75a",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "The complexity of the min / max issue is one thing.  Another thing is that we don't know when the connection has been established, and when it has not.  NetworkClient doesn't expose this information.  `NetworkClient#ready` may return false for a variety of reasons, many of which are not indicative of connection establishment.",
+        "createdAt" : "2021-03-17T00:35:52Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a00c1d8f12fcfcc3306d93f86f031d9f596871b",
+    "line" : 160,
+    "diffHunk" : "@@ -1,1 +1127,1131 @@                        pollTimeout = Math.min(pollTimeout, deadline - now);\n                    } else {\n                        nodeReadyDeadlines.put(node, now + requestTimeoutMs);\n                    }\n                    long nodeTimeout = client.pollDelayMs(node, now);"
+  },
+  {
+    "id" : "615c0397-6ba4-4d30-be08-637f6cfe4822",
+    "prId" : 10281,
+    "prUrl" : "https://github.com/apache/kafka/pull/10281#pullrequestreview-613832092",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6f827826-2a71-452e-bfaa-542f3e68b951",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "So I guess the intent here is to count the \"ready time\" toward the request timeout. I think that's reasonable. It means that request timeout represents the maximum time we will commit to trying to get a response from a particular node before retrying. It might be worth a comment to explain this?",
+        "createdAt" : "2021-03-12T02:53:24Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9e4e0b3-4f1b-4f8a-8f8a-195e8a155094",
+        "parentId" : "6f827826-2a71-452e-bfaa-542f3e68b951",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "I added a comment",
+        "createdAt" : "2021-03-17T00:37:01Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a00c1d8f12fcfcc3306d93f86f031d9f596871b",
+    "line" : 172,
+    "diffHunk" : "@@ -1,1 +1137,1141 @@                // the total request time.\n                int remainingRequestTime;\n                Long deadlineMs = nodeReadyDeadlines.remove(node);\n                if (deadlineMs == null) {\n                    remainingRequestTime = requestTimeoutMs;"
+  },
+  {
+    "id" : "0786def6-7944-4fe5-a257-e8db9273e67d",
+    "prId" : 10281,
+    "prUrl" : "https://github.com/apache/kafka/pull/10281#pullrequestreview-614771509",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5056f7b3-b87f-4552-8896-e022e9f4a7c0",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Might be a good idea to use `Math.max(0, deadline - now)` since system time is non-monotonic.",
+        "createdAt" : "2021-03-17T20:57:20Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a00c1d8f12fcfcc3306d93f86f031d9f596871b",
+    "line" : 158,
+    "diffHunk" : "@@ -1,1 +1125,1129 @@                            continue;\n                        }\n                        pollTimeout = Math.min(pollTimeout, deadline - now);\n                    } else {\n                        nodeReadyDeadlines.put(node, now + requestTimeoutMs);"
+  },
+  {
+    "id" : "55f5ef8a-f6b6-4ba5-8846-1037af5fd28f",
+    "prId" : 10281,
+    "prUrl" : "https://github.com/apache/kafka/pull/10281#pullrequestreview-614771509",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a48265f0-c113-4c96-9360-ec88a28744b3",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I noticed that we lose the throwable that we caught here. Can we add it as a cause?",
+        "createdAt" : "2021-03-17T21:22:13Z",
+        "updatedAt" : "2021-03-24T15:49:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a00c1d8f12fcfcc3306d93f86f031d9f596871b",
+    "line" : 193,
+    "diffHunk" : "@@ -1,1 +1151,1155 @@                        requestBuilder = call.createRequest(timeoutMs);\n                    } catch (Throwable t) {\n                        call.fail(now, new KafkaException(String.format(\n                            \"Internal error sending %s to %s.\", call.callName, node), t));\n                        continue;"
   }
 ]
