@@ -339,5 +339,313 @@
     "commit" : "99578dc91d650a228e1f16b4b3c39d379329ace1",
     "line" : 40,
     "diffHunk" : "@@ -1,1 +204,208 @@    protected abstract Map<String, ByteBuffer> performAssignment(String leaderId,\n                                                                 String protocol,\n                                                                 List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata);\n\n    /**"
+  },
+  {
+    "id" : "eedfaca6-0f9b-4391-b2cd-7022567667e9",
+    "prId" : 6650,
+    "prUrl" : "https://github.com/apache/kafka/pull/6650#pullrequestreview-235228193",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0c542359-bcce-4cc4-9462-2607885d476f",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Note that users's callback / future would see the fixed error message\r\n\r\n\"The coordinator reports a more recent member.id associated with the consumer's group.instance.id.\"\r\n\r\nI felt the above error message is more understandable to users, as \"a more recent member.id\" seems a bit confusing, maybe we can update that error message in `Errors` as well as this static log4j error message as:\r\n\r\n\"The broker rejected this static consumer since another instance with the same group.instance.id has registered with a more recent timestamp\".\r\n",
+        "createdAt" : "2019-05-08T00:50:23Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "58638a94-b154-4e81-8b5b-3a5cc8460d92",
+        "parentId" : "0c542359-bcce-4cc4-9462-2607885d476f",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Sounds good!",
+        "createdAt" : "2019-05-08T18:47:14Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a0c245434329139d931b0cc904704ef8c26a62c",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +561,565 @@            } else if (error == Errors.FENCED_INSTANCE_ID) {\n                log.error(\"Received fatal exception: group.instance.id gets fenced\");\n                future.raise(error);\n            } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL\n                    || error == Errors.INVALID_SESSION_TIMEOUT"
+  },
+  {
+    "id" : "828a2a97-b5dc-4a8c-b696-76b5c742c6e7",
+    "prId" : 6650,
+    "prUrl" : "https://github.com/apache/kafka/pull/6650#pullrequestreview-235368936",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9b7bf66d-9875-478c-af81-f334591261e3",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Similar to commit, if this error is thrown, then in `AbstractCoordinator#initiateJoinGroup`:\r\n\r\n```\r\n             public void onFailure(RuntimeException e) {\r\n                    // we handle failures below after the request finishes. if the join completes\r\n                    // after having been woken up, the exception is ignored and we will rejoin\r\n                    synchronized (AbstractCoordinator.this) {\r\n                        state = MemberState.UNJOINED;\r\n                    }\r\n                }\r\n```\r\n\r\nI.e. it will also be swallowed and retry. Should we instead let this consumer to fail by throwing this exception all the way up, like in KafkaProducer we throw `ProduceFencedException` all the way to the caller's face.",
+        "createdAt" : "2019-05-08T01:12:37Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71901d4f-f0ed-45d3-a734-dce9dcad15a6",
+        "parentId" : "9b7bf66d-9875-478c-af81-f334591261e3",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "I could see #initiateJoinGroup being called and we do check future later here for exceptions:\r\n```\r\n} else {\r\n                resetJoinGroupFuture();\r\n                final RuntimeException exception = future.exception();\r\n                if (exception instanceof UnknownMemberIdException ||\r\n                        exception instanceof RebalanceInProgressException ||\r\n                        exception instanceof IllegalGenerationException ||\r\n                        exception instanceof MemberIdRequiredException)\r\n                    continue;\r\n                else if (!future.isRetriable())\r\n                    throw exception;\r\n```\r\nSo my understanding is that we will not retry in the case, since the exception is thrown.",
+        "createdAt" : "2019-05-08T18:54:26Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "804afe4a-1b38-40f0-8ba5-b2d3058c06ad",
+        "parentId" : "9b7bf66d-9875-478c-af81-f334591261e3",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Ah makes sense.",
+        "createdAt" : "2019-05-09T01:53:01Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a0c245434329139d931b0cc904704ef8c26a62c",
+    "line" : 64,
+    "diffHunk" : "@@ -1,1 +666,670 @@                    log.debug(\"SyncGroup failed because the group began another rebalance\");\n                    future.raise(error);\n                } else if (error == Errors.FENCED_INSTANCE_ID) {\n                    log.error(\"Received fatal exception: group.instance.id gets fenced\");\n                    future.raise(error);"
+  },
+  {
+    "id" : "f1f0281e-646f-4e8e-9a0c-82af0d1c3fe9",
+    "prId" : 6650,
+    "prUrl" : "https://github.com/apache/kafka/pull/6650#pullrequestreview-239175775",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f48e1c23-c5d4-4f18-8f09-5185c0b51edc",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "If we are fenced, should we keep track of that somewhere so that we do not keep sending RPCs to the coordinator?",
+        "createdAt" : "2019-05-17T15:07:20Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bdb5b5a2-78c2-4824-96a2-32525ae4ce64",
+        "parentId" : "f48e1c23-c5d4-4f18-8f09-5185c0b51edc",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "As long as we don't reset our generation info, all subsequent requests should be failing once other consumer joins the group right? Eventually this will lead to a complete crash IIUC.",
+        "createdAt" : "2019-05-17T16:58:09Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "890a5fd0-7309-4271-be17-2365ea5f1f45",
+        "parentId" : "f48e1c23-c5d4-4f18-8f09-5185c0b51edc",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "For JoinResponse specifically, it should be caught in line 427 above and then falls into `else if (!future.isRetriable())` to throw the exception to the callers immediately. So I agree with @abbccdda that no extra logic would be needed.",
+        "createdAt" : "2019-05-17T18:42:40Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac69d353-a90d-45bb-b86c-5b6d4a76ad3a",
+        "parentId" : "f48e1c23-c5d4-4f18-8f09-5185c0b51edc",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I think I wasn't clear. What I'm asking is whether the consumer should remember the fact that it was fenced. So if the user continues trying to do stuff, we fail immediately instead of sending additional requests to the broker.",
+        "createdAt" : "2019-05-17T20:55:18Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7326c7ec-8c34-4a5e-b5db-d9d9d80c47d8",
+        "parentId" : "f48e1c23-c5d4-4f18-8f09-5185c0b51edc",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "For `Join/Sync/OffsetCommitSync` the failures should be immediate; for `heartbeat/commitAsync` it would not be immediate but will be quickly surfaced. If we do want a global variable indicating the failure, potentially we need to add a new `MemberState`",
+        "createdAt" : "2019-05-17T23:58:16Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08a6d61f-39f3-4ef9-8ff9-7305e29a62f6",
+        "parentId" : "f48e1c23-c5d4-4f18-8f09-5185c0b51edc",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Yes, a new MemberState would be a nice way to handle this. We can do this later if you do not think it is important now.",
+        "createdAt" : "2019-05-18T00:03:35Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fcc20ab0-beb2-433d-8a3f-207876075ff3",
+        "parentId" : "f48e1c23-c5d4-4f18-8f09-5185c0b51edc",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "SG!",
+        "createdAt" : "2019-05-18T00:37:39Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a0c245434329139d931b0cc904704ef8c26a62c",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +566,570 @@                    || error == Errors.INVALID_GROUP_ID\n                    || error == Errors.GROUP_AUTHORIZATION_FAILED\n                    || error == Errors.GROUP_MAX_SIZE_REACHED) {\n                // log the error and re-throw the exception\n                log.error(\"Attempt to join group failed due to fatal error: {}\", error.message());"
+  },
+  {
+    "id" : "dd673de3-4ec4-4017-b2c4-9672c8e5f114",
+    "prId" : 6650,
+    "prUrl" : "https://github.com/apache/kafka/pull/6650#pullrequestreview-238975578",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1cbf98c5-09cd-4c0b-ac39-a93276f26e31",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Maybe worth a log message that we caught the fenced error in the heartbeat thread.",
+        "createdAt" : "2019-05-17T15:07:30Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a0c245434329139d931b0cc904704ef8c26a62c",
+    "line" : 94,
+    "diffHunk" : "@@ -1,1 +1144,1148 @@                                        } else if (e instanceof FencedInstanceIdException) {\n                                            log.error(\"Caught fenced group.instance.id {} error in heartbeat thread\", groupInstanceId);\n                                            heartbeatThread.failed.set(e);\n                                            heartbeatThread.disable();\n                                        } else {"
+  },
+  {
+    "id" : "56cea4c0-dbe0-4878-8617-361c51aa0b94",
+    "prId" : 6650,
+    "prUrl" : "https://github.com/apache/kafka/pull/6650#pullrequestreview-239079340",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9c74d122-a9c1-4adb-8a1e-54e6dfe5116f",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "We should print the `groupInstanceId` value as well in error message, as in other cases.",
+        "createdAt" : "2019-05-17T18:49:08Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a0c245434329139d931b0cc904704ef8c26a62c",
+    "line" : 92,
+    "diffHunk" : "@@ -1,1 +1142,1146 @@                                            // however, then the session timeout may expire before we can rejoin.\n                                            heartbeat.receiveHeartbeat();\n                                        } else if (e instanceof FencedInstanceIdException) {\n                                            log.error(\"Caught fenced group.instance.id {} error in heartbeat thread\", groupInstanceId);\n                                            heartbeatThread.failed.set(e);"
+  },
+  {
+    "id" : "a89cb4d6-a061-4d54-936b-99f9c44cece4",
+    "prId" : 6650,
+    "prUrl" : "https://github.com/apache/kafka/pull/6650#pullrequestreview-239176057",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "92b40c81-1764-4517-b45b-798fb1e59bb7",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Should we return after we fail the heartbeat thread? We do no want it to keep running I assume.",
+        "createdAt" : "2019-05-18T00:00:37Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9c3efd92-28f4-450d-8233-d1ce348512d1",
+        "parentId" : "92b40c81-1764-4517-b45b-798fb1e59bb7",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "We are in a if-else branch here, but I agree. In case someone adds logic after if-else block in the future.",
+        "createdAt" : "2019-05-18T00:14:54Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "258674d1-72f0-469d-8d21-b86425baa7c0",
+        "parentId" : "92b40c81-1764-4517-b45b-798fb1e59bb7",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Oh, actually it's against code style, so just leave it.",
+        "createdAt" : "2019-05-18T00:15:22Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d53ffe16-20f8-4fc8-9987-9a570b5d2603",
+        "parentId" : "92b40c81-1764-4517-b45b-798fb1e59bb7",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "We do need a way to stop the heartbeat thread still, right? Perhaps we can invoke `disable()`?",
+        "createdAt" : "2019-05-18T00:31:42Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0f072b39-f395-4852-b586-a91619c9b50d",
+        "parentId" : "92b40c81-1764-4517-b45b-798fb1e59bb7",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Oh, got it. Let's stop it through disable() then",
+        "createdAt" : "2019-05-18T00:41:29Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a0c245434329139d931b0cc904704ef8c26a62c",
+    "line" : 94,
+    "diffHunk" : "@@ -1,1 +1144,1148 @@                                        } else if (e instanceof FencedInstanceIdException) {\n                                            log.error(\"Caught fenced group.instance.id {} error in heartbeat thread\", groupInstanceId);\n                                            heartbeatThread.failed.set(e);\n                                            heartbeatThread.disable();\n                                        } else {"
+  },
+  {
+    "id" : "d8309529-d1e0-47fc-922c-ca90499fc52e",
+    "prId" : 6650,
+    "prUrl" : "https://github.com/apache/kafka/pull/6650#pullrequestreview-239174940",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3282f427-b2ad-4a63-8e53-6d35f84e7167",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "nit: missing space after \"retry\"\r\n\r\nI think it would be better to just say that the broker does not support the use of `group.instance.id`. It's a little weird to tell the user to unset a configuration.",
+        "createdAt" : "2019-05-18T00:04:06Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95c65584-5a67-4a8c-9917-4af9ac9d3ed2",
+        "parentId" : "3282f427-b2ad-4a63-8e53-6d35f84e7167",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Got it",
+        "createdAt" : "2019-05-18T00:26:11Z",
+        "updatedAt" : "2019-05-18T04:04:24Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4a0c245434329139d931b0cc904704ef8c26a62c",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +577,581 @@                }\n            } else if (error == Errors.UNSUPPORTED_VERSION) {\n                log.error(\"Attempt to join group failed due to unsupported version error. Please unset field group.instance.id and retry\" +\n                        \"to see if the problem resolves\");\n                future.raise(error);"
   }
 ]

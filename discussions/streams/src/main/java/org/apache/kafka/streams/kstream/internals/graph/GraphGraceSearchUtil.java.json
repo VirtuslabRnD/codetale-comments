@@ -86,5 +86,126 @@
     "commit" : "035b26310e76216b502839a6b9f22bf1fc75fee2",
     "line" : 35,
     "diffHunk" : "@@ -1,1 +33,37 @@    private static long findAndVerifyWindowGrace(final StreamsGraphNode streamsGraphNode, final String chain) {\n        // error base case: we traversed off the end of the graph without finding a window definition\n        if (streamsGraphNode == null) {\n            throw new TopologyException(\n                \"Window close time is only defined for windowed computations. Got [\" + chain + \"].\""
+  },
+  {
+    "id" : "00807788-ceed-4cbf-b1b3-fb9629f15107",
+    "prId" : 6654,
+    "prUrl" : "https://github.com/apache/kafka/pull/6654#pullrequestreview-233295237",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "There's no formal definition of a window definition's \"close time\", so we are awkwardly piecing it together here. The duration we're looking for here is the amount of time to add to the window end time to get the window close time. Uniquely, for session windows, we have to wait the grace period + the inactivity gap before the window is closed. Otherwise, a record may arrive after the grace period, but before the inactivity gap, and merge with an existing window, moving the end time to the current time.",
+        "createdAt" : "2019-04-30T18:53:23Z",
+        "updatedAt" : "2019-04-30T19:51:42Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d40c2bf6-e7aa-467a-8593-3da4b64f1e9f",
+        "parentId" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Great catch! Was thinking if `max(grace, inactivity_gap)` is sufficient or not, but after a few more thoughts, I realize you are right :)",
+        "createdAt" : "2019-05-01T01:41:20Z",
+        "updatedAt" : "2019-05-01T01:43:37Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba6a58b6-ac5f-41d8-83de-97a279010d1b",
+        "parentId" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks for double-checking!",
+        "createdAt" : "2019-05-01T03:07:29Z",
+        "updatedAt" : "2019-05-01T03:07:30Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "50cf234e-3191-43c1-907f-3c637ea77801",
+        "parentId" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "> Otherwise, a record may arrive after the grace period, but before the inactivity gap, and merge with an existing window, moving the end time to the current time\r\n\r\nThis makes sense to me but thinking on this some more (and I may be missing something here), what does this imply for users that set a modest grace period but a larger inactivity gap? Wouldn't this allow records to come in beyond the users' expectations of the grace period?\r\n\r\nBut I'm guessing this is a better trade off than having a late arriving record adjust the end time of an existing window.",
+        "createdAt" : "2019-05-01T22:13:05Z",
+        "updatedAt" : "2019-05-01T22:39:25Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e26846a-eca7-460b-99ec-74a326faa0c9",
+        "parentId" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I see Bill's concern here but I think it should be clarified: how exactly do we define the grace period (or how do we think users will interpret it?) -- is it a strict upper limit of allowable lateness, or a minimum amount of time we will wait? \r\n\r\nIt seems tricky to determine the \"correct\" behavior when the grace period is < inactivity gap, since these two parameters essentially oppose each other Re: the inclusion of a record and so one has to trump the other when a record arrives between them.\r\nFor the more straightforward case grace period > inactivity gap though I'm not so sure about this logic ... it seems to me in this case we should (only) wait for the grace period. ",
+        "createdAt" : "2019-05-02T01:08:50Z",
+        "updatedAt" : "2019-05-02T01:08:51Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0e43178-da63-4e1f-9d16-75c673c16764",
+        "parentId" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> is it a strict upper limit of allowable lateness, or a minimum amount of time we will wait?\r\n\r\nIt is a strict limit.\r\n\r\n> Wouldn't this allow records to come in beyond the users' expectations of the grace period?\r\n\r\nand\r\n\r\n> It seems tricky to determine the \"correct\" behavior when the grace period is < inactivity gap, since these two parameters essentially oppose each other Re: the inclusion of a record and so one has to trump the other when a record arrives between them.\r\n\r\nI don't think so. The grace period is additive to the session-gap. If grace period is zero, and gap=5000, and we have a single-record session at timestamp 1000, we would emit it at 6000 (=end+gap+grace)\r\n\r\n> For the more straightforward case grace period > inactivity gap though I'm not so sure about this logic ... it seems to me in this case we should (only) wait for the grace period\r\n\r\nFrom my understanding, for this case we would emit after gap plus grace period passed.\r\n\r\nNote, that as long as the gap time did not elapse, _ordered_ records can expand the session. In our example above, we had a single-record session at 1000 (let's say key=A) with gap 5000. If a record with key=A arrives at 3000, the session is expended to `<A,[1000,3000]>` and the new \"gap cut-off point\" moves from 6000 to 8000. We need to allow for this case even if grace period is zero: the record was not out-of-order! However, if we get a record with different key=B at timestamp 9000, and afterwards a record with key=A and timestamps 7000 arrives, we don't add it to the old session of `[1000,3000]` because the new record was out-of-order and missed the grace period (and it dropped as late record). In order to incorporate the record, we would need a grace period of 1000: for this case, key=B (ts: 9000) is just one tick before grace period passed for the open A-session, and we don't close the A-session yet, and afterward extend the A-session to `[1000,7000]` to incorporate the out-of-order record, resulting in new session-gap cut-off time of 12000 and new close time of 13000 (incorporating the 1000ms grace period).",
+        "createdAt" : "2019-05-02T12:47:51Z",
+        "updatedAt" : "2019-05-02T12:47:52Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f2de5a4f-72bd-4f29-8c2a-8f70fc3b6ecd",
+        "parentId" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks, all. I agree it's a bit mind-bending (hence, the bug).\r\n\r\n@mjsax is right, it's not a \"loose\" definition at all. It's both strict and well defined. There's bound to be some confusion, because Streams differs from other SP frameworks in the way we handle late records. (In my opinion, our way is better ;) ) Building on Matthias's example, I'll try and give a high-level \"mental model\" of what's going on here.\r\n\r\nSome quick definitions, since all the SP frameworks and papers like to use overlapping terms differently:\r\n* \"stream time\" is \"right now\" with respect to the data you've seen so far. Notably, Streams defines \"stream time\" as the maximum observed timestamp so far in the stream (specifically, in a topic-partition). Beam (for example) defines it using a \"watermark\", which dynamically lags the maximum observed timestamp, in an effort to not have late events at all (but you have future events instead, which I think is kind of weird).\r\n* \"lateness\" (specifically for the purpose of this conversation) is \"stream time - record timestamp\". Note that in a perfectly-ordered stream, all records have the maximum observed timestamp so far, so they all have zero lateness. In Streams, any record that has an out-of-order timestamp has some amount of lateness. Also, note that in Beam (for example), records may have out-of-order timestamps, but not be considered \"late\" at all because the watermark lags the max observed timestamp.\r\n\r\nThat was fun.\r\n\r\nSo, in Beam (and company), you can \"bound the maximum allowed lateness\" explicitly, and the default bound is \"zero\". But you still have out-of-order events, because of the fancy stream-time/watermark definition. But in Streams, you cannot! And you don't need to! I don't think this is a useful property to define for an SP application. Why bother bounding the maximum allowed lateness of your application? What can you do with this information?\r\n\r\nWhat matters, I think, is stuff like bounding the time you have to wait for final updates, or the amount of time you're going to keep the window state stored (either for updates or for query). Note that these bounds are specifically on _windows_, not _records_. That's why our \"grace period\" is set on the window definition, and the \"retention time\" is set on the window store, and there is no mention of a record-lateness bound anywhere.\r\n\r\nSo the right way to think about the grace period is bounding the time (in stream time) that the window stays open for updates, and hence the amount of time you have to wait for the \"final updates\", if you're using suppression. This doesn't put any specific bound on record lateness, since a record that \"should\" be toward the beginning of the window is admitted with a higher lateness than a record that \"should\" be toward the end of the window.\r\n\r\nBut! It's also not quite perfect to say that it's the \"amount of time we'll wait\", since that phrase leaves out the time you start waiting... Is it the beginning of the window, the end of the window, or what? If you imagine a perfectly ordered stream, then there is some point at which you know a window won't be updated anymore. We can call this the *natural close time*. For fixed-size windows, this is the window end time. For data-driven windows, it's more nebulous, because it depends on the logic of the window definition. Specifically, for session windows, it's the end-time plus the inactivity gap.\r\n\r\nFor _im_perfectly ordered streams (ones with out-of-order/late records), we want to keep the window open for updates for a little longer (the grace period), so the actual *close time* of the window is the natural close time + the grace period. In other words, I'd modify @ableegoldman 's phrase and say that the grace priod is the \"amount of time we'll wait for updates after the natural close time of the window\".\r\n\r\nSo, in response to Bill, yes this behavior might violate users' expectations about what happens, but only if they don't understand what grace period means. It could be that less terse documentation is in order.",
+        "createdAt" : "2019-05-02T22:33:13Z",
+        "updatedAt" : "2019-05-02T22:33:13Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d42aacef-a524-42bc-a555-146b2dfbb34f",
+        "parentId" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "With the above context in mind, I think I see why I found the code here a little sketchy. The associativity is messed up. It should be `(window end + inactivity gap) + grace`. What I mean is that `(window end + inactivity gap)` is an identifiable concept (the natural close time).\r\n\r\nBut the code is actually `window end + (inactivity gap + grace)`, which feels wrong because `(inactivity gap + grace)` is just two numbers added together. It's algebraically correct, but it's not semantically aligned.\r\n\r\nBut the structure of the code makes the first association more awkward to implement, since both the inactivity gap and the grace period are static properties of the window definition, while the window end time is unique to each window... I'll see if I can re-structure the code to be more intuitive, but it might be that we just have to live with it.",
+        "createdAt" : "2019-05-02T22:39:32Z",
+        "updatedAt" : "2019-05-02T22:39:32Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4288463-f75e-4547-99ba-bc76664723b6",
+        "parentId" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Thanks @vvcephei for the detailed analysis! In light of a more concrete understanding of grace period and window end/close time the situation is much less ambiguous...maybe you should be writing all our docs :wink:",
+        "createdAt" : "2019-05-02T23:04:15Z",
+        "updatedAt" : "2019-05-02T23:04:15Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d2ea13ae-437a-4b72-aace-f40c5cf98024",
+        "parentId" : "fc50c918-9e15-42a0-8df3-05d3e7e5bf02",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@ableegoldman You must be aware that @vvcephei holds a degree for that :P",
+        "createdAt" : "2019-05-03T00:43:22Z",
+        "updatedAt" : "2019-05-03T00:43:22Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17f270c82b53e5edbf89e45279665b6b97997439",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +79,83 @@                final KStreamSessionWindowAggregate kStreamSessionWindowAggregate = (KStreamSessionWindowAggregate) processorSupplier;\n                final SessionWindows windows = kStreamSessionWindowAggregate.windows();\n                return windows.gracePeriodMs() + windows.inactivityGap();\n            } else {\n                return null;"
   }
 ]

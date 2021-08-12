@@ -31,5 +31,82 @@
     "commit" : "fe613fa277d66b2739ae7377d7c673f9d6bf6789",
     "line" : 12,
     "diffHunk" : "@@ -1,1 +173,177 @@\n        resourceConfig.register(ConnectExceptionMapper.class);\n        resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);\n\n        registerRestExtensions(herder, resourceConfig);"
+  },
+  {
+    "id" : "1bf677f7-a6fe-43ca-bb69-464f8f80c22d",
+    "prId" : 6622,
+    "prUrl" : "https://github.com/apache/kafka/pull/6622#pullrequestreview-229295740",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "85ebc512-5a98-4996-a94b-55812fd1756c",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Would it be better to get the value only when the return type is an integer rather than do that when it the type is non-null? For example, something like:\r\n```\r\nInteger rebalanceTimeoutMs = null;\r\nif (config.typeOf(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG) == ConfigDef.Type.INTEGER) {\r\n    rebalanceTimeoutMs = config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);\r\n}\r\n```\r\nThis may be a bit easier to read, and it's also going to cast to an integer only if the value actually is an integer.",
+        "createdAt" : "2019-04-22T21:28:50Z",
+        "updatedAt" : "2019-04-22T23:39:48Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c73a843-4bf8-4d1e-b1cc-f7b65216f568",
+        "parentId" : "85ebc512-5a98-4996-a94b-55812fd1756c",
+        "authorId" : "fa51427f-0ebb-4ee2-9811-0d6262fc02f1",
+        "body" : "@rhauch, fair point. I was really hoping for `AbstractConfig::hasKey`` method, but the `typeOf` was the closest I could get.\r\n\r\nThere are two reasons I prefer my method: \r\n * The ternary is a one-liner so it's concise and compact assignation. If it were already the pattern in the package, I would have even take a step further and add `final`.\r\n * If the config is changed to a non-integer type, I would prefer the unit test to fail rather than carry on and assign `null`. For example, if the timeout config is changed to type `Long`, all of our tests would continue to pass, and we'd silently start changing behavior unexpectedly.",
+        "createdAt" : "2019-04-22T21:46:40Z",
+        "updatedAt" : "2019-04-22T23:39:48Z",
+        "lastEditedBy" : "fa51427f-0ebb-4ee2-9811-0d6262fc02f1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a35e339-6735-4146-be8c-7f7f90d0de4c",
+        "parentId" : "85ebc512-5a98-4996-a94b-55812fd1756c",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "To your second bullet point, the existing code won't work if the config type is changed to a long (for example), because `getInt(...)` is basically just `return (Integer) get(key);`, which will result in a class cast exception if the value is anything but an integer. Besides, any change of the config type would require changing all of the places where `getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG)` is called.\r\n\r\nTo your first point, I agree that the current code is pretty readable, but becomes less readable if you were to change the existing code to only convert if the config value were an integer, such as:\r\n```\r\nInteger rebalanceTimeoutMs =\r\n    config.typeOf(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG) == ConfigDef.Type.INTEGER ? \r\n    config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG) :\r\n    null;\r\n```\r\nor\r\n```\r\nInteger rebalanceTimeoutMs =\r\n    config.typeOf(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG) != ConfigDef.Type.INTEGER ? null :\r\n    config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);\r\n```\r\nThe latter makes it really hard to miss the `!=`.",
+        "createdAt" : "2019-04-22T22:10:49Z",
+        "updatedAt" : "2019-04-22T23:39:48Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "79065f9e-39f5-47a8-8089-6fc045b18de7",
+        "parentId" : "85ebc512-5a98-4996-a94b-55812fd1756c",
+        "authorId" : "fa51427f-0ebb-4ee2-9811-0d6262fc02f1",
+        "body" : "@rhauch I'm not sure we're on the same page: I think it is an advantage of the PR as it is to fail on the Integer typecasting. This way, unit tests will fail and we will be alerted. In the case where we test against `INTEGER` type, we will see no failures, which I'd argue is a disadvantage: Behavior would silently change.\r\n\r\nTo your point about \"any change of the config type would require changing all of the places\", that is true, and I think the code as its written in the PR helps make sure we catch this case, by virtue of a failing unit test.\r\n\r\nMaybe I'm still not understanding your reasoning?",
+        "createdAt" : "2019-04-22T22:33:56Z",
+        "updatedAt" : "2019-04-22T23:39:48Z",
+        "lastEditedBy" : "fa51427f-0ebb-4ee2-9811-0d6262fc02f1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "14b78dae-2e36-4bfe-b78a-4b2eab68cb4b",
+        "parentId" : "85ebc512-5a98-4996-a94b-55812fd1756c",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "How about we get rid of the problem altogether -- define `WorkerConfig.rebalanceTimeout()` that returns null by default, and then override it in `DistributedConfig` to return `getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG)` since that will always be an integer. The latter's method is trivial, and the code in `RestServer` becomes simpler and easier to read.\r\n\r\nI think there's enough precedence in `StreamsConfig` and `ConverterConfig` to add getter methods (without `get` prefix). The fact that it cleans this up this significantly is also good justification.",
+        "createdAt" : "2019-04-22T23:28:21Z",
+        "updatedAt" : "2019-04-22T23:39:48Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa6c77ef-3670-459e-a77c-ca00ace3ddeb",
+        "parentId" : "85ebc512-5a98-4996-a94b-55812fd1756c",
+        "authorId" : "fa51427f-0ebb-4ee2-9811-0d6262fc02f1",
+        "body" : "@rhauch sounds good!",
+        "createdAt" : "2019-04-22T23:39:46Z",
+        "updatedAt" : "2019-04-22T23:39:48Z",
+        "lastEditedBy" : "fa51427f-0ebb-4ee2-9811-0d6262fc02f1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "61eb09bc3ff80eaf4d64dcea24c766c4e4979827",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +311,315 @@\n        Integer rebalanceTimeoutMs = config.getRebalanceTimeout();\n\n        if (rebalanceTimeoutMs != null) {\n            herderRequestTimeoutMs = Math.min(herderRequestTimeoutMs, rebalanceTimeoutMs.longValue());"
   }
 ]

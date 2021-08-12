@@ -108,5 +108,225 @@
     "commit" : "ddd78d9ad6826da2d821584232f2750d022ef34a",
     "line" : 50,
     "diffHunk" : "@@ -1,1 +199,203 @@            verify(\n                drainProducerRecords(driver, \"output-suppressed\", STRING_DESERIALIZER, LONG_DESERIALIZER),\n                singletonList(new KeyValueTimestamp<>(\"v1\", 1L, 2L))\n            );\n            // inserting a dummy \"tick\" record just to advance stream time"
+  },
+  {
+    "id" : "b1aade91-9c4a-4a11-aa15-bfa3e34d04ae",
+    "prId" : 6645,
+    "prUrl" : "https://github.com/apache/kafka/pull/6645#pullrequestreview-237630991",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "If we merge two sessions, we use the session-end-timestamp on delete for the smaller session now.",
+        "createdAt" : "2019-04-28T12:12:30Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d854eeab-9229-48fd-8549-15174849a99a",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Hmm... Does this say that `k1@0/0` was both created and deleted at time `0`?",
+        "createdAt" : "2019-05-06T19:59:39Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "51f992be-4a25-481f-9763-7178b19b19c4",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Maybe -- I was not really sure about this one. We never discussed how deletes should be handled. If we don't use the session-window end-timestamp, it seem we might reintroduce non-determinism -- not sure.",
+        "createdAt" : "2019-05-06T22:15:09Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5736421d-f37b-43aa-a7a9-df47f95f027d",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "This is a very tricky subject, but it _seems_ like the deletes should \"happen\" at the same time as the update. This would be the window-end time of the final merged window. In that case, we should actually not do any mutation while we're merging, but instead collect all the stuff to delete, and delete it at the end, while we also issue the update. (Since we wouldn't know the timestamp to use until after the merging is done).\r\n\r\nActually, this would also let us fix https://issues.apache.org/jira/browse/KAFKA-8318 , and opens up the possibility of doing a bulk/batch update to the state store.",
+        "createdAt" : "2019-05-07T14:38:16Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "78b489ec-1762-412a-9dd9-6e0b22296fd0",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Not sure if I understand the connection to 8318? Why do we need the merged-windowed end-timestamp to fix it? Also not sure how bulk/batch updates related?\r\n\r\nAlso curious was others think. \\cc @guozhangwang @bbejeck @ableegoldman @cadonna @abbccdda",
+        "createdAt" : "2019-05-07T15:14:32Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d70c0814-360e-4775-aad9-01bee0186416",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Sure, those are just things that become low-hanging fruit as a result of the refactoring we have to do to fix the time semantics here. Since we won't know the timestamp for \"this\" update until after computing the merged window, we can't actually do any of the state updates/forwards until after merging, which means that we have a batch of updates available. It also means we're in a position to eliminate the unnecessary tombstone.\r\n\r\nBut those are just extras. The main point is that we're deleting the old window at time 5 here, not time 0. Introducing time-travel to the aggregation logic seems more likely to create problems than not.",
+        "createdAt" : "2019-05-07T19:10:55Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b25fffeb-2bc9-4fe1-ac4d-82cc3cbeee9f",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Bumping this conversation...",
+        "createdAt" : "2019-05-10T14:34:47Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "39ff1591-dc26-4cee-9331-c64dbc1296b8",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I inclined to agree that it seems the delete should happen at the same time as the update, meaning that we use the timestamp when the delete action occurs, but I could be wrong.",
+        "createdAt" : "2019-05-10T15:30:07Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0990253d-5916-4189-b80b-5019ad060b1e",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Hmm, I'm going to be a PITA and change my mind on this. Sorry, @bbejeck ...\r\n\r\nAfter some further reflection, here's what I'm thinking:\r\nSession windows have this lifecycle: creation, multiple updates, and deletion. Creation has always taken place effectively at window-end time, since when a window is created, start==end==record.timestamp.\r\n\r\nPreviously updates to a window were just assigned the timestamp of the event that caused the update. Let's say you have a count aggregation, and you have some window `[0,5]` with a count of 2, and you get some more input events at times `5, 3, 4`, then your sequence of result updates are `3 at time 5, 4 at time 3, and 5 at time 4`. This is semantically problematic, because the timestamps tell you these results are \"out of order\" and that the \"most recent\" count is actually 3 :( .\r\n\r\nWhat @mjsax is proposing here is to \"pin\" all updates to a window to window-end time. Then, the result updates for our example is just `3 at time 5, 4 at time 5, 5 at time 5`. This is totally fine, since, in the case of identical timestamps, offset order is the tie-breaker. Therefore, the \"most recent\" count is (correctly) 5.\r\n\r\nIt's worth noting that in general, we get an equally correct sequence of window updates as long as the update times don't go backwards. Just save this thought for a minute.\r\n\r\nNow, we come to deletes. Arguably, the delete is just another kind of update. I think this is where Matthias's head was originally at. The same logic applies, if the delete timestamp is equal to the update timestamps and the create timestamp, then offset order is the tie-breaker. Since we delete the window after the creation and updates, the final state of the window is (correctly) \"deleted\".\r\n\r\nUnlike the create/updates, though, the delete is \"caused\" by an event with a timestamp after the window end time. This is what was tripping me up. It seems fine to report a window update time as the \"high watermark\" time of all the window updates so far (in the case of disordered events), but it seems weird to report a window update (in this case, the delete) time as \"in the past\", from the perspective of the event that caused it. That's why I was thinking that we should use the later timestamp, to indicate that the delete was caused at that later time. This is _also_ correct from a time semantics POV, because it preserves the correct order, that the delete comes the create/updates.\r\n\r\nSo, this is the punchline, that both approaches result in correct time semantics. The only difference is that using the causing-event timestamp for deletes reflects the provenance of the delete more accurately, but I don't think this fact is actually useful for anything. Given that we're already pinning the create and update timestamps to all be the window-end time, I'm thinking we should go ahead and stick with Matthias's original proposal to go ahead and use the same timestamp for the \"final\" update (aka, the delete).",
+        "createdAt" : "2019-05-10T18:14:03Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4826a83f-2cdd-4627-8714-0797835d436f",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@vvcephei Thanks for the detailed analysis! I think I agree with you and @mjsax on the approach, just to clarify my understanding further:\r\n\r\nToday even if we are not merging two session windows, a single session window's update is treated as a delete followed by an update. I think is what https://issues.apache.org/jira/browse/KAFKA-8318 is reporting about..\r\n\r\nNow the logic would become that we use the max(ts, window_end_time) for updates, hence:\r\n\r\n1) with an update whose ts is smaller than the current end-window AND larger than the current start-window, the window_start/window_end_time would not change in the update record as well as in the changelog. In this case, we can consider optimizing it by not doing the delete followed by an update (i.e. KAFKA-8318). \r\n\r\n** but practically, with rare out-of-ordering data this would probably give very small perf boost, right?\r\n\r\n2) with an update whose ts is larger than current window end time, OR smaller than the window start time, we would update it as an delete of the original record (hence the tombstone ts == the old end-time) and then followed by a put of the new record with the new start / end-time == this record's ts.\r\n\r\n3) merging two windows is actually equal to updating the smaller window with a larger end time and updating the larger window with a smaller start time (of course, with a single record).\r\n\r\nIs my understanding correct?",
+        "createdAt" : "2019-05-11T19:04:55Z",
+        "updatedAt" : "2019-05-12T13:26:58Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ff7e01e-53a8-47e2-9e8b-03368ea1c524",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Hey @guozhangwang , just getting back to this thread...\r\n\r\nFor 1, yes, I think this is the situation, and I agree with your conclusion (under the assumption that out-of-order data is actually rare)\r\n\r\nFor 2, almost... for \"followed by a put of the new record with the new start / end-time == this record's ts\", do you mean the new end-time of the window? That's what we will use as the update timestamp. Note, the new end-time of the window might be the same as the old one, which brings us back to KAFKA-8318.\r\n\r\nFor 3, I'm afraid I don't follow. Looking at the sequence of updates, it's equivalent to deleting both the original windows and then adding a new one that spans both (and is semantically the merge result). Is this what you meant?",
+        "createdAt" : "2019-05-13T21:54:20Z",
+        "updatedAt" : "2019-05-13T21:54:20Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df3b06dc-bec1-478e-87c4-6b72af00a592",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Sound correct. Only (3 - merging two window) should be two deletes (of the old windows) and one insert for the new merged window with `[first-window-start-ts,second-window-end-ts]`.\r\n\r\n> ** but practically, with rare out-of-ordering data this would probably give very small perf boost, right?\r\n\r\nIt's not about performance, but just annoying to see unnecessary tombstones IMHO.\r\n\r\n",
+        "createdAt" : "2019-05-13T21:58:40Z",
+        "updatedAt" : "2019-05-13T21:58:40Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "99bdd7b6-4ad0-4073-a81a-ddd598c156f5",
+        "parentId" : "cba25cde-f38b-4bf3-bc19-a74c3e19fe30",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Yeah for 3) I mean the same as you guys, i.e. we are updating two windows by deleting the old records, but with only a new record. So logically it was like \"new window replace old window1\" and also \"new window replace old window2\". \r\n\r\nFor 2), the end/start-time of the window will only be the same as the old one if the update record's ts < end-time and ts > start-time. I think we are on the same page @vvcephei ",
+        "createdAt" : "2019-05-15T06:38:00Z",
+        "updatedAt" : "2019-05-15T06:38:01Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "43873294c59da42142246aa9c261e0f903f0f3d4",
+    "line" : 75,
+    "diffHunk" : "@@ -1,1 +500,504 @@                asList(\n                    new KeyValueTimestamp<>(\"[k1@0/0]\", 1L, 0L),\n                    new KeyValueTimestamp<>(\"[k1@0/0]\", null, 0L),\n                    new KeyValueTimestamp<>(\"[k1@0/5]\", 2L, 5L),\n                    new KeyValueTimestamp<>(\"[k1@0/5]\", null, 5L),"
+  },
+  {
+    "id" : "4793ebc3-48fd-4d33-a888-736503e4115c",
+    "prId" : 6654,
+    "prUrl" : "https://github.com/apache/kafka/pull/6654#pullrequestreview-232343745",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "184e5166-2912-4a43-86b6-a2d2fde44b53",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Updated this to exercise the bug. Also, changed the scenario below to verify the behavior bounds more tightly.",
+        "createdAt" : "2019-04-30T18:59:33Z",
+        "updatedAt" : "2019-04-30T19:51:42Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17f270c82b53e5edbf89e45279665b6b97997439",
+    "line" : 51,
+    "diffHunk" : "@@ -1,1 +463,467 @@            .stream(\"input\", Consumed.with(STRING_SERDE, STRING_SERDE))\n            .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))\n            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(0L)))\n            .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as(\"counts\").withCachingDisabled());\n        valueCounts"
+  },
+  {
+    "id" : "bd7ae8cd-07a2-42af-83e5-289d8f34d5de",
+    "prId" : 6654,
+    "prUrl" : "https://github.com/apache/kafka/pull/6654#pullrequestreview-233505917",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6a38a165-b71e-4132-a86b-d368e54dfb38",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Why do we get this tombstone? Might be something we can improve in the session operator implementation?",
+        "createdAt" : "2019-05-01T21:58:45Z",
+        "updatedAt" : "2019-05-01T22:00:27Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73b02d68-92d1-4f8a-a8b0-9229f62b1f8f",
+        "parentId" : "6a38a165-b71e-4132-a86b-d368e54dfb38",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Yeah, I felt the same. It occurs just because of the way the session merging implementation is written, but it's definitely pointless. I'll make a ticket to fix it.",
+        "createdAt" : "2019-05-02T21:48:49Z",
+        "updatedAt" : "2019-05-02T21:48:50Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bbca92b8-b1e6-4ba7-8693-7bb262217954",
+        "parentId" : "6a38a165-b71e-4132-a86b-d368e54dfb38",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Created https://issues.apache.org/jira/browse/KAFKA-8318",
+        "createdAt" : "2019-05-03T14:39:32Z",
+        "updatedAt" : "2019-05-03T14:39:33Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17f270c82b53e5edbf89e45279665b6b97997439",
+    "line" : 80,
+    "diffHunk" : "@@ -1,1 +495,499 @@                    new KeyValueTimestamp<>(\"[k1@0/0]\", null, 5L),\n                    new KeyValueTimestamp<>(\"[k1@0/5]\", 2L, 5L),\n                    new KeyValueTimestamp<>(\"[k1@0/5]\", null, 1L),\n                    new KeyValueTimestamp<>(\"[k1@0/5]\", 3L, 1L),\n                    new KeyValueTimestamp<>(\"[k2@6/6]\", 1L, 6L),"
   }
 ]

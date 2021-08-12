@@ -229,5 +229,159 @@
     "commit" : "9e9e027171422c2f5af6d9602429702a58939036",
     "line" : 31,
     "diffHunk" : "@@ -1,1 +260,264 @@            if (!transactionManager.isCompleting()) {\n                log.info(\"Aborting incomplete transaction due to shutdown\");\n                transactionManager.beginAbort();\n            }\n            try {"
+  },
+  {
+    "id" : "8dd8cbda-dfc2-43e1-87b0-b46f8c7ddff7",
+    "prId" : 6613,
+    "prUrl" : "https://github.com/apache/kafka/pull/6613#pullrequestreview-232477693",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "176c3f77-5d2d-4cae-bd9f-0d401c5d3ad9",
+        "parentId" : null,
+        "authorId" : "0e2392fc-5c22-4c17-aa96-3025239a3098",
+        "body" : "It seems to me that this is the main fix. Do we really want to redefine 'now' in this method as you do on L455? It is used in multiple places in `run` and I wonder if there will be side effects of using a different value here. ",
+        "createdAt" : "2019-04-22T18:20:56Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "0e2392fc-5c22-4c17-aa96-3025239a3098",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "51e34992-1169-4b35-adc5-ff9cf36ec7ee",
+        "parentId" : "176c3f77-5d2d-4cae-bd9f-0d401c5d3ad9",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm.. We definitely have to update the time after the blocking operations above, but it's a fair point that the old `now` continues to be used in `run` afterwards. We actually have the same problem in `maybeWaitForProducerId`, which is also a blocking operation. I don't see a way around it except to change the logic in `run` to treat `now` as more of a `startTimeMs`. ",
+        "createdAt" : "2019-04-22T18:46:24Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "17b1e606-2e5b-4ff7-9115-d7b4452d9a4c",
+        "parentId" : "176c3f77-5d2d-4cae-bd9f-0d401c5d3ad9",
+        "authorId" : "0e2392fc-5c22-4c17-aa96-3025239a3098",
+        "body" : "You're right that accounting for the blocking operations is key. \r\n\r\nInitially, I thought the main issue with recomputing the `currentTime` in every down stream call is that it will likely affect the validity of a bunch of the test cases in `SenderTest`. But I looked at the cases they should be OK with such a change. \r\n\r\nI think standardizing on treating `now` as more of a `startTimeMs` makes sense.",
+        "createdAt" : "2019-04-22T20:27:35Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "0e2392fc-5c22-4c17-aa96-3025239a3098",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc2a48ab-9a4f-481c-8fea-e6f9509b2cd0",
+        "parentId" : "176c3f77-5d2d-4cae-bd9f-0d401c5d3ad9",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Thanks for reviewing. I ended up changing the signature so that it removes the timing assumption. Literally every call to this method was `run(time.milliseconds())`, so I got rid of the argument and renamed to `runOnce`.",
+        "createdAt" : "2019-04-22T22:51:26Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "82fe1d98-d56b-46cd-b571-9dc48cfd5aaa",
+        "parentId" : "176c3f77-5d2d-4cae-bd9f-0d401c5d3ad9",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I like the refactoring too: we had similar pattern of passing `now` in Streamthread loop but later I refactored it to `advanceNowAndComputeLatency` whenever a blocking call is made for the same reason.",
+        "createdAt" : "2019-05-01T02:10:36Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bfb67287553fb24daf3e7e252379a05d0ef08860",
+    "line" : 97,
+    "diffHunk" : "@@ -1,1 +458,462 @@                        targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);\n                    log.debug(\"Sending transactional request {} to node {}\", requestBuilder, targetNode);\n                    client.send(clientRequest, currentTimeMs);\n                    transactionManager.setInFlightCorrelationId(clientRequest.correlationId());\n                    return true;"
+  },
+  {
+    "id" : "032bb1c0-a97c-4892-a414-d4122174ec03",
+    "prId" : 6613,
+    "prUrl" : "https://github.com/apache/kafka/pull/6613#pullrequestreview-229311111",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d621f73f-6ac2-4dfd-84d3-f94dbc3d2eca",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Should this also be `now` instead of `currentTimeMs` ?",
+        "createdAt" : "2019-04-23T00:43:43Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a21493e3-32e6-4300-a13a-3ce3c0c511af",
+        "parentId" : "d621f73f-6ac2-4dfd-84d3-f94dbc3d2eca",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I actually favor `currentTimeMs`, but perhaps it is unnecessarily pedantic.",
+        "createdAt" : "2019-04-23T00:47:50Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b2411a6b-0c0b-41b3-98e5-07a8cdf6bac7",
+        "parentId" : "d621f73f-6ac2-4dfd-84d3-f94dbc3d2eca",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I personally don't care too much. Was just wondering about keeping the code consistent. If `now` is the current way, we might want to keep it this way -- or rename it everywhere (but maybe in a separate PR). Just my 2 cents. Feel free to ignore.",
+        "createdAt" : "2019-04-23T01:03:04Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bfb67287553fb24daf3e7e252379a05d0ef08860",
+    "line" : 71,
+    "diffHunk" : "@@ -1,1 +331,335 @@        }\n\n        long currentTimeMs = time.milliseconds();\n        long pollTimeout = sendProducerData(currentTimeMs);\n        client.poll(pollTimeout, currentTimeMs);"
+  },
+  {
+    "id" : "6786b035-92f8-4524-91ed-3efc71cc49f9",
+    "prId" : 6613,
+    "prUrl" : "https://github.com/apache/kafka/pull/6613#pullrequestreview-229308364",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "51de4927-a569-47c7-9593-1bfee7f74e43",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Should this also be `now` instead of `currentTimeMs` ?\r\n\r\n",
+        "createdAt" : "2019-04-23T00:46:33Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bfb67287553fb24daf3e7e252379a05d0ef08860",
+    "line" : 90,
+    "diffHunk" : "@@ -1,1 +454,458 @@                    if (nextRequestHandler.isRetry())\n                        time.sleep(nextRequestHandler.retryBackoffMs());\n                    long currentTimeMs = time.milliseconds();\n                    ClientRequest clientRequest = client.newClientRequest(\n                        targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);"
+  },
+  {
+    "id" : "b13fb653-afa3-4ab6-827b-bda0a630120a",
+    "prId" : 6613,
+    "prUrl" : "https://github.com/apache/kafka/pull/6613#pullrequestreview-229898809",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e6ed8486-9dd3-4cfb-83e7-6945db46eb69",
+        "parentId" : null,
+        "authorId" : "0e2392fc-5c22-4c17-aa96-3025239a3098",
+        "body" : "(This is a rewrite of the comment I thought I had left with my previous review)\r\n\r\nWith the changes in this patch, the path for the regular produce diverges from the transactional path: the former takes in a value of `now` from `runOnce` and uses it all the way through while the latter recomputes it. This is fine because the regular producer path has no blocking calls. It would be good add a comment explaining this at the top level.",
+        "createdAt" : "2019-04-24T04:55:26Z",
+        "updatedAt" : "2019-05-01T20:59:05Z",
+        "lastEditedBy" : "0e2392fc-5c22-4c17-aa96-3025239a3098",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bfb67287553fb24daf3e7e252379a05d0ef08860",
+    "line" : 76,
+    "diffHunk" : "@@ -1,1 +336,340 @@    }\n\n    private long sendProducerData(long now) {\n        Cluster cluster = metadata.fetch();\n        // get the list of partitions with data ready to send"
   }
 ]

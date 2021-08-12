@@ -53,5 +53,71 @@
     "commit" : "ddf4d0c71c9c70fa0a9c317c49768107b8cf4d9f",
     "line" : 15,
     "diffHunk" : "@@ -1,1 +51,55 @@        if (!(store instanceof TimestampedBytesStore) && store.persistent()) {\n            store = new KeyValueToTimestampedKeyValueByteStoreAdapter(store);\n        }\n        return new MeteredTimestampedKeyValueStore<>(\n            maybeWrapCaching(maybeWrapLogging(store)),"
+  },
+  {
+    "id" : "12097360-9041-4b58-a84f-831946a72e0c",
+    "prId" : 6667,
+    "prUrl" : "https://github.com/apache/kafka/pull/6667#pullrequestreview-236088309",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "255e160f-1391-4b8b-944d-e89f80583550",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "This fixes a bug that was exposed after rebasing. We need to treat in-memory stores always as `TimestampedByteStores` to guarantee correct restore. (Similar below for window stores.)",
+        "createdAt" : "2019-05-08T14:57:22Z",
+        "updatedAt" : "2019-05-11T12:26:17Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8e73ab5-b825-4258-a787-ae5324accd11",
+        "parentId" : "255e160f-1391-4b8b-944d-e89f80583550",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Added a new test to #6179 that also exposed this bug (cf. `StoreUpgradeIntegrationTest`)",
+        "createdAt" : "2019-05-08T23:17:45Z",
+        "updatedAt" : "2019-05-11T12:26:17Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9bb73886-685c-4e07-892d-7b16af94ad88",
+        "parentId" : "255e160f-1391-4b8b-944d-e89f80583550",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I agree with the fix, but it raises another question for me.\r\n\r\nI admit I could be either missing something or forgetting some details already spelled out.  Why don't we convert the values for in-memory stores to also have timestamps in the value?  I'm basing on the fact that the `InMemoryTimestampedKeyValueStoreMarker` does simple puts/gets.\r\n",
+        "createdAt" : "2019-05-09T18:30:51Z",
+        "updatedAt" : "2019-05-11T12:26:17Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "056bcfb5-c268-449f-9a96-490e2f27f39a",
+        "parentId" : "255e160f-1391-4b8b-944d-e89f80583550",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "The in-memory store will have no content on startup, and the upper layer will put/get `byte[]` -- the store does not care what is in it. The upper layer will already serialize value+timestamp and put those, and expects value+timestamp `byte[]` back -- hence, the in-memory store does not need to do any translation.\r\n\r\nFor persistent store, the store does have content on local disk, namely plain values. Because this store cannot be upgraded, we put the adapter in between, to remove the timestamp part on put() and add dummy timestamp on get(), to meet the contract to the upper layer that expects `byte[]` to be value+timestamp.\r\n\r\nIf we restore a persistent store, the just copy plain key/value from the changelog topic and put it into the store. Everything still works as expected.\r\n\r\nIf we restore an in-memory store, we need to add the timestamp to the value, and this is triggered by the `TimestampeByteStore` interface. Otherwise, the in-memory store would contain plain values, and violate the contract to the upper layer, because the assumption is, that everything store in it, has value+timestamp format.\r\n\r\nIe, for persistent store, we play the backward compatibility game using surrogate timestamps. However, for in-memory store, we don't need to do this, because there is no local on-disk content and we can switch to timestamped-store behavior without any drawbacks and get full feature set.\r\n\r\nDoes this make sense?",
+        "createdAt" : "2019-05-10T09:14:40Z",
+        "updatedAt" : "2019-05-11T12:26:17Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0b8fd65-2f00-43e7-b0a1-f872f04fbfdf",
+        "parentId" : "255e160f-1391-4b8b-944d-e89f80583550",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "yep thanks for clarifying",
+        "createdAt" : "2019-05-10T12:56:38Z",
+        "updatedAt" : "2019-05-11T12:26:17Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "21e5dee3c8c50f5d8d88ce0f1b78b351e30768ba",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +59,63 @@            } else {\n                store = new InMemoryTimestampedKeyValueStoreMarker(store);\n            }\n        }\n        return new MeteredTimestampedKeyValueStore<>("
   }
 ]
