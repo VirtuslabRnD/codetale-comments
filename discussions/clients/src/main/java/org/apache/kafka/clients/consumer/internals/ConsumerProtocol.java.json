@@ -1,0 +1,277 @@
+[
+  {
+    "id" : "b626a3ea-e0ff-43d1-8fab-8a7a6292a90e",
+    "prId" : 6528,
+    "prUrl" : "https://github.com/apache/kafka/pull/6528#pullrequestreview-223485483",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eee5df2d-27a2-4d69-9dad-28733be7ac53",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Is throwing an exception on unknown error appropriate here? I can imagine future versions wanting to make use of this field by adding new error codes, and this will break the forwards compatibility in place elsewhere (ie that higher versions can be parsed as V1)",
+        "createdAt" : "2019-04-02T01:27:12Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d64985d7-dd35-4f05-a797-4bb9f9d771d6",
+        "parentId" : "eee5df2d-27a2-4d69-9dad-28733be7ac53",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Hmm interesting point. If we want to maintain forward compatibility we need to consider what's an appropriate default behavior for unknown error code.\r\n\r\nOn the other hand, as mentioned in https://cwiki.apache.org/confluence/display/KAFKA/KIP-429%3A+Kafka+Consumer+Incremental+Rebalance+Protocol#KIP-429:KafkaConsumerIncrementalRebalanceProtocol-LookingintotheFuture we'd likely change the protocol as future works so that broker will try to pick the leader with the highest version, and hence as long as the leader is \"backward compatible\" meaning it knows all other member's recognizable protocol and makes sure to now give them unknown information, this may not be a bad situation either. Thoughts?",
+        "createdAt" : "2019-04-04T18:21:01Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7698ef26-9391-4d20-8515-181785adf4b0",
+        "parentId" : "eee5df2d-27a2-4d69-9dad-28733be7ac53",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "It seems a bit messy to require the leader to check each member's protocol against a list of acceptable error codes for that version. I think just logging on some level rather than throwing an exception provides a more flexible path forward without relying on future work, but I do see your point.",
+        "createdAt" : "2019-04-04T22:08:43Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "de0e8412-b9c8-43d1-9d61-d768155cb18d",
+        "parentId" : "eee5df2d-27a2-4d69-9dad-28733be7ac53",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "If the newly added error code in the future requires consumer clients to take some action, then just logging an error and proceed by default may not be the best solution.\r\n\r\nOn the other hand, I can see that requiring leader to always keep track of other member's versions is indeed a bit intrusive (e.g. at the moment this version information is only used for serde at the `ConsumerProtocol`, and when ti was given to the Subscription / Assignment it was omitted already).\r\n\r\nRegarding the code messiness, yeah that's also another thing to keep in mind, today we do not have a strict policy to \"deprecate\" older versions across all modules i.e. we let all newer versions to be backward compatible to all older versions, I think moving forward we can gradually remove the logic for handling older versions?\r\n\r\nGiven that, so how about this: I can augment `Subscription / Assignment` to always have the version information in this PR, and hence moving forward they will always be available to leader's assignor beyond version 2.3, and hence making such backward compatible logic would not be too hard.",
+        "createdAt" : "2019-04-05T21:09:14Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "829fbd3c-056f-4e2d-a916-bf343c35063e",
+        "parentId" : "eee5df2d-27a2-4d69-9dad-28733be7ac53",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "SGTM",
+        "createdAt" : "2019-04-05T21:24:58Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e54d8e197bd593369b51f2f2e07a7f120c8cf606",
+    "line" : 104,
+    "diffHunk" : "@@ -1,1 +126,130 @@                    return NEED_REJOIN;\n                default:\n                    throw new IllegalArgumentException(\"Unknown error code: \" + code);\n            }\n        }"
+  },
+  {
+    "id" : "3f703bc4-3d2f-4b24-a7ba-3e7a62a96331",
+    "prId" : 6528,
+    "prUrl" : "https://github.com/apache/kafka/pull/6528#pullrequestreview-235366894",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a2c53485-19f0-41c6-8c27-a9851789125d",
+        "parentId" : null,
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Should we consider replacing this file with automated protocol first?",
+        "createdAt" : "2019-04-25T00:56:45Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10337036-56d6-45ad-8d13-9e85f5c521d9",
+        "parentId" : "a2c53485-19f0-41c6-8c27-a9851789125d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "ConsumerProtocol is not part of the network protocol and hence it is not straight-forward to refactor. I'd prefer to defer that to a future work.",
+        "createdAt" : "2019-05-09T01:41:05Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e54d8e197bd593369b51f2f2e07a7f120c8cf606",
+    "line" : 1,
+    "diffHunk" : "@@ -1,1 +28,32 @@import java.nio.ByteBuffer;\nimport java.util.ArrayList;\nimport java.util.List;\nimport java.util.Map;\n"
+  },
+  {
+    "id" : "c3f57693-d05d-4036-891b-d127d594d9b4",
+    "prId" : 6528,
+    "prUrl" : "https://github.com/apache/kafka/pull/6528#pullrequestreview-240292333",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0ee128d7-ec55-4a13-bb6f-bb8e4d2f0690",
+        "parentId" : null,
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "nit: empty lines seem not necessary",
+        "createdAt" : "2019-04-25T00:57:46Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1ebcceb-6767-437a-9b66-5b3c343694bd",
+        "parentId" : "0ee128d7-ec55-4a13-bb6f-bb8e4d2f0690",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Personally I'd prefer having the extra empty line to separate the case branches; if you feel strong about it I can change.",
+        "createdAt" : "2019-05-09T01:42:28Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ff8f411-ecb9-47fb-ab03-6fafe0ba286c",
+        "parentId" : "0ee128d7-ec55-4a13-bb6f-bb8e4d2f0690",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Ok on my side",
+        "createdAt" : "2019-05-21T20:49:38Z",
+        "updatedAt" : "2019-06-05T01:03:34Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e54d8e197bd593369b51f2f2e07a7f120c8cf606",
+    "line" : 150,
+    "diffHunk" : "@@ -1,1 +168,172 @@            case CONSUMER_PROTOCOL_V0:\n                return serializeSubscriptionV0(subscription);\n\n            case CONSUMER_PROTOCOL_V1:\n                return serializeSubscriptionV1(subscription);"
+  },
+  {
+    "id" : "b09162a6-b776-47d6-98de-d69ecf631dee",
+    "prId" : 6528,
+    "prUrl" : "https://github.com/apache/kafka/pull/6528#pullrequestreview-250155436",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a121886a-360b-4b33-bddf-fc9548d8eddc",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "More out of curiosity, but I'm assuming we'll always try to serialize to the latest version, but why not throw an exception? Seems it would be a bug if we hit this point.  Same applies to deserializing below.",
+        "createdAt" : "2019-06-14T00:56:56Z",
+        "updatedAt" : "2019-06-14T00:59:08Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f56720c0-feb5-4a98-86d2-285092297a55",
+        "parentId" : "a121886a-360b-4b33-bddf-fc9548d8eddc",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "We want to leave the door open for \"future proof\": e.g. in the current code https://github.com/apache/kafka/pull/6528/files/e54d8e197bd593369b51f2f2e07a7f120c8cf606#diff-bad29ccb1aba700e1badeff62f1a86b7L147\r\n\r\nWe just check if the version is not negative, and if not we always assume it can be deserialized as v0; this is indeed true still: say old byte-code gets a v1 subscription object, it can still successfully deserialize as v0.",
+        "createdAt" : "2019-06-14T22:50:01Z",
+        "updatedAt" : "2019-06-14T22:50:01Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e54d8e197bd593369b51f2f2e07a7f120c8cf606",
+    "line" : 155,
+    "diffHunk" : "@@ -1,1 +173,177 @@\n            default:\n                // for any versions higher than known, try to serialize it as V1\n                return serializeSubscriptionV1(subscription);\n        }"
+  },
+  {
+    "id" : "fe9a4914-1e35-4d62-a57f-37cbcb5d2569",
+    "prId" : 6528,
+    "prUrl" : "https://github.com/apache/kafka/pull/6528#pullrequestreview-250156953",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cd13e21d-8cb3-4b42-afca-c74cc5598eae",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Got a little lazy, eh? 😉 \r\n\r\nI think it would be a good idea to see if we can use generated classes as Boyang suggested. Then that would also serve as documentation.",
+        "createdAt" : "2019-06-14T22:58:14Z",
+        "updatedAt" : "2019-06-14T23:16:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e54d8e197bd593369b51f2f2e07a7f120c8cf606",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +55,59 @@ * </pre>\n *\n * Older versioned formats can be inferred by reading the code below.\n *\n * The current implementation assumes that future versions will not break compatibility. When"
+  },
+  {
+    "id" : "50a10a0c-8b25-483f-aeba-cb22088335b8",
+    "prId" : 6528,
+    "prUrl" : "https://github.com/apache/kafka/pull/6528#pullrequestreview-250156953",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f512cee1-3271-4604-a9a1-a9083d7a15d0",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Would it make sense to give this a different name to avoid confusion with the usual `Errors` class? Maybe `AssignmentError` or something like that? Then usage is `ConsumerProtocol.AssignmentError` which seems explicit.",
+        "createdAt" : "2019-06-14T23:04:03Z",
+        "updatedAt" : "2019-06-14T23:16:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e54d8e197bd593369b51f2f2e07a7f120c8cf606",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +105,109 @@        ERROR_CODE);\n\n    public enum Errors {\n        NONE(0),\n        NEED_REJOIN(1);"
+  },
+  {
+    "id" : "3bbfe053-3338-42fd-bd8f-cc9e63285bc2",
+    "prId" : 6528,
+    "prUrl" : "https://github.com/apache/kafka/pull/6528#pullrequestreview-251372905",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8ea0875d-7e62-4dd4-bf1a-7dad97a523ce",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "nit: no need for `.name`",
+        "createdAt" : "2019-06-14T23:07:16Z",
+        "updatedAt" : "2019-06-14T23:16:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b1414a0f-e0a7-4d35-81d6-0d99039441cb",
+        "parentId" : "8ea0875d-7e62-4dd4-bf1a-7dad97a523ce",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Ah right.",
+        "createdAt" : "2019-06-18T21:29:44Z",
+        "updatedAt" : "2019-06-18T21:29:44Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e54d8e197bd593369b51f2f2e07a7f120c8cf606",
+    "line" : 253,
+    "diffHunk" : "@@ -1,1 +259,263 @@        }\n        struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());\n        struct.set(ERROR_CODE.name, assignment.error().code);\n\n        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + ASSIGNMENT_V1.sizeOf(struct));"
+  },
+  {
+    "id" : "47758b18-76d7-42a7-bcd2-d9d64ed82263",
+    "prId" : 6528,
+    "prUrl" : "https://github.com/apache/kafka/pull/6528#pullrequestreview-250156953",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3bc2d0de-71b0-4e35-8f52-bfe58c108f1a",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I think it's slightly dubious to use the same error code field from the common protocol. It just saves us one field definition and the doc string doesn't make as much sense. Also, we'll probably be getting rid of `CommonFields` eventually.",
+        "createdAt" : "2019-06-14T23:07:42Z",
+        "updatedAt" : "2019-06-14T23:16:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e54d8e197bd593369b51f2f2e07a7f120c8cf606",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +31,35 @@import java.util.Map;\n\nimport static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;\n\n/**"
+  }
+]

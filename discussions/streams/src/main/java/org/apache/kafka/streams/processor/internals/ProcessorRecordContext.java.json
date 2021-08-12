@@ -163,5 +163,214 @@
     "commit" : "f587e6cc1433697abc3b294efc3b1970338c90d5",
     "line" : 3,
     "diffHunk" : "@@ -1,1 +90,94 @@        if (headers != null) {\n            for (final Header header : headers) {\n                size += header.key().toCharArray().length;\n                final byte[] value = header.value();\n                if (value != null) {"
+  },
+  {
+    "id" : "bba937d0-6d2d-46ff-8461-41580c72bab0",
+    "prId" : 6536,
+    "prUrl" : "https://github.com/apache/kafka/pull/6536#pullrequestreview-228859727",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2ab02cc5-4ebf-4bd6-a13d-2a3c3526683d",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "How could `topic` be `null`?",
+        "createdAt" : "2019-04-12T17:25:37Z",
+        "updatedAt" : "2019-04-19T21:52:28Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43ce0375-7d73-42b4-83a7-494879113a48",
+        "parentId" : "2ab02cc5-4ebf-4bd6-a13d-2a3c3526683d",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I could see making an assumption that a specific ConsumerRecord is always has a topic (because that's where they come from), but this is the ProcessorRecordContext. The class has no null checks on the topic field, so rather than tracing all the usages to find out whether it can ever be null, in main code or test code, it's simpler and bulletproof just to check for it.",
+        "createdAt" : "2019-04-12T22:07:25Z",
+        "updatedAt" : "2019-04-19T21:52:28Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88549ab2-d342-4d10-8310-656eff71ad4f",
+        "parentId" : "2ab02cc5-4ebf-4bd6-a13d-2a3c3526683d",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "`ProcessorRecordContext` would only set the topic to `null` for calls into `init()`, `close()`, and punctuation callbacks. Thus, it should never be `null` here IMHO and I believe it would indicate a bug, if it's `null` here. Hence, this check might masked a bug and we should rather fail with a NPE for this case. \\cc @guozhangwang to confirm.",
+        "createdAt" : "2019-04-14T03:03:23Z",
+        "updatedAt" : "2019-04-19T21:52:28Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9ba34674-8263-4734-800b-fc1cce320171",
+        "parentId" : "2ab02cc5-4ebf-4bd6-a13d-2a3c3526683d",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Ok, so I have a clarification: this method is used to estimate the size of the record context in memory, for a variety of usages not restricted to processing. Including some of the cases where you point out it may be null, so we do need the null-check in this method.\r\n\r\nIn the de//serialize methods below, I've removed the null-check, following the spirit of your feedback.",
+        "createdAt" : "2019-04-17T15:21:17Z",
+        "updatedAt" : "2019-04-19T21:52:28Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac9e3d5e-a9b7-4a0a-a1ad-974987aa850c",
+        "parentId" : "2ab02cc5-4ebf-4bd6-a13d-2a3c3526683d",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I understand your argument. However, I am not 100% sure if this does not introduce a weird asymmetry? Also, we only estimate the size _if_ we serialize the context. We don't estimate in-memory/object space usage, do we?\r\n",
+        "createdAt" : "2019-04-19T01:44:20Z",
+        "updatedAt" : "2019-04-19T21:52:28Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71cf770e-79a0-4bf1-aab1-6a7772a230ca",
+        "parentId" : "2ab02cc5-4ebf-4bd6-a13d-2a3c3526683d",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Yes, we do. This is also used for computing the size of the record cache to determine cached state store flushing, etc. (I was a little surprised when a bunch of \"unrelated\" tests failed as a result of the change I tried here).\r\n\r\nI shared your concern about the asymmetry, but I think it's actually ok, even if you only consider the suppression buffer. The `sizeBytes` method is an estimation of the resident size of this object in memory, which is only loosely related to the size of the serialized form of the data in this object.",
+        "createdAt" : "2019-04-19T21:03:00Z",
+        "updatedAt" : "2019-04-19T21:52:28Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ebef044-b50a-4015-8875-066c9495e9fa",
+        "parentId" : "2ab02cc5-4ebf-4bd6-a13d-2a3c3526683d",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Ack. Thanks for being patient with me :)",
+        "createdAt" : "2019-04-20T01:08:02Z",
+        "updatedAt" : "2019-04-20T01:08:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f5bd0999c3376588b891016efbec78274a3714ec",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +89,93 @@        size += Long.BYTES; // value.context.timestamp\n        size += Long.BYTES; // value.context.offset\n        if (topic != null) {\n            size += topic.toCharArray().length;\n        }"
+  },
+  {
+    "id" : "603c4117-e8ab-46d5-b8d1-920eeb9d4149",
+    "prId" : 6536,
+    "prUrl" : "https://github.com/apache/kafka/pull/6536#pullrequestreview-228838893",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e364b7d2-12d0-4d6f-8c75-57a29e95e5cc",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Why this block?",
+        "createdAt" : "2019-04-19T01:45:13Z",
+        "updatedAt" : "2019-04-19T21:52:28Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a942a916-db88-488e-9326-419b4faf9f7b",
+        "parentId" : "e364b7d2-12d0-4d6f-8c75-57a29e95e5cc",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "It just prevents polluting the method scope with the temp variable `topicBytes`",
+        "createdAt" : "2019-04-19T22:00:18Z",
+        "updatedAt" : "2019-04-19T22:00:18Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f5bd0999c3376588b891016efbec78274a3714ec",
+    "line" : 108,
+    "diffHunk" : "@@ -1,1 +175,179 @@        final int topicSize = buffer.getInt();\n        final String topic;\n        {\n            // not handling the null topic condition, because we believe the topic will never be null when we serialize\n            final byte[] topicBytes = new byte[topicSize];"
+  },
+  {
+    "id" : "fe50007b-1ef7-480c-9a31-9a4fab54f763",
+    "prId" : 6602,
+    "prUrl" : "https://github.com/apache/kafka/pull/6602#pullrequestreview-230282664",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c035c9f1-baad-45c2-ab6f-88ccc197d49e",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "some on-the-side cleanup of `ProcessorRecordContext` I encountered while writing my test.",
+        "createdAt" : "2019-04-24T18:30:01Z",
+        "updatedAt" : "2019-04-26T13:35:41Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7414ed063c920aa5c2f4bb29c81664fecb851b9b",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +34,38 @@    private final String topic;\n    private final int partition;\n    private final Headers headers;\n\n    public ProcessorRecordContext(final long timestamp,"
+  },
+  {
+    "id" : "cc7cdd5f-c687-4bdf-b5b0-cca6bb217ecd",
+    "prId" : 6602,
+    "prUrl" : "https://github.com/apache/kafka/pull/6602#pullrequestreview-231344688",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "199b2de2-599f-46be-96df-69646ff95f11",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "No need to deprecate internal method. If we want to remove it, we should just do it.",
+        "createdAt" : "2019-04-26T05:15:35Z",
+        "updatedAt" : "2019-04-26T13:35:41Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bdebb394-1085-45a3-924b-966362224a02",
+        "parentId" : "199b2de2-599f-46be-96df-69646ff95f11",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "We can't remove `hashCode`, since it's defined by `Object`. Marking it as deprecated isn't necessary, since any attempt to use it results in an exception, but it's just extra documentation that `hashCode` is not to be used on `ProcessorRecordContext`.\r\n\r\nI implemented it because implementing `equals` without `hashCode` is a bug, and a very subtle one. But I wanted `equals` in support of the test validation. And we also can't provide a correct implementation of `hashCode`, since there is mutable state in this object. This all basically amounts to a flaw in Java, that you can't define equality without implying that an object is stably hashable. Ideally, we could plug in a different notion of equality, but all the testing frameworks have built-in dependency on `equals`. Throwing the exception and adding a deprecation is essentially finding a middle ground, we wind up with safe code that can also be used in tests.",
+        "createdAt" : "2019-04-26T13:09:45Z",
+        "updatedAt" : "2019-04-26T13:35:41Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3e15e48a-a7ab-4b5b-8ca9-4fe2e1317c76",
+        "parentId" : "199b2de2-599f-46be-96df-69646ff95f11",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "What I meant by \"remove\" was, to remove the overwrite :)\r\n\r\nThanks to clarify why you want to overwrite and throw. But this does not mean that the method is deprecated... Using the annotation implies that we want to remove this overwrite in the future was is miss leading. I would prefer to remove the annotation. \\cc @guozhangwang @bbejeck \r\n\r\n",
+        "createdAt" : "2019-04-26T16:55:22Z",
+        "updatedAt" : "2019-04-26T16:55:22Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ae92e40-0e97-481b-98ea-3aa14dca823b",
+        "parentId" : "199b2de2-599f-46be-96df-69646ff95f11",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I think that throwing the exception in its override implementation is sufficient for future bug-proof, as regarding to documentation I feel neutral either way.",
+        "createdAt" : "2019-04-26T17:06:02Z",
+        "updatedAt" : "2019-04-26T17:06:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b7b65d6a-6f55-47a1-95d4-b4c04c0f9f5a",
+        "parentId" : "199b2de2-599f-46be-96df-69646ff95f11",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "We should still add JavaDocs and explain that we throw and why. But deprecation != documentation IMHO.",
+        "createdAt" : "2019-04-26T20:23:33Z",
+        "updatedAt" : "2019-04-26T20:23:34Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7414ed063c920aa5c2f4bb29c81664fecb851b9b",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +222,226 @@     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable.\n     */\n    @Deprecated\n    @Override\n    public int hashCode() {"
   }
 ]
