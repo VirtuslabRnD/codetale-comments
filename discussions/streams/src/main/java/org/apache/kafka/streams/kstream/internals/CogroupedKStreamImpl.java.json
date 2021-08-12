@@ -1,0 +1,189 @@
+[
+  {
+    "id" : "f2946212-6f5a-459e-a62a-50f2193dfc9d",
+    "prId" : 7538,
+    "prUrl" : "https://github.com/apache/kafka/pull/7538#pullrequestreview-302917490",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "100fa186-0087-498d-a0b9-2ac36d0d6059",
+        "parentId" : null,
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "it is necessary to  to do an unchecked cast for the input value type. This is because cogrouped can have any type value for the group streams it intakes",
+        "createdAt" : "2019-10-16T22:38:38Z",
+        "updatedAt" : "2019-12-01T00:43:00Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3553929c506967ca45dff88e7139f3a4cdae0b4d",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +50,54 @@    }\n\n    @SuppressWarnings(\"unchecked\")\n    @Override\n    public <VIn> CogroupedKStream<K, VOut> cogroup(final KGroupedStream<K, VIn> groupedStream,"
+  },
+  {
+    "id" : "8d675fda-cb5b-4dbb-8bfc-96994f8db2e7",
+    "prId" : 7538,
+    "prUrl" : "https://github.com/apache/kafka/pull/7538#pullrequestreview-323394971",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f03cb1d8-d7e9-464c-bea3-bc21f75e86f0",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Why do we not pass `Serdes` ? If we repartition, don't we need to have upstream Serdes to read from the repartition topic?",
+        "createdAt" : "2019-10-22T18:48:30Z",
+        "updatedAt" : "2019-12-01T00:43:00Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "79ba6e5a-b556-4a3a-8de0-f4a8f6dbac79",
+        "parentId" : "f03cb1d8-d7e9-464c-bea3-bc21f75e86f0",
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "Because it is not obvious from which stream to get the serde so either  override from the materialized object, or use the default from the config.\r\n\r\nAlso we do not pass the value Serdes because we cannot do so safely because each streams can have a different value type ",
+        "createdAt" : "2019-10-23T18:46:50Z",
+        "updatedAt" : "2019-12-01T00:43:00Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd2fb4df-5b0b-4f8b-9dc5-2c006b287abf",
+        "parentId" : "f03cb1d8-d7e9-464c-bea3-bc21f75e86f0",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Ah. I missed that we have only only `CogroupedKStreamImpl` object (my mental model was that we have one for each input stream).\r\n\r\nWhat's unclear to me atm (maybe I need to do more detailed review) is, how repartitioning works? For that case, when do we insert a \"source\" node that is reading from the repartition topic, and where does the source node get the `Serde` information from? We could also have multiple independent repartition steps for different input streams.",
+        "createdAt" : "2019-10-25T07:24:32Z",
+        "updatedAt" : "2019-12-01T00:43:00Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "59537724-2437-4340-864d-1c86651534fa",
+        "parentId" : "f03cb1d8-d7e9-464c-bea3-bc21f75e86f0",
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "we had a couple long conversations about this. We resolved that the Serdes would come from the Materialized when aggregated or the default for that type",
+        "createdAt" : "2019-11-26T19:55:26Z",
+        "updatedAt" : "2019-12-01T00:43:00Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2cdc1992-26a7-4015-81b4-0f192c385e3f",
+        "parentId" : "f03cb1d8-d7e9-464c-bea3-bc21f75e86f0",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I think there is some misunderstanding. I understand that we cannot pass in `Serdes` to the superclass, but we still need to track them. Assume, the following programs:\r\n```\r\nKStream<String, Integer> stream1 = builder.stream(...).map(...);\r\nKStream<String, Long> stream2 = builder.stream(...).map(...);\r\n\r\nKTable<String, Float> result = stream1.groupByKey(Grouped.with(...))\r\n    .cogroup(stream2.groupByKey(Grouped.with(...)))\r\n    .aggregate(...);\r\n```\r\n\r\nBecause we do a `map()` the serdes from `builder.stream()` cannot be forwarded and we also need to repartition each stream before we can compute the `aggregation()`. Hence, the use needs to pass in the Serdes for the new types (ie, result types of `map()` via `Grouped()` into each operation -- note, that both value types can be different. Because we apply repartitioning lazy, we would only insert it when we call `aggregate()`. Hence, the topology we need to generate later must be:\r\n```\r\nsource1 -> map1 -> sink1 -> repartitionTopic1 -> source3 -> aggProcessor1 --+\r\n                                                                            |\r\n                                                                            + --> mergeNode\r\n                                                                            |\r\nsource2 -> map2 -> sink2 -> repartitionTopic2 -> source4 -> aggProcessor2 --+\r\n```\r\n\r\nFor both repartition steps, we need to use different Serdes (as provided by each `Grouped` parameter) -- hence, the `GroupedKStream` must forward the corresponding Serdes to `CogroupedKStreamImpl` because this class will add all corresponding `StreamGraphNodes` (including the ones to repartition the data if necessary. Compare https://github.com/apache/kafka/blob/trunk/streams/src/main/java/org/apache/kafka/streams/kstream/internals/GroupedStreamAggregateBuilder.java#L84-L99\r\n\r\nNot sure atm what the best way is to implement this. Maybe just adding\r\n```\r\nfinal private Map<KGroupedStreamImpl<K, ?>, Serde> keySerde;\r\nfinal private Map<KGroupedStreamImpl<K, ?>, Serde> valueSerde;\r\n```\r\n\r\nto `CogroupedKStreamImpl` (ie, next to `groupPatterns`) might be sufficient. Maybe there is a more elegant way? Maybe we can introduce a small helper Pojo to wrap `Aggregator` + both `Serdes` and have only one `Map` instead (to avoid scattering the state we track into different data structures)\r\n\r\nThe Serdes from `Materialized` only apply to the _output_ value type that can be different to the input value types (in fact, input value types can be different to each other, too).",
+        "createdAt" : "2019-11-27T03:02:26Z",
+        "updatedAt" : "2019-12-01T00:43:00Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3553929c506967ca45dff88e7139f3a4cdae0b4d",
+    "line" : 47,
+    "diffHunk" : "@@ -1,1 +45,49 @@                         final StreamsGraphNode streamsGraphNode,\n                         final InternalStreamsBuilder builder) {\n        super(name, null, null, sourceNodes, streamsGraphNode, builder);\n        groupPatterns = new LinkedHashMap<>();\n        aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);"
+  },
+  {
+    "id" : "0ba5f8fd-749d-4383-9dea-80335c5bd13c",
+    "prId" : 7538,
+    "prUrl" : "https://github.com/apache/kafka/pull/7538#pullrequestreview-323245527",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "76ecf9c4-b175-4425-884d-b3bca409ec24",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "it seem that `aggregateBuilder` is only used in `doAggregate()` -- hence, why do we need it as a member variable? Why not just create an instance in `doAggregate()` ?",
+        "createdAt" : "2019-11-26T00:10:32Z",
+        "updatedAt" : "2019-12-01T00:43:00Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7c572095-a8bf-41d0-b6a5-04a2935c2fb4",
+        "parentId" : "76ecf9c4-b175-4425-884d-b3bca409ec24",
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "Because it will be used when adding the windowed PRs",
+        "createdAt" : "2019-11-26T19:53:23Z",
+        "updatedAt" : "2019-12-01T00:43:00Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3553929c506967ca45dff88e7139f3a4cdae0b4d",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +39,43 @@\n    final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns;\n    final private CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;\n\n    CogroupedKStreamImpl(final String name,"
+  },
+  {
+    "id" : "b6922e67-c424-4370-99b5-57687c795d4e",
+    "prId" : 7538,
+    "prUrl" : "https://github.com/apache/kafka/pull/7538#pullrequestreview-324915022",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9fca7cb8-966e-43b5-9b8d-954ebaaa5ba7",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "New default name for the merge-node",
+        "createdAt" : "2019-12-01T00:51:40Z",
+        "updatedAt" : "2019-12-01T00:51:41Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3553929c506967ca45dff88e7139f3a4cdae0b4d",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +36,40 @@\n    static final String AGGREGATE_NAME = \"COGROUPKSTREAM-AGGREGATE-\";\n    static final String MERGE_NAME = \"COGROUPKSTREAM-MERGE-\";\n\n    final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns;"
+  },
+  {
+    "id" : "5e4ad849-9bc0-498d-b507-1dda4333bd42",
+    "prId" : 7538,
+    "prUrl" : "https://github.com/apache/kafka/pull/7538#pullrequestreview-324915030",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5f62d11e-65c6-4edd-b636-63d0dfc967c4",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "remove unnecessary `this.`",
+        "createdAt" : "2019-12-01T00:51:51Z",
+        "updatedAt" : "2019-12-01T00:51:51Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3553929c506967ca45dff88e7139f3a4cdae0b4d",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +47,51 @@        super(name, null, null, sourceNodes, streamsGraphNode, builder);\n        groupPatterns = new LinkedHashMap<>();\n        aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);\n    }\n"
+  },
+  {
+    "id" : "a3b50986-9588-4efb-8fcd-e7b0120816c6",
+    "prId" : 7538,
+    "prUrl" : "https://github.com/apache/kafka/pull/7538#pullrequestreview-324915039",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4c11e55f-6155-4dea-b125-18765e36d068",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Unified the non-null check into a single place.",
+        "createdAt" : "2019-12-01T00:52:22Z",
+        "updatedAt" : "2019-12-01T00:52:23Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3553929c506967ca45dff88e7139f3a4cdae0b4d",
+    "line" : 66,
+    "diffHunk" : "@@ -1,1 +64,68 @@    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,\n                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {\n        return aggregate(initializer, NamedInternal.empty(), materialized);\n    }\n"
+  }
+]
