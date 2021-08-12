@@ -31,5 +31,258 @@
     "commit" : "54d1baa1897cac042aa24918a49930940ab781ed",
     "line" : 20,
     "diffHunk" : "@@ -1,1 +115,119 @@     * @param host the host of the connection, to be resolved internally if needed\n     * @param clientDnsLookup the mode of DNS lookup to use when resolving the {@code host}\n     */\n    public void connecting(String id, long now, String host, ClientDnsLookup clientDnsLookup) {\n        NodeConnectionState connectionState = nodeState.get(id);"
+  },
+  {
+    "id" : "c1f78188-60c7-4e42-9c24-0000f889eb27",
+    "prId" : 8683,
+    "prUrl" : "https://github.com/apache/kafka/pull/8683#pullrequestreview-435231805",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "31f312aa-29bb-4725-b3dd-a925ca7098e7",
+        "parentId" : null,
+        "authorId" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "body" : "Shouldn't we also check that the node is in connecting state?",
+        "createdAt" : "2020-06-12T18:44:10Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d4c3744-af08-4d72-927d-5222410e5b94",
+        "parentId" : "31f312aa-29bb-4725-b3dd-a925ca7098e7",
+        "authorId" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "body" : "I think we don't need to check if the node is in connecting state because the caller is only applying this test to all the nodes in the connecting state.",
+        "createdAt" : "2020-06-12T21:19:26Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a77da75a-2f02-4331-b0d3-2a760140397e",
+        "parentId" : "31f312aa-29bb-4725-b3dd-a925ca7098e7",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "That is indeed true today as the caller only calls with nodes in `connectingNodes` but that may not be true forever. I would add the check as suggested by Rajini here to make the implementation safe.",
+        "createdAt" : "2020-06-19T09:15:23Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aad654a7-8ec9-45e9-8550-5e307f657c62",
+        "parentId" : "31f312aa-29bb-4725-b3dd-a925ca7098e7",
+        "authorId" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "body" : "Make sense. Checker added.",
+        "createdAt" : "2020-06-22T20:00:42Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a160400df526c60ce7d6550592bbafc45ecd3539",
+    "line" : 202,
+    "diffHunk" : "@@ -1,1 +438,442 @@        if (nodeState.state != ConnectionState.CONNECTING)\n            throw new IllegalStateException(\"Node \" + id + \" is not in connecting state\");\n        return now - lastConnectAttemptMs(id) > connectionSetupTimeoutMs(id);\n    }\n"
+  },
+  {
+    "id" : "ce1be6d7-6de1-40b2-bb98-6c084c17d7d9",
+    "prId" : 8683,
+    "prUrl" : "https://github.com/apache/kafka/pull/8683#pullrequestreview-433889702",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b20a6ed6-7ccf-4e4a-98b4-04fae0b02544",
+        "parentId" : null,
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Shouldn't we increment before computing the new reconnect backoff?",
+        "createdAt" : "2020-06-16T07:45:29Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b0aa30a8-6484-421a-ae0c-85f676af9d0b",
+        "parentId" : "b20a6ed6-7ccf-4e4a-98b4-04fae0b02544",
+        "authorId" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "body" : "reconnectBackoff.term(0) will return the ${reconnect.backoff.ms} * 2 ^ 0 * jitter\r\nreconnectBackoff.term(1) will return the ${reconnect.backoff.ms} * 2 ^ 1 * jitter\r\n\r\nThe difference btw reconnect backoff and connection timeout here is that, after the first failed attempts, the connection timeout will be the 1st term of the randomized geometric sequence but the reconnect backoff will be the 0st term of the randomized geometric sequence. So We should use (failedAttempts - 1) for fetching reconnect backoff and (failedAttemps) for fetching the connection timeout.",
+        "createdAt" : "2020-06-18T01:17:09Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "40f42f7f-f4f4-4c87-896c-0c2575d8809c",
+        "parentId" : "b20a6ed6-7ccf-4e4a-98b4-04fae0b02544",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "That makes sense. Thanks for the clarification.",
+        "createdAt" : "2020-06-19T08:16:23Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a160400df526c60ce7d6550592bbafc45ecd3539",
+    "line" : 147,
+    "diffHunk" : "@@ -1,1 +357,361 @@    private void updateReconnectBackoff(NodeConnectionState nodeState) {\n        nodeState.reconnectBackoffMs = reconnectBackoff.backoff(nodeState.failedAttempts);\n        nodeState.failedAttempts++;\n    }\n"
+  },
+  {
+    "id" : "f4aaeb54-10fe-440a-aa64-f049dbf1b262",
+    "prId" : 8683,
+    "prUrl" : "https://github.com/apache/kafka/pull/8683#pullrequestreview-433889702",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "20a6d3f5-0f05-4510-a337-1fdb23c25a57",
+        "parentId" : null,
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Are you sure that using `lastConnectAttemptMs` is correct here? `lastConnectAttemptMs` is recorded when a connection is disconnected and as we respect the `reconnectBackoffMs` before reconnecting, the connection timeout computed here will also include the current `reconnectBackoffMs`. Is this what we want? It may be better to record the time in `connecting`.",
+        "createdAt" : "2020-06-16T07:53:51Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56d15c86-56d1-4cc0-9d89-c010e4b90f07",
+        "parentId" : "20a6d3f5-0f05-4510-a337-1fdb23c25a57",
+        "authorId" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "body" : "I think so. The `lastConnectAttemptMs` is updated in both `connecting` (Line 145 & Line 157) and `disconnected`. ",
+        "createdAt" : "2020-06-18T16:31:29Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a62b0bdd-9508-4afa-8fb9-80001fb566a4",
+        "parentId" : "20a6d3f5-0f05-4510-a337-1fdb23c25a57",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Oh right. I missed the ones in `connecting`. Thanks for the clarification.",
+        "createdAt" : "2020-06-19T09:15:56Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a160400df526c60ce7d6550592bbafc45ecd3539",
+    "line" : 202,
+    "diffHunk" : "@@ -1,1 +438,442 @@        if (nodeState.state != ConnectionState.CONNECTING)\n            throw new IllegalStateException(\"Node \" + id + \" is not in connecting state\");\n        return now - lastConnectAttemptMs(id) > connectionSetupTimeoutMs(id);\n    }\n"
+  },
+  {
+    "id" : "8f066dff-5cce-4494-aad8-c60f5f3d5f3b",
+    "prId" : 8683,
+    "prUrl" : "https://github.com/apache/kafka/pull/8683#pullrequestreview-436841551",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1dd98432-0ca0-4471-a615-3f81732c5c0b",
+        "parentId" : null,
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Should we ensure that `nodeState` is not `null` here?",
+        "createdAt" : "2020-06-16T07:54:53Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e1be840-c681-4345-a81f-5112a3379b9a",
+        "parentId" : "1dd98432-0ca0-4471-a615-3f81732c5c0b",
+        "authorId" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "body" : "No. The caller will ensure that the node is in the connecting state. I'll add an IllegalStateException here.",
+        "createdAt" : "2020-06-18T16:30:13Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f8b8f77-5d9f-421b-8def-a5fd2c8eb657",
+        "parentId" : "1dd98432-0ca0-4471-a615-3f81732c5c0b",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "I would rather prefer to handle this like we did in `lastConnectAttemptMs` in order to remain consistent. If `nodeState` is `null`, we can return `0`.",
+        "createdAt" : "2020-06-19T09:13:24Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd161b4b-5f31-4f42-ab01-86dd62ea0e2b",
+        "parentId" : "1dd98432-0ca0-4471-a615-3f81732c5c0b",
+        "authorId" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "body" : "When `NetworkClient` initializes a connection to a given node (`NetworkClient::initiateConnect`), it's guaranteed that the `nodeState` will get initialized and won't be `null`. I think it's probably not reasonable if the caller wants to get the connection timeout of a given node before the connection initialization, which is the reason I prevent this kind of calling by throwing the exception.\r\n\r\nHowever, it might be reasonable for a caller to get the `lastConnectAttemptMs` before initializing the connection. For example, the node provider wants to provide a node with the least recent connection attempt. For those nodes haven't been connected yet, their `NodeConnectionState` does not exist. However, this implies that the node has the highest priority and we may assume their `lastConnectAttemptMs` is 0.",
+        "createdAt" : "2020-06-22T19:43:25Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "799d8e70-887b-4657-8fd2-fdd95d4dd2f5",
+        "parentId" : "1dd98432-0ca0-4471-a615-3f81732c5c0b",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Thanks for the clarification. In this case, let's reuse the `nodeState` method which check null and throws an `IllegalStateException` as you do here. We may be able to use it in `isConnectionSetupTimeout` as well.",
+        "createdAt" : "2020-06-24T14:48:29Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "988bde62-bf70-4118-8464-798539e9939f",
+        "parentId" : "1dd98432-0ca0-4471-a615-3f81732c5c0b",
+        "authorId" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "body" : "Sure. Now `isConnectionSetupTimeout` is also using this checker.",
+        "createdAt" : "2020-06-24T17:05:17Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a160400df526c60ce7d6550592bbafc45ecd3539",
+    "line" : 190,
+    "diffHunk" : "@@ -1,1 +426,430 @@    public long connectionSetupTimeoutMs(String id) {\n        NodeConnectionState nodeState = this.nodeState(id);\n        return nodeState.connectionSetupTimeoutMs;\n    }\n"
+  },
+  {
+    "id" : "e70feede-ad74-4c5f-a5c1-4fb3d00b8137",
+    "prId" : 8683,
+    "prUrl" : "https://github.com/apache/kafka/pull/8683#pullrequestreview-435207460",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5ee89c0d-aa35-43a5-937d-a77aabb37b6a",
+        "parentId" : null,
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Can we add a javadoc for this method?",
+        "createdAt" : "2020-06-19T09:13:47Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3203b04-86ea-49bb-a21a-f91bdc1e16e8",
+        "parentId" : "5ee89c0d-aa35-43a5-937d-a77aabb37b6a",
+        "authorId" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "body" : "Yes. Added.",
+        "createdAt" : "2020-06-22T19:20:59Z",
+        "updatedAt" : "2020-06-27T23:48:12Z",
+        "lastEditedBy" : "bb605074-6b7c-47bc-9e2f-a760f7e44ad8",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a160400df526c60ce7d6550592bbafc45ecd3539",
+    "line" : 188,
+    "diffHunk" : "@@ -1,1 +424,428 @@     * @param id the connection to fetch the state for\n     */\n    public long connectionSetupTimeoutMs(String id) {\n        NodeConnectionState nodeState = this.nodeState(id);\n        return nodeState.connectionSetupTimeoutMs;"
   }
 ]

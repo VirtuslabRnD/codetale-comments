@@ -130,5 +130,104 @@
     "commit" : "2353e5a29fdd36b86160a8e63de90cd54f0d0825",
     "line" : 474,
     "diffHunk" : "@@ -1,1 +472,476 @@\n        // if we don't already need to revoke something due to subscription changes, first try to balance by only moving newly added partitions\n        if (!revocationRequired) {\n            performReassignments(unassignedPartitions, currentAssignment, prevAssignment, sortedCurrentSubscriptions,\n                consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);"
+  },
+  {
+    "id" : "99af712e-1b97-4cd0-9e43-33c0418cebba",
+    "prId" : 8668,
+    "prUrl" : "https://github.com/apache/kafka/pull/8668#pullrequestreview-421217820",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "607485ad-3d8b-4128-98e4-ffde994fca61",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Is it possible that this unfilled consumer has N+1 remaining capacity, while there's only N max consumer only?",
+        "createdAt" : "2020-05-29T19:27:51Z",
+        "updatedAt" : "2020-05-30T02:34:19Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10bc6c60-2c3f-4ca5-9f67-c47637382d5e",
+        "parentId" : "607485ad-3d8b-4128-98e4-ffde994fca61",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "NVM, I realized it should never happen.",
+        "createdAt" : "2020-05-29T19:31:05Z",
+        "updatedAt" : "2020-05-30T02:34:19Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e25a323d7e21aa5a554e43d811ac6eb3e3894055",
+    "line" : 193,
+    "diffHunk" : "@@ -1,1 +225,229 @@            List<TopicPartition> consumerAssignment = assignment.get(consumer);\n            int remainingCapacity = minQuota - consumerAssignment.size();\n            while (remainingCapacity > 0) {\n                String overloadedConsumer = maxCapacityMembers.poll();\n                if (overloadedConsumer == null) {"
+  },
+  {
+    "id" : "17ee795e-6c62-4bdd-b40a-06101bc27998",
+    "prId" : 8668,
+    "prUrl" : "https://github.com/apache/kafka/pull/8668#pullrequestreview-421370476",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c1051944-29a5-4434-a3b1-c3b3a7178f91",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "This is just an optimization for the cooperative case: I found that the assignment time for the eager and cooperative assignor began to diverge once you reached partition counts in the millions. At 10 million partitions for example, the eager assignor hovered around 30s but the cooperative assignor was upwards of 5-6 minutes.\r\nThe discrepancy was entirely due to the `adjustAssignment` method needing to compute the set of partitions transferring ownership  in the completed assignment. But we can build up this map during assignment much more efficiently, by taking advantage of the additional context we have at various steps in the algorithm. Tracking and exposing this set to the cooperative assignor cut the assignment time for large partition numbers pretty drastically, putting the cooperative assignor  on par with the eager assignor. ",
+        "createdAt" : "2020-05-30T02:29:09Z",
+        "updatedAt" : "2020-05-30T02:34:19Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e25a323d7e21aa5a554e43d811ac6eb3e3894055",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +48,52 @@    // Keep track of the partitions being migrated from one consumer to another during assignment\n    // so the cooperative assignor can adjust the assignment\n    protected Map<TopicPartition, String> partitionsTransferringOwnership = new HashMap<>();\n\n    static final class ConsumerGenerationPair {"
+  },
+  {
+    "id" : "3adef16f-ea02-4419-9a30-45e86231f2be",
+    "prId" : 8668,
+    "prUrl" : "https://github.com/apache/kafka/pull/8668#pullrequestreview-421370570",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3e0b82b1-e058-47ff-be0c-54f1a7e89433",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I didn't bother to include this optimization for the general case. We know that the assignment algorithm itself becomes a bottleneck at only 2,000 partitions, so there's no point optimizing something that only becomes a bottleneck in the millions of partitions",
+        "createdAt" : "2020-05-30T02:30:31Z",
+        "updatedAt" : "2020-05-30T02:34:19Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e25a323d7e21aa5a554e43d811ac6eb3e3894055",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +82,86 @@            log.debug(\"Detected that all not consumers were subscribed to same set of topics, falling back to the \"\n                          + \"general case assignment algorithm\");\n            partitionsTransferringOwnership = null;\n            return generalAssign(partitionsPerTopic, subscriptions);\n        }"
+  },
+  {
+    "id" : "d494ff1f-ce40-4488-b3d8-a2f6b21b78bb",
+    "prId" : 8668,
+    "prUrl" : "https://github.com/apache/kafka/pull/8668#pullrequestreview-422865488",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "da8fdca7-d9c8-40b8-89f4-c7de6b8e4f0e",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Just FYI, I introduced this bug right before merging. Luckily the tests caught it -- fix is https://github.com/apache/kafka/pull/8777",
+        "createdAt" : "2020-06-02T16:42:49Z",
+        "updatedAt" : "2020-06-02T16:42:50Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e25a323d7e21aa5a554e43d811ac6eb3e3894055",
+    "line" : 101,
+    "diffHunk" : "@@ -1,1 +133,137 @@                if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {\n                    membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);\n                    membersOfCurrentHighestGeneration.clear();\n                    maxGeneration = memberData.generation.get();\n                }"
   }
 ]

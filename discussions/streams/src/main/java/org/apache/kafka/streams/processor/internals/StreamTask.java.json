@@ -1978,5 +1978,71 @@
     "commit" : "5f8b15773b7d1eb96e8804a90e29cb27d390f6b3",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +318,322 @@                recordCollector.flush();\n\n                log.debug(\"Prepared task for committing\");\n\n                break;"
+  },
+  {
+    "id" : "c28e126c-398f-4aad-aaea-36ce5d5636be",
+    "prId" : 8697,
+    "prUrl" : "https://github.com/apache/kafka/pull/8697#pullrequestreview-418844438",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "07febf5f-88a0-44c0-a1ec-8114cff75c7f",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "If I understand this right, we are recording sink latencies after processing, but source latencies before processing. This nicely avoids the problem with recording non-sink latencies after processing, but is it accurate?",
+        "createdAt" : "2020-05-26T17:21:21Z",
+        "updatedAt" : "2020-05-26T23:33:26Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1f2f304-7518-421c-9b6e-30acfaf09484",
+        "parentId" : "07febf5f-88a0-44c0-a1ec-8114cff75c7f",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "We discussed this offline, but in case anyone else was wondering:\r\n\r\nYes. We can't record the latency _after_ processing for source nodes due to our recursive DFS approach to processing, as the source node's `#process` actually doesn't complete until the record has been processed by every other node in the subtopology. And anyways, the intent of the source node metric is to gauge the e2e latency when the record arrives at the subtopology, which is what we are recording here.",
+        "createdAt" : "2020-05-26T21:20:27Z",
+        "updatedAt" : "2020-05-26T23:33:26Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9089566f-0393-4777-8985-b74b851e4af9",
+        "parentId" : "07febf5f-88a0-44c0-a1ec-8114cff75c7f",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks, @ableegoldman , I think this is a fine tradeoff. Also helping is the fact that we know all \"source nodes\" are actually instances of SourceNode, which specifically do nothing except forward every record, so whether we measure these nodes before or \"after\" their processing logic should make no practical difference at all.",
+        "createdAt" : "2020-05-26T21:24:10Z",
+        "updatedAt" : "2020-05-26T23:33:26Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cedfee86-9988-46d9-8f7c-d8f7e2d43744",
+        "parentId" : "07febf5f-88a0-44c0-a1ec-8114cff75c7f",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> o whether we measure these nodes before or \"after\" their processing logic should make no practical difference at all.\r\n\r\nI think it make a big difference, and only recording _before_ processing is what we want (according to what the KIP says). Otherwise, the latency includes the processing time for one or more processors (in the worst case even all processors).",
+        "createdAt" : "2020-05-26T23:13:07Z",
+        "updatedAt" : "2020-05-26T23:33:26Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5295a4d3-5243-4690-b302-7f05b29c8acf",
+        "parentId" : "07febf5f-88a0-44c0-a1ec-8114cff75c7f",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Sorry for my ambiguity. Please let me clarify my terms. Currently if you wait until the end of the \"process\" method, you wind up including the call to forward, which recursively calls process on all descendents of the source node. This is _not_ what I was talking about. I meant only the time spent _just_ in processing the SourceNode, excluding the time in \"forward\". What shall we call this? Maybe \"actual\", or \"proper\", or \"internal\" processing time?\r\n\r\nSo, my comment was that, given that we know the implementation of SourceNode, we know that it's \"actual\", \"proper\", \"internal\" processing time is going to be very small, probably far less than a single millisecond. So it doesn't make any practical difference whether we measure before the call for just the special case of source nodes, or magically solve the problem of measuring the e2e latency after internal processing, but not including the calls to \"forward\".\r\n\r\nThis is why I think it's fine to measure SourceNodes _before_ the call to process, even though the KIP technically specifies that processors' end-to-end latencies should include processing latency. We're making a simplifying assumption that for source nodes specifically, the processing latency would be `<< 1`, so we can ignore it.",
+        "createdAt" : "2020-05-27T04:13:06Z",
+        "updatedAt" : "2020-05-27T04:13:07Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8223ea29b07d9754b28ef4b06e765c66f208863c",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +605,609 @@\n            updateProcessorContext(record, currNode, wallClockTime);\n            maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());\n            maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);\n"
   }
 ]

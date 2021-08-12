@@ -53,5 +53,49 @@
     "commit" : "b4e31258ee738cecc004fe14dc5ac318d893ceb5",
     "line" : 4,
     "diffHunk" : "@@ -1,1 +79,83 @@        workerProps.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, \"org.apache.kafka.connect.json.JsonConverter\");\n        workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, \"connect-offsets\");\n        workerProps.put(WorkerConfig.LISTENERS_CONFIG, \"HTTP://localhost:0\");\n\n        return workerProps;"
+  },
+  {
+    "id" : "079f6963-9fdf-4c91-aaa1-50995e936140",
+    "prId" : 8620,
+    "prUrl" : "https://github.com/apache/kafka/pull/8620#pullrequestreview-407792628",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ee94cd4f-58f1-43e7-b61a-e0f486566fea",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "These are great and very useful, but they still don't thoroughly test the `validateHttpResponseHeaderConfig` and `validateHeaderConfigAction` methods. If you make these methods static, package-protected in the `WorkerConfig` class (rather than in a nested class), then you can easily add more tests to `WorkerConfigTest` that thoroughly verify all of the logic in those methods.\r\n\r\nFor example, something like the following in `WorkerConfigTest`:\r\n```\r\n    protected static final List<String> VALID_UNQUOTED_HEADER_CONFIGS = Arrays.asList(\r\n            // TODO: Add a lot more valid header configs\r\n            \"\\\"add Cache-Control: no-cache, no-store, must-revalidate\\\"\",\r\n            \"add X-XSS-Protection: 1; mode=block\",\r\n            \"add Strict-Transport-Security: max-age=31536000; includeSubDomains\",\r\n            \"AdD   Strict-Transport-Security:    max-age=31536000;  includeSubDomains\",\r\n            \"AdD \\t Strict-Transport-Security : \\n   max-age=31536000;  includeSubDomains\",\r\n            \"add X-Content-Type-Options: nosniff\"\r\n    );\r\n\r\n    protected static final List<String> VALID_QUOTE_REQUIRED_HEADER_CONFIGS = Arrays.asList(\r\n            // TODO: Add a lot more valid header configs\r\n            \"add Cache-Control: no-cache, no-store, must-revalidate\"\r\n    );\r\n\r\n    protected static final List<String> INVALID_UNQUOTED_HEADER_CONFIGS = Arrays.asList(\r\n            // TODO: Add a lot more valid header configs\r\n            \"WRONG Cache-Control: no-cache\",\r\n            \"add Cache-Control no-cache\",\r\n            \"WRONG Cache-Control: no-cache, no-store, must-revalidate\",\r\n    );\r\n\r\n    protected static final String WHITESPACE = \" \\t \\n  \";\r\n\r\n    @Test\r\n    public void testSingleValidHeaderConfigs() {\r\n        for (String config : VALID_UNQUOTED_HEADER_CONFIGS) {\r\n            assertValidHeaderConfig(config);\r\n        }\r\n        for (String config : VALID_QUOTE_REQUIRED_HEADER_CONFIGS) {\r\n            assertValidHeaderConfig(\"\\\"\" + config + \"\\\"\");\r\n        }\r\n    }\r\n\r\n    @Test\r\n    public void testSingleValidHeaderConfigsWithWhitespace() {\r\n        for (String config : VALID_UNQUOTED_HEADER_CONFIGS) {\r\n            assertValidHeaderConfig(WHITESPACE + config + WHITESPACE);\r\n        }\r\n        for (String config : VALID_QUOTE_REQUIRED_HEADER_CONFIGS) {\r\n            assertValidHeaderConfig(WHITESPACE + \"\\\"\" + WHITESPACE + config + WHITESPACE + \"\\\"\" + WHITESPACE);\r\n        }\r\n    }\r\n\r\n    @Test\r\n    public void testMultipleValidHeaderConfigsWithoutWhitespace() {\r\n        assertValidHeaderConfig(String.join(\", \", VALID_UNQUOTED_HEADER_CONFIGS));\r\n        assertValidHeaderConfig(String.join(\" , \", VALID_UNQUOTED_HEADER_CONFIGS));\r\n    }\r\n\r\n    @Test\r\n    public void testHeaderConfigsThatRequireQuotes() {\r\n        for (String config : VALID_QUOTE_REQUIRED_HEADER_CONFIGS) {\r\n            assertInvalidHeaderConfig(config);\r\n        }\r\n    }\r\n\r\n    @Test\r\n    public void testInvalidHeaderConfigs() {\r\n        for (String config : INVALID_UNQUOTED_HEADER_CONFIGS) {\r\n            assertInvalidHeaderConfig(config);\r\n        }\r\n    }\r\n\r\n    @Test\r\n    public void testOneInvalidAndMultipleValidHeaderConfigs() {\r\n        assertInvalidHeaderConfig(String.join(\", \", VALID_UNQUOTED_HEADER_CONFIGS)\r\n                                  + \", \" + INVALID_UNQUOTED_HEADER_CONFIGS.get(0));\r\n        assertInvalidHeaderConfig(INVALID_UNQUOTED_HEADER_CONFIGS.get(0) + \", \"\r\n                                  + String.join(\", \", VALID_UNQUOTED_HEADER_CONFIGS));\r\n    }\r\n\r\n    protected void assertValidHeaderConfig(String config) {\r\n        WorkerConfig.validateHttpResponseHeaderConfig(config);\r\n        // any valid config should be valid per HeaderFilter\r\n        configureHeaderFilter(config);\r\n    }\r\n\r\n    protected void assertInvalidHeaderConfig(String config) {\r\n        assertThrows(ConfigException.class, () -> WorkerConfig.validateHttpResponseHeaderConfig(config));\r\n        // any invalid config should be also be invalid per HeaderFilter\r\n        assertThrows(ConfigException.class, () -> configureHeaderFilter(config));\r\n    }\r\n\r\n    protected void configureHeaderFilter(String headerConfig) {\r\n        FilterHolder headerFilterHolder = new FilterHolder(HeaderFilter.class);\r\n        headerFilterHolder.setInitParameter(\"headerConfig\", headerConfig);\r\n        try {\r\n            try {\r\n                headerFilterHolder.doStart();\r\n                headerFilterHolder.initialize();\r\n            } finally {\r\n                headerFilterHolder.doStop();\r\n            }\r\n        } catch (Exception e) {\r\n          // wrap in ConfigException to keep the test simple\r\n          throw new ConfigException(\"HeaderFilter failure\", e);\r\n        }\r\n    }\r\n```",
+        "createdAt" : "2020-05-06T15:59:45Z",
+        "updatedAt" : "2020-05-09T15:44:50Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f2e73a2d-7f8b-4fcb-9c59-4bc437996d87",
+        "parentId" : "ee94cd4f-58f1-43e7-b61a-e0f486566fea",
+        "authorId" : "d209785c-ecc3-4ee2-b1e2-c791ace87b17",
+        "body" : "It is good idea  to assert each checking using assertValidHeaderConfig and assertInvalidHeaderConfig. I think latest version will cover validation of header config. Please let me know. For all valid header config cases, testValidCustomizedHttpResponseHeaders should cover both config validation at config phase and validation on FilterHolder layer.",
+        "createdAt" : "2020-05-06T23:19:02Z",
+        "updatedAt" : "2020-05-09T15:44:50Z",
+        "lastEditedBy" : "d209785c-ecc3-4ee2-b1e2-c791ace87b17",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eaf6eea9-342c-45e9-bf70-80c21f26bf8b",
+        "parentId" : "ee94cd4f-58f1-43e7-b61a-e0f486566fea",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Looks good. I like the additional checking that you're doing here.",
+        "createdAt" : "2020-05-07T20:06:58Z",
+        "updatedAt" : "2020-05-09T15:44:50Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f061423f4b5e2118563eb820fb8e88abb1490efe",
+    "line" : 79,
+    "diffHunk" : "@@ -1,1 +450,454 @@        }\n    }\n\n    private String executeGet(String host, int port, String endpoint) throws IOException {\n        HttpRequest request = new HttpGet(endpoint);"
   }
 ]

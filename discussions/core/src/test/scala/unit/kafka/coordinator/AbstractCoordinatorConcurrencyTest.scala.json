@@ -1,0 +1,167 @@
+[
+  {
+    "id" : "ec9cf39c-4181-4d02-a1cd-8728d84a0517",
+    "prId" : 8657,
+    "prUrl" : "https://github.com/apache/kafka/pull/8657#pullrequestreview-483663498",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "@junrao This change avoids deadlock in ```TransactionCoordinatorConcurrencyTest```.\r\n\r\nIf we update ```watchKeys``` before ```tryCompleteElseWatch```, the other threads can take the same key to complete delayed request.  Hence the deadlock happens due to following conditions.\r\n\r\n**thread_1**  holds ```stateLock``` of TransactionStateManager to call ```appendRecords``` and it requires lock of delayed request to call ```tryCompleteElseWatch```.\r\n\r\n**thread_2** holds lock of delayed request to call ```onComplete``` (updateCacheCallback) and ```updateCacheCallback``` requires ```stateLock``` of TransactionStateManager.",
+        "createdAt" : "2020-09-03T06:50:50Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d2b5bc83-f91a-433b-b436-4b0482f27f6b",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "According to above case, there is a potential deadlock.\r\n\r\n```\r\n    var watchCreated = false\r\n    for(key <- watchKeys) {\r\n      // If the operation is already completed, stop adding it to the rest of the watcher list.\r\n      if (operation.isCompleted)\r\n        return false\r\n      watchForOperation(key, operation)\r\n\r\n      if (!watchCreated) {\r\n        watchCreated = true\r\n        estimatedTotalOperations.incrementAndGet()\r\n      }\r\n    }\r\n\r\n    isCompletedByMe = operation.safeTryComplete()\r\n    if (isCompletedByMe)\r\n      return true\r\n\r\n```\r\n\r\n```safeTryComplete()``` is executed after updating ```watchKey```. Hence, it is possible that the lock of this request is held by **another thread**. The deadlock happens if this ```tryCompleteElseWatch``` is holding the **lock** required by **another thread**.\r\n\r\nIt seems to me the simple approach is to remove ```operation.safeTryComplete```. That should be fine since we have called ```tryComplete``` before.",
+        "createdAt" : "2020-09-03T07:06:44Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "42801a09-2069-41af-9489-5611d09bdb83",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@chia7712 : \r\n\r\n1. I think we still need `operation.safeTryComplete` in `DelayedOperation.tryCompleteElseWatch()`. The reason is that after the `operation.tryComplete()` call, but before we add the key to watch, the operation could have been completed by another thread. Since that thread doesn't see the registered key, it won't complete the request. If we don't call `operation.safeTryComplete` after adding the key for watch, we could have missed the only chance for completing this operation.\r\n\r\n2. I am not sure if there is a deadlock caused by TransactionStateManager. I don't see updateCacheCallback hold any lock on stateLock. The following locking sequence is possible through TransactionStateManager.\r\n\r\n  thread 1 : hold readLock of stateLock, call ReplicaManager.appendRecords, call tryCompleteElseWatch, hold lock on delayedOperation\r\n\r\n  thread 2: hold lock on delayedOperation, call delayedOperation.onComplete, call removeFromCacheCallback(), hold readLock of stateLock.\r\n\r\nHowever, since both threads hold readLock of stateLock, there shouldn't be a conflict.\r\n\r\nDo you see the test fail due to a deadlock?\r\n",
+        "createdAt" : "2020-09-03T21:58:37Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ff4413a6-ed6b-4696-a0da-56d47e0e4493",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "> Do you see the test fail due to a deadlock?\r\n\r\nthe following read/write lock is from```stateLock``` of ```TransactionStateManager```\r\n\r\n1. Thread_1: holding readlock and waiting for lock of delayed op (TransactionStateManager#appendTransactionToLog)\r\n2. Thread_2: waiting for writelock (```TransactionCoordinatorConcurrencyTest#testConcurrentGoodPathWithConcurrentPartitionLoading```)\r\n    ```\r\n    val t = new Thread() {\r\n      override def run(): Unit = {\r\n        while (keepRunning.get()) {\r\n          txnStateManager.addLoadingPartition(numPartitions + 1, coordinatorEpoch)\r\n        }\r\n      }\r\n    }\r\n    private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {\r\n      val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)\r\n      inWriteLock(stateLock) {\r\n        loadingPartitions.add(partitionAndLeaderEpoch)\r\n      }\r\n    }\r\n    ```\r\n3. Thread_3: holding lock of delayed op and waiting for readlock (another thread is trying to complete delayed op)\r\n\r\n**deadlock**\r\n1. Thread_1 is waiting for thread_3\r\n1. Thread_3 is waiting for Thread_2\r\n1. Thread_2 is waiting for thread_1",
+        "createdAt" : "2020-09-04T11:15:46Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ee51248-5cff-4d55-8729-4ae3b9203305",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@chia7712 : Thanks for the explanation. `stateLock` is created as an unfair ReentrantReadWriteLock. So, in that case, will thread_3's attempt for getting the readLock blocked after thread_2? Did the test actually failed because of this?",
+        "createdAt" : "2020-09-04T20:33:01Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66298db9-ffb0-4e5d-9cab-ea170dd75bf9",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "> will thread_3's attempt for getting the readLock blocked after thread_2?\r\n\r\nTo the best of my knowledge, writers have preference over readers in order to avoid starvation. That behavior is not public and we can get some evidence from source code. for example:\r\n\r\n```java\r\n        final boolean readerShouldBlock() {\r\n            /* As a heuristic to avoid indefinite writer starvation,\r\n             * block if the thread that momentarily appears to be head\r\n             * of queue, if one exists, is a waiting writer.  This is\r\n             * only a probabilistic effect since a new reader will not\r\n             * block if there is a waiting writer behind other enabled\r\n             * readers that have not yet drained from the queue.\r\n             */\r\n            return apparentlyFirstQueuedIsExclusive();\r\n        }\r\n```\r\n\r\nAt any rate, the non-fair mode does not guarantee above situation does not happen. Hence, it would be better to avoid potential deadlock caused by ```tryCompleteElseWatch```.\r\n\r\n> I think we still need operation.safeTryComplete in DelayedOperation.tryCompleteElseWatch()\r\n\r\nHow about using ```tryLock``` in tryCompleteElseWatch? It avoids conflicting locking and still check completion of delayed operations after adding watches?\r\n",
+        "createdAt" : "2020-09-05T01:53:31Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5b14ac54-263e-4336-80ec-a8be0c6a9d71",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@chia7712 : Thanks for the explanation. I agree that it's a potential problem.\r\n\r\nDoes using `tryLock` in `tryCompleteElseWatch()` lead us back to the previous issue that we could miss the opportunity to to complete an operation (fixed with KAFKA-6653)?\r\n\r\nAnother possibly is that we hold the lock in delayed operation while adding the operation to watch list and do the final `safeTryComplete()` check. This way, when the delayed operation is exposed to another thread, every thread, including the caller, always first acquires the lock in delayed operation. This should avoid all potential deadlocks between `tryCompleteElseWatch()` and `checkAndComplete()`. What do you think?",
+        "createdAt" : "2020-09-05T16:31:58Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5cda16d6-fad2-463b-bf77-2f55a66b5150",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "> Another possibly is that we hold the lock in delayed operation while adding the operation to watch list and do the final safeTryComplete() check. This way, when the delayed operation is exposed to another thread, every thread, including the caller, always first acquires the lock in delayed operation. This should avoid all potential deadlocks between tryCompleteElseWatch() and checkAndComplete()\r\n\r\nnice idea. I have addressed this approach.",
+        "createdAt" : "2020-09-06T08:22:57Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "99229b8d-17ff-46ed-b8b4-10ad93f0ccfa",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Do we still need this change to avoid deadlocks?",
+        "createdAt" : "2020-09-06T17:02:00Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a564acf-d02a-4fff-959f-27c98dbe764d",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "Yep. if we add it to watch list too early, the concurrent issue happens as tryCompleteElseWatch calls tryComplete without locking. ",
+        "createdAt" : "2020-09-06T18:01:29Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2953c84e-bd96-4e00-b42e-a5654eb9be01",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "@junrao This approach can not resolve all potential deadlock. For example:\n\n1. thread_a gets lock of op\n1. thread_a adds op to watch list\n1. thread_a calls op#tryComplete (and it requires lock_b)\n1. thread_b holds lock_b\n1. thread_b sees op from watch list\n1. thread_b needs lock of op\n\nHence, we are facing the following issues.\n\n1. the last completion check can cause deadlock after the op is exposed to other threads (by watch list).\n1. the last completion check can not be removed due to KAFKA-6653.\n\nHow about using ActionQueue to resolve it? We add completion check to ActionQueue after adding op to watch list. All handlers are able to complete it even if they don't have same key.\n",
+        "createdAt" : "2020-09-07T00:59:57Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa3cf357-6195-4be4-b755-7356170d4092",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@chia7712 : What you described is possible, but probably not an issue in practice. Since tryComplete() always completes a delayed operation asynchronously, there is no reason for the caller of a delayed operation to hold any lock while calling tryComplete. Therefore, in step 4 above, the first lock that thread_b (assuming it's well designed) can acquire should be the lock in delayed operation. ",
+        "createdAt" : "2020-09-07T04:52:58Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ed5b903-76b5-45e0-9787-bf278c383d78",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "> there is no reason for the caller of a delayed operation to hold any lock while calling tryComplete. \r\n\r\nYou are right. However, not sure how to maintain that \"well designed\" code in the future as the deadlock is implicit. It seems to me avoiding multiples exclusive lockings can avoid the deadlock.\r\n\r\nI will keep current approach since the story I described may be overkill in practice. ",
+        "createdAt" : "2020-09-07T06:32:29Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a9af2de-76cc-4271-bc75-fb26086ab871",
+        "parentId" : "9d67ff6f-c4e9-45a6-8eed-334f412df0cb",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Is this change still necessary now that we always call tryComplete() with lock in tryCompleteElseWatch?",
+        "createdAt" : "2020-09-07T17:04:35Z",
+        "updatedAt" : "2020-09-08T16:18:13Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fbd46565aa5e03f4fd9c857a184b7c2371ca5932",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +202,206 @@      }\n      val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq\n      watchKeys ++= producerRequestKeys\n      producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)\n    }"
+  }
+]
