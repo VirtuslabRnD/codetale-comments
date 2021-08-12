@@ -636,5 +636,93 @@
     "commit" : "55080af3c9ce8155147fe4f561ed059f71f6c71d",
     "line" : 50,
     "diffHunk" : "@@ -1,1 +574,578 @@                        second_other_monitor.wait_until(\"Sent a version 5 subscription and group.s latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.\",\n                                                        timeout_sec=60,\n                                                        err_msg=\"Never saw output 'Upgrade metadata to version 6' on\" + str(second_other_node.account))\n\n                    log_monitor.wait_until(\"Version probing detected. Triggering new rebalance.\","
+  },
+  {
+    "id" : "62c47a0a-43fb-4829-af94-a097c123e25d",
+    "prId" : 7841,
+    "prUrl" : "https://github.com/apache/kafka/pull/7841#pullrequestreview-334898582",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a40f2e29-d5a1-403f-be14-283744ab5707",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Hm. We actually changed the metadata version in 2.4, we should have moved `DEV_VERSION` to a new metadata group at that time. I'm not that familiar with the metadata upgrade test, maybe someone else can chime in on what else (if anything) needs to be updated so that we're actually testing the metadata upgrade here?\r\n...I do notice the referenced `start_cmd` function no longer seems to take any versions, so we should update the comment above if anyone knows what's going on here @mjsax @guozhangwang @bbejeck @vvcephei ",
+        "createdAt" : "2019-12-17T22:00:19Z",
+        "updatedAt" : "2019-12-18T12:41:32Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "469a4886-197c-44fe-8ec3-f108fa9f5cb9",
+        "parentId" : "a40f2e29-d5a1-403f-be14-283744ab5707",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "As the variable name says, it's all version with version 3 or higher -- in version 3 we introduced version probing and thus to upgrade, no \"upgrade_from\" config must be specified (from a metadata version point of view), ie, the metadata version itself can be bumped without an issue.\r\n\r\nHowever, given `2.4` release introduces eager/incremental upgrade, I am not sure if we can simply upgrade from`2.3` to `2.4` without setting the config -- but for a different reason.\r\n\r\nMaybe we need to change how we structure the test?",
+        "createdAt" : "2019-12-17T23:43:02Z",
+        "updatedAt" : "2019-12-18T12:41:32Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "944c0121-22e7-4462-9be1-288fb36b5b3a",
+        "parentId" : "a40f2e29-d5a1-403f-be14-283744ab5707",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I see...I wonder if we should rethink the general approach to upgrade system tests. We have all these different upgrade paths:\r\na) pre-VP: double rolling bounce, need to pin metadata to lower version\r\nb) version probing: single rolling bounce, but need to wait for group to stabilize\r\nc) cooperative upgrade: double rolling bounce (first of which will technically be VP)\r\n\r\n Obviously it only makes sense to follow/test one path for a given (to, from) pair. Instead of one system test per upgrade path that tests all version combinations, we should have one test that goes through all (to, from) versions and chooses the correct upgrade path for that pair, then just calls it on that pair. WDYT?\r\n\r\nNote that the current VP system test actually tests forward compatibility, and not any existing upgrade path. That's valuable and we should keep that as a separate test, but it does mean we have a gap in our current system tests w.r.t an actual VP upgrade between existing versions",
+        "createdAt" : "2019-12-18T00:55:13Z",
+        "updatedAt" : "2019-12-18T12:41:32Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "68867e91-9ce9-44a8-8477-834ef1f4c283",
+        "parentId" : "a40f2e29-d5a1-403f-be14-283744ab5707",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> Instead of one system test per upgrade path that tests all version combinations, we should have one test that goes through all (to, from) versions and chooses the correct upgrade path for that pair, then just calls it on that pair.\r\n\r\nNot sure if this would simplify the code? Having \"groups of versions\" and have a different test for each \"upgrade path\" (from all versions of one group to all version of the other group) seems to make it clear which \"upgrade path\" we are testing?\r\n\r\n> Note that the current VP system test actually tests forward compatibility, and not any existing upgrade path.\r\n\r\nWell, that seems to be fine, as the upgrade path is just a single rolling bounce. But see where you are coming from.\r\n\r\n> but it does mean we have a gap in our current system tests w.r.t an actual VP upgrade between existing versions\r\n\r\nWhy that? If the versions are compatible, there is nothing to be tested but compatibility? Or maybe I miss your point?\r\n\r\nLet see what @cadonna thinks. In any case, I don't care too much how we structure the test as long as we don't miss a case :)",
+        "createdAt" : "2019-12-18T01:26:00Z",
+        "updatedAt" : "2019-12-18T12:41:32Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb821c5c-9ecb-4968-a16c-7ea8f8710315",
+        "parentId" : "a40f2e29-d5a1-403f-be14-283744ab5707",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "> Instead of one system test per upgrade path that tests all version combinations, we should have one test that goes through all (to, from) versions and chooses the correct upgrade path for that pair, then just calls it on that pair.\r\n\r\nI agree with @mjsax here.\r\n\r\n> Note that the current VP system test actually tests forward compatibility, and not any existing upgrade path. That's valuable and we should keep that as a separate test, but it does mean we have a gap in our current system tests w.r.t an actual VP upgrade between existing versions\r\n\r\nI am not sure wether I understand all details of `test_version_probing_upgrade`. AFAIU, the test just verifies the version numbers in the subscription and assignment info as well as whether the group stabilizes. That is not a full-fledged real-world upgrade test, but the test rather verifies a fundamental aspect of upgrades with an increased version of metadata. Testing the behavior of the clients according to the changed metadata is done in other system tests like `streams_static_membership_test` and `streams_cooperative_rebalance_upgrade_test`. Please correct me if I am wrong or missed something. I am wondering why we do not test downgrades. Do we not support them?\r\n\r\nAnyways, I would not restructure anything in this PR, because this PR should actually only add the 2.4 version to system tests. Since it should also document the update of the system tests for the next release, I would like to keep it as simple as possible.  \r\n",
+        "createdAt" : "2019-12-18T12:31:05Z",
+        "updatedAt" : "2019-12-18T21:11:54Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ecc84099-d9b6-45ac-a8a0-8f5c59749df3",
+        "parentId" : "a40f2e29-d5a1-403f-be14-283744ab5707",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I agree that we should keep this simple, and _if_ we want to refactor something do a follow up PR. Also agree, that the purpose of version probing test is, to ensure that we can dump the metadata version without crashing, and it's not a full upgrade test.\r\n\r\n> I am wondering why we do not test downgrades. Do we not support them?\r\n\r\nDowngrades should work (for some upgrades; not all upgrades are backward compatible). We could add them if we think it's worth the effort. So far, I am not aware of any questions or reported issue and thus I am not sure if it's worth to spent time?",
+        "createdAt" : "2019-12-19T16:53:56Z",
+        "updatedAt" : "2019-12-19T16:53:56Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "294edce4-e6f1-4a93-8872-56a671d34e19",
+        "parentId" : "a40f2e29-d5a1-403f-be14-283744ab5707",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I definitely wasn't saying we should block this PR on the issue, refactoring the upgrade tests is way way out of scope here. \r\n> I don't care too much how we structure the test as long as we don't miss a case :)\r\n\r\nI agree completely, but we _have_ missed things: rolling upgrades across a metadata version bump were broken for several versions (this is the \"gap\" I mentioned -- we test forward compatibility, not backwards, eg we didn't test the 2.0 -> 2.1 upgrade path in 2.1, we just tested 2.1 -> ?).\r\n\r\nWe _need_ to test a realistic upgrade scenario; if the existing tests serve other purposes, then maybe we need a new test rather than a refactoring. That said, \"test whether we can bump the metadata version\" sounds like the job of a unit/integration test, not a system test: the system tests should test an actual upgrade.\r\n\r\nI can open a ticket to discuss this further, but I feel pretty strongly that we should reexamine our upgrade-related system tests (I also have strong feelings about what that would look like, but I'm happy to debate that on the ticket). This PR LGTM though, thanks Bruno!",
+        "createdAt" : "2019-12-19T20:01:44Z",
+        "updatedAt" : "2019-12-19T20:02:57Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "df644b1eb2111528e8f27fb5ac5f32815fcb5f22",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +37,41 @@# can be replaced with metadata_2_versions\nbackward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]\nmetadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(DEV_VERSION)]\n\n\"\"\""
   }
 ]
