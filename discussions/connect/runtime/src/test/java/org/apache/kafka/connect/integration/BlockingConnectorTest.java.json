@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "ccafd128-26c0-40e8-bb5f-2107486b0580",
+    "prId" : 8928,
+    "prUrl" : "https://github.com/apache/kafka/pull/8928#pullrequestreview-445138385",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6c9bbf4b-27c8-4d05-9d16-5492588cb404",
+        "parentId" : null,
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "We have `EmbeddedConnectClusterAssertions#assertExactlyNumWorkersAreUp`\r\nShould we use this high level assertion to confirm that the workers are up?",
+        "createdAt" : "2020-07-04T16:42:53Z",
+        "updatedAt" : "2020-07-04T16:43:10Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a47bfd1-09f3-4346-913b-a0308ba17ae3",
+        "parentId" : "6c9bbf4b-27c8-4d05-9d16-5492588cb404",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "That won't quite buy us what we need. The litmus test for a worker being available with that call is that its [root resource returns a valid ServerInfo response](https://github.com/apache/kafka/blob/72042f26aff396ed85d02e7e312fd07ea2cc7617/connect/runtime/src/test/java/org/apache/kafka/connect/util/clusters/EmbeddedConnectCluster.java#L269-L270), but this doesn't guarantee that the worker has completed startup (reading to the end of internal topics, specifically) and so calls to the REST API that have to be handled in the `DistributedHerder::tick` method may still block and, because of the reduced timeouts for this test, fail.\r\n\r\nThis isn't a great solution but as far as I can tell there's no official way to determine if a worker has completed startup or not via the REST API, so issuing an info request for a non-existent connector is used instead.",
+        "createdAt" : "2020-07-04T17:05:50Z",
+        "updatedAt" : "2020-07-04T17:05:51Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dbca3469-6eb7-4f9a-aee6-58a5a5607484",
+        "parentId" : "6c9bbf4b-27c8-4d05-9d16-5492588cb404",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "Should we change the assertions then? I'd assume this will be useful to other tests as well.",
+        "createdAt" : "2020-07-04T17:11:23Z",
+        "updatedAt" : "2020-07-04T17:11:23Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f5fb2348-cdd8-4a5d-b26e-630d3e59b877",
+        "parentId" : "6c9bbf4b-27c8-4d05-9d16-5492588cb404",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "I didn't change the assertions initially for two reasons:\r\n\r\n1. This test is the only one that artificially reduces the REST request timeout from the usual 90 seconds to just 5 seconds; it seemed fairly unlikely that the distinction between \"any REST request is ready to be handled by the herder\" and \"all REST requests are ready to be handled by the herder\" would matter in any test that still uses the normal 90 second timeout. Herders not starting in 5 seconds isn't too surprising; herders not starting in 90 seconds is probably a sign of something going wrong.\r\n\r\n2. The solution here, while valid for this test, is a little hacky. Issuing a request for info of a non-existent connector and waiting for the response status to transition from 500 to 404 works if you know that the connector doesn't exist, but not necessarily if you aren't certain that that connector shouldn't exist. We'd probably want to wait for the status to become either 404 (herder has completed startup and connector doesn't exist) or 200 (herder has completed startup and connector does exist) and use some obscure name like `\"test-for-herder-startup\"`, but even then, it's possible that there may be unexpected side effects to these requests if they're used for all integration tests instead of just ones where the conditions are more controlled.\r\n\r\nLMK what you think; I'm willing to add this logic to the embedded cluster assertions if there's a case to be made for how it'd benefit more than just this test.",
+        "createdAt" : "2020-07-04T18:56:12Z",
+        "updatedAt" : "2020-07-04T18:56:12Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3aff170-e6a8-4ecb-8b00-eb7a3c47da6a",
+        "parentId" : "6c9bbf4b-27c8-4d05-9d16-5492588cb404",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "Should we just hit the endpoint that lists connectors to verify that the worker is ready to serve REST requests? \r\n\r\nThat's what we've been doing in system tests: \r\nhttps://github.com/apache/kafka/blob/trunk/tests/kafkatest/services/connect.py#L110\r\n\r\nGiven that this is a valid endpoint and doesn't need an artificial connector name seems less hacky and we could include this condition overall in the utils. Wdyt?",
+        "createdAt" : "2020-07-06T15:14:53Z",
+        "updatedAt" : "2020-07-06T15:14:53Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "459199c5-ec67-4f94-9317-cdc8373bb65c",
+        "parentId" : "6c9bbf4b-27c8-4d05-9d16-5492588cb404",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "That hits the in-memory config state and doesn't require a herder request, so the availability of that endpoint doesn't guarantee that the herder has finished startup unfortunately.",
+        "createdAt" : "2020-07-07T16:54:19Z",
+        "updatedAt" : "2020-07-07T16:54:26Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d82313a2-4447-4ac8-b52d-0e1547701de5",
+        "parentId" : "6c9bbf4b-27c8-4d05-9d16-5492588cb404",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "Interesting observation. Of course, hitting the leader with a request doesn't tell you that other workers have started, so that's applicable in tests like this one, which start only one worker here, etc. This doesn't seem to be a race condition we encounter often, so I'm fine with an ad hoc specific fix here given the reduced timeout. I'd be surprised if it took noticeable time to load the services after the herder is submitted to its executor. ",
+        "createdAt" : "2020-07-08T21:21:59Z",
+        "updatedAt" : "2020-07-08T21:21:59Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bc1fd02f3beb9aa7e9ee957f0e08263491b7a9fe",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +83,87 @@        // request timeout; otherwise, we may get an unexpected 500 with our first real REST request\n        // if the worker is still getting on its feet.\n        waitForCondition(\n            () -> connect.requestGet(connect.endpointForResource(\"connectors/nonexistent\")).getStatus() == 404,\n            CONNECT_WORKER_STARTUP_TIMEOUT,"
+  }
+]

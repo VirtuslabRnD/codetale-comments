@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "e50abb31-e13c-4238-bdcb-5512a59f00d5",
+    "prId" : 8935,
+    "prUrl" : "https://github.com/apache/kafka/pull/8935#pullrequestreview-448264229",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c0863652-8548-43e8-ab86-51aae43746ec",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Hmm, if eventQueueTimeHist.count() is not 0, it seems that we can block on queue.take() forever without resetting the histogram?",
+        "createdAt" : "2020-07-14T00:06:04Z",
+        "updatedAt" : "2020-07-16T20:41:36Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a2cb10c-1028-4ebc-a0e5-8a788813ee1b",
+        "parentId" : "c0863652-8548-43e8-ab86-51aae43746ec",
+        "authorId" : "0fe173e1-fd92-4265-b2d8-32c09214d054",
+        "body" : "@junrao I'm not sure I follow. If there are no more events in the queue (`count != 0`), we'd like the histogram to reset after a specified timeout. `count` will always be a non-zero value until we reset the histogram.\r\n\r\nIf we block on queue.take() forever even when `count != 0`, wouldn't that behave the same way as before? In which case do you suggest resetting?",
+        "createdAt" : "2020-07-14T01:00:53Z",
+        "updatedAt" : "2020-07-16T20:41:36Z",
+        "lastEditedBy" : "0fe173e1-fd92-4265-b2d8-32c09214d054",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d676a42e-4802-4a55-8d3a-991baea626cd",
+        "parentId" : "c0863652-8548-43e8-ab86-51aae43746ec",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@jeffkbkim : Yes, you are right. The code seems fine.",
+        "createdAt" : "2020-07-14T16:21:56Z",
+        "updatedAt" : "2020-07-16T20:41:36Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1a7b9438a35d1a696ec95b24e8b636f2a0b10b1b",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +142,146 @@\n  private def pollFromEventQueue(): QueuedEvent = {\n    val count = eventQueueTimeHist.count()\n    if (count != 0) {\n      val event  = queue.poll(eventQueueTimeTimeoutMs, TimeUnit.MILLISECONDS)"
+  },
+  {
+    "id" : "49514989-fdd5-409b-92a7-bca3324b3e93",
+    "prId" : 8935,
+    "prUrl" : "https://github.com/apache/kafka/pull/8935#pullrequestreview-450199327",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4102508e-51b7-4ffc-9e6b-9de4b1fdc99a",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "This approach seems fine for this particular usage. There are other usage of histogram that all have the same issue. A more complete fix would be to fix the issue at the Histogram level. Could we try patching the Yammer code upstream or at least file an issue? I am thinking that we could track the last time a histogram is updated, if it passes a certain amount of time, we reset on next get() or update().",
+        "createdAt" : "2020-07-14T00:10:33Z",
+        "updatedAt" : "2020-07-16T20:41:36Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16880476-0d1c-4cb0-b7e9-b89e7369fdf6",
+        "parentId" : "4102508e-51b7-4ffc-9e6b-9de4b1fdc99a",
+        "authorId" : "0fe173e1-fd92-4265-b2d8-32c09214d054",
+        "body" : "@junrao Two of the biggest issues is that the histogram does not reset when the broker shuts down or when the controller moves. There will not be a next `get()/update()` in these scenarios - should we reset the histogram outside of `ControllerEventThread` instead?",
+        "createdAt" : "2020-07-14T01:16:47Z",
+        "updatedAt" : "2020-07-16T20:41:36Z",
+        "lastEditedBy" : "0fe173e1-fd92-4265-b2d8-32c09214d054",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "14cc2d64-d29d-4e13-9c7d-2255f19c3c41",
+        "parentId" : "4102508e-51b7-4ffc-9e6b-9de4b1fdc99a",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "What I was thinking is the following. We change Histogram so that it tracks the last time it's updated. If the expiration time has been reached, the histogram will reset on next update. If there is no next update, but the histogram value is being read, we will also reset the value on read.",
+        "createdAt" : "2020-07-14T16:28:12Z",
+        "updatedAt" : "2020-07-16T20:41:36Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c7e59afe-7398-47cb-9ea7-31a7e8eab626",
+        "parentId" : "4102508e-51b7-4ffc-9e6b-9de4b1fdc99a",
+        "authorId" : "0fe173e1-fd92-4265-b2d8-32c09214d054",
+        "body" : "unfortunately, the metrics version kafka uses (v2.2.0) is no longer supported by yammer https://github.com/dropwizard/metrics/issues/1618",
+        "createdAt" : "2020-07-16T20:39:53Z",
+        "updatedAt" : "2020-07-16T20:41:36Z",
+        "lastEditedBy" : "0fe173e1-fd92-4265-b2d8-32c09214d054",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1a7b9438a35d1a696ec95b24e8b636f2a0b10b1b",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +141,145 @@  }\n\n  private def pollFromEventQueue(): QueuedEvent = {\n    val count = eventQueueTimeHist.count()\n    if (count != 0) {"
+  }
+]

@@ -42,5 +42,159 @@
     "commit" : "c3324cce90f8379c69c8538b594edd29e83f7fe1",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +559,563 @@            // if errors raised from the operator were swallowed by the task implementation, an\n            // exception needs to be thrown to kill the task indicating the tolerance was exceeded\n            if (retryWithToleranceOperator.failed() && !retryWithToleranceOperator.withinToleranceLimits()) {\n                throw new ConnectException(\"Tolerance exceeded in error handler\",\n                    retryWithToleranceOperator.error());"
+  },
+  {
+    "id" : "658866be-0ce8-4263-a9d1-2730a1c2a4e8",
+    "prId" : 8910,
+    "prUrl" : "https://github.com/apache/kafka/pull/8910#pullrequestreview-439637037",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9c41cc1f-09ab-48da-8a68-0f44042e9a8e",
+        "parentId" : null,
+        "authorId" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "body" : "I think this gets called by the consumer thread, which is different from the thread which calls `close()`. I think that it may be necessary to mark this variable as volatile.",
+        "createdAt" : "2020-06-26T19:51:30Z",
+        "updatedAt" : "2020-06-26T19:51:30Z",
+        "lastEditedBy" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e13f63b-d675-412e-9851-632483a90873",
+        "parentId" : "9c41cc1f-09ab-48da-8a68-0f44042e9a8e",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "The callback gets invoked on the same thread as the one that `KafkaConsumer::close` is invoked on, so `volatile` isn't strictly necessary. If you (or others) think it'd be good to include just in case that changes or this callback gets invoked after the task is stopped on a different thread (which afaik is not possible atm), I don't have any major objections to adding it. Just didn't want to add it unnecessarily as it might be misleading to people reading the code base down the road. LMKWYT",
+        "createdAt" : "2020-06-27T06:05:49Z",
+        "updatedAt" : "2020-09-28T23:18:44Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ab619412-fc5b-498e-bacf-5e7a7fe8f101",
+        "parentId" : "9c41cc1f-09ab-48da-8a68-0f44042e9a8e",
+        "authorId" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "body" : "I wasn't aware that the onPartitionsRevoked was called by close on the same thread, good to know for the future.\r\nI'm fine with this as-is.\r\n",
+        "createdAt" : "2020-06-30T03:04:29Z",
+        "updatedAt" : "2020-06-30T03:04:29Z",
+        "lastEditedBy" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e5b217f1274dd896730403a8bd8fc36383ee5ae",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +693,697 @@        @Override\n        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {\n            if (taskStopped) {\n                log.trace(\"Skipping partition revocation callback as task has already been stopped\");\n                return;"
+  },
+  {
+    "id" : "40728ba3-aad5-4c4a-b480-d9e11fa98463",
+    "prId" : 8910,
+    "prUrl" : "https://github.com/apache/kafka/pull/8910#pullrequestreview-439389821",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0929c7ff-2cb0-4d3a-8301-bd021427e4a2",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "Could it be replaced by ```isStopping()```? It seems to me both flags are similar and we don't need to add more duplicate.",
+        "createdAt" : "2020-06-27T07:32:18Z",
+        "updatedAt" : "2020-06-27T07:32:18Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66a44eb4-5711-4ff3-a413-862683c3e111",
+        "parentId" : "0929c7ff-2cb0-4d3a-8301-bd021427e4a2",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "I originally considered this approach, but it won't work for cases where the task stops on its own due to failure instead of being stopped externally by the worker.",
+        "createdAt" : "2020-06-28T01:21:53Z",
+        "updatedAt" : "2020-06-28T01:21:53Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34569360-bb4e-4be4-8ad1-8d2665b56400",
+        "parentId" : "0929c7ff-2cb0-4d3a-8301-bd021427e4a2",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "> it won't work for cases where the task stops on its own due to failure instead of being stopped externally by the worker.\r\n\r\nthanks for the explanation. The case you mentioned is that we don't call ```onFailure``` before closing task so ```isStopping``` still return true. Could you add unit test for that case?",
+        "createdAt" : "2020-06-28T04:57:29Z",
+        "updatedAt" : "2020-06-28T04:57:30Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "47ea87e3-2ee2-4b01-8a67-ebe2d7e65ee3",
+        "parentId" : "0929c7ff-2cb0-4d3a-8301-bd021427e4a2",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "Given the complexity of the unit tests for the `WorkerSinkTask` class and the guarantees we get from the coverage of the existing tests, I'm not sure it's really worth the effort. The code path that's modified in this PR is agnostic about the cause of shutdown for the task and we won't really get any more coverage by simulating a shutdown triggered by an exception from the `SinkTask` instance instead of external request from the `Worker` instance.",
+        "createdAt" : "2020-06-29T18:18:01Z",
+        "updatedAt" : "2020-06-29T18:18:01Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e5b217f1274dd896730403a8bd8fc36383ee5ae",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +140,144 @@        this.consumer = consumer;\n        this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);\n        this.taskStopped = false;\n        this.workerErrantRecordReporter = workerErrantRecordReporter;\n    }"
+  },
+  {
+    "id" : "c15955f8-32c7-426a-af2f-c03c7d4bc3c8",
+    "prId" : 8910,
+    "prUrl" : "https://github.com/apache/kafka/pull/8910#pullrequestreview-498885832",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d53ad038-8ccf-47e9-9a13-2718c2f34f49",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Shouldn't this be volatile?\r\n\r\nYes, it's true that `WorkerSinkTask.close()` is always and only called from within the `WorkerTask.doRun()` after the tasks determines it will stop. However, the `onPartitionsRevoked(...)` method is called from the consumer thread, and making the field volatile is the only way to ensure that the consumer thread reads a non-cached value.",
+        "createdAt" : "2020-09-28T21:21:21Z",
+        "updatedAt" : "2020-09-28T23:44:22Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d4ba48d-7477-4ed1-bec1-ccde4dfc8f67",
+        "parentId" : "d53ad038-8ccf-47e9-9a13-2718c2f34f49",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "The [Javadocs](https://kafka.apache.org/26/javadoc/org/apache/kafka/clients/consumer/ConsumerRebalanceListener.html) for the `ConsumerRebalanceLister` state that the callback \"will only execute in the user thread as part of the `poll(long)` call\"; I think we have a guarantee here that `onPartitionsRevoked` will be called on the same thread that sets `taskStopped` to `false`. A fun way to verify this is to view the exceptions that get thrown by this bug; the stack traces include these lines:\r\n\r\n```\r\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask$HandleRebalance.onPartitionsRevoked(WorkerSinkTask.java:695)\r\n\tat org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.invokePartitionsRevoked(ConsumerCoordinator.java:312)\r\n\tat org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.onLeavePrepare(ConsumerCoordinator.java:744)\r\n\tat org.apache.kafka.clients.consumer.internals.AbstractCoordinator.close(AbstractCoordinator.java:976)\r\n\tat org.apache.kafka.clients.consumer.internals.ConsumerCoordinator.close(ConsumerCoordinator.java:888)\r\n\tat org.apache.kafka.clients.consumer.KafkaConsumer.close(KafkaConsumer.java:2368)\r\n\tat org.apache.kafka.clients.consumer.KafkaConsumer.close(KafkaConsumer.java:2335)\r\n\tat org.apache.kafka.clients.consumer.KafkaConsumer.close(KafkaConsumer.java:2285)\r\n\tat org.apache.kafka.common.utils.Utils.closeQuietly(Utils.java:933)\r\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.close(WorkerSinkTask.java:174)\r\n\tat org.apache.kafka.connect.runtime.WorkerTask.doClose(WorkerTask.java:164)\r\n\tat org.apache.kafka.connect.runtime.WorkerTask.doRun(WorkerTask.java:191)\r\n\tat org.apache.kafka.connect.runtime.WorkerTask.run(WorkerTask.java:235)\r\n```\r\n\r\nThe only edge case I can think of might be with asynchronous offset commits, but fwict those don't trigger asynchronous rebalance listener callbacks (if they trigger rebalances or rebalance listener callbacks at all).",
+        "createdAt" : "2020-09-29T20:55:43Z",
+        "updatedAt" : "2020-09-29T20:55:43Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e5b217f1274dd896730403a8bd8fc36383ee5ae",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +140,144 @@        this.consumer = consumer;\n        this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);\n        this.taskStopped = false;\n        this.workerErrantRecordReporter = workerErrantRecordReporter;\n    }"
+  },
+  {
+    "id" : "9fb645fa-8480-4c56-98d5-f969575d0792",
+    "prId" : 8918,
+    "prUrl" : "https://github.com/apache/kafka/pull/8918#pullrequestreview-444384725",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d4c7aa34-5789-43f9-9dd2-7bdeac386522",
+        "parentId" : null,
+        "authorId" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "body" : "these shouldn't be noisy. there is some [dedup logic](https://github.com/apache/kafka/blob/2.5.0/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/WorkerSinkTask.java#L430-L434) that should prevent the same message from being printed over and over again.",
+        "createdAt" : "2020-07-08T03:18:19Z",
+        "updatedAt" : "2020-10-14T20:46:26Z",
+        "lastEditedBy" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3fe54aaa51319192de3efc6b8ee4fe5977e0cec3",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +344,348 @@\n    private void doCommitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, final int seqno) {\n        log.debug(\"{} Committing offsets asynchronously using sequence number {}: {}\", this, seqno, offsets);\n        OffsetCommitCallback cb = new OffsetCommitCallback() {\n            @Override"
   }
 ]

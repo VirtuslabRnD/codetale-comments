@@ -185,5 +185,214 @@
     "commit" : "1ad8282dd07d2d4b91647f7f94fe235536139227",
     "line" : 82,
     "diffHunk" : "@@ -1,1 +133,137 @@        final ProcessorStateException exception = firstException.get();\n        if (exception != null) {\n            throw exception;\n        }\n    }"
+  },
+  {
+    "id" : "a20a2cef-b084-4d51-a51b-0956d94d1ca8",
+    "prId" : 8964,
+    "prUrl" : "https://github.com/apache/kafka/pull/8964#pullrequestreview-462117590",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ca2d8e8d-b228-4330-a0a6-f09776ea753d",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I'm a bit torn about this optimization to avoid double checkpointing, because on the other hand, even if we have not made any progress since loaded the checkpoint, we'd still need to make a checkpoint upon closing if we have never made one before -- and I use emptyMap as an indicator for that.\r\n\r\nGiven that upon suspending we are now less likely to checkpoint, the chance that we would double checkpointing (when transiting to suspended, and when transiting to closed) is smaller, and hence I'm thinking maybe I'd just remove this optimization to make the logic a bit simpler. LMK WDYT.",
+        "createdAt" : "2020-07-01T03:23:53Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3af15648-5fdb-4bfa-b996-0662e28d613b",
+        "parentId" : "ca2d8e8d-b228-4330-a0a6-f09776ea753d",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Is this out of date? It seems like we now never checkpoint during suspension so we don't have to bother with this optimization",
+        "createdAt" : "2020-07-21T22:59:32Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1571478c-21f4-47df-81a9-0d985c0585f7",
+        "parentId" : "ca2d8e8d-b228-4330-a0a6-f09776ea753d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Sorry I meant the \"commit\" during suspension: when we suspend a task we would commit the offsets and in `postCommit` we may write the checkpoint file, and then when we close the suspended task we may commit again (note the `prepareCommit` call should return empty offsets since there's nothing new to commit, but in `postCommit` we would checkpoint the file again, i.e. double writing checkpoint.\r\n\r\nSo what I did here is to not enforce checkpointing in `postCommit` during suspension, and only enforce checkpointing in `postCommit` during closing.",
+        "createdAt" : "2020-07-24T05:05:27Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1356f266-56fa-410a-9dc7-22b568ad4169",
+        "parentId" : "ca2d8e8d-b228-4330-a0a6-f09776ea753d",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Can you elaborate on why not enforce the checkpoint during suspension in `handleRevocation` (for the tasks to be closed)? It seems like we just re-introduce this problem of potentially double checkpointing and I'm not sure I understand why we need to checkpoint only in `handleAssignment`. Is this an optimization or a correctness issue or a code cleanness thing?",
+        "createdAt" : "2020-07-28T17:37:42Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "922c1a44-0c91-4139-a7ca-8568da71b643",
+        "parentId" : "ca2d8e8d-b228-4330-a0a6-f09776ea753d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I think we do not need to enforce checkpoint during suspension but only need to do that during closure / recycling; if a suspended task is resumed then we do not need to write checkpoint in between.\r\n\r\nBut admittedly moving forward most suspended tasks would be closed or recycled :slightly_smiling_face: So I can change that back.",
+        "createdAt" : "2020-07-29T00:24:31Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d753745d-dccf-4d2c-8ee7-8a9cfe3318e7",
+        "parentId" : "ca2d8e8d-b228-4330-a0a6-f09776ea753d",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I would expect that writing the checkpoint file should be cheap anyway (it's just some metadata, how bad can it be?) -- or are you worried about the blocking flush to the file system? Thus, I don't consider double-checkpointing as a real issue? Might be a case of pre-mature optimization? It might simplify our code if we just blindly write the checkpoint data even if it did not change? -- But I am fine either way.",
+        "createdAt" : "2020-08-05T23:39:08Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9132348d-ffe0-4e74-935b-572c65c80d95",
+        "parentId" : "ca2d8e8d-b228-4330-a0a6-f09776ea753d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "In the current code we actually call `postCommit(true)` both during suspension and closure. It's just that in `checkpointNeeded` we would only return true with `enforce` if it has changed --- personally I think this is a general optimization worth applying.",
+        "createdAt" : "2020-08-06T00:56:48Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4f2272986357de9c48032d1fd0d9b1482d5a974",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +67,71 @@        // when enforcing checkpoint is required, we should overwrite the checkpoint if it is different from the old one;\n        // otherwise, we only overwrite the checkpoint if it is largely different from the old one\n        return enforceCheckpoint ? totalOffsetDelta > 0 : totalOffsetDelta > OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;\n    }\n"
+  },
+  {
+    "id" : "2cc7922e-7ee7-4a06-8725-d712d5855499",
+    "prId" : 8964,
+    "prUrl" : "https://github.com/apache/kafka/pull/8964#pullrequestreview-456244877",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2559cb9c-eede-4ea2-a491-438691436e04",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is just a placeholder for making less frequent flushing than commits, currently I'm making it num.records based, but it's open for better proposal to decide when flushing should be executed.",
+        "createdAt" : "2020-07-07T02:23:55Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b73790e0-b547-4ecb-ad22-0b9a89b98ea6",
+        "parentId" : "2559cb9c-eede-4ea2-a491-438691436e04",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "It would be awesome if we could do it based on the size of the pending data and the configured memtable size. Not sure if that's really feasible, just throwing it out there",
+        "createdAt" : "2020-07-24T18:10:25Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a3553a7-8898-4e80-9b08-3463eeeb92ba",
+        "parentId" : "2559cb9c-eede-4ea2-a491-438691436e04",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "You mean when the accumulated pending data is larger than the memtable, we should checkpoint?",
+        "createdAt" : "2020-07-27T00:05:24Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "96ddda55-fc3c-4a0c-bb7f-c81bb99043f8",
+        "parentId" : "2559cb9c-eede-4ea2-a491-438691436e04",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Something like that. We know rocksdb will render the memtable immutable once it reaches the configured memtable size, after that it will flush once the number of immutable memtables reaches the configured value. Probably makes sense to align our checkpoint/flushing to the configured rocksdb flushing.\r\n\r\nWould be cool if we could piggy-back on the rocksdb options and avoid a new config in Streams altogether, but obviously not everyone uses rocksdb",
+        "createdAt" : "2020-07-27T23:33:10Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba045854-9635-45cb-89f1-fb6c1674a38e",
+        "parentId" : "2559cb9c-eede-4ea2-a491-438691436e04",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Yeah my major concern is to tie the flushing policy with rocksdb -- although it is the default persistent stores now, we should avoid tying with a specific type of stores.",
+        "createdAt" : "2020-07-28T01:40:35Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4f2272986357de9c48032d1fd0d9b1482d5a974",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +42,46 @@final class StateManagerUtil {\n    static final String CHECKPOINT_FILE_NAME = \".checkpoint\";\n    static final long OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT = 10_000L;\n\n    private StateManagerUtil() {}"
+  },
+  {
+    "id" : "f1e323ea-db13-46c2-8bf1-4fa28b2cfb73",
+    "prId" : 8996,
+    "prUrl" : "https://github.com/apache/kafka/pull/8996#pullrequestreview-445973926",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "33f49759-d6c9-482f-bbf9-7033b9b22d35",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I take it this block can also throw an exception? We shouldn't throw exceptions inside a finally block because it's not defined when the exception will be thrown, or in the case where the first try block threw, which exception is ultimately thrown is also undefined.\r\n\r\nTo make this simpler to grapple with, we added org.apache.kafka.streams.state.internals.ExceptionUtils#executeAll",
+        "createdAt" : "2020-07-09T19:11:58Z",
+        "updatedAt" : "2020-07-09T19:14:27Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0aca226f-ef10-4e4f-bce0-e7a6e480099b",
+        "parentId" : "33f49759-d6c9-482f-bbf9-7033b9b22d35",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Well, I figured it didn't matter since these both just throw IOException which we catch in the outer block. The point was to make sure we unlock it. But I'll check out `ExceptionUtils#executeAll`",
+        "createdAt" : "2020-07-09T20:43:56Z",
+        "updatedAt" : "2020-07-09T20:43:56Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0caea0d-5c31-4608-84b2-924e2a4317a7",
+        "parentId" : "33f49759-d6c9-482f-bbf9-7033b9b22d35",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I can't use `ExceptionUtils#executeAll` because the compiler complains that we don't handle the `IOException` unless we surround each Runnable with its own try-catch block, at which point `#executeAll` isn't really doing anything",
+        "createdAt" : "2020-07-09T21:08:30Z",
+        "updatedAt" : "2020-07-09T21:08:31Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac623c13-75b4-48c1-9002-5999076997fc",
+        "parentId" : "33f49759-d6c9-482f-bbf9-7033b9b22d35",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "IMHO, the code is good as-is.\r\n\r\nThanks for rewriting to a nested `try-final` structure!",
+        "createdAt" : "2020-07-09T21:14:44Z",
+        "updatedAt" : "2020-07-09T21:14:44Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6f6db6d6dea1a2164ee59895e46ccc268e6a477d",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +118,122 @@                    } finally {\n                        stateDirectory.unlock(id);\n                    }\n                }\n            }"
   }
 ]

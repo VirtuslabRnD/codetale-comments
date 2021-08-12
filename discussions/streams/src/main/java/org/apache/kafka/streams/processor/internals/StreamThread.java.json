@@ -1890,5 +1890,236 @@
     "commit" : "f7aad3ae9d2dbce77fe3e2ec2957298d466fb003",
     "line" : 4,
     "diffHunk" : "@@ -1,1 +552,556 @@                    log.info(\"Triggering the followup rebalance scheduled for {} ms.\", nextProbingRebalanceMs.get());\n                    mainConsumer.enforceRebalance();\n                    nextProbingRebalanceMs.set(Long.MAX_VALUE);\n                }\n            } catch (final TaskCorruptedException e) {"
+  },
+  {
+    "id" : "90913c76-5dbb-406f-8daa-0d463ca8fff9",
+    "prId" : 8994,
+    "prUrl" : "https://github.com/apache/kafka/pull/8994#pullrequestreview-446716036",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1e5e9ba3-ee3a-46d9-9e33-d02c2f335b72",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "What's up with this?",
+        "createdAt" : "2020-07-08T23:43:58Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "84b49f03-b5bc-490d-a4bd-038067957abf",
+        "parentId" : "1e5e9ba3-ee3a-46d9-9e33-d02c2f335b72",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I meant to call this out, too. In order to get the task re-initialized after a corruption recovery, we could set the state back to PartitionsAssigned, but I felt that would be confusing in the logs. Instead, I added an extra condition that we'll initialize tasks if there are any that need initialization, even though the thread may already be in running, which means we can have a self-transition from running to running.",
+        "createdAt" : "2020-07-09T03:10:36Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bb24d23a-a4c2-4c6a-bec2-f2fbd92615ef",
+        "parentId" : "1e5e9ba3-ee3a-46d9-9e33-d02c2f335b72",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Where does this self-transition happen exactly? And could/should we detect this case and not call `setState()` for this case instead of allowing the transition?",
+        "createdAt" : "2020-07-09T18:29:26Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a5a392b-9fb6-4bf5-a88e-f7f0f6187a62",
+        "parentId" : "1e5e9ba3-ee3a-46d9-9e33-d02c2f335b72",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "\\cc @vvcephei ",
+        "createdAt" : "2020-07-10T04:50:02Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a6e4dcf-3327-4755-9945-6279914a3258",
+        "parentId" : "1e5e9ba3-ee3a-46d9-9e33-d02c2f335b72",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Ah, sorry, I didn't see this follow-up question.\r\n\r\nIt's here: https://github.com/apache/kafka/blob/568dceb5f61c71428432d23d947c5f9b29fb7bfb/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamThread.java#L657\r\n\r\nI thought about it, but it seemed to be in violation of the whole idea of having a specified state machine. I.e., saying \"`if not running, setState(running)`\" is literally the same thing as saying that self-transitions are allowed. So why not just say that self-transitions are allowed (explicitly instead of implicitly)?\r\n\r\nAnyway, that's what I was thinking; no guarantee that it makes sense ;)",
+        "createdAt" : "2020-07-10T19:19:05Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "797007dd-13cf-474d-ac65-9dfbd4fd35ea",
+        "parentId" : "1e5e9ba3-ee3a-46d9-9e33-d02c2f335b72",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I agree with the sentiment. However, our overall patterns is to disallowed self-transitions, ie, this pattern is applied throughout all other code. IMHO, I might be better to stick with one pattern. Thus, if we think we should allow self-transitions, we might want to do it for all states and update the code throughout accordingly. Begin in a \"mixed mode\" seems suboptimal.\r\n\r\nOf course this would be follow up work. And frankly I am not sure if it would buy us much at this point?",
+        "createdAt" : "2020-07-10T20:48:36Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62bcd995-1cd4-485e-8596-46afdc8e7b50",
+        "parentId" : "1e5e9ba3-ee3a-46d9-9e33-d02c2f335b72",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "FWIW, we actually do follow this pattern already, at least with respect to StreamThread state transitions. I'd rather be consistent with the other StreamThread state changes and inconsistent with other places in the code (eg the Task state changes), especially if we all agree this seems like the sensible approach to the fsm",
+        "createdAt" : "2020-07-10T20:56:29Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b12510f5-424a-4ab0-b45f-4c7b68158e1c",
+        "parentId" : "1e5e9ba3-ee3a-46d9-9e33-d02c2f335b72",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Thanks for chiming in. Seems I did not separate thread state and task state transition. Sorry for the confusion.",
+        "createdAt" : "2020-07-10T21:20:05Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "422b97ef-eaa8-41d6-bfa5-0fa7355ae580",
+        "parentId" : "1e5e9ba3-ee3a-46d9-9e33-d02c2f335b72",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "No worries, thanks for the review @mjsax . Now that I'm thinking about it, it does seem like Task is _allowing_ self-transitions, rather than _disallowing_ them, so we should probably add the self-transitions to the Task state machine. But maybe in a follow-up.",
+        "createdAt" : "2020-07-10T21:41:44Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a8fbcc37a3f9881be49852b8a300b046a90a920",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +96,100 @@     *          |      +-----+-------+      |\n     *          |            |              |\n     *          |            |--------------+\n     *          |            v              |\n     *          |      +-----+-------+      |"
+  },
+  {
+    "id" : "6be3be27-c033-4cca-9624-dabddcf10c78",
+    "prId" : 8994,
+    "prUrl" : "https://github.com/apache/kafka/pull/8994#pullrequestreview-445261425",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9b9e1380-2f41-4fa3-940c-0df113e4303c",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Why do we need this?",
+        "createdAt" : "2020-07-08T23:59:38Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8ebb21d5-28cf-4ccc-af2a-a37b516ce0b3",
+        "parentId" : "9b9e1380-2f41-4fa3-940c-0df113e4303c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Sorry, I meant to explain it, but forgot. I've explained it here: https://github.com/apache/kafka/pull/8994#discussion_r451938891",
+        "createdAt" : "2020-07-09T03:11:24Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a8fbcc37a3f9881be49852b8a300b046a90a920",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +138,142 @@        PARTITIONS_REVOKED(2, 3, 5),      // 2\n        PARTITIONS_ASSIGNED(2, 3, 4, 5),  // 3\n        RUNNING(2, 3, 4, 5),              // 4\n        PENDING_SHUTDOWN(6),              // 5\n        DEAD;                             // 6"
+  },
+  {
+    "id" : "f40c9a7c-bbb9-4af6-bc89-7399b1efb1c8",
+    "prId" : 8994,
+    "prUrl" : "https://github.com/apache/kafka/pull/8994#pullrequestreview-446760274",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab5e33fc-6da6-4827-b2b7-a55cb880e9bb",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "We we need this `isEmpty` check? What happens is we blindly pass an empty set into `seekToBeginning`? -- Similar for `seekToEnd()` below?",
+        "createdAt" : "2020-07-10T22:31:31Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3b1bfda0-c0a4-4adf-bd81-4afb136e361b",
+        "parentId" : "ab5e33fc-6da6-4827-b2b7-a55cb880e9bb",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Huh, I didn't wonder that before, but ... dear god. From the javadoc on KafkaConsumer:\r\n> If no partitions are provided, seek to the first offset for all of the currently assigned partitions.\r\n\r\nWhat a dangerous API!",
+        "createdAt" : "2020-07-10T22:39:05Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5869a5bf-eb58-46a1-9268-7a25f91a791a",
+        "parentId" : "ab5e33fc-6da6-4827-b2b7-a55cb880e9bb",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Just verified that we never call it unguarded by a non-empty check.",
+        "createdAt" : "2020-07-10T23:35:46Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ffc40f53-351b-48c2-b9d2-0c7184e41474",
+        "parentId" : "ab5e33fc-6da6-4827-b2b7-a55cb880e9bb",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Awesome! Thanks for double checking!",
+        "createdAt" : "2020-07-11T00:33:59Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a8fbcc37a3f9881be49852b8a300b046a90a920",
+    "line" : 102,
+    "diffHunk" : "@@ -1,1 +795,799 @@\n        if (notReset.isEmpty()) {\n            if (!seekToBeginning.isEmpty()) {\n                mainConsumer.seekToBeginning(seekToBeginning);\n            }"
+  },
+  {
+    "id" : "2338d3b6-a8e0-4a18-93c9-880e9a3af219",
+    "prId" : 8994,
+    "prUrl" : "https://github.com/apache/kafka/pull/8994#pullrequestreview-446821078",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0ba787e4-394e-416c-aab1-7824187b8573",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "The flaky test was related to us going into this block from other states. I finally got a clue when one of the tests failed on \"invalid transition from PARTITIONS_REVOKED to RUNNING\". I'm not sure how, exactly, but I think the shutdown test that failed on ConcurrentModificationException was also related, probably due to the test invoking the handleAssignment/Revocation/Lost methods from a different thread (which can normally never happen).\r\n\r\nAnyway, my prior code only intended to add the _self_ transition, but failed to make sure we were actually in a self-transition. It's fixed now.",
+        "createdAt" : "2020-07-11T04:58:02Z",
+        "updatedAt" : "2020-07-11T05:00:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac8b249a-fdb1-4bac-b71a-9808a748415d",
+        "parentId" : "0ba787e4-394e-416c-aab1-7824187b8573",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Thanks. The fix makes sense to me.",
+        "createdAt" : "2020-07-11T18:38:57Z",
+        "updatedAt" : "2020-07-11T18:38:58Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a8fbcc37a3f9881be49852b8a300b046a90a920",
+    "line" : 47,
+    "diffHunk" : "@@ -1,1 +653,657 @@        // if the state is still in PARTITION_ASSIGNED after the poll call\n        if (state == State.PARTITIONS_ASSIGNED\n            || state == State.RUNNING && taskManager.needsInitializationOrRestoration()) {\n\n            // transit to restore active is idempotent so we can call it multiple times"
   }
 ]

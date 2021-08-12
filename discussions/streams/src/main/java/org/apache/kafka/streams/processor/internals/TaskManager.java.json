@@ -2242,5 +2242,214 @@
     "commit" : "20321fd1325d402405a4b5899c22c83a51732b1c",
     "line" : 67,
     "diffHunk" : "@@ -1,1 +706,710 @@        // have still been in CREATED at the time of shutdown, since Task#close will not do so\n        executeAndMaybeSwallow(\n            clean,\n            this::releaseLockedUnassignedTaskDirectories,\n            e -> firstException.compareAndSet(null, e),"
+  },
+  {
+    "id" : "692fc600-c152-45df-addd-5b2900cce916",
+    "prId" : 8964,
+    "prUrl" : "https://github.com/apache/kafka/pull/8964#pullrequestreview-459408630",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d4246ef9-c6ac-470d-aa7a-459ecee9eb38",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "It's still making me a bit uncomfortable that we call `prepare/postCommit` during `handleRevocation`. and `handleAssignment`. Maybe I'm being paranoid but experience has shown it's been difficult for us to keep track of which methods need to be called when, and in what order.\r\nIt seems like, now that we've decoupled flushing from committing, the only reason for calling pre/postCommit in `handleRevocation` is so that the record collector is flushed before committing offsets. So what if we extract the record collector flushing out into a separate StreamTask method that is only ever called in `TaskManager#commitOffsetsOrTransaction`? I haven't thought this all the way through but it just seems like we may as well go all the way in decoupling flushing from committing and split them out into separate methods. Maybe `preCommit` and `postCommit` have become relics of the past",
+        "createdAt" : "2020-07-31T04:10:09Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16defdca-fbd0-44f1-8e03-91d24ef9912e",
+        "parentId" : "d4246ef9-c6ac-470d-aa7a-459ecee9eb38",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I know that's kind of another large change, so feel free to tell me to drop it 🙂  Or one of us can consider as followup work.",
+        "createdAt" : "2020-07-31T04:11:48Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8c342ef-7c7b-454d-843b-44ad78be1127",
+        "parentId" : "d4246ef9-c6ac-470d-aa7a-459ecee9eb38",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Alternatively, now that we enforce checkpoint during suspension, we could just remove the `pre/postCommit` for active tasks in `handleAssignment`. It just seems nice to be able to assert that we never call `pre/postCommit` after a task is suspended",
+        "createdAt" : "2020-07-31T17:29:19Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0ee8497f-48a1-468d-8a56-e5b3711b2ccf",
+        "parentId" : "d4246ef9-c6ac-470d-aa7a-459ecee9eb38",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I'm leaning towards the second option here: in `handleAssignment` we actually do not commit at all, but only use 1) `preCommit` to validate certain states, and use 2) `postCommit` and expecting it to be a no-op actually. Let me see if I can get rid of those two in `handleAssignment`.",
+        "createdAt" : "2020-07-31T19:02:07Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b873bc78-e26e-4834-8375-39fb6edd04a1",
+        "parentId" : "d4246ef9-c6ac-470d-aa7a-459ecee9eb38",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I tried some ways and ended-up with explicitly specifying suspend / postCommit for `standby` tasks only, and use `prepareCommit` to check if the previous revocation has failed or not. Personally I'm happy with the current workflow now.",
+        "createdAt" : "2020-07-31T19:25:09Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4f2272986357de9c48032d1fd0d9b1482d5a974",
+    "line" : 162,
+    "diffHunk" : "@@ -1,1 +330,334 @@                // 2) for standby tasks prepareCommit should always return empty, and then in postCommit we would probably\n                //    write the checkpoint file.\n                final Map<TopicPartition, OffsetAndMetadata> offsets = task.prepareCommit();\n                if (!offsets.isEmpty()) {\n                    log.error(\"Task {} should has been committed when it was suspended, but it reports non-empty \" +"
+  },
+  {
+    "id" : "6a810e8c-0de9-4676-9688-64153db4048c",
+    "prId" : 8964,
+    "prUrl" : "https://github.com/apache/kafka/pull/8964#pullrequestreview-462079456",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f6d55454-bb12-4687-897d-ac977adaf174",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "While I usually prefer checks like this, it seems unnecessary here? (Feel free to ignore.)",
+        "createdAt" : "2020-08-06T00:16:24Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4f2272986357de9c48032d1fd0d9b1482d5a974",
+    "line" : 150,
+    "diffHunk" : "@@ -1,1 +318,322 @@        if (!tasksToCloseDirty.isEmpty()) {\n            throw new IllegalArgumentException(\"Tasks to close-dirty should be empty\");\n        }\n\n        // for all tasks to close or recycle, we should first right a checkpoint as in post-commit"
+  },
+  {
+    "id" : "f441f4cf-112b-49b9-8781-2673967a92ab",
+    "prId" : 8964,
+    "prUrl" : "https://github.com/apache/kafka/pull/8964#pullrequestreview-462079456",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce4f3f1e-bbd0-462b-b32e-5360f95dbc5a",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "We should remove `task` from `taskToCloseClean`/`taskToRecycle` here to maintain the invariant that a task is only in either one of the three sets/list but never in multiple at the same time. (cf. my comment below)\r\n\r\nI understand that you want to share this loop for \"cleanClose\" and \"recycle\" we can extract it into its own method to achieve this.",
+        "createdAt" : "2020-08-06T00:17:27Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4f2272986357de9c48032d1fd0d9b1482d5a974",
+    "line" : 168,
+    "diffHunk" : "@@ -1,1 +336,340 @@                            task.id(), offsets);\n\n                    tasksToCloseDirty.add(task);\n                } else if (!task.isActive()) {\n                    // For standby tasks, always try to first suspend before committing (checkpointing) it;"
+  },
+  {
+    "id" : "2aa9bb23-c18d-4cda-ae22-2541c730504c",
+    "prId" : 8964,
+    "prUrl" : "https://github.com/apache/kafka/pull/8964#pullrequestreview-462079456",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "01bdf2b9-5e5e-45f6-8e2a-fd4e43ea9c93",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "as above.",
+        "createdAt" : "2020-08-06T00:17:36Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4f2272986357de9c48032d1fd0d9b1482d5a974",
+    "line" : 185,
+    "diffHunk" : "@@ -1,1 +353,357 @@                // We've already recorded the exception (which is the point of clean).\n                // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.\n                tasksToCloseDirty.add(task);\n            }\n        }"
+  },
+  {
+    "id" : "f993b718-362c-466f-95c8-0365931d6d84",
+    "prId" : 8964,
+    "prUrl" : "https://github.com/apache/kafka/pull/8964#pullrequestreview-462079456",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a9cdff74-c48c-4048-afd0-c5b142e2a3fa",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "as above",
+        "createdAt" : "2020-08-06T00:17:44Z",
+        "updatedAt" : "2020-08-11T21:25:16Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4f2272986357de9c48032d1fd0d9b1482d5a974",
+    "line" : 201,
+    "diffHunk" : "@@ -1,1 +369,373 @@                log.error(uncleanMessage, e);\n                taskCloseExceptions.putIfAbsent(task.id(), e);\n                tasksToCloseDirty.add(task);\n            }\n        }"
+  },
+  {
+    "id" : "f89451b1-2c9a-42c0-83d5-632ef048f65c",
+    "prId" : 8994,
+    "prUrl" : "https://github.com/apache/kafka/pull/8994#pullrequestreview-445798208",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7ead8f36-3fbe-4233-8710-760ddc2b63be",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Shouldn't try to reset the main consumer at all if this is only a standby.",
+        "createdAt" : "2020-07-09T16:58:12Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a8fbcc37a3f9881be49852b8a300b046a90a920",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +196,200 @@            }\n            task.closeDirty();\n            if (task.isActive()) {\n                // Pause so we won't poll any more records for this task until it has been re-initialized\n                // Note, closeDirty already clears the partitiongroup for the task."
+  },
+  {
+    "id" : "d3397f5b-a169-4a89-b998-0a65494f7cba",
+    "prId" : 8994,
+    "prUrl" : "https://github.com/apache/kafka/pull/8994#pullrequestreview-446736291",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6d6d091a-13b5-44ef-a1b2-26a9d26bc2f4",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "For my own education: when does the actual `resume()` happen (and are we sure those partitions are resumed later?)",
+        "createdAt" : "2020-07-10T22:34:35Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1b5632f8-01ea-4f85-b7e1-c910021e79b7",
+        "parentId" : "6d6d091a-13b5-44ef-a1b2-26a9d26bc2f4",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Good question!\r\nIt goes through the \"restoration\" phase, at the end of which, we resume the main consumer's partitions.\r\n\r\nIn TaskManager:\r\n```\r\n        if (allRunning) {\r\n            // we can call resume multiple times since it is idempotent.\r\n            mainConsumer.resume(mainConsumer.assignment());\r\n        }\r\n```",
+        "createdAt" : "2020-07-10T22:40:28Z",
+        "updatedAt" : "2020-07-11T04:40:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7a8fbcc37a3f9881be49852b8a300b046a90a920",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +212,216 @@                }\n\n                mainConsumer().pause(assignedToPauseAndReset);\n                final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer().committed(assignedToPauseAndReset);\n                for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : committed.entrySet()) {"
   }
 ]
