@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "193c371d-e316-49ea-bdb6-2565cd7358c1",
+    "prId" : 4959,
+    "prUrl" : "https://github.com/apache/kafka/pull/4959#pullrequestreview-120364573",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5570a959-ec18-4f45-b015-1a7d562aa6e4",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This makes me thinking: we should let least document that users should not rely on the number of generated valueTransformers in their logic, because here, we will create two instances for getter and processor, hence we'd actually get 2N instances of transformers given N tasks, etc.",
+        "createdAt" : "2018-05-14T18:31:16Z",
+        "updatedAt" : "2018-05-18T21:57:57Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1314e937-1c0c-4a17-b0f1-abf0bb8bc62e",
+        "parentId" : "5570a959-ec18-4f45-b015-1a7d562aa6e4",
+        "authorId" : "e431deb4-a19e-4e78-a775-12af049c9089",
+        "body" : "@guozhangwang, is it 2N always, or either 1N or 2N depending on whether the downstream processor node is materialized or not?",
+        "createdAt" : "2018-05-14T22:53:19Z",
+        "updatedAt" : "2018-05-18T21:57:57Z",
+        "lastEditedBy" : "e431deb4-a19e-4e78-a775-12af049c9089",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "82036e0a-897d-4be4-ab57-e96ac61314dd",
+        "parentId" : "5570a959-ec18-4f45-b015-1a7d562aa6e4",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "It is not 2N always, I think the point here is that the valueTransformer.transform() call could be triggered more than once for each record, because of 1) we may use a `getter` that initialize a new value transformer, 2) we may send old values which calls `transform` again on the old values. This is unfortunately not very intuitive to users, and we'd better warn them about that for now. And in the future we can consider how to address this (I've filed a JIRA for it)",
+        "createdAt" : "2018-05-15T18:42:00Z",
+        "updatedAt" : "2018-05-18T21:57:57Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "33adaa715c6b8d930bb8a901a7406d9f0904e81a",
+    "line" : 135,
+    "diffHunk" : "@@ -1,1 +133,137 @@            parentGetter.init(context);\n\n            valueTransformer.init(new ForwardingDisabledProcessorContext(context));\n        }\n"
+  },
+  {
+    "id" : "1d426045-b314-4fdb-bdde-00b66c508562",
+    "prId" : 4959,
+    "prUrl" : "https://github.com/apache/kafka/pull/4959#pullrequestreview-120822370",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5017f78b-ed7c-4e7e-a39c-d034b0db2cf6",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "For `KTableTransformValuesProcessor` that extends `AbstractProcessor`, we should override its `close()` call as:\r\n\r\n```\r\n       @Override\r\n        public void close() {\r\n            valueTransformer.close();\r\n        }\r\n```\r\n\r\nSimilarly we should close the `valueTransformer` in `Getter` as well. Unfortunately we do not have a `close()` in `KTableValueGetter` yet. If there is no better way to call `valueTransformer.close()` when the topology is closing we should then add this function and make sure it is called when the dependent processor node is being closed.",
+        "createdAt" : "2018-05-14T18:46:47Z",
+        "updatedAt" : "2018-05-18T21:57:57Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0ba6b6ef-691b-4f62-be4b-9641981d4873",
+        "parentId" : "5017f78b-ed7c-4e7e-a39c-d034b0db2cf6",
+        "authorId" : "e431deb4-a19e-4e78-a775-12af049c9089",
+        "body" : "Can't see a better way, so adding `close()` to KTableValueGetter and wiring that up.",
+        "createdAt" : "2018-05-16T21:12:48Z",
+        "updatedAt" : "2018-05-18T21:57:57Z",
+        "lastEditedBy" : "e431deb4-a19e-4e78-a775-12af049c9089",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "33adaa715c6b8d930bb8a901a7406d9f0904e81a",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +34,38 @@    private boolean sendOldValues = false;\n\n    KTableTransformValues(final KTableImpl<K, ?, V> parent,\n                          final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends V1> transformerSupplier,\n                          final String queryableName) {"
+  }
+]
