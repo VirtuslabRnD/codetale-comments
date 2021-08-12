@@ -42,5 +42,93 @@
     "commit" : "198d50998daad9de66daadbfeb04d759530dbcc8",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +3,7 @@// found in the LICENSE file.\n\nexport 'src/plugin_registry.dart';"
+  },
+  {
+    "id" : "50c81182-937b-4272-8559-7e54df142878",
+    "prId" : 70722,
+    "prUrl" : "https://github.com/flutter/flutter/pull/70722#pullrequestreview-542434625",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b4c8a351-d6a3-48bc-8404-81e41175ee45",
+        "parentId" : null,
+        "authorId" : "8e61038c-e0e3-49db-a5f4-64b67a3393e5",
+        "body" : "Is it possible to keep `js_url_strategy.dart` and `utils.dart` unexported? `url_strategy.dart` exposes enough API for users.",
+        "createdAt" : "2020-11-30T18:03:03Z",
+        "updatedAt" : "2020-11-30T18:04:34Z",
+        "lastEditedBy" : "8e61038c-e0e3-49db-a5f4-64b67a3393e5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "74212f26-bbb2-4832-8ad6-a31263f8f225",
+        "parentId" : "b4c8a351-d6a3-48bc-8404-81e41175ee45",
+        "authorId" : "9b5a6de7-1648-432f-a400-7a47bea935d8",
+        "body" : "By policy we always export everything. Private APIs should be underscore-prefixed. Having a \"private\" API that is just not exported doesn't work, people can (and do) still import those library explicitly. If we think these APIs should be private I can submit a second PR that uses underscore-prefixing to limit their visibility, though.",
+        "createdAt" : "2020-11-30T18:11:07Z",
+        "updatedAt" : "2020-11-30T18:11:07Z",
+        "lastEditedBy" : "9b5a6de7-1648-432f-a400-7a47bea935d8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "576ece41-41a4-4cd9-af31-67ed45c33a81",
+        "parentId" : "b4c8a351-d6a3-48bc-8404-81e41175ee45",
+        "authorId" : "8e61038c-e0e3-49db-a5f4-64b67a3393e5",
+        "body" : "@Hixie That's good to know, thanks for clarifying. I prefer to keep them private and not expose unnecessary APIs to users. I'm not sure how to do that without placing everything in one file though (since `url_strategy.dart` calls into `js_url_strategy.dart` and `utils.dart`). Are you talking about underscore-prefixing file names? Or underscore-prefixing classes?",
+        "createdAt" : "2020-11-30T18:20:51Z",
+        "updatedAt" : "2020-11-30T18:20:51Z",
+        "lastEditedBy" : "8e61038c-e0e3-49db-a5f4-64b67a3393e5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34be56bc-f6c3-4f01-acde-7ec2fc2bd889",
+        "parentId" : "b4c8a351-d6a3-48bc-8404-81e41175ee45",
+        "authorId" : "9b5a6de7-1648-432f-a400-7a47bea935d8",
+        "body" : "Putting everything in one file is what I meant, yeah.\r\n\r\nThese files are pretty short, it would probably be fine to do that if you feel strongly about wanting these APIs private.",
+        "createdAt" : "2020-12-01T00:45:30Z",
+        "updatedAt" : "2020-12-01T00:45:30Z",
+        "lastEditedBy" : "9b5a6de7-1648-432f-a400-7a47bea935d8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1d57cea3-c58d-4fa7-83e0-4b397ea73ad8",
+        "parentId" : "b4c8a351-d6a3-48bc-8404-81e41175ee45",
+        "authorId" : "da7c6230-81e0-42ca-a747-81cf34aaa357",
+        "body" : "> By policy we always export everything. [...] people can (and do) still import those library explicitly. [...] Putting everything in one file is what I meant\r\n\r\n@Hixie may I add a +1 on Mouad's push-back on this?\r\n\r\nI see a problem with exporting private APIs like this: they'll pollute the documentation of the library with information that the user doesn't need to know/care about. The bigger the surface of the API, the harder it is to add backwards-compatible changes to it.\r\n\r\nMoving everything to a big file (be it by copy-pasting into a big file, or using a `part` directives) makes the library harder to reason about and maintain (at least, for me).\r\n\r\nWhile migrating old plugins to the new Federated architecture, I found some maintainability issues derived from the `_` pattern (mostly in `part`ed libraries, and especially with _PrivateClasses and _PrivateEnums):\r\n\r\n* Code is harder to read. Depending on how much 'private' API exists, a file might end up growing to a huge size. See any web plugin for examples where most (lots) of the code is private, and we need to tightly control what gets exported and what doesn't.\r\n* Code is harder to test. IIRC `_PrivateThings` can't be seen/used from your unit tests, (can they???)\r\n* Code is harder to extend/refactor/split after it's been merged. For example: how can a private `_Enum` be shared from several library entrypoints if it's not in a common file? What if `_Enum` then needs to become public because it needs to be shared across packages?\r\n\r\nThe `part` directive (and I guess, by extension, copy-pasting code into a single big file) is discouraged by Dart in: \"[Creating packages: Organizing a library package](https://dart.dev/guides/libraries/create-library-packages#organizing-a-library-package)\":\r\n\r\n>> **Note:** You may have heard of the `part` directive, which allows you to split a library into multiple Dart files. We recommend that you avoid using `part` and create mini libraries instead.\r\n\r\nWRT importing from somebody else's `src`; according to Dart's \"[Package layout conventions: Implementation files](https://dart.dev/tools/pub/package-layout#implementation-files)\" (emphasis mine): \r\n\r\n>> You are free to import libraries that live in `lib/src` from within other Dart code in the same package (like other libraries in `lib`, scripts in `bin`, and tests) but **you should never import from another package’s `lib/src` directory. Those files are not part of the package’s public API, and they might change in ways that could break your code.**\r\n\r\nI understand that people may have imported from `lib/src` on occasion, but they really **shouldn't**. (Can we make [the `implementation_imports` lint](https://dart-lang.github.io/linter/lints/implementation_imports.html) mandatory at the dart-sdk level? :P)\r\n",
+        "createdAt" : "2020-12-01T02:26:02Z",
+        "updatedAt" : "2020-12-01T02:27:56Z",
+        "lastEditedBy" : "da7c6230-81e0-42ca-a747-81cf34aaa357",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f0326806-0eda-4d95-babe-3f96084e4b46",
+        "parentId" : "b4c8a351-d6a3-48bc-8404-81e41175ee45",
+        "authorId" : "9b5a6de7-1648-432f-a400-7a47bea935d8",
+        "body" : "I agree with everything you say. The problem is that in practice people find \"hidden\" APIs and there's a psychological thing where using a hidden/undocumented API feels \"cool\", and so then they're using a bunch of undocumented APIs and the APIs not being documented becomes a hindrance, not a benefit... and we don't get any of the benefits of \"internal\" APIs being easier to break.\r\n\r\nThis is why our breaking change policy doesn't take public/private into account. It doesn't matter if an API we want to change is documented or not; what matters is whether or not it breaks a test in flutter/tests (the customer_testing shard).\r\n\r\nThat's why I just made it all public. The reality is that they are all public anyway.",
+        "createdAt" : "2020-12-01T23:36:25Z",
+        "updatedAt" : "2020-12-01T23:36:25Z",
+        "lastEditedBy" : "9b5a6de7-1648-432f-a400-7a47bea935d8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a50d621-cd15-4720-abfc-01b840533582",
+        "parentId" : "b4c8a351-d6a3-48bc-8404-81e41175ee45",
+        "authorId" : "da7c6230-81e0-42ca-a747-81cf34aaa357",
+        "body" : "If I had to make the choice, I'd prefer \"all public\" than \"all in a single file\" too :P ",
+        "createdAt" : "2020-12-02T01:40:59Z",
+        "updatedAt" : "2020-12-02T01:40:59Z",
+        "lastEditedBy" : "da7c6230-81e0-42ca-a747-81cf34aaa357",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "404da10e82223bcd462fd1308f871d3b815ced74",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +18,22 @@export 'src/navigation/js_url_strategy.dart';\nexport 'src/navigation/url_strategy.dart';\nexport 'src/navigation/utils.dart';\nexport 'src/plugin_event_channel.dart';\nexport 'src/plugin_registry.dart';"
   }
 ]
