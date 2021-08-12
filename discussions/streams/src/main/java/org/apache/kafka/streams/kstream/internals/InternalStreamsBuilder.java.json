@@ -20,5 +20,214 @@
     "commit" : "4f4728f60d68d61a376113cf4267d7c2c29774b5",
     "line" : 9,
     "diffHunk" : "@@ -1,1 +200,204 @@                                            final ConsumedInternal consumed,\n                                            final ProcessorSupplier stateUpdateSupplier) {\n        // explicitly disable logging for global stores\n        storeBuilder.withLoggingDisabled();\n        final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);"
+  },
+  {
+    "id" : "69ff4015-87e3-4b32-ba2f-2e13f0e12177",
+    "prId" : 5451,
+    "prUrl" : "https://github.com/apache/kafka/pull/5451#pullrequestreview-143793752",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0fdbed28-86c1-42ad-9492-fe19829d1a99",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Traverse up the graph to only update the descendants of key-changing operation that actually require repartitioning. \r\n",
+        "createdAt" : "2018-08-06T23:26:40Z",
+        "updatedAt" : "2018-08-14T00:17:00Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9faa4975e48126bc019e77e03e8ec8ce2f75826d",
+    "line" : 153,
+    "diffHunk" : "@@ -1,1 +322,326 @@            for (final OptimizableRepartitionNode repartitionNodeToBeReplaced : entry.getValue()) {\n\n                final StreamsGraphNode keyChangingNodeChild = findParentNodeMatching(repartitionNodeToBeReplaced, gn -> gn.parentNodes().contains(keyChangingNode));\n\n                if (keyChangingNodeChild == null) {"
+  },
+  {
+    "id" : "f3d54008-936f-45df-b778-2edc0a88b3ed",
+    "prId" : 5451,
+    "prUrl" : "https://github.com/apache/kafka/pull/5451#pullrequestreview-145886964",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "55e6f6ff-34d0-4d63-9b40-c8a200ffec1b",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Actually, Matthias's question is still nagging me... Do we know it's impossible to have two paths back to the keyChangingNode?",
+        "createdAt" : "2018-08-10T22:33:51Z",
+        "updatedAt" : "2018-08-14T00:17:00Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b2573ce-fdbd-41e7-ad20-ef46a0b03151",
+        "parentId" : "55e6f6ff-34d0-4d63-9b40-c8a200ffec1b",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I think so, but I'll write a test to verify.",
+        "createdAt" : "2018-08-10T22:53:53Z",
+        "updatedAt" : "2018-08-14T00:17:00Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "277e4564-51af-44a1-8d40-f320195ab9c5",
+        "parentId" : "55e6f6ff-34d0-4d63-9b40-c8a200ffec1b",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : ">Actually, Matthias's question is still nagging me... Do we know it's impossible to have two paths back to the keyChangingNode\r\n\r\nWell if the key changing node has multiple children then yes, but code currently accounts for this and unless I misunderstand your concern, that's the main focus of this optimization,  taking multiple child nodes which require a repartition and reducing them down to one where possible.\r\n\r\nHaving said that, from thinking over the weekend I did come up with an edge condition concerning using `merge` which I'll address as general comment on this PR.",
+        "createdAt" : "2018-08-13T13:53:47Z",
+        "updatedAt" : "2018-08-14T00:17:00Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ccbccf1f-29a7-48d3-b424-5f8e0a3505d6",
+        "parentId" : "55e6f6ff-34d0-4d63-9b40-c8a200ffec1b",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Ok, I think that's what I was talking about. Not multiple child nodes, but multiple parents somewhere on the chain back from `repartitionNodeToBeReplaced` to `keyChangingNode`. \r\n\r\nThis line of code seems to assume that there is always one path back to `keyChangingNode`, but in general, you could have a diamond (since this is a DAG and not a tree). like :\r\n\r\n```\r\nkeyChangingNode\r\n  |        |\r\n  c1       c2\r\n   \\       /\r\n  (something)\r\n       |\r\nrepartitionNodeToBeReplaced\r\n```\r\n\r\nIf this can occur, then there would need to be multiple of `keyChangingNodeChild` which all need to be re-rooted.\r\n\r\nBut I'm not sure it can occur.",
+        "createdAt" : "2018-08-13T14:11:40Z",
+        "updatedAt" : "2018-08-14T00:17:00Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0f0153e3-f098-440d-9ca8-62e4d61f4fad",
+        "parentId" : "55e6f6ff-34d0-4d63-9b40-c8a200ffec1b",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "oh, actually I think it can. I think this will produce two paths back:\r\n```\r\nchangedKeyStream = stream.map(...)\r\nleft = changedKeyStream.filter(fnA)\r\nright = changedKeyStream.filter(fnB)\r\nmerged = left.merge(right)\r\nmerged.join(otherStream)\r\n```\r\nAnd I *think* this code would only re-root either `left` or `right`, but they should both be re-rooted, right?\r\n\r\nIf so, it might make a good test case.",
+        "createdAt" : "2018-08-13T14:20:23Z",
+        "updatedAt" : "2018-08-14T00:17:00Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20b473c4-cdd3-4ea0-a6a5-2bc4ac951429",
+        "parentId" : "55e6f6ff-34d0-4d63-9b40-c8a200ffec1b",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "What you are talking about above is the \"edge condition\" (maybe not an edge condition, but rare?), I was referring to above.\r\n\r\nThis is the case I was thinking of :\r\n\r\n```\r\nupdatedA = originalStream.map(...);\r\nupdatedB = otherStream.map(...);\r\nmerged = updatedA.merge(updatedB)\r\nmerged.groupByKey().windowedBy(....)\r\nmerged.groupByKey().windowedBy(...)\r\n```\r\nAs the code stands right now, we only grab the first key-changing parent node, but in reality, we need to grab both key-changing parent nodes and insert a new repartition node as a child of both.\r\n\r\nI'm planning on updating the PR to handle this case.",
+        "createdAt" : "2018-08-13T14:44:01Z",
+        "updatedAt" : "2018-08-14T00:17:00Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "274ab377-d1f0-4513-87e4-5476ee41fbe0",
+        "parentId" : "55e6f6ff-34d0-4d63-9b40-c8a200ffec1b",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Now seeing the example (super helpful) I am wondering if we can/should be more fancy. I think, it's actually three cases:\r\n\r\n```\r\nrekeyed = stream1.map();\r\nmerged = rekeyed.merged(stream2);\r\nmerged.groupByKey()...\r\n```\r\nFor this case, without optimization, we would insert repartition _after_ merge _before_ groupBy -- this mean, we repartition stream2 for no good reason. Could we repartition _before_ merge? Checking first parent might catch this case?\r\n\r\n```\r\nrekeyed = stream1.map();\r\nmerged = stream2.merged(rekeyed); // similar to above put change order of childen\r\nmerged.groupByKey()...\r\n```\r\nThis case is similar, but we might not detect if, if we don't check all parent nodes. Thus, we might miss to insert an repartition topic at all in current code?\r\n\r\n```\r\nrekeyed1 = stream1.map();\r\nrekeyed2 = stream2.map();\r\nmerged = rekeyed1.merged(rekeyed2);\r\nmerged.groupByKey()...\r\n```\r\nFor this case, we should do the repartition _after_ merge -- otherwise, we would create two repartition topics what is not desired (for the case, that `rekeyed1` and `rekeyed2` are not used elsewhere, too). If `rekeyed1` or `rekeyed2` are use like this:\r\n```\r\nrekeyed1 = stream1.map();\r\nrekeyed1.groupByKey()\r\nrekeyed2 = stream2.map();\r\nmerged = rekeyed1.merged(rekeyed2);\r\nmerged.groupByKey()...\r\n```\r\nwe would still need two repartition topics, because we need content of `stream1` not be mixed with `stream2` in line 2. Also, as `rekeyed1` will be repartitions already before merge(), we don't need to repartition again but `stream2` should be repartition on it's own before merge(), too.\r\n\r\nDoes this make sense? (note, that merge requires that key and value type of both input streams are the same, and thus, we can use same Serdes independent where we insert the repartition topic(s))",
+        "createdAt" : "2018-08-14T00:56:51Z",
+        "updatedAt" : "2018-08-14T00:56:51Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9faa4975e48126bc019e77e03e8ec8ce2f75826d",
+    "line" : 153,
+    "diffHunk" : "@@ -1,1 +322,326 @@            for (final OptimizableRepartitionNode repartitionNodeToBeReplaced : entry.getValue()) {\n\n                final StreamsGraphNode keyChangingNodeChild = findParentNodeMatching(repartitionNodeToBeReplaced, gn -> gn.parentNodes().contains(keyChangingNode));\n\n                if (keyChangingNodeChild == null) {"
+  },
+  {
+    "id" : "4bf83aa9-a102-4041-95b7-fdb792a0eeb4",
+    "prId" : 5451,
+    "prUrl" : "https://github.com/apache/kafka/pull/5451#pullrequestreview-146184239",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c2ac7f8a-e084-4520-9daa-25724f3794c8",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "IMHO  it's more straightforward to build the key-changing to optimizing nodes map as is.  \r\n\r\nThen before optimizing the topology for repartition nodes, we iterate over the map and \"intercept\" any key-changing nodes that have a `merge` node as a child.\r\n\r\nSince the `merge` node sits between the key-changing node and the repartition node(s) we can use the `merge` node as a proxy for all parent key-changing nodes for the associated repartition node children.",
+        "createdAt" : "2018-08-14T00:25:33Z",
+        "updatedAt" : "2018-08-14T00:31:32Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eac1d2d6-0916-41fc-8c69-5b2af9860df6",
+        "parentId" : "c2ac7f8a-e084-4520-9daa-25724f3794c8",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@mjsax had a comment above that, for the following case:\r\n\r\n```\r\nrekeyed = stream1.map();\r\nmerged = rekeyed.merged(stream2);\r\nmerged.groupByKey()...\r\n```\r\n\r\nWe may want to do 1) repartition stream1, 2) then merge with stream2 on the mapped key, and 3) do aggregation without repartition any more. Whereas in the current approach we would 1) merge mapped stream1 with stream2 first, and 2) do repartition, and then 3) do aggregation.\r\n\r\nBut I think it is not only about optimization efficiency, but also about correctness: Note that merge signature is:\r\n\r\n```\r\nKStream<K, V> merge(final KStream<K, V> stream);\r\n```\r\n\r\nI.e. the merging KStream should have the same key/value type, so the merging operator itself should be also requiring co-partitioning. This makes me thinking that, we should probably think of `merge` also as a `join` from the optimization point of view, that it requires co-partitioning, and hence if there are key-changing operators, we should enforce a repartitioning before merging.\r\n\r\nI know this is not enforced today, which may just be a bug. WDYT?",
+        "createdAt" : "2018-08-14T18:02:25Z",
+        "updatedAt" : "2018-08-14T18:02:26Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9faa4975e48126bc019e77e03e8ec8ce2f75826d",
+    "line" : 192,
+    "diffHunk" : "@@ -1,1 +361,365 @@    }\n\n    private void maybeUpdateKeyChangingRepartitionNodeMap() {\n        final Map<StreamsGraphNode, Set<StreamsGraphNode>> mergeNodesToKeyChangers = new HashMap<>();\n        for (final StreamsGraphNode mergeNode : mergeNodes) {"
+  },
+  {
+    "id" : "7f81d0e0-15a2-480b-b8c3-dd28cad0457c",
+    "prId" : 5451,
+    "prUrl" : "https://github.com/apache/kafka/pull/5451#pullrequestreview-146981875",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cd0b932f-607b-4b19-b75e-92a995863dbf",
+        "parentId" : null,
+        "authorId" : "0c73d886-f3da-4107-8045-92d8e3c8fb75",
+        "body" : "Since the criterion is StreamsGraphNode::isKeyChangingOperation, I don't see why the call on line 407 is needed: if there is no key changing operation, null would be returned anyway.",
+        "createdAt" : "2018-08-15T22:41:11Z",
+        "updatedAt" : "2018-08-15T22:41:11Z",
+        "lastEditedBy" : "0c73d886-f3da-4107-8045-92d8e3c8fb75",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bbff7301-f5c2-4d4d-b5d6-602f725487dd",
+        "parentId" : "cd0b932f-607b-4b19-b75e-92a995863dbf",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Hmm.. that's a good question. @bbejeck could you take a look?",
+        "createdAt" : "2018-08-15T22:48:30Z",
+        "updatedAt" : "2018-08-15T22:48:30Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0033e97e-adbc-4107-a5b6-5535d0b0dc90",
+        "parentId" : "cd0b932f-607b-4b19-b75e-92a995863dbf",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Yep, I'll take a look and push a minor PR if needed.",
+        "createdAt" : "2018-08-16T15:44:30Z",
+        "updatedAt" : "2018-08-16T15:44:30Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "764f54f2-88ae-4d9c-abd3-7c758cc8dd5a",
+        "parentId" : "cd0b932f-607b-4b19-b75e-92a995863dbf",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "It is needed.  \r\n\r\nWhen we attempt to optimize a key-changing operation, if there are any KStream operations that change the value, between the key-changing operation and the repartition node,  we don't do the optimization.   \r\n\r\nThe call on 407 will retrieve either a value changing or key changing operation from the repartition node.  \r\n\r\nIf the two retrieved nodes aren't equal on line 410, then we won't perform the optimization for this individual repartition node, as the values could have changed types.\r\n\r\nUntil we have serde inheritance in place, we can't safely optimize the repartition due to serialization/deserialization issues with the new value type.\r\n\r\nBut I should add some comments to the method to describe what is going on.\r\n\r\nDoes this make sense?",
+        "createdAt" : "2018-08-16T16:33:27Z",
+        "updatedAt" : "2018-08-16T16:40:17Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7dd3cde-cf59-4b2a-a87a-8bbadfbb5ca4",
+        "parentId" : "cd0b932f-607b-4b19-b75e-92a995863dbf",
+        "authorId" : "0c73d886-f3da-4107-8045-92d8e3c8fb75",
+        "body" : "I see what you intended.\r\n\r\nThanks for the response.",
+        "createdAt" : "2018-08-16T19:02:52Z",
+        "updatedAt" : "2018-08-16T19:02:52Z",
+        "lastEditedBy" : "0c73d886-f3da-4107-8045-92d8e3c8fb75",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9faa4975e48126bc019e77e03e8ec8ce2f75826d",
+    "line" : 239,
+    "diffHunk" : "@@ -1,1 +408,412 @@\n        final StreamsGraphNode keyChangingNode = findParentNodeMatching(repartitionNode, StreamsGraphNode::isKeyChangingOperation);\n        if (shouldBeKeyChangingNode != null && shouldBeKeyChangingNode.equals(keyChangingNode)) {\n            return keyChangingNode;\n        }"
   }
 ]

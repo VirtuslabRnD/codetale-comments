@@ -20,5 +20,71 @@
     "commit" : "9fc84a53065fce2f4d15418a5f36c8d839ed1ae5",
     "line" : 52,
     "diffHunk" : "@@ -1,1 +856,860 @@\n        long offset = -1;\n        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));\n        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));\n        thread.runOnce(-1);"
+  },
+  {
+    "id" : "1b440d11-c8f0-45e6-8377-3a3b9ae8c93d",
+    "prId" : 5428,
+    "prUrl" : "https://github.com/apache/kafka/pull/5428#pullrequestreview-148270649",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "500ebcc0-d624-4bd0-b7ac-2fa48dfc35a4",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Why did this go from 2 to 1? other than not passing an arg to `runOnce` the test logic to this point hasn't changed",
+        "createdAt" : "2018-08-16T18:02:59Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29f963a5-f4a5-48e7-839c-f23d7d1978fe",
+        "parentId" : "500ebcc0-d624-4bd0-b7ac-2fa48dfc35a4",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "The logic does have changed: in the old code we will commit twice on producer, one during the rebalance and one from the elapsed time. In the new code, the optimization I added will realize that nothing has been generated since the last commit, and hence we will skip committing in this case. \r\n\r\nThinking about it, this does have a side-effect though since for EOS if commit was not called in a long time then txn will be aborted, and if producer does not talk to txn coordinator even longer it could be removed as well. But personally I think it is okay for such scenario to happen, since really no data was generated, and hence committing an empty txn does not really make sense, and we should rather increase the txn expiration time in this case. WDYT? @mjsax @vvcephei ",
+        "createdAt" : "2018-08-21T01:16:54Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0ab3d996-98c5-4ff2-b4f3-96bbed206cae",
+        "parentId" : "500ebcc0-d624-4bd0-b7ac-2fa48dfc35a4",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I guess that we always have a transaction open, not just when we have something to commit.\r\n\r\nIt seems like one solution is to open a transaction only when we have data to process. Although this might complicate things.\r\n\r\nAlternatively, is there a way to periodically send a \"keep alive\" message to let the broker know we do still intend to use that transaction? It seems like either this or just abort/close the empty txn and re-open is better than a super-long expiration time. Otherwise, why is there even an expiration time?\r\n\r\nIs there any tradeoff between having one transaction open for a super long time, vs periodically closing empty transactions and starting new ones?",
+        "createdAt" : "2018-08-21T21:23:35Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e9b3d57-9f83-4b25-bc50-800c6ce89685",
+        "parentId" : "500ebcc0-d624-4bd0-b7ac-2fa48dfc35a4",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Completing a txn and starting a new one come with some cost, and hence is what we want to avoid generally.\r\n\r\nOn the other hand, we do not yet have a mechanism for \"keep alive\": with that, I think keeping a long lived EMPTY txn is okay, note that if the txn is not empty, then not committing it in time will increase the latency. Hence I'm only trying to optimize the case when the txn is empty.",
+        "createdAt" : "2018-08-21T21:57:21Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57608d7f-c74f-4e15-9ca0-e114501faee5",
+        "parentId" : "500ebcc0-d624-4bd0-b7ac-2fa48dfc35a4",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I just talked to @hachikuji about this. Not committing is actually fine. Note, that beginTx() is a client local state transition -- nothing is written to the log (there are no \"begin tx markers\") and the TC state is also not modified. This implies, that the transaction timeout is not started on beginTx() -- the timeout only starts after the first record was written to the log. Thus, we don't need \"keep alive heartbeats\" and don't need to tell users to increase the tx timeout for low traffic topics that might have longer periods with no data.",
+        "createdAt" : "2018-08-21T22:09:46Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "71b2b16d0b0f37a05af3df60ae9b5ff88649a7a4",
+    "line" : 209,
+    "diffHunk" : "@@ -1,1 +767,771 @@                @Override\n                public boolean conditionMet() {\n                    return producer.commitCount() == 1;\n                }\n            },"
   }
 ]

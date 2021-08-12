@@ -185,5 +185,93 @@
     "commit" : "e742d310817ba306c0a217666b983755418549e1",
     "line" : 48,
     "diffHunk" : "@@ -1,1 +88,92 @@                final long pos = processNext(records.records(partition), restorer, updatedEndOffsets.get(partition));\n                restorer.setRestoredOffset(pos);\n                if (restorer.hasCompleted(pos, updatedEndOffsets.get(partition))) {\n                    restorer.restoreDone();\n                    updatedEndOffsets.remove(partition);"
+  },
+  {
+    "id" : "f66aeb3a-5139-4446-bd54-629bb3011079",
+    "prId" : 5430,
+    "prUrl" : "https://github.com/apache/kafka/pull/5430#pullrequestreview-141276279",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9351f4a1-2da1-4265-b9d0-138c5ed181c8",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is just centralizing the structs a bit: I only store the map from topic partitions to restorers in one place now, namely  the `stateRestorers`, all other structs are simplified to set of topic partitions only, and they can retrieve the corresponding restorer from the first map always.",
+        "createdAt" : "2018-07-27T21:36:36Z",
+        "updatedAt" : "2018-07-28T01:08:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9eda58c38bbc5f2936654e768d67eea4742a831f",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +49,53 @@    private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();\n    private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();\n    private final Set<TopicPartition> needsRestoring = new HashSet<>();\n    private final Set<TopicPartition> needsInitializing = new HashSet<>();\n    private final Set<TopicPartition> completedRestorers = new HashSet<>();"
+  },
+  {
+    "id" : "fb99106e-46b1-4fb4-bdd6-6ed99391daf3",
+    "prId" : 5430,
+    "prUrl" : "https://github.com/apache/kafka/pull/5430#pullrequestreview-141276279",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8fb8aed6-63fc-4899-b92c-8a8caacac461",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I've added this set to replace the logic of `completed = total (stateRestorers) - needsRestoring`, since it is no longer true: if a partition is not in needsRestoring, it may because of the re-initialization.",
+        "createdAt" : "2018-07-27T21:37:31Z",
+        "updatedAt" : "2018-07-28T01:08:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9eda58c38bbc5f2936654e768d67eea4742a831f",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +51,55 @@    private final Set<TopicPartition> needsRestoring = new HashSet<>();\n    private final Set<TopicPartition> needsInitializing = new HashSet<>();\n    private final Set<TopicPartition> completedRestorers = new HashSet<>();\n    private final Duration pollTime;\n"
+  },
+  {
+    "id" : "920eeaf8-7197-4d55-b9f8-8be3de09411f",
+    "prId" : 5430,
+    "prUrl" : "https://github.com/apache/kafka/pull/5430#pullrequestreview-141276279",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "000f3353-2743-4b2c-bea6-369c20ac7677",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Okay this is a bit hack but is the key of the fix: I've decided to keep the restorer in the map and note replacing it with the new restorer, since from the ProcessorStateManager the checkpoint offset cannot be inferred. This is just to walk around the code hierarchy of Restorer and the ProcessorStateManager.",
+        "createdAt" : "2018-07-27T21:39:15Z",
+        "updatedAt" : "2018-07-28T01:08:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9eda58c38bbc5f2936654e768d67eea4742a831f",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +66,70 @@    @Override\n    public void register(final StateRestorer restorer) {\n        if (!stateRestorers.containsKey(restorer.partition())) {\n            restorer.setUserRestoreListener(userStateRestoreListener);\n            stateRestorers.put(restorer.partition(), restorer);"
+  },
+  {
+    "id" : "f2610047-7842-491f-b010-a43a4c2da9d9",
+    "prId" : 5430,
+    "prUrl" : "https://github.com/apache/kafka/pull/5430#pullrequestreview-141276279",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5709da88-f673-4b63-8911-60f45ef0c5ec",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is the other fix: whenever we initialize, inside `reinitializeStateStoresForPartitions` the store.init will be called which will call storechangelogger.register() again to put it into the `needsInitializing` set.",
+        "createdAt" : "2018-07-27T21:40:12Z",
+        "updatedAt" : "2018-07-28T01:08:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9eda58c38bbc5f2936654e768d67eea4742a831f",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +106,110 @@                log.info(\"Reinitializing StreamTask {} for changelog {}\", task, partition);\n\n                needsInitializing.remove(partition);\n                needsRestoring.remove(partition);\n"
   }
 ]

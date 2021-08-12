@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "0f63fe42-66f7-4afe-a11b-82ed963d63a1",
+    "prId" : 5484,
+    "prUrl" : "https://github.com/apache/kafka/pull/5484#pullrequestreview-144875581",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "226a9834-4e74-4773-9ab7-a0f4f9ec2268",
+        "parentId" : null,
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "This comment doesn't seem to say anything different than the code, right? The thing that wasn't clear to me is why we need to special case the total, but not the rate.",
+        "createdAt" : "2018-08-09T14:18:17Z",
+        "updatedAt" : "2018-08-10T20:40:03Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "469da88d-0eef-4912-a03b-9f8573688b03",
+        "parentId" : "226a9834-4e74-4773-9ab7-a0f4f9ec2268",
+        "authorId" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "body" : "@ijuma Thanks for the review. What I was trying to say in the comment, but probably not very clearly was that we record `1.0` here for the total because the corresponding `Count` recorded `1.0`. `Rate` with `Count` as the underlying stat counts `1.0`, so that works fine.",
+        "createdAt" : "2018-08-09T14:45:10Z",
+        "updatedAt" : "2018-08-10T20:40:03Z",
+        "lastEditedBy" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "40db0de2e042738420750f71b15c1218c758bf84",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +81,85 @@    public void record(MetricConfig config, double value, long timeMs) {\n        rate.record(config, value, timeMs);\n        // Total metrics with Count stat should record 1.0 (as recorded in the count)\n        double totalValue = (rate.stat instanceof Count) ? 1.0 : value;\n        total.record(config, totalValue, timeMs);"
+  },
+  {
+    "id" : "c5d65822-ea27-4a58-8c94-c7ca4e522838",
+    "prId" : 5484,
+    "prUrl" : "https://github.com/apache/kafka/pull/5484#pullrequestreview-145392092",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "888e9f66-79a8-446d-8f86-8c246a7f1605",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Not sure if this is the best fix. It seems that the issue is that the customized rateStat is only reflected in Rate, but not in total. It seems that we can extend Total to also allow a customizable stat. That way, rate and total can be updated consistently and we don't need customized code in record().",
+        "createdAt" : "2018-08-09T23:14:53Z",
+        "updatedAt" : "2018-08-10T20:40:03Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62c01f2e-f9dd-4b02-9181-bca6260b13cb",
+        "parentId" : "888e9f66-79a8-446d-8f86-8c246a7f1605",
+        "authorId" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "body" : "\r\n\r\n@junrao Thanks for the review. I was trying to avoid public API changes and keep the change localized. Perhaps I missed something. Ideally, we would have a single stat used for both rate and total so they are consistent. But I couldn't figure out a way to make that work with the current APIs. The customized rate stat needs to be a SampledStat (e.g. Count), but the total stat needs to be cumulative. So don't we need two different, but consistent customized stats for rate and total? And caller needs to remember to make them consistent?",
+        "createdAt" : "2018-08-10T11:02:09Z",
+        "updatedAt" : "2018-08-10T20:40:03Z",
+        "lastEditedBy" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8aad0955-2e22-41f6-8d12-99b9e15031af",
+        "parentId" : "888e9f66-79a8-446d-8f86-8c246a7f1605",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Hey @rajinisivaram,\r\n\r\nI've been wrestling with the same issue in the Streams module. The approach I took was actually to split up all my meters into separate rate and count/total metrics. The rationale being that we already have the ability to group a bunch of metrics under a sensor, why also have compound metrics? This allowed us to sidestep this issue, that sometimes you want the total over all values and other times you want to count the number of invocations. Rather than trying to infer the intent from the rate stat, we just explicitly add both metrics independently.\r\n\r\nOf course, I failed to notice that Count is sampled, so now we have https://github.com/apache/kafka/pull/5467 to fix our total metrics again. But that's sort of beside the point.\r\n\r\nAnother unsolicited idea: it looks to me like there are only two kinds of meters in use: ones that use a `Count` rate and ones that use a `SampledTotal` rate. We could add two static factory methods, one for each usage, and privatize the other constructors. Of course, this is a public interface change, which you're trying to avoid...",
+        "createdAt" : "2018-08-10T14:58:38Z",
+        "updatedAt" : "2018-08-10T20:40:03Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "960e5c58-1c6e-4618-b4f6-80951f35fdcc",
+        "parentId" : "888e9f66-79a8-446d-8f86-8c246a7f1605",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@rajinisivaram : Understand your point on the API change. For the short term fix, your fix works when rateStat is Count. I am just not sure if it works for other rateStat. I am wondering if it makes sense for Meter to take rateStat other than SampledTotal and Count. If not, perhaps we could take your fix, but throw an exception if the passed in rateStat is anything else.\r\n\r\nIn hindsight, I sort of agree with John. The current design allows one to piggyback a counting meter on the same sensor used for value meter. However, it makes Meter a bit hard to understand and I am not sure the benefit is significant. Perhaps it would have been simpler to only allow Meter to be value based. If a user also wants a count-based meter, the user will just do that on a separate sensor.",
+        "createdAt" : "2018-08-10T18:43:00Z",
+        "updatedAt" : "2018-08-10T20:40:03Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "227c9a3e-d238-4e19-b2ac-0cb4214b2967",
+        "parentId" : "888e9f66-79a8-446d-8f86-8c246a7f1605",
+        "authorId" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "body" : "@junrao @vvcephei Yes, I totally agree that it would have been better to only allow value based Meter from start. But since we shouldn't change the public API now, I have added the check that @junrao suggested, so we only allow SampledTotal and Count.",
+        "createdAt" : "2018-08-10T20:43:22Z",
+        "updatedAt" : "2018-08-10T20:43:22Z",
+        "lastEditedBy" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "40db0de2e042738420750f71b15c1218c758bf84",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +82,86 @@        rate.record(config, value, timeMs);\n        // Total metrics with Count stat should record 1.0 (as recorded in the count)\n        double totalValue = (rate.stat instanceof Count) ? 1.0 : value;\n        total.record(config, totalValue, timeMs);\n    }"
+  }
+]

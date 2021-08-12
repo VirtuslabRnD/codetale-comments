@@ -130,5 +130,258 @@
     "commit" : "8c57cec79fa53032b55dd7a5f374c9ee62c25098",
     "line" : 29,
     "diffHunk" : "@@ -1,1 +113,117 @@            // add the operation metrics with additional tags\n            final Map<String, String> tagMap = metrics.tagMap(\"task-id\", taskName);\n            taskCommitTimeSensor = metrics.taskLevelSensor(taskName, \"commit\", Sensor.RecordingLevel.DEBUG, parent);\n            taskCommitTimeSensor.add(\n                new MetricName(\"commit-latency-avg\", group, \"The average latency of commit operation.\", tagMap),"
+  },
+  {
+    "id" : "f7fee4d1-0d0d-4a9a-bc3b-e714f6ccede1",
+    "prId" : 5428,
+    "prUrl" : "https://github.com/apache/kafka/pull/5428#pullrequestreview-148681869",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b1a991cc-5f3a-4cbc-913c-be5b9b5e5e13",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "In trunk, the ordering of calls for the `producer` during a commit was broken up, but now they are all grouped together.  It seems ok to do this and is cleaner to follow, I just wanted to double check the change of ordering doesn't matter. \r\n\r\nMaybe we should run system tests to confirm?",
+        "createdAt" : "2018-08-07T18:54:08Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "58bc5045-4e53-4bfb-96ed-4d30088603aa",
+        "parentId" : "b1a991cc-5f3a-4cbc-913c-be5b9b5e5e13",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Good point, I will run the system test accordingly.",
+        "createdAt" : "2018-08-08T20:37:54Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c8bf06a-41c9-4ee5-97bb-0c9c13c485f0",
+        "parentId" : "b1a991cc-5f3a-4cbc-913c-be5b9b5e5e13",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "It was broken apart because we checked if there is anything to commit in the first place (ie, do the check on one place)-- if we did not process any data, we don't need to commit.\r\n\r\nThis check now happens outside of `StreamTask` as pointed out by Guozhang https://github.com/apache/kafka/pull/5428/files#r212395430 Thus, regrouping makes sense. Code is cleaner this way.",
+        "createdAt" : "2018-08-22T22:13:22Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "71b2b16d0b0f37a05af3df60ae9b5ff88649a7a4",
+    "line" : 148,
+    "diffHunk" : "@@ -1,1 +455,459 @@\n        try {\n            if (eosEnabled) {\n                producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);\n                producer.commitTransaction();"
+  },
+  {
+    "id" : "3a78173f-9786-438b-853e-0bf000e71d92",
+    "prId" : 5428,
+    "prUrl" : "https://github.com/apache/kafka/pull/5428#pullrequestreview-149953014",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6085021a-6973-4ed8-99f0-f8743e5c4b03",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "is this just because punctuations might result in context.forwards?",
+        "createdAt" : "2018-08-10T16:09:53Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f10a947a-6cef-48e9-a5ee-4df87f5def99",
+        "parentId" : "6085021a-6973-4ed8-99f0-f8743e5c4b03",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Actually it is because users can call `context.commit()` in either ` punctuate()` or `process()` calls.",
+        "createdAt" : "2018-08-10T23:24:16Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "adebb24d-126e-4227-911a-8b920ba318af",
+        "parentId" : "6085021a-6973-4ed8-99f0-f8743e5c4b03",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Hmmm... if there is nothing to commit, it might also be fine to ignore the user commit request? It's a tricky question what to do for this case. Just follow what the user demands, or be smart? From a correctness point of view, it should not make a difference, would it?\r\n\r\nAlso, we set flag `commitRequested` for this case -- thus, it might be better to put this logic somewhere else? Eg: `AbstractTask` or overwrite in `StreamTask`:\r\n```\r\npublic boolean commitNeeded() {\r\n    return commitNeeded || commitRequested;\r\n}\r\n```\r\n\r\n (An alternative, that I like less would be to add a check if `commitRequested==true`)?",
+        "createdAt" : "2018-08-22T22:21:57Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "68279723-cbca-49e6-a0d6-eaf9650bd113",
+        "parentId" : "6085021a-6973-4ed8-99f0-f8743e5c4b03",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Not sure I follow your comment here.. let me elaborate a bit on my logic:\r\n\r\nWe have two commits in places: commitAll (periodic) and maybeCommit (for user requested):\r\n\r\nThe latter checks\r\n\r\n```\r\nif (task.commitRequested() && task.commitNeeded()) \r\n                    task.commit();\r\n```\r\n\r\nWhile the former only checks:\r\n\r\n```\r\nif (task.commitNeeded()) \r\n                    task.commit();\r\n```\r\n\r\nI.e. the logic for the latter is that \"only if user have requested, and it is indeed needed to commit\": for example, if we have actually committed from the commit interval, and then user requested it as well, the second will be omitted.\r\n\r\nI intentionally separated \"commitRequest\" (this is only set by user) and \"commitNeeded\" (this is determined by the library) because this way looks cleaner to me.",
+        "createdAt" : "2018-08-23T17:47:42Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7bac8d5e-b9fc-400f-9680-518fe4a244ec",
+        "parentId" : "6085021a-6973-4ed8-99f0-f8743e5c4b03",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "So setting `commitNeeded` is a conservative approach, because we don't know what the user did within punctuation call? Might be better to set `commitNeeded` if user calls `context.forward` or `state.put()` -- not sure how hard this would be -- would also be out-of-scope for this PR. If we think it might be worth it, we should create a JIRA for this optimization.",
+        "createdAt" : "2018-08-23T18:03:45Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7ad87686-7aed-4d3f-bc87-570cd0e3b0b3",
+        "parentId" : "6085021a-6973-4ed8-99f0-f8743e5c4b03",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Thought on my last comment?",
+        "createdAt" : "2018-08-25T00:14:15Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "026e5009-286a-4e49-94a4-3116e7a813b1",
+        "parentId" : "6085021a-6973-4ed8-99f0-f8743e5c4b03",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "We still need to commit even if no records are processed: consider a topology which only contains a single source node, then no data processed at all, but we still want to commit so that we would not re-process them right?",
+        "createdAt" : "2018-08-27T22:59:59Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "12d3cecb-4c2c-49a3-989f-d5f29b765aa7",
+        "parentId" : "6085021a-6973-4ed8-99f0-f8743e5c4b03",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Fair enough. Thanks for pointing it out.",
+        "createdAt" : "2018-08-28T03:11:36Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "71b2b16d0b0f37a05af3df60ae9b5ff88649a7a4",
+    "line" : 239,
+    "diffHunk" : "@@ -1,1 +794,798 @@\n            if (punctuated) {\n                commitNeeded = true;\n            }\n"
+  },
+  {
+    "id" : "f197a9dd-1706-4641-bede-d92e8d377cb2",
+    "prId" : 5428,
+    "prUrl" : "https://github.com/apache/kafka/pull/5428#pullrequestreview-149019658",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "603e1f0c-423b-4c03-9709-a2ff6b308346",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Why do we not check `if(commitNeeded)` any longer?",
+        "createdAt" : "2018-08-22T22:09:07Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73f6657b-a2b8-4158-a3e5-43cbf0addbb5",
+        "parentId" : "603e1f0c-423b-4c03-9709-a2ff6b308346",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "We check this in the AssignedTasks now: if no commit is needed, we skip the whole committing function, including commit offsets, flushing stores, etc.",
+        "createdAt" : "2018-08-23T17:37:20Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "71b2b16d0b0f37a05af3df60ae9b5ff88649a7a4",
+    "line" : 138,
+    "diffHunk" : "@@ -1,1 +446,450 @@        }\n\n        final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());\n        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {\n            final TopicPartition partition = entry.getKey();"
+  },
+  {
+    "id" : "795f0b14-a972-492a-836c-cd31921723a4",
+    "prId" : 5428,
+    "prUrl" : "https://github.com/apache/kafka/pull/5428#pullrequestreview-153876402",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5c3fb631-27f5-4af1-bd37-117ca6c0a451",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "nit: should it be `>` instead of `>=` ?",
+        "createdAt" : "2018-09-06T18:38:24Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "44d1fd3f-d6c8-404a-a560-a6f32c9fb36c",
+        "parentId" : "5c3fb631-27f5-4af1-bd37-117ca6c0a451",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "There was an early comment on the test code that suggests `>=`. Personally I think it does not make a big difference at all.",
+        "createdAt" : "2018-09-07T17:32:21Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "721169e2-bf17-443c-86cb-1eaaa9890cd6",
+        "parentId" : "5c3fb631-27f5-4af1-bd37-117ca6c0a451",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I am to blame for this suggestion. I agree it doesn't make a big difference.\r\nThe reasoning was that if it's the \"maximum idle time\", then you shouldn't idle longer than it, otherwise, it's not really a maximum.",
+        "createdAt" : "2018-09-07T19:38:19Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c5c3bdaf-3f6a-4983-94d0-9a65a92a21d7",
+        "parentId" : "5c3fb631-27f5-4af1-bd37-117ca6c0a451",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I agree that it does not matter too much :) (that why it's a nit)\r\n\r\nHowever, I think that the maximum is inclusive, and only if we exceed it, we should force processing. From my understanding, \"maximum idle time\" is actually a lower bound (-> don't force processing until this time passed) because we cannot guarantee anyway to not exceed this threshold. I see your point why the name might be counter intuitive (even if I think the name is correct). If you interpret the name strictly, we would be allowed (or actually we would be required) to force processing before the time passed. This interpretation would make the parameter useless (ie, user tells us to idle max 5 minutes and we obey by forcing processing after 1 minute).\r\n\r\nTo me, the right interpretation is, \"wait until this time passed and force processing asap if the time is exceeded\". Chaning the name to `min.idle.time.ms` would be more precise, but I think it would be more confusing to users. ",
+        "createdAt" : "2018-09-08T21:50:01Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6004d97c-77aa-419e-afe1-9076c0787dfd",
+        "parentId" : "5c3fb631-27f5-4af1-bd37-117ca6c0a451",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Okay guys, I'm going to make a final call here to end the discussion: I'm staying with `max.idle..` since I feel it is easier to understand for users, and be aware that this is not strictly respected in practice unless it is set to `0`. Also I'm staying with `>=` since again, it is easier to understand though not strictly sound mathematically.",
+        "createdAt" : "2018-09-10T17:09:01Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "59407b08-636d-476d-a615-3e54b7a3064a",
+        "parentId" : "5c3fb631-27f5-4af1-bd37-117ca6c0a451",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : ":) Fair enough.",
+        "createdAt" : "2018-09-10T17:17:35Z",
+        "updatedAt" : "2018-09-11T21:32:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "71b2b16d0b0f37a05af3df60ae9b5ff88649a7a4",
+    "line" : 112,
+    "diffHunk" : "@@ -1,1 +313,317 @@            }\n\n            if (now - idleStartTime >= maxTaskIdleMs) {\n                taskMetrics.taskEnforcedProcessSensor.record();\n                return true;"
   }
 ]
