@@ -31,5 +31,104 @@
     "commit" : "98b78ecd73a08d76506318623561b797d1659c49",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +47,51 @@                    inner.name())));\n\n        // if the inner store is an LRU cache, add the eviction listener to log removed record\n        if (inner instanceof MemoryLRUCache) {\n            ((MemoryLRUCache<Bytes, byte[]>) inner).whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<Bytes, byte[]>() {"
+  },
+  {
+    "id" : "28b3a879-2335-42a9-a073-5441d18af645",
+    "prId" : 6266,
+    "prUrl" : "https://github.com/apache/kafka/pull/6266#pullrequestreview-203944634",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fe90be12-5c7a-4038-83a5-a8a1ccfd6f0f",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "This change would make it impossible for underlying stores to implement an atomic update. At the least, it prohibits a performance optimization if the underlying store supports `putIfAbsent` natively.\r\n\r\nIt could cause concurrency bugs, if the underlying store were attempting to provide thread-safe access via IQ. I'm not too sure about this, though.",
+        "createdAt" : "2019-02-13T23:35:25Z",
+        "updatedAt" : "2019-02-14T16:44:27Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56ce6bf0-3d27-47c7-bcdf-1bf98e816554",
+        "parentId" : "fe90be12-5c7a-4038-83a5-a8a1ccfd6f0f",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I cannot follow.",
+        "createdAt" : "2019-02-14T01:26:56Z",
+        "updatedAt" : "2019-02-14T16:44:27Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb77033f-f6c8-4bc0-a2ae-c4d8e6310e86",
+        "parentId" : "fe90be12-5c7a-4038-83a5-a8a1ccfd6f0f",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "The prior logic splits one call (`putIfAbsent`) into two separate operations (`get`, followed by `put`). The underlying store has its own `putIfAbsent` method, which we would never call through to.",
+        "createdAt" : "2019-02-14T16:36:02Z",
+        "updatedAt" : "2019-02-14T16:44:27Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5a71b6d-cea4-4190-b97e-2eec61e40f84",
+        "parentId" : "fe90be12-5c7a-4038-83a5-a8a1ccfd6f0f",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "It's unexpected for a \"pass-though\" layer to actually change the behavior and semantics of an operation.",
+        "createdAt" : "2019-02-14T16:37:41Z",
+        "updatedAt" : "2019-02-14T16:44:27Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "839e25c1-0a10-43c9-9b9c-6e0be19123cd",
+        "parentId" : "fe90be12-5c7a-4038-83a5-a8a1ccfd6f0f",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Well, it's single threaded so it does not really matter too much. I understand that it is a change, but you mentioned \r\n\r\n> It could cause concurrency bugs, if the underlying store were attempting to provide thread-safe access via IQ. I'm not too sure about this, though.\r\n\r\nthat why I was asking. This was not an issue in existing code -- I guess the code was written this way to \"share\" the part that does the actually `changelog.logChange()` call",
+        "createdAt" : "2019-02-14T17:55:19Z",
+        "updatedAt" : "2019-02-14T17:55:20Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0afdb173-e1b9-4b4f-be6f-2211c5b4d630",
+        "parentId" : "fe90be12-5c7a-4038-83a5-a8a1ccfd6f0f",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Thus, I agree that the change makes sense -- it was just your comment that confused me.",
+        "createdAt" : "2019-02-14T18:23:49Z",
+        "updatedAt" : "2019-02-14T18:23:49Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d06750e9-eb1a-4d74-877d-b40484704957",
+        "parentId" : "fe90be12-5c7a-4038-83a5-a8a1ccfd6f0f",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Yes, I agree. It also looked to me like the intent was to share the logging portion of the `put` call. Normally, this would be ideal, but in this case it seems to violate the expectations of store implementers.\r\n\r\nIt is true that Streams's processing is single-threaded. I should have been more explicit about the nature of the concurrency behavior I had in mind... Specifically, I was thinking about concurrent read access via IQ, but in retrospect, since IQ users don't have any visibility into the exact state of record processing, the concurrent read story should be identical whether Streams performs a single atomic operation, or two separate ones.\r\n\r\nTherefore, I guess the concurrency thing is a non-issue. Sorry for the confusion. ",
+        "createdAt" : "2019-02-14T18:34:23Z",
+        "updatedAt" : "2019-02-14T18:34:23Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a5bd14d9-d376-4df3-b377-2bc32f05a16a",
+        "parentId" : "fe90be12-5c7a-4038-83a5-a8a1ccfd6f0f",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "All good :)",
+        "createdAt" : "2019-02-14T20:03:12Z",
+        "updatedAt" : "2019-02-14T20:03:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8341bb9cf1e05867c4756d16ac53c66557037e05",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +70,74 @@        if (previous == null) {\n            // then it was absent\n            changeLogger.logChange(key, value);\n        }\n        return previous;"
   }
 ]

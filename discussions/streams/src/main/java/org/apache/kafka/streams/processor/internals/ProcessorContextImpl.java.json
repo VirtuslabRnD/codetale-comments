@@ -86,5 +86,71 @@
     "commit" : "5a3613b4a03c0e0caa683f19026aca726248d191",
     "line" : 31,
     "diffHunk" : "@@ -1,1 +346,350 @@    }\n\n    private static class TimestampedWindowStoreReadOnlyDecorator<K, V>\n        extends WindowStoreReadOnlyDecorator<K, ValueAndTimestamp<V>>\n        implements TimestampedWindowStore<K, V> {"
+  },
+  {
+    "id" : "6c800f17-244e-4a5b-a068-40fbff80eb46",
+    "prId" : 6255,
+    "prUrl" : "https://github.com/apache/kafka/pull/6255#pullrequestreview-203043571",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0a0d15dd-a607-4b7e-80ba-2d76dcec555d",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is a meta thought orthogonal to this PR, but I'd leave it here and then create a JIRA ticket later: The `StateStore` interface is really designed to be \"implemented by users, and called by library\" -- maybe one can argue that users may want to explicitly call `flush` as well, but I'd say it is okay to NOT allow users do so. And the extended interface, like `KeyValueStore` are designed to be \"implemented by library or user-customizable, and called by user\".\r\n\r\nGiven this thought, we should probably consider refactoring the hierarchy of state stores more as:\r\n\r\n1) `interface StateStore`\r\n2) `interface ReadOnlyKeyValueStore`\r\n3) `interface KeyValueStateStore extends StateStore, ReadOnlyKeyValueStore` (note the name difference)\r\n4) `interface KeyValueStore extends ReadOnlyKeyValueStore`.\r\n\r\nAnd 3) would be the one used in `Stores` factory, i.e. required for either built-in or user-customization, while 4) would be the one returned from `ProcessorContext.getStateStore`. The returned object would, in fact, always be extending `StateStore` as well but only library will care to cast and call its inner functions.\r\n\r\nI'm not sure if there's a better way to do this in order to get rid of all such decorators, @vvcephei wdyt?",
+        "createdAt" : "2019-02-12T01:48:03Z",
+        "updatedAt" : "2019-02-13T14:39:33Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd93cfec-31f9-4eb4-b799-8b1371e8eb3a",
+        "parentId" : "0a0d15dd-a607-4b7e-80ba-2d76dcec555d",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "While I completely agree (all the \"decorators\" are only necessary because we got the API wrong, leaking \"internal\" API like `flush()`, `close()` etc into PAPI).\r\n\r\nHowever, I this possible to refactor without breaking the public API?",
+        "createdAt" : "2019-02-12T19:46:24Z",
+        "updatedAt" : "2019-02-13T14:39:33Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c3a3c7e-b76f-4196-8bb5-ebc99de21a8b",
+        "parentId" : "0a0d15dd-a607-4b7e-80ba-2d76dcec555d",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I agree 100%, and would very much like to see something like this. It would also help us to avoid leaking other administrative methods if we add them (besides just `init`, `flush`, `close`).\r\n\r\nI think cleanest the way to do it backwards compatibly is to introduce a new store hierarchy and deprecate the old one.",
+        "createdAt" : "2019-02-12T23:19:57Z",
+        "updatedAt" : "2019-02-13T14:39:33Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57ec7d8e-29dd-4bc6-ad09-46c3e0faf181",
+        "parentId" : "0a0d15dd-a607-4b7e-80ba-2d76dcec555d",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> I think cleanest the way to do it backwards compatibly is to introduce a new store hierarchy and deprecate the old one.\r\n\r\nI am afraid that might be the only way to do it -- deprecation hell -- users won't be happy -- thus we should think hard if it's worth to do or not...",
+        "createdAt" : "2019-02-13T00:33:58Z",
+        "updatedAt" : "2019-02-13T14:39:33Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a563f42c-e126-44ae-a960-e3582cc8e73d",
+        "parentId" : "0a0d15dd-a607-4b7e-80ba-2d76dcec555d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Cool, I will create a JIRA ticket for now to keep track of it.",
+        "createdAt" : "2019-02-13T06:15:42Z",
+        "updatedAt" : "2019-02-13T14:39:33Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1e871f2a26bed0701a074e91e41c4e47f48f6b9e",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +215,219 @@    }\n\n    private abstract static class StateStoreReadOnlyDecorator<T extends StateStore> extends WrappedStateStore<T> {\n        static final String ERROR_MESSAGE = \"Global store is read only\";\n"
   }
 ]

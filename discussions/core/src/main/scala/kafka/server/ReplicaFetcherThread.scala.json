@@ -64,5 +64,93 @@
     "commit" : "544f4fdf83ce6f540124668d95a58d2cdebc1ea8",
     "line" : 88,
     "diffHunk" : "@@ -1,1 +353,357 @@          // if we get any unexpected exception, mark all partitions with an error\n          result = partitions.map { case (tp, _) =>\n            tp -> new EpochEndOffset(Errors.forException(t), UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)\n          }\n      }"
+  },
+  {
+    "id" : "ed223c40-b276-4f46-aafd-d552f9d7d485",
+    "prId" : 6232,
+    "prUrl" : "https://github.com/apache/kafka/pull/6232#pullrequestreview-201478184",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "15d0b941-dc34-41b3-a5a9-2783908d1d58",
+        "parentId" : null,
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "I see this is used in `fetchTruncatingPartitions` only to filter partitions with epochs. `brokerSupportsLeaderEpochRequest` depends on `inter.broker.protocol.version > 0.10`. This means that we won't truncate partitions according to epochs in `maybeTruncate()` if we have `message.format.version > 0.10` but `inter.broker.protocol.version=0.10`.\r\n\r\nI know we don't recommend such a configuration, yet it's worth asking whether this is desired.",
+        "createdAt" : "2019-02-06T18:10:12Z",
+        "updatedAt" : "2019-02-08T04:13:43Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4dfd4b3-ce90-49e4-9406-52916414450e",
+        "parentId" : "15d0b941-dc34-41b3-a5a9-2783908d1d58",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I think it is unavoidable. The OffsetsForLeaderEpoch API that this logic relies on is only available in 0.11.",
+        "createdAt" : "2019-02-06T19:56:45Z",
+        "updatedAt" : "2019-02-08T04:13:43Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8d153301-8a8a-4b8f-8a54-22b999b21d39",
+        "parentId" : "15d0b941-dc34-41b3-a5a9-2783908d1d58",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "We actually disallow `message.format.version > 0.10` and `inter.broker.protocol.version=0.10`.",
+        "createdAt" : "2019-02-08T08:55:35Z",
+        "updatedAt" : "2019-02-08T08:55:35Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ab429a3c1ea54d660cfae70d6c14c21ad8bf4c1e",
+    "line" : 91,
+    "diffHunk" : "@@ -1,1 +320,324 @@  }\n\n  override def isOffsetForLeaderEpochSupported: Boolean = brokerSupportsLeaderEpochRequest\n\n"
+  },
+  {
+    "id" : "6c3251d0-25c9-4e0e-b594-d4a045c346fb",
+    "prId" : 6232,
+    "prUrl" : "https://github.com/apache/kafka/pull/6232#pullrequestreview-200796731",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "138a042c-d4b8-47d8-a229-fab5d62a5504",
+        "parentId" : null,
+        "authorId" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "body" : "I'm not sure whether this makes sense to have in the code anymore, I think it can never evaluated to true.\r\n\r\nIt is only called from `truncateToEpochEndOffsets` which is only called in `maybeTruncate()` like this:\r\n```\r\nif (partitionsWithEpochs.nonEmpty) {\r\n      truncateToEpochEndOffsets(partitionsWithEpochs)\r\n    }\r\n```",
+        "createdAt" : "2019-02-06T18:15:08Z",
+        "updatedAt" : "2019-02-08T04:13:43Z",
+        "lastEditedBy" : "df911192-d6c6-4af9-8568-f67bf2dcf926",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "732ae528-8958-4223-8436-f87d9977e8ff",
+        "parentId" : "138a042c-d4b8-47d8-a229-fab5d62a5504",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Fair enough. Sometimes it is difficult to strike a good balance between good defensiveness and avoiding redundant validation. I think I will just get rid of the `nonEmpty` check.",
+        "createdAt" : "2019-02-06T19:59:00Z",
+        "updatedAt" : "2019-02-08T04:13:43Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "972c22d9-7c1c-48d2-b1ce-6be16d0eb679",
+        "parentId" : "138a042c-d4b8-47d8-a229-fab5d62a5504",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "After looking at it, I think I prefer to leave it as is. The cost is small and it makes the code a little more resilient if we can avoid unnecessary assumptions about arguments, particularly when the logic is split across separate classes.",
+        "createdAt" : "2019-02-06T20:48:25Z",
+        "updatedAt" : "2019-02-08T04:13:43Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ab429a3c1ea54d660cfae70d6c14c21ad8bf4c1e",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +295,299 @@  override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {\n\n    if (partitions.isEmpty) {\n      debug(\"Skipping leaderEpoch request since all partitions do not have an epoch\")\n      return Map.empty"
   }
 ]

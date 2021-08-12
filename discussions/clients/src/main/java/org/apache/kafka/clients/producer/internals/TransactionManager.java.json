@@ -141,5 +141,60 @@
     "commit" : "9e9e027171422c2f5af6d9602429702a58939036",
     "line" : 14,
     "diffHunk" : "@@ -1,1 +683,687 @@\n    synchronized void close() {\n        KafkaException shutdownException = new KafkaException(\"The producer closed forcefully\");\n        pendingRequests.forEach(handler ->\n                handler.fatalError(shutdownException));"
+  },
+  {
+    "id" : "216551fc-d9ce-4597-a2c3-cd684f4b2757",
+    "prId" : 6270,
+    "prUrl" : "https://github.com/apache/kafka/pull/6270#pullrequestreview-210728892",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5f180194-b6aa-47e2-9529-d2c9e906b3a2",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm.. This is an interesting case. As far as I can tell, the state would only get reset if we are changing the producerId in `resetProducerId`. So the question is whether it is valid to associate the last acked offset of the old producerId with the new one? I suspect the answer is no. The last acked offset is used in order to try and detect spurious UNKNOWN_PRODUCER_ID errors, so I think our assumption is that this offset is associated with the producerId at the time of the request.",
+        "createdAt" : "2019-03-01T18:58:21Z",
+        "updatedAt" : "2019-03-06T13:51:49Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2598586a-0520-4f84-9083-af4b154dc95c",
+        "parentId" : "5f180194-b6aa-47e2-9529-d2c9e906b3a2",
+        "authorId" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "body" : "`SenderTest.testResetOfProducerStateShouldAllowQueuedBatchesToDrain` does an example for this. I was debating a lot wether the test tests a non-existent/invalid scenario or not. The test seems valid though. Basically it sends two request, one will be rejected with an \"not leader for partition\" while the other one will be rejected with \"out of order sequence number\". The first will be reenqueued while the other one causes the transaction state to reset. Since the out of order response arrived later, the reenqueued request will be resent in the next `run()`.\r\nNow based on what you're saying, perhaps it would be better to\r\n- either ignore the last acked offset in this case as the response belonged to the previous producer ID which might be still valid on the broker (it hasn't timed out or been deleted). If the producer ID not valid anymore, then broker won't accept the message anyway. The only downside is that it's hard to validate if we're in this scenario.\r\n- or to reject the message entirely saying that the producerId has changed since. This would be something like the behavior in `Sender.completeBatch` therefore may be better or maybe more expected from the user's perspective.\r\n\r\nWhat do you think?\r\n",
+        "createdAt" : "2019-03-04T10:44:07Z",
+        "updatedAt" : "2019-03-06T13:51:49Z",
+        "lastEditedBy" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c4ccb170-a884-4e56-8703-f211e727279c",
+        "parentId" : "5f180194-b6aa-47e2-9529-d2c9e906b3a2",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I was thinking more along the lines of the first option. From a high level, when we reset the producerId, we want to start from a clean slate. Basically we want to ignore responses to requests which used the old producerId. These cases are tricky to think about. In KIP-360, I proposed that we should not reset the producerId, but should bump the epoch instead. That would make the UNKNOWN_PRODUCER_ID case unambiguous.\r\n\r\nI think I'd suggest that we leave this case handled as it is currently so that we can merge this refactor. Then we can think about the proper handling in a separate issue. If KIP-360 is adopted, maybe this logic ends up going away anyway. Sound good?",
+        "createdAt" : "2019-03-04T22:06:23Z",
+        "updatedAt" : "2019-03-06T13:51:49Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "69acff3d-c58a-444b-9f29-26cf48d56a0b",
+        "parentId" : "5f180194-b6aa-47e2-9529-d2c9e906b3a2",
+        "authorId" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "body" : "Sounds good to me.",
+        "createdAt" : "2019-03-05T15:03:26Z",
+        "updatedAt" : "2019-03-06T13:51:49Z",
+        "lastEditedBy" : "cb6f8432-d515-4113-87f8-14e555ab8ed1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2d4044912617863ea29723925712307228fa1b37",
+    "line" : 303,
+    "diffHunk" : "@@ -1,1 +525,529 @@        long lastOffset = response.baseOffset + batch.recordCount - 1;\n        OptionalLong lastAckedOffset = lastAckedOffset(batch.topicPartition);\n        // It might happen that the TransactionManager has been reset while a request was reenqueued and got a valid\n        // response for this. This can happen only if the producer is only idempotent (not transactional) and in\n        // this case there will be no tracked bookkeeper entry about it, so we have to insert one."
   }
 ]

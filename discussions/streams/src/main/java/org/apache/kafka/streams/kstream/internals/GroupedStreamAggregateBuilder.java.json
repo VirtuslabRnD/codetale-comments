@@ -86,5 +86,225 @@
     "commit" : "7d02ad5bab3f2cf4ae2c11457e8dfe099d3a4b12",
     "line" : 18,
     "diffHunk" : "@@ -1,1 +101,105 @@                                valSerde,\n                                sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),\n                                queryableStoreName,\n                                aggregateSupplier,\n                                statefulProcessorNode,"
+  },
+  {
+    "id" : "526fdb65-a5d4-4816-9582-b1e7158c0ada",
+    "prId" : 6265,
+    "prUrl" : "https://github.com/apache/kafka/pull/6265#pullrequestreview-204451888",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "431f9e1d-461a-401a-866a-1e54c92204ac",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "On the first invocation, the `repartitionNode` is always null, so we'll build the repartition node and set the variable.  But on subsequent calls, only if the user has provided a name for the repartition topic will we re-use the repartition graph node.\r\n\r\nThis maintains compatibility as users not naming the repartition topic will get the same topology and re-using  the `KGroupedStream` results in an `InvalidToplogyException` when building the topology",
+        "createdAt" : "2019-02-13T21:22:17Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e42e626c-de76-4c30-a139-db9af6c8e182",
+        "parentId" : "431f9e1d-461a-401a-866a-1e54c92204ac",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> and re-using the `KGroupedStream` results in an `InvalidToplogyException` when building the topology\r\n\r\nI thought, if there is no user topic-name, old code would create multiple repartition topics? And re-using `KGroupedStream` only throughs if there is a user topic-name (and this restriction is lifted with this PR)",
+        "createdAt" : "2019-02-14T18:42:08Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea887ddc-fa2f-4f99-a571-362297beed29",
+        "parentId" : "431f9e1d-461a-401a-866a-1e54c92204ac",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I had a hard time reasoning about the or condition and what exactly happens when there is a name / isn't a name / repartition isn't required at all.\r\n\r\nCan we consider breaking these up into three separate cases to make the code more linear?",
+        "createdAt" : "2019-02-14T19:58:10Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3b12810c-f2fc-43ef-bcc1-bcf724019ed8",
+        "parentId" : "431f9e1d-461a-401a-866a-1e54c92204ac",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : ">I thought, if there is no user topic-name, old code would create multiple repartition topics? And re-using `KGroupedStream` only throughs if there is a user topic-name (and this restriction is lifted with this PR)\r\n\r\nThat's correct.  I may not have been clear above, but what I  meant is that this change won't break compatibility with users currently **_not providing_** a repartition topic name as it will create multiple repartition topics thus keep their topology the same.  Does that make sense? ",
+        "createdAt" : "2019-02-15T14:44:37Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "398e23ab-2866-4a08-a445-903c2a779654",
+        "parentId" : "431f9e1d-461a-401a-866a-1e54c92204ac",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : ">Can we consider breaking these up into three separate cases to make the code more linear?\r\n\r\nRepartitons are required when the `repartitionRequired` flag is true as passed in from the parent `KStream` instance https://github.com/apache/kafka/pull/6265/files#diff-2585c8864b9121454af6d88adba60975R81.  A name for the repartition topic is always required; it's just a matter of using a generated one or the user provided one.\r\n\r\nSo we are left with just two cases:\r\n\r\n1. On the first call the to `GroupedStreamAggregateBuilder#build()` method the `reparitionNode` will always be `null`, so we need to create it, regardless if the user has provided a reparation topic name or not.\r\n2. The other case is when we make subsequent `GroupedStreamAggregateBuilder#build()` calls to the same `GroupedStreamAggregateBuilder` instance; then the name does come into play.  If the user **_has provided_** a repartition topic name, we would reuse the same repartition node. Otherwise, it's null, so we know to create a new repartition node. \r\n\r\nI originally had this:\r\n```java\r\nif (repartitionNode == null) {\r\n    repartitionNode = repartitionNodeBuilder.build();\r\n} else if (userProvidedRepartitionTopicName == null) {\r\n    repartitionNode = repartitionNodeBuilder.build();\r\n}\r\n```\r\nBut I felt that having multiple lines with the same variable assignment did not make sense.  What do think about me adding my explanation here to line  86 as comments?",
+        "createdAt" : "2019-02-15T15:02:10Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca36ca47-d87f-4e58-a0a6-01cdfb87b1cf",
+        "parentId" : "431f9e1d-461a-401a-866a-1e54c92204ac",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Yeah, comments would help. I think the logic is correct, but it's just a little complex to reason about. Some stuff I came to realize only by poking around the code:\r\n1. there is a 1:1 relationship between a GroupedStreamAggregateBuilder instance and a KGroupedStreamImpl instance (i.e., we construct the builder in the constructor of the grouped stream node), so when we cache a repartition node in the builder, it's exactly like caching it in the KGroupedStream node, which is intuitively what we wanted to do.\r\n2. If repartition is not required, we don't build a repartition node at all, but just bypass it in the graph.\r\n3. Although we cache the repartition node in an instance field, we actually only use it if the node is user-named. If the name is auto-generated, we overwrite the repartition node every time before adding it to the graph.\r\n\r\n2 and 3 were basically what I had in mind as separate branches. Something like:\r\n* if repartition not required, just connect the agg node directly to the source node\r\n* if repartition is required and not user-named, make a brand-new repartition node, and hook it up to the source node and hook the agg node up to the repartition node\r\n* if the repartition is required and user-named, then check if there's already a repartition node (if not, create one, hook it up to the source node, and cache it), then hook the agg node up to the repartition node\r\n\r\nThis is just to clarify my comment above. If you prefer to clarify the flow with the explanation you gave, that's fine as well.",
+        "createdAt" : "2019-02-15T16:42:57Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a874c69f-f4df-4019-be64-c4ff1af07577",
+        "parentId" : "431f9e1d-461a-401a-866a-1e54c92204ac",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> That's correct. I may not have been clear above, but what I meant is that this change won't break compatibility with users currently **_not providing_** a repartition topic name as it will create multiple repartition topics thus keep their topology the same. Does that make sense?\r\n\r\nAck. Just wanted to make sure we are on the same page :)",
+        "createdAt" : "2019-02-15T18:57:53Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5702e941-5a1b-45f3-8869-d2262fdd3ff7",
+        "parentId" : "431f9e1d-461a-401a-866a-1e54c92204ac",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : ">2 and 3 were basically what I had in mind as separate branches.\r\n\r\nWe already have this \r\n\r\n1.  Line 84 is the guard for checking if a repartition is not required, if not then we do skip all the repartition node creation steps and just add the agg node to the source node.\r\n2. If a repartition is required we drop into the block and make the necessary node creation and graph links.\r\n\r\nI'll add a comment on the boolean statement just to clarify what's going on.",
+        "createdAt" : "2019-02-15T21:24:57Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f6fcec6b-71c8-418f-b268-1148a4f352e2",
+        "parentId" : "431f9e1d-461a-401a-866a-1e54c92204ac",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : ":+1: Thanks.",
+        "createdAt" : "2019-02-15T21:43:37Z",
+        "updatedAt" : "2019-02-15T21:43:37Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8271bb21f388cef4cb46d384d9bfef8491b63a19",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +91,95 @@            // the user has provided a name for the repartition topic, is so we re-use\n            // the existing repartition node, otherwise we create a new one.\n            if (repartitionNode == null || userProvidedRepartitionTopicName == null) {\n                repartitionNode = repartitionNodeBuilder.build();\n            }"
+  },
+  {
+    "id" : "a91c6b0b-5d71-4816-8b1c-0202bfae1e34",
+    "prId" : 6265,
+    "prUrl" : "https://github.com/apache/kafka/pull/6265#pullrequestreview-204389772",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "05c3c876-8bef-4d8e-868d-858ec965dd89",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I did not in-line this method as I feel it helps with the readability of the code.",
+        "createdAt" : "2019-02-13T21:24:32Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80e9c209-5e61-443d-bb98-c5a960ed2334",
+        "parentId" : "05c3c876-8bef-4d8e-868d-858ec965dd89",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Does it? It's a one liner calling `createRepartitionedSource`, so what does we gain by calling `createRepartitionSource` instead?",
+        "createdAt" : "2019-02-14T18:46:53Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a5b7f7a-cd74-4e10-8cc5-0e04ea5e154c",
+        "parentId" : "05c3c876-8bef-4d8e-868d-858ec965dd89",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I guess it's personal preference if you insist I can inline it.",
+        "createdAt" : "2019-02-15T15:07:26Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a626cf15-f336-4ae8-b3a2-b00fda516bf1",
+        "parentId" : "05c3c876-8bef-4d8e-868d-858ec965dd89",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Don't insist -- would prefer though (for this case) -- in general, this pattern can be useful -- just don't see it for this particular case.",
+        "createdAt" : "2019-02-15T18:59:02Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8271bb21f388cef4cb46d384d9bfef8491b63a19",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +123,127 @@     * @return the new sourceName of the repartitioned source\n     */\n    private String createRepartitionSource(final String repartitionTopicNamePrefix,\n                                           final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder) {\n"
+  },
+  {
+    "id" : "fa6f5487-863d-4b7a-a7cc-47e04be3424d",
+    "prId" : 6265,
+    "prUrl" : "https://github.com/apache/kafka/pull/6265#pullrequestreview-203906501",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "040577c6-ca55-417d-aba0-36e231c846c3",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Thanks for renaming! Much better!",
+        "createdAt" : "2019-02-14T18:47:25Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8271bb21f388cef4cb46d384d9bfef8491b63a19",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +40,44 @@    private final Serde<V> valueSerde;\n    private final boolean repartitionRequired;\n    private final String userProvidedRepartitionTopicName;\n    private final Set<String> sourceNodes;\n    private final String name;"
+  },
+  {
+    "id" : "fe9a7f80-713c-4d75-950e-8f847b009fa6",
+    "prId" : 6265,
+    "prUrl" : "https://github.com/apache/kafka/pull/6265#pullrequestreview-204297853",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "49ec6452-c1de-4fbd-8bef-c69538d0cc2e",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Not your code, but did we want the assert on L73 to execute all the time, rather than just when java is executed with `-ea`?",
+        "createdAt" : "2019-02-14T19:56:22Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9847a3cf-72ed-4328-a80c-c3dc661e7bf8",
+        "parentId" : "49ec6452-c1de-4fbd-8bef-c69538d0cc2e",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I'm not sure.  \\cc @guozhangwang ",
+        "createdAt" : "2019-02-15T15:34:33Z",
+        "updatedAt" : "2019-02-15T21:40:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8271bb21f388cef4cb46d384d9bfef8491b63a19",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +76,80 @@                                  final Serde<VR> valSerde) {\n        assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());\n\n        final String aggFunctionName = builder.newProcessorName(functionName);\n"
   }
 ]

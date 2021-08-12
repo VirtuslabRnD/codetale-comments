@@ -108,5 +108,93 @@
     "commit" : "317e534d50cb26c93dda69261d51295817f9c6a9",
     "line" : 85,
     "diffHunk" : "@@ -1,1 +225,229 @@                }\n\n                stateStore.init(processorContext, stateStore);\n            }\n        }"
+  },
+  {
+    "id" : "77598d6e-03ae-428c-9466-49f4dfa9bd5a",
+    "prId" : 6204,
+    "prUrl" : "https://github.com/apache/kafka/pull/6204#pullrequestreview-197403293",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ce2cd52f-a637-4ffb-9fbb-91add18b62f7",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Hmm.. I thought the restorer / state manager would now be agnostic to the convert at all, since the inner store impl is responsible for extending the interface as well as calling its `TimestampedBytesStore` function internally. Why do we still need an internal `RecordConverter` class?",
+        "createdAt" : "2019-01-28T04:30:34Z",
+        "updatedAt" : "2019-01-29T01:06:09Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62413f6b-e8d8-4983-80a2-253c2da3f0a3",
+        "parentId" : "ce2cd52f-a637-4ffb-9fbb-91add18b62f7",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "The new static method that is used by the stores, will translate on-disk data from old to new format.\r\n\r\nWe still need a `RecordConverter` that translates data from the changelog topic to the new format, because on restore, we put plain `<byte[],byte[]>` key-value pairs into the store, and the store expects those record to be in the new format.\r\n\r\nThis make we realize, the the implementation of `RecordConverter` is actually not correct in this PR -- it should not use the new static method (that inserts a `-1` as timestamp), but it need to put the actual record timestamp... Will update the PR accordingly.",
+        "createdAt" : "2019-01-29T00:58:32Z",
+        "updatedAt" : "2019-01-29T01:06:09Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "54104621-3864-409e-beb3-b08eb7bddc33",
+        "parentId" : "ce2cd52f-a637-4ffb-9fbb-91add18b62f7",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "But can't we make this logic inside the `prepareBatch` call inside the internal store impl (of course we would require customized users to do so as well) so that the callers do not need to be aware of that?",
+        "createdAt" : "2019-01-29T01:39:51Z",
+        "updatedAt" : "2019-01-29T01:39:51Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8850d3cd-98b3-4644-9856-16963a81d58b",
+        "parentId" : "ce2cd52f-a637-4ffb-9fbb-91add18b62f7",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "No, because `prepareBatch` (or actually `restoreAllInternal`) takes `KeyValue<byte[],byte[]` but not a `ConsumerRecord`. Thus there is not timestamp information we can add to the value.",
+        "createdAt" : "2019-01-29T01:52:20Z",
+        "updatedAt" : "2019-01-29T01:52:21Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd2904ef-6beb-4575-a5cc-7347323e17d4",
+        "parentId" : "ce2cd52f-a637-4ffb-9fbb-91add18b62f7",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : ":+1: The `convertToTimestampedFormat` function is purely for converting the already-stored data into the new binary format. It can't actually add any timestamp information, because we don't have it when we retrieve the old-format data. So the function is like `(value) -> [-1,value]`.\r\n\r\nIn contrast, the state restorer needs to be able to insert the timestamp, so the function is like `(value, timestamp) -> [timestamp, value]`.\r\n\r\nActually, looking at this code again, I see Matthias was right, the `RecordConverter` erroneously calls through to the `convertToTimestampedFormat` function. Oops! Good catch!",
+        "createdAt" : "2019-01-29T06:14:30Z",
+        "updatedAt" : "2019-01-29T06:14:30Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f402982f-2d01-4f93-b31d-a5ce1738f6cc",
+        "parentId" : "ce2cd52f-a637-4ffb-9fbb-91add18b62f7",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Ah, I just refreshed, and looked at the new code. It LGTM. Thanks!",
+        "createdAt" : "2019-01-29T06:19:56Z",
+        "updatedAt" : "2019-01-29T06:19:56Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3058c615-35ae-4363-8c4b-ab77d0d90ff3",
+        "parentId" : "ce2cd52f-a637-4ffb-9fbb-91add18b62f7",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@mjsax Thanks for the explanation! LGTM.",
+        "createdAt" : "2019-01-29T07:11:32Z",
+        "updatedAt" : "2019-01-29T07:11:32Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a2f34bb3907bc00582ab7d70f64e475427090fa5",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +138,142 @@            store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;\n        final RecordConverter recordConverter =\n            stateStore instanceof TimestampedBytesStore ? RecordConverter.converter() : record -> record;\n\n        if (isStandby) {"
   }
 ]

@@ -1,0 +1,79 @@
+[
+  {
+    "id" : "7dec1b24-9f55-4f38-bedd-fc46cf4681bb",
+    "prId" : 6283,
+    "prUrl" : "https://github.com/apache/kafka/pull/6283#pullrequestreview-242010053",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f9ce8f42-5814-4a54-baf8-11b60d154204",
+        "parentId" : null,
+        "authorId" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "body" : "there are a couple of other places where we call `readToEnd()` and `poll()`  (links below). should we catch this exception in those places also?\r\n\r\nhttps://github.com/apache/kafka/blob/176ea0d0f9b4386cdc0e3b9bab560a11e3d3d516/connect/runtime/src/main/java/org/apache/kafka/connect/util/KafkaBasedLog.java#L332\r\n\r\nhttps://github.com/apache/kafka/blob/176ea0d0f9b4386cdc0e3b9bab560a11e3d3d516/connect/runtime/src/main/java/org/apache/kafka/connect/util/KafkaBasedLog.java#L153",
+        "createdAt" : "2019-05-24T17:09:49Z",
+        "updatedAt" : "2019-05-24T17:10:17Z",
+        "lastEditedBy" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e5e89a55-f1a1-4c83-b1d7-7a80c2d75bbb",
+        "parentId" : "f9ce8f42-5814-4a54-baf8-11b60d154204",
+        "authorId" : "9af9fedf-5bac-44a0-895d-96aad0032528",
+        "body" : "Thanks for the additional eyes @wicknicks !\r\n\r\nThe `readToLogEnd()` call is inside `start()`so my thinking was that failure would happen on startup which seems okay (if not desirable).  If there were broker availability issues it seems reasonable to me for Connect not to start.  If we want to try to be more robust we could come up with some retrying strategy, but I bet that would require changes in a number of other places.\r\n\r\nThe `poll()` method contains its own `catch (KafkaException e)` which is a super class of `TimeoutException` so we ought to be okay there:\r\n\r\nhttps://github.com/apache/kafka/blob/176ea0d0f9b4386cdc0e3b9bab560a11e3d3d516/connect/runtime/src/main/java/org/apache/kafka/connect/util/KafkaBasedLog.java#L267",
+        "createdAt" : "2019-05-25T17:24:49Z",
+        "updatedAt" : "2019-05-25T17:25:37Z",
+        "lastEditedBy" : "9af9fedf-5bac-44a0-895d-96aad0032528",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "045131130aec48970581bcbb7353cdb01afffe74",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +314,318 @@                            readToLogEnd();\n                            log.trace(\"Finished read to end log for topic {}\", topic);\n                        } catch (TimeoutException e) {\n                            log.warn(\"Timeout while reading log to end for topic '{}'. Retrying automatically. \" +\n                                \"This may occur when brokers are unavailable or unreachable. Reason: {}\", topic, e.getMessage());"
+  },
+  {
+    "id" : "0d502d3a-3a32-42d3-89a6-b8f33cfa8b65",
+    "prId" : 6283,
+    "prUrl" : "https://github.com/apache/kafka/pull/6283#pullrequestreview-274125721",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "59bcc2b0-91b6-4317-a60d-86277c6f9232",
+        "parentId" : null,
+        "authorId" : "d840fbbb-c85a-43b7-b9ca-be0779ee4a6e",
+        "body" : "I would suggest to backoff the retry, as the timeout probably means the unavailability of the resource (it might be the kafka broker itself, or the network, or something else), an immediate retry likely will not be success.",
+        "createdAt" : "2019-08-12T21:22:49Z",
+        "updatedAt" : "2019-08-12T21:23:35Z",
+        "lastEditedBy" : "d840fbbb-c85a-43b7-b9ca-be0779ee4a6e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bc1a8cf4-b091-41fb-88a8-039331d268fd",
+        "parentId" : "59bcc2b0-91b6-4317-a60d-86277c6f9232",
+        "authorId" : "9af9fedf-5bac-44a0-895d-96aad0032528",
+        "body" : "In practice, actual retries to the network will still be beholden to the `request.timeout.ms` and `retry.backoff.ms` inside the consumer, so that isn't an issue here.",
+        "createdAt" : "2019-08-12T23:47:40Z",
+        "updatedAt" : "2019-08-12T23:47:40Z",
+        "lastEditedBy" : "9af9fedf-5bac-44a0-895d-96aad0032528",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7845a333-68a7-4c6c-b527-c0e8d96c2a03",
+        "parentId" : "59bcc2b0-91b6-4317-a60d-86277c6f9232",
+        "authorId" : "d840fbbb-c85a-43b7-b9ca-be0779ee4a6e",
+        "body" : "That's true, thanks for refreshing my mind. Then no need to backoff here.",
+        "createdAt" : "2019-08-13T08:19:24Z",
+        "updatedAt" : "2019-08-13T08:19:24Z",
+        "lastEditedBy" : "d840fbbb-c85a-43b7-b9ca-be0779ee4a6e",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "045131130aec48970581bcbb7353cdb01afffe74",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +317,321 @@                            log.warn(\"Timeout while reading log to end for topic '{}'. Retrying automatically. \" +\n                                \"This may occur when brokers are unavailable or unreachable. Reason: {}\", topic, e.getMessage());\n                            continue;\n                        } catch (WakeupException e) {\n                            // Either received another get() call and need to retry reading to end of log or stop() was"
+  }
+]
