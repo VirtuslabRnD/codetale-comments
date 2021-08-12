@@ -317,5 +317,104 @@
     "commit" : "094ee6acc772f0532f5513f9d29e5b46f165bd01",
     "line" : 24,
     "diffHunk" : "@@ -1,1 +434,438 @@        } else {\n            log.warn(\"Request to create new topic '{}' failed\", topic);\n            throw new ConnectException(\"Task failed to create new topic \" + newTopic + \". Ensure \"\n                    + \"that the task is authorized to create topics or that the topic exists and \"\n                    + \"restart the task\");"
+  },
+  {
+    "id" : "5cffdd03-36a9-4ce8-9e2b-1bc9eaff0f72",
+    "prId" : 10016,
+    "prUrl" : "https://github.com/apache/kafka/pull/10016#pullrequestreview-581636358",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f2701cef-3e0f-438b-a5f1-4e83c118d246",
+        "parentId" : null,
+        "authorId" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "body" : "Should we also clean up the admin client in a cancel scenario? or is it already closed by this point? Maybe this can be outside of the scope of this ticket, but it seems like it might have a similar leak behavior.\r\nThe transformation chain and retryWithToleranceOperator could also be leaking.\r\n\r\nAnd at that point, is duplicating these calls in `cancel()` better than asynchronously calling `close()` (or some refactored variant without the `task.stop()`)?",
+        "createdAt" : "2021-02-01T22:44:01Z",
+        "updatedAt" : "2021-02-26T16:56:26Z",
+        "lastEditedBy" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af9e7c2f-34e3-4843-bb2d-f460a3142f2a",
+        "parentId" : "f2701cef-3e0f-438b-a5f1-4e83c118d246",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "I wanted to keep things focused here. We know that there's an edge case with the producer that can cause it to hang forever in `send`, and we're addressing that. As far as I know, there is no such case with the admin client, so closing the admin client proactively seems unnecessary. Although there could be an issue with a transformation chain blocking, there's no guarantee that invoking `close` on it is going to fix anything since a transform blocked on, e.g., input/output could remain blocked on that even after being `closed` from another thread.\r\n\r\nUltimately, if a similar case comes up where follow-up is necessary, we can consider our options then based on the particulars of the situation. Right now we only have one specific problem to solve, and I think a targeted approach that doesn't unnecessarily change things is best for that.\r\n\r\nIf nothing else, maybe a comment explaining why the producer gets special treatment here would be beneficial.",
+        "createdAt" : "2021-02-02T13:28:12Z",
+        "updatedAt" : "2021-02-26T16:56:26Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a6ef473-4007-402a-8e81-04fbdf26b1e1",
+        "parentId" : "f2701cef-3e0f-438b-a5f1-4e83c118d246",
+        "authorId" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "body" : "Yeah, I see that here that the situation doesn't require any plugins to block, just the framework/clients. I'm sure that had you implemented by refactoring close, someone could come along and leave the comment \"is all of this necessary? how about just closing the producer instead?\"\r\n\r\nI'm fine with this fix as-is, and if we notice a resource leak related to any of the other plugins caused by stalled connectors, we can address them at that time.",
+        "createdAt" : "2021-02-02T18:13:31Z",
+        "updatedAt" : "2021-02-26T16:56:26Z",
+        "lastEditedBy" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a442a0a2cc5bfe8287edf9b460d5ff68d04a236a",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +179,183 @@        closeProducer(Duration.ofSeconds(30));\n\n        if (admin != null) {\n            try {\n                admin.close(Duration.ofSeconds(30));"
+  },
+  {
+    "id" : "b266655f-4c90-4ea9-aa72-426fcf8d8481",
+    "prId" : 10016,
+    "prUrl" : "https://github.com/apache/kafka/pull/10016#pullrequestreview-600006844",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dca03dfc-8d23-4998-8686-b4ab2e90f56e",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "The producer's `close(...)` method can throw an `InterruptException` if the method fails to join the IO thread. This can theoretically happen even if the timeout is 0 if the thread is interrupted (e.g., the executor is shutdown) _before_ the join can wait. Although the likelihood of this is small, what do you think about catching `InterruptException` and ignoring the error?\r\n```suggestion\r\n            } catch (InterruptException t) {\r\n                // ignore, since this is likely due to the worker's executor being shut down\r\n            } catch (Throwable t) {\r\n```\r\nTwo things. First, the producer throws `InterruptExeption`, not `InterruptedException`. Second, even though the `WorkerSourceTask::close()` that calls this `closeProducer(Duration)` method doesn't _directly_ use the executor, the `Worker` does use that same executor to stop this `WorkerSourceTask`, which ultimately does call `WorkerSourceTask::close()`. IOW, this `closeProducer(Duration)` method is always called from the executor, and the executor could be shutdown at any moment, thus the potential `InterruptException`.",
+        "createdAt" : "2021-02-26T16:07:55Z",
+        "updatedAt" : "2021-02-26T16:56:26Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f54b8a59-59b5-4b69-9bb9-f359b7bdf6d6",
+        "parentId" : "dca03dfc-8d23-4998-8686-b4ab2e90f56e",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "Right now there aren't any code paths that lead to the worker's executor being shut down. One might be added in the future, but it seems a little premature to try to catch it right now and may mislead readers of the code base. Plus, if an `InterruptException` does get generated somehow, it might be worth knowing about as it may indicate unhealthy (or at least unexpected) behavior from the worker, the task, an interceptor, etc.",
+        "createdAt" : "2021-02-26T16:52:56Z",
+        "updatedAt" : "2021-02-26T16:56:26Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8ee0ff5e-0601-495c-8c55-06cad18961ef",
+        "parentId" : "dca03dfc-8d23-4998-8686-b4ab2e90f56e",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "> Right now there aren't any code paths that lead to the worker's executor being shut down.\r\n\r\nHmm, that seems to have been done a long time ago. I wonder if that was an oversight, or whether that was intentional since in Connect the `Worker::stop()` is called when the herder is stopped, which only happens (in Connect) when the shutdown hook is called -- at which point the JVM is terminating anyway. Luckily MM2 works the same way.\r\n\r\nBut in our test cases that use `EmbeddedConnectCluster`, those tests are not cleaning up all resources of the Worker (and thus Herder) -- we might have threads that still keep running. Seems like we should address that in a different issue. I'll log something.",
+        "createdAt" : "2021-02-26T17:22:33Z",
+        "updatedAt" : "2021-02-26T17:22:33Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e88719d8-1dbe-440c-974a-efb302b38faf",
+        "parentId" : "dca03dfc-8d23-4998-8686-b4ab2e90f56e",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "I've logged https://issues.apache.org/jira/browse/KAFKA-12380 for shutting down the worker's executor. Again, it's not an issue in runtime, but a *potential* issue in our tests.",
+        "createdAt" : "2021-02-26T22:42:31Z",
+        "updatedAt" : "2021-02-26T22:43:01Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a442a0a2cc5bfe8287edf9b460d5ff68d04a236a",
+    "line" : 74,
+    "diffHunk" : "@@ -1,1 +272,276 @@            try {\n                producer.close(duration);\n            } catch (Throwable t) {\n                log.warn(\"Could not close producer for {}\", id, t);\n            }"
   }
 ]

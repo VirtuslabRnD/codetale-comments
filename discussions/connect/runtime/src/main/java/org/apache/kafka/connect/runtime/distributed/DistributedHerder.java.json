@@ -614,5 +614,115 @@
     "commit" : "54a3f10bc7be899cb47c6500d51ff2cec3e1e572",
     "line" : 66,
     "diffHunk" : "@@ -1,1 +231,235 @@                      Time time,\n                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,\n                      AutoCloseable... uponShutdown) {\n        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);\n"
+  },
+  {
+    "id" : "a9b1508d-fa78-4707-8fd9-11ceddf50a31",
+    "prId" : 10014,
+    "prUrl" : "https://github.com/apache/kafka/pull/10014#pullrequestreview-581644860",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3c4f7fa4-afb6-466e-9dc6-64d07141e78e",
+        "parentId" : null,
+        "authorId" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "body" : "I don't think the `keyExpiration < MAX_VALUE` condition is strictly necessary any more, since if we're the leader, we must either have a valid key by this point. It made sense before, as it was basically an implcit `isLeader()` check that explicitly happened much earlier during the callback. Now, we either had a key read before, or added one at the beginning of this loop (and read to the end of the log, executing all callbacks including the one which updates `keyExpiration`). \r\nNeither the `isLeader()` or `internalRequestValidationEnabled()` conditions should change in between the `checkForKeyRotation(now)` call and here, so I don't think there's danger of hitting this condition when the `checkForKeyRotation(now)` didn't ensure that we have a key.\r\n\r\nIf `putSessionKey()` ever changed implementation to not read back the key and ensure that callbacks were executed prior to returning, then this condition would guard in that case, and prevent us from scheduling a `nextRequestTimeoutMs` 50y earlier than the otherwise very reasonable 292 million years in the future. We would \"forget\" to schedule a key expiration because of a race condition while installing a new key, and only schedule a rebalance the next time a rebalance occurred due to some other factor.\r\n\r\nSeems harmless to remove, and only changes behavior for a case where we introduce a (worse) concurrency bug. Removing it will keep someone from wondering \"why is that condition there\" at some point in the future though :)",
+        "createdAt" : "2021-02-01T22:09:58Z",
+        "updatedAt" : "2021-02-26T16:28:14Z",
+        "lastEditedBy" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "398fc208-6513-4ded-adf2-85d4e6436089",
+        "parentId" : "3c4f7fa4-afb6-466e-9dc6-64d07141e78e",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "There's a rationale for leaving the check in here but I'm not sold either way. Let me know what you think:\r\n\r\nThe `Scheduled next key rotation at...` log message should ideally only be emitted if key rotation is actually enabled. Key rotation can be [disabled by setting the ttl to 0](https://github.com/apache/kafka/blob/821d867c1bd01b88aa695827cb57c9aa764857a4/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/distributed/DistributedHerder.java#L1579). If someone has key rotation disabled, emitting this log message doesn't make a lot of sense (even if the scheduled rotation time is millions of years in the future).\r\n\r\nThis also mirrors the structure of the scheduled rebalance delay check above, although that check is more necessary because of the tweaking of the `rebalanceResolved` field.",
+        "createdAt" : "2021-02-02T14:39:55Z",
+        "updatedAt" : "2021-02-26T16:28:14Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ded1b2b-3330-4826-a532-312197d62db3",
+        "parentId" : "3c4f7fa4-afb6-466e-9dc6-64d07141e78e",
+        "authorId" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "body" : "Got it, duh. should have checked the other condition before leaving an uninformed comment 🙃 ",
+        "createdAt" : "2021-02-02T18:23:39Z",
+        "updatedAt" : "2021-02-26T16:28:14Z",
+        "lastEditedBy" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "37287ea7bb95cf770fe5eccf9414e5f1e928409f",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +403,407 @@                    scheduledRebalance, now, nextRequestTimeoutMs);\n        }\n        if (isLeader() && internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {\n            nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(keyExpiration - now, 0));\n            log.debug(\"Scheduled next key rotation at: {} (now: {} nextRequestTimeoutMs: {}) \","
+  },
+  {
+    "id" : "276e3cdc-7166-4e0b-9fdf-f719a720fa95",
+    "prId" : 10014,
+    "prUrl" : "https://github.com/apache/kafka/pull/10014#pullrequestreview-615609982",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a721f877-8134-4264-8be8-86633ed1b738",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "IIUC, `keyExpiration` is set to `Long.MAX_VALUE` above (line 365) when the key is to be rotated, but then after that is done this herder is the leader and its `keyExpiration` field is modified only through its own `ConfigUpdateListener`. But it's also possible that when all requests to be processed on lines 380-397 take less time than the config store requires to consume its own session key record, then this block is not entered until the next `tick()` call? If so, then isn't it possible that the tick blocks longer than the time until the next key expiration (assuming there are no further config updates or rebalance-inducing conditions)?",
+        "createdAt" : "2021-03-09T16:40:41Z",
+        "updatedAt" : "2021-03-09T16:51:14Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e00a36d2-65af-4a28-b0d9-81732dda35ff",
+        "parentId" : "a721f877-8134-4264-8be8-86633ed1b738",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "Good question--this shouldn't be possible since `KafkaConfigBackingStore::putSessionKey` does a flush and read-to-end after dispatching the new session key to the producer:\r\n\r\nhttps://github.com/apache/kafka/blob/0e8a84e5d7203765240894873fd2896906dfbc2b/connect/runtime/src/main/java/org/apache/kafka/connect/storage/KafkaConfigBackingStore.java#L456-L471",
+        "createdAt" : "2021-03-09T16:59:28Z",
+        "updatedAt" : "2021-03-09T16:59:28Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f282bdb8-459c-418c-9ef0-c7e44f341a6c",
+        "parentId" : "a721f877-8134-4264-8be8-86633ed1b738",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Actually, the `configLog.readToEnd().get(30000, TimeUnit.MILLISECONDS)` effective call only blocks up to 30 seconds for the consumer to read to the end. So it is *possible* for the `putSessionKey(...)` to return without the consumer having caught up and the session key notification method called. One example scenario is a network event after the producer successfully sends the record, but before the consumer is able to read to the end of the log, at which point the consumer continues retrying with effectively no timeout.\r\n\r\nIt still seems like it's possible in worker with no effective changes for it to block much longer than the key expiration. Obviously, if anything does cause the leader to wake up, it should be recover. But my question is what happens to one of the followers (which maybe isn't partitioned from the Kafka cluster) when they discover the session key is expired? Do they do nothing until they are called (again, assuming no change in membership and no config changes)?",
+        "createdAt" : "2021-03-09T18:52:17Z",
+        "updatedAt" : "2021-03-09T18:52:17Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ecafdc5e-c8d5-4857-8e80-86d1b2d0567f",
+        "parentId" : "a721f877-8134-4264-8be8-86633ed1b738",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "If the read to end doesn't complete after 30 seconds, the call doesn't return silently, but throws an exception. This in itself may not be great (we could catch exceptions caused by the call to `KafkaConfigBackingStore::putSessionKey` instead of allowing them to kill the entire worker), but it's still impossible for an accidental call to `WorkerGroupMember::poll` with `Long.MAX_VALUE` to happen under those circumstances.",
+        "createdAt" : "2021-03-09T18:59:16Z",
+        "updatedAt" : "2021-03-09T18:59:41Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9509100f-ed7b-4da0-8bde-78564a0a4a6b",
+        "parentId" : "a721f877-8134-4264-8be8-86633ed1b738",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Sounds good. Thanks for logging [KAFKA-12474](https://issues.apache.org/jira/browse/KAFKA-12474) and [KAFKA-12476](https://issues.apache.org/jira/browse/KAFKA-12476).",
+        "createdAt" : "2021-03-18T16:23:19Z",
+        "updatedAt" : "2021-03-18T16:23:19Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "37287ea7bb95cf770fe5eccf9414e5f1e928409f",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +403,407 @@                    scheduledRebalance, now, nextRequestTimeoutMs);\n        }\n        if (isLeader() && internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {\n            nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(keyExpiration - now, 0));\n            log.debug(\"Scheduled next key rotation at: {} (now: {} nextRequestTimeoutMs: {}) \","
   }
 ]

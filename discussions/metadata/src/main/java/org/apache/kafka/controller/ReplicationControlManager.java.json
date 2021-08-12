@@ -1,0 +1,442 @@
+[
+  {
+    "id" : "2f9a7cda-5c23-403c-8277-af77bfd85174",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-592528032",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3eb1851f-74d2-4eab-8377-90cd65677c6b",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "This can throw StaleBrokerEpochException. It would be useful for KafkaEventQueue.run() to log the event associated with the exception. ",
+        "createdAt" : "2021-02-11T01:33:46Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "463816ad-498d-4e71-b065-6e8bb5f483a2",
+        "parentId" : "3eb1851f-74d2-4eab-8377-90cd65677c6b",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "`handleEventException` handles logging exceptions thrown by events.",
+        "createdAt" : "2021-02-16T20:48:46Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8f24323-dc9a-4149-8101-8ad7411f860d",
+        "parentId" : "3eb1851f-74d2-4eab-8377-90cd65677c6b",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "It seems that we are logging at the debug level. I am wondering if we should log at WARN as before in ZK based appoach.\r\n\r\n```\r\n        if (exception instanceof ApiException) {\r\n            log.debug(\"{}: failed with {} in {} us\", name,\r\n                exception.getClass().getSimpleName(), deltaUs);\r\n            return exception;\r\n        }\r\n\r\n```",
+        "createdAt" : "2021-02-17T01:31:42Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76cad274-2996-4865-9a73-d6b58ebe2d58",
+        "parentId" : "3eb1851f-74d2-4eab-8377-90cd65677c6b",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "We can get here just because the user made an invalid RPC, so I don't know if WARN is appropriate.  I'll change it to INFO for now.  ",
+        "createdAt" : "2021-02-17T19:01:51Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 559,
+    "diffHunk" : "@@ -1,1 +557,561 @@\n    ControllerResult<AlterIsrResponseData> alterIsr(AlterIsrRequestData request) {\n        clusterControl.checkBrokerEpoch(request.brokerId(), request.brokerEpoch());\n        AlterIsrResponseData response = new AlterIsrResponseData();\n        List<ApiMessageAndVersion> records = new ArrayList<>();"
+  },
+  {
+    "id" : "a137dab8-4b31-4d19-98cb-15382d4ffeb8",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-591621664",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a486b87b-ca40-45e2-8fc4-72d826e55d4e",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "In the ZK case, we use the ZK version to do conditional updates. In Raft, could we associated each partitionState with the offset in the Raft log and use that as partitionEpoch for conditional updates? This way, we don't need to explicitly maintain a separate partitionEpoch field and the epoch is automatically bumped up for any change to the partition record, not just for leader and isr.",
+        "createdAt" : "2021-02-11T01:39:11Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3d0b07e9-c84c-46d7-91ad-584eede94ee7",
+        "parentId" : "a486b87b-ca40-45e2-8fc4-72d826e55d4e",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Yes, I think that could work for partition epoch.  Let's do that once we have the initial code in, though...",
+        "createdAt" : "2021-02-16T21:02:02Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 590,
+    "diffHunk" : "@@ -1,1 +588,592 @@                    continue;\n                }\n                if (partitionData.currentIsrVersion() != partition.partitionEpoch) {\n                    responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().\n                        setPartitionIndex(partitionData.partitionIndex())."
+  },
+  {
+    "id" : "bc604eda-fb41-4615-8be9-b5bf57f56f16",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-589716082",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e31c7fc3-b571-44f2-9e53-2c31000bd462",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Could we add some comment for this class?",
+        "createdAt" : "2021-02-12T22:20:43Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 82,
+    "diffHunk" : "@@ -1,1 +80,84 @@ * of each partition, as well as administrative tasks like creating or deleting topics.\n */\npublic class ReplicationControlManager {\n    /**\n     * A special value used to represent the leader for a partition with no leader. "
+  },
+  {
+    "id" : "d4ed0dcd-c2e4-4ecf-8bf7-3e0b2e38b424",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-592609398",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "99e12181-198c-46ab-a75a-0f3954834c91",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Are we deprecating the state-change log and the controller log that we had before?",
+        "createdAt" : "2021-02-12T22:28:11Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2bd6b1d2-6ef2-4bcd-a83a-cdc107fabf50",
+        "parentId" : "99e12181-198c-46ab-a75a-0f3954834c91",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "I don't think the state change log can scale to the number of partitions we need.  It gets too verbose.  Also, this information is available in the metadata log itself.",
+        "createdAt" : "2021-02-17T20:41:57Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 315,
+    "diffHunk" : "@@ -1,1 +313,317 @@        PartitionControlInfo prevPartInfo = topicInfo.parts.get(record.partitionId());\n        if (prevPartInfo == null) {\n            log.info(\"Created partition {}:{} with {}.\", record.topicId(),\n                record.partitionId(), newPartInfo.toString());\n            topicInfo.parts.put(record.partitionId(), newPartInfo);"
+  },
+  {
+    "id" : "03b10b33-9ac5-4a64-bbdf-53a057a9406b",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-594683396",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "26ed7eb1-b544-4fee-aad7-6217ea9dbf34",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Could we add a TODO for handling the preferred leader election?",
+        "createdAt" : "2021-02-17T23:52:30Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "87a6a725-fcf2-433c-b673-d532166cbcdf",
+        "parentId" : "26ed7eb1-b544-4fee-aad7-6217ea9dbf34",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Hmm, I thought this already handles preferred leader election (there are only two options, PREFERRED and UNCLEAN, so far...)",
+        "createdAt" : "2021-02-18T17:52:32Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d480d8a9-5feb-4cea-b263-59b73d01f731",
+        "parentId" : "26ed7eb1-b544-4fee-aad7-6217ea9dbf34",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "I think we need to handle preferred leader election in a special way. For example, if the assigned replicas are 1,2,3, isr is 2,3 and the current leader is 3, when doing preferred leader election, we want to keep the leader as 3 instead of changing it to 2.",
+        "createdAt" : "2021-02-18T18:55:42Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "54a62653-2925-45ec-9878-3998bc3e178b",
+        "parentId" : "26ed7eb1-b544-4fee-aad7-6217ea9dbf34",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "> > I think we need to handle preferred leader election in a special way. For example, if the assigned replicas are 1,2,3, isr is 2,3 and the current leader is 3, when doing preferred leader election, we want to keep the leader as 3 instead of changing it to 2.\r\n\r\n\r\n> \r\n> Hmm, wouldn't we want to switch the leader to 2 in that case, since 2 is more preferred?\r\n\r\nWell, currently the contract is just that if every broker picks the preferred replica (i.e. 1st replica), the leaders will be balanced among brokers. If not, all other replicas are equivalent. Moving leaders among non-preferred replicas just creates churns without benefiting the balance.",
+        "createdAt" : "2021-02-19T02:14:23Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7eb25f0e-d924-4ca8-939d-84a411c83144",
+        "parentId" : "26ed7eb1-b544-4fee-aad7-6217ea9dbf34",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "ack.  I fixed this",
+        "createdAt" : "2021-02-20T01:21:30Z",
+        "updatedAt" : "2021-02-20T01:21:30Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 755,
+    "diffHunk" : "@@ -1,1 +753,757 @@\n    ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {\n        boolean unclean = electionIsUnclean(request.electionType());\n        List<ApiMessageAndVersion> records = new ArrayList<>();\n        ElectLeadersResponseData response = new ElectLeadersResponseData();"
+  },
+  {
+    "id" : "e23736b0-3286-4263-ac92-5354bc594e31",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-593495905",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f003ae64-651f-4719-951e-ab46d5581887",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Is this check already implied since we are iterating `brokersToIsrs`?",
+        "createdAt" : "2021-02-18T00:51:31Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8305a096-08c9-48e7-9829-3320f15573e7",
+        "parentId" : "f003ae64-651f-4719-951e-ab46d5581887",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "We're iterating over the partitions with no leader, which may or may not have the newly activated broker in their ISR.",
+        "createdAt" : "2021-02-18T17:55:39Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 745,
+    "diffHunk" : "@@ -1,1 +743,747 @@            // TODO: if this partition is configured for unclean leader election,\n            // check the replica set rather than the ISR.\n            if (Replicas.contains(partition.isr, brokerId)) {\n                records.add(new ApiMessageAndVersion(new PartitionChangeRecord().\n                    setPartitionId(topicPartition.partitionId())."
+  },
+  {
+    "id" : "842038ce-15c4-43b6-a296-ffcb7937baca",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-594435064",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dd67d1a5-63d9-4e73-9869-7f4d5e7d7465",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "> It seems like the remaining behavioral difference is that the new code will, if no other leader can be chosen, set the leader to -1 (offline). If we don't do this, controlled shutdown easily gets stuck if there are any partitions with replication factor = 1. Maybe we can tune this a bit later?\r\n\r\nIt's fine to revisit that later. The tradeoff is that if we wait, it slightly increases the probability of availability since another replica could join isr.",
+        "createdAt" : "2021-02-18T18:51:14Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7eec415b-ff28-43e2-80e6-2257158e3583",
+        "parentId" : "dd67d1a5-63d9-4e73-9869-7f4d5e7d7465",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "This is resolved in the latest version of the code, where we disable metadata updates on the shutting down broker before starting controlled shutdown, and bump the leader epoch of all partitions.",
+        "createdAt" : "2021-02-19T18:04:52Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 850,
+    "diffHunk" : "@@ -1,1 +848,852 @@                    // shutting down broker is in here.  This prevents the broker from\n                    // getting re-added to the ISR later.\n                    handleNodeDeactivated(brokerId, records);\n                    break;\n                case SHUTDOWN_NOW:"
+  },
+  {
+    "id" : "75225e4b-d734-48fb-b117-de0014373308",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-594439509",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d063767e-8f85-4a6d-a39e-c23be6842c59",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "As Jason pointed out, in ZK based approach, the controller bumps up the leader epoch for removing replica from ISR too.\r\n\r\nAlso, since the broker is no longer receiving the leaderAndIsr requests, we need some logic for the broker to ignore the new partition record (for follower fetching) once it starts the controlled shutdown process.",
+        "createdAt" : "2021-02-19T02:17:34Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4d500a3f-4067-4b9d-a318-c7b0934ff982",
+        "parentId" : "d063767e-8f85-4a6d-a39e-c23be6842c59",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "I changed this so that the leader epoch is bumped if and only if there is a leader present in the PartitionChange record.  (It is possible to bump the epoch without changing the leader by including the same leader again in the record.)\r\n\r\nWe now use this during controlled shutdown to unconditionally bump the leader epochs.  Otherwise, we only bump the leader epochs if the leader changed.",
+        "createdAt" : "2021-02-19T18:10:42Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 682,
+    "diffHunk" : "@@ -1,1 +680,684 @@                setPartitionId(topicPartition.partitionId()).\n                setTopicId(topic.id);\n            int[] newIsr = Replicas.copyWithout(partition.isr, brokerId);\n            if (newIsr.length == 0) {\n                // We don't want to shrink the ISR to size 0. So, leave the node in the ISR."
+  },
+  {
+    "id" : "87882cbc-d686-45df-a34e-12ff62e9dd1d",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-594661287",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6ecd5e61-56cb-4b3f-bd62-137f41fa3a4e",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Currently, for leader initiated AlterIsr request, the controller doesn't bump up the leader epoch. If we change that, it will slightly increase unavailability since all clients have to refresh the metadata in this case.",
+        "createdAt" : "2021-02-19T19:03:59Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc3ea9bb-4f9a-4b9e-8f21-df6039c59ce9",
+        "parentId" : "6ecd5e61-56cb-4b3f-bd62-137f41fa3a4e",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Hmm... ReplicationControlManager should not allow this to happen during an alter isr request.  There is some code that checks if the alter isr request is attempting to remove the current leader from the isr, and returns an error if so.  So the leader should not be changed by an alter isr request and therefore the leader epoch will not be.\r\n\r\n```\r\n                if (!Replicas.contains(newIsr, partition.leader)) {\r\n                    // An alterIsr request can't remove the current leader.\r\n                    responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().\r\n                        setPartitionIndex(partitionData.partitionIndex()).\r\n                        setErrorCode(Errors.INVALID_REQUEST.code()));\r\n                    continue;\r\n                }\r\n```",
+        "createdAt" : "2021-02-19T20:41:39Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "12889461-47ab-4b70-8ae9-55e7419f17f1",
+        "parentId" : "6ecd5e61-56cb-4b3f-bd62-137f41fa3a4e",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Yes, the alterIsr doesn't change leader, but generates a PartitionChangeRecord. On replaying this record, the code following code bumps on leaderEpoch?\r\n\r\n`        PartitionControlInfo newPartitionInfo = prevPartitionInfo.merge(record);`",
+        "createdAt" : "2021-02-19T21:52:36Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "251911e5-b388-4f26-a822-054ca7f1f6b0",
+        "parentId" : "6ecd5e61-56cb-4b3f-bd62-137f41fa3a4e",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "merge only bumps the epoch if the leader was set.\r\n\r\n```\r\n        PartitionControlInfo merge(PartitionChangeRecord record) {\r\n            int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());\r\n            int newLeader;\r\n            int newLeaderEpoch;\r\n            if (record.leader() == NO_LEADER_CHANGE) {\r\n                newLeader = leader;\r\n                newLeaderEpoch = leaderEpoch;\r\n            } else {\r\n                newLeader = record.leader();\r\n                newLeaderEpoch = leaderEpoch + 1;\r\n            }\r\n            return new PartitionControlInfo(replicas,\r\n                newIsr,\r\n                removingReplicas,\r\n                addingReplicas,\r\n                newLeader,\r\n                newLeaderEpoch,\r\n                partitionEpoch + 1);\r\n        }\r\n```",
+        "createdAt" : "2021-02-20T00:10:42Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 144,
+    "diffHunk" : "@@ -1,1 +142,146 @@            } else {\n                newLeader = record.leader();\n                newLeaderEpoch = leaderEpoch + 1;\n            }\n            return new PartitionControlInfo(replicas,"
+  },
+  {
+    "id" : "b2d6175a-c2a8-495d-b610-297d04f4af7b",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-594633387",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f57d6a3f-7f05-4806-bcb7-8fbe3085536e",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Hmm, merge bumps up the leaderEpoch. It seems that this needs to be persisted in the metadata log?",
+        "createdAt" : "2021-02-19T19:54:01Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "86b46337-3eb3-4e2f-8bf1-01fbcedf4798",
+        "parentId" : "f57d6a3f-7f05-4806-bcb7-8fbe3085536e",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "The leader epoch is managed implicitly -- every time a PartitionChangeRecord appears, the epoch is bumped if the leader is not NO_LEADER_CHANGE.",
+        "createdAt" : "2021-02-19T22:48:43Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 344,
+    "diffHunk" : "@@ -1,1 +342,346 @@                \":\" + record.partitionId() + \", but no partition with that id was found.\");\n        }\n        PartitionControlInfo newPartitionInfo = prevPartitionInfo.merge(record);\n        topicInfo.parts.put(record.partitionId(), newPartitionInfo);\n        brokersToIsrs.update(record.topicId(), record.partitionId(),"
+  },
+  {
+    "id" : "8b7e04d6-6f17-4df2-9df0-e3ab3999d4cb",
+    "prId" : 10070,
+    "prUrl" : "https://github.com/apache/kafka/pull/10070#pullrequestreview-594667179",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6eea8648-8a45-4bef-ad77-6a31c9f38f85",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Hmm, we should set the leader to NO_LEADER_CHANGE, right?",
+        "createdAt" : "2021-02-19T23:28:15Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a545efbc-4110-4960-87d5-5217c7c8ac4f",
+        "parentId" : "6eea8648-8a45-4bef-ad77-6a31c9f38f85",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "That is the default so we don't need to set it unless we're changing it",
+        "createdAt" : "2021-02-20T00:07:59Z",
+        "updatedAt" : "2021-02-20T00:12:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3cf6350-e7a0-4c08-9b13-cb624007e057",
+        "parentId" : "6eea8648-8a45-4bef-ad77-6a31c9f38f85",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "We have NO_LEADER_CHANGE as the default for the serialized data. However, the active controller replays the PartitionChangeRecord created in memory, which defaults leader to NO_LEADER_CHANGE, right?",
+        "createdAt" : "2021-02-20T00:35:14Z",
+        "updatedAt" : "2021-02-20T00:37:20Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7bcdd2ec50b7fbacffcb3c5810a37ae8161a64c3",
+    "line" : 610,
+    "diffHunk" : "@@ -1,1 +608,612 @@                    continue;\n                }\n                records.add(new ApiMessageAndVersion(new PartitionChangeRecord().\n                    setPartitionId(partitionData.partitionIndex()).\n                    setTopicId(topic.id)."
+  }
+]
