@@ -20,5 +20,82 @@
     "commit" : "ce334f4557feeda61ccb61510d4cc3ce017138f7",
     "line" : 1,
     "diffHunk" : "@@ -1,1 +-1,3 @@// Copyright 2017 The Chromium Authors. All rights reserved.\n// Use of this source code is governed by a BSD-style license that can be\n// found in the LICENSE file."
+  },
+  {
+    "id" : "da1d37ea-6002-4f30-8562-f10f44ade767",
+    "prId" : 16413,
+    "prUrl" : "https://github.com/flutter/flutter/pull/16413#pullrequestreview-119862907",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0e56a40c-b718-4d8d-a13a-f76242e2b718",
+        "parentId" : null,
+        "authorId" : "1dc608b7-5634-49db-a2de-36dd357356e8",
+        "body" : "Why was the change in how we load the schema necessary?",
+        "createdAt" : "2018-05-10T05:20:47Z",
+        "updatedAt" : "2018-05-13T03:31:22Z",
+        "lastEditedBy" : "1dc608b7-5634-49db-a2de-36dd357356e8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a999ddc4-5d3f-4033-b98b-bd41f9ef0c44",
+        "parentId" : "0e56a40c-b718-4d8d-a13a-f76242e2b718",
+        "authorId" : "d41b38fa-7518-46b7-8e03-89f245fdb330",
+        "body" : "I couldn't find a way for the previous version to load the path from `MemoryFileSystem` on tests that used it. I believe it should work in production, but I wouldn't have a way to verify the windows behavior. \r\n\r\nIf I remember correctly this was the line that caused problems `return new File(uri.scheme == 'file' ? uri.toFilePath() : schemaUrl)`, from `Schema.createSchemaFromUrl`. \r\n\r\nI did a lot of refactors from the 1st working version to the present cleaned one, but couldn't figure out a way to make `Schema.createSchemaFromUrl` work without changing it.",
+        "createdAt" : "2018-05-13T03:13:35Z",
+        "updatedAt" : "2018-05-13T03:31:22Z",
+        "lastEditedBy" : "d41b38fa-7518-46b7-8e03-89f245fdb330",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34d0b146-838f-433d-a971-1ea535ff6862",
+        "parentId" : "0e56a40c-b718-4d8d-a13a-f76242e2b718",
+        "authorId" : "d41b38fa-7518-46b7-8e03-89f245fdb330",
+        "body" : "BTW the tests I added on `flutter_manifest_test.dart` deal directly with this change.",
+        "createdAt" : "2018-05-13T03:15:47Z",
+        "updatedAt" : "2018-05-13T03:31:22Z",
+        "lastEditedBy" : "d41b38fa-7518-46b7-8e03-89f245fdb330",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ab9fe681-6805-4852-aec9-de0f263329b2",
+        "parentId" : "0e56a40c-b718-4d8d-a13a-f76242e2b718",
+        "authorId" : "1dc608b7-5634-49db-a2de-36dd357356e8",
+        "body" : "Ah, I see now.  Yeah, it's pretty tricky -- you have to use `IOOverrides` when you want to inject your `MemoryFileSystem` into a package that doesn't use `package:file`.\r\n\r\nCheck out the following sample for how to do this in a test:\r\n\r\nhttps://github.com/flutter/flutter/blob/f9bb4289e9fd861d70ae78bcc3a042ef1b35cc9d/packages/flutter_test/test/goldens_test.dart#L37-L57\r\n\r\nWith something like that, you should be able to keep the old call to `Schema.createSchemaFromUrl`, which should yield better asynchrony.",
+        "createdAt" : "2018-05-13T06:39:49Z",
+        "updatedAt" : "2018-05-13T06:39:49Z",
+        "lastEditedBy" : "1dc608b7-5634-49db-a2de-36dd357356e8",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34b0ffe9-6d29-4419-a205-80dc81206c6a",
+        "parentId" : "0e56a40c-b718-4d8d-a13a-f76242e2b718",
+        "authorId" : "d41b38fa-7518-46b7-8e03-89f245fdb330",
+        "body" : "There's a modification necessary on Schema (`schema.dart`) to make it work.\r\n\r\nConsider the following method `futureSchema`, heavily based on `Schema.createSchemaFromUrl`: \r\n\r\n```\r\nFuture<Schema>  futureSchema(String schemaUrl) async {\r\n\r\n  if (true || uri.scheme == 'file' || uri.scheme == '') {\r\n    return new io.File(uri.scheme == 'file' ? uri.toFilePath() : schemaUrl)\r\n        .readAsString()\r\n        .then((text) => Schema.createSchema(convert.json.decode(text)));\r\n  } else {\r\n    throw new Exception('Nonsense c: is a valid uri scheme: $schemaUrl');\r\n  }\r\n}\r\n```\r\nThen we can keep the `_validate` method even simpler. \r\n```\r\nFuture<bool> _validate(Object manifest) async {\r\n  final String schemaPath = buildSchemaPath(fs);\r\n  final Schema schema = await futureSchema(schemaPath);\r\n  final Validator validator = new Validator(schema);\r\n  . . .\r\n```\r\n\r\nSo far I couldn't find any combination of File,`new Uri`, `fs.path`, `fs.file` or `'file:// + ???` that could build a path that can be acceptable to the current version of `createSchemaFromUrl`. `MemoryFileSystem` is ok with `C:\\....\\....yaml` but the current checks (`if (uri.scheme == 'file' || uri.scheme == '')`) prevent it from working.",
+        "createdAt" : "2018-05-14T13:29:15Z",
+        "updatedAt" : "2018-05-14T13:29:15Z",
+        "lastEditedBy" : "d41b38fa-7518-46b7-8e03-89f245fdb330",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b97241b4-84c1-4bc8-bdc4-11a542b3e86d",
+        "parentId" : "0e56a40c-b718-4d8d-a13a-f76242e2b718",
+        "authorId" : "d41b38fa-7518-46b7-8e03-89f245fdb330",
+        "body" : "here's another variation on `createSchemaFromUrl` that apparently would make it work: \r\n`final Uri uri = Uri.parse(r'$schemaUrl');`.\r\n\r\nThis whole effort is going beyond my reasonable energy.",
+        "createdAt" : "2018-05-14T14:37:07Z",
+        "updatedAt" : "2018-05-14T14:37:08Z",
+        "lastEditedBy" : "d41b38fa-7518-46b7-8e03-89f245fdb330",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "faf15e4ee8ed2bcd333e64d7840bf3deeda2a00c",
+    "line" : 33,
+    "diffHunk" : "@@ -1,1 +171,175 @@  final String schemaPath = buildSchemaPath(fs);\n\n  final String schemaData = fs.file(schemaPath).readAsStringSync();\n  final Schema schema = await Schema.createSchema(\n      convert.json.decode(schemaData));"
   }
 ]
