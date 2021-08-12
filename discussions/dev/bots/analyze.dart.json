@@ -482,5 +482,71 @@
     "commit" : "8e17f8ec958375e7693c8b6643e464008e0dcc62",
     "line" : 4,
     "diffHunk" : "@@ -1,1 +606,610 @@    .where((File file) => path.extension(file.path) != '.ico')\n    .where((File file) => path.extension(file.path) != '.jar')\n    .where((File file) => path.extension(file.path) != '.swp')\n    .toList();\n  final List<String> problems = <String>[];"
+  },
+  {
+    "id" : "a5aca6eb-ce03-4220-9e9e-226ddd959f25",
+    "prId" : 88003,
+    "prUrl" : "https://github.com/flutter/flutter/pull/88003#pullrequestreview-727936099",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e4891301-ded1-49e0-8c2d-cfb4c72cfb17",
+        "parentId" : null,
+        "authorId" : "fd82dff4-bfc7-4076-8507-e7e4521446f2",
+        "body" : "What happens if I have a \"skip\" parameter in a test class (or any other class that is used in a test, for that matter)?\r\n\r\ne.g.:\r\n```dart\r\nclass TestFoo {\r\n  TestFoo({Set<int> values, bool skip = false});\r\n  factory TestFoo.skip() => TestFoo(values: {1,2,3}, skip: true);\r\n}\r\n```\r\n\r\nSeems like you really want is to use the Dart AST parser: regexes are only going to get you so far, and this kind of parsing is not something they really work well for (nested complex structures).",
+        "createdAt" : "2021-08-10T21:59:23Z",
+        "updatedAt" : "2021-08-10T22:19:17Z",
+        "lastEditedBy" : "fd82dff4-bfc7-4076-8507-e7e4521446f2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "386d7e2c-71aa-4e27-b85f-5e1fb7840909",
+        "parentId" : "e4891301-ded1-49e0-8c2d-cfb4c72cfb17",
+        "authorId" : "fd82dff4-bfc7-4076-8507-e7e4521446f2",
+        "body" : "I mean, I know it seems like overkill a bit, but on the other hand, I'm sure we'll hit a point where someone (maybe not even in the Flutter code) calls a parameter \"skip\" and gets a headache.\r\n\r\nWriting the parser for this isn't that bad, I just did one for the snippets tool so that the parsing would be more robust (since I was using RegExps a lot before), and I was surprised at how little code it actually took, especially since you're only looking for a single parameter on a single kind of element.",
+        "createdAt" : "2021-08-10T23:54:29Z",
+        "updatedAt" : "2021-08-10T23:54:30Z",
+        "lastEditedBy" : "fd82dff4-bfc7-4076-8507-e7e4521446f2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e6f4a2e-c676-4201-816a-b61e91595965",
+        "parentId" : "e4891301-ded1-49e0-8c2d-cfb4c72cfb17",
+        "authorId" : "4d6ff42b-5e54-4527-b55d-0fb7f3c5513b",
+        "body" : "Thanks for the suggestion. I hear ya, and did consider that as I am not a fan of regexp for parsing. I was reluctant to introduce an analyzer script dependency on the Dart AST parser (although maybe that isn't a big deal). In addition, it might be trickier to handle the 'comment on the same line' with the parser.\r\n\r\nThe regexp solution is simpler and while potentially flawed, doesn't seem to have uncovered any other use cases of a skip keyword parameter in *_test.dart files in the flutter repo.  So I went with the pragmatic option.\r\n\r\nThat said, I will take a look at what would be involved with migrating this to a parser solution. I may still go forward with this solution in the mean time just to keep more unmarked skip tests creeping into the tree.\r\n",
+        "createdAt" : "2021-08-11T00:39:01Z",
+        "updatedAt" : "2021-08-11T00:39:01Z",
+        "lastEditedBy" : "4d6ff42b-5e54-4527-b55d-0fb7f3c5513b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "989b95c7-4def-4b68-821b-845d4b4c1b64",
+        "parentId" : "e4891301-ded1-49e0-8c2d-cfb4c72cfb17",
+        "authorId" : "fd82dff4-bfc7-4076-8507-e7e4521446f2",
+        "body" : "(I sent this to you in email, then saw your response here):\r\n\r\nHere's an example of an AST parser that would give you the character offsets of each \"skip\" parameter attached to a call with a name that starts with 'test' or is called 'group'.  It is harder to find the attached comments. Well, it's pretty easy to find preceding comments (e.g. \"`/* preceding comment */ skip: true`\"), but finding an inline comment at the end of the same line, for example, is pretty hard in the AST parser (it doesn't have any concept of \"lines\"). I'd just take the character offset ranges and use that to look for comments on the same line using regexps.\r\n\r\nI don't think that the dependency is a big deal: we already depend on it in other places in the repo, and it's not customer facing code.\r\n\r\n```dart\r\nimport 'package:analyzer/dart/analysis/features.dart';\r\nimport 'package:analyzer/dart/analysis/results.dart';\r\nimport 'package:analyzer/dart/analysis/utilities.dart';\r\nimport 'package:analyzer/dart/ast/ast.dart';\r\nimport 'package:analyzer/dart/ast/visitor.dart';\r\nimport 'package:file/file.dart';\r\nimport 'package:file/local.dart';\r\n\r\nvoid main(List<String> args) {\r\n  const FileSystem fs = LocalFileSystem();\r\n  final List<Skip> skips = getFileSkips(fs.file(args[0])).toList();\r\n  skips.sort((Skip a, Skip b) => a.charOffset.compareTo(b.charOffset));\r\n  skips.forEach(print);\r\n}\r\n\r\nclass Skip extends Object {\r\n  Skip(this.element);\r\n  final NamedExpression element;\r\n  int get charOffset => element.beginToken.charOffset;\r\n  int get endCharOffset => element.endToken.charOffset + element.endToken.length;\r\n\r\n  @override\r\n  String toString() {\r\n    return '$charOffset-$endCharOffset: $element';\r\n  }\r\n}\r\n\r\nIterable<Skip> getFileSkips(File file) {\r\n  // You could use parseString here instead.\r\n  final ParseStringResult parseResult = parseFile(\r\n    featureSet: FeatureSet.latestLanguageVersion(),\r\n    path: file.absolute.path,\r\n  );\r\n  final _SourceVisitor<CompilationUnit> visitor =\r\n      _SourceVisitor<CompilationUnit>(file);\r\n  visitor.visitCompilationUnit(parseResult.unit);\r\n  return visitor.skips;\r\n}\r\n\r\nclass _SourceVisitor<T> extends RecursiveAstVisitor<T> {\r\n  _SourceVisitor(this.file) : skips = <Skip>{};\r\n\r\n  final Set<Skip> skips;\r\n  File file;\r\n\r\n  static bool isTestMethod(String name) {\r\n    return name.startsWith('test') || name == 'group';\r\n  }\r\n\r\n  @override\r\n  T? visitMethodInvocation(MethodInvocation node) {\r\n    if (isTestMethod(node.methodName.toString())) {\r\n      for (final Expression argument in node.argumentList.arguments) {\r\n        if (argument is NamedExpression && argument.name.label.name == 'skip') {\r\n          skips.add(Skip(argument));\r\n        }\r\n      }\r\n    }\r\n    return super.visitMethodInvocation(node);\r\n  }\r\n}\r\n```\r\n",
+        "createdAt" : "2021-08-11T18:38:40Z",
+        "updatedAt" : "2021-08-11T18:38:41Z",
+        "lastEditedBy" : "fd82dff4-bfc7-4076-8507-e7e4521446f2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "27fed867-cc0d-4da7-be5d-7e20583893ad",
+        "parentId" : "e4891301-ded1-49e0-8c2d-cfb4c72cfb17",
+        "authorId" : "fd82dff4-bfc7-4076-8507-e7e4521446f2",
+        "body" : "Also, there is a method called `LineInfo.fromContent()` in the analyzer that will give you the line number for an offset.",
+        "createdAt" : "2021-08-11T20:39:56Z",
+        "updatedAt" : "2021-08-11T20:39:56Z",
+        "lastEditedBy" : "fd82dff4-bfc7-4076-8507-e7e4521446f2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42b48de6a6fa78d728bcbdef47cb59705a89797b",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +296,300 @@    final List<String> lines = file.readAsLinesSync();\n    for (int index = 0; index < lines.length; index++) {\n      final Match? match = _skipTestCommentPattern.firstMatch(lines[index]);\n      final String? skipComment = match?.group(1);\n      if (skipComment != null"
   }
 ]
