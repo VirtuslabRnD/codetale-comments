@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "863aa863-7b33-45a4-96c8-f18003f3ad6e",
+    "prId" : 8829,
+    "prUrl" : "https://github.com/apache/kafka/pull/8829#pullrequestreview-426419753",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2b9aa611-c7b2-4da4-8ba9-7201ece278bd",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "This marks the failure when we get a new error but the previous error already put us over the limit. IOW, if this is the first error that is reported, then `totalFailures` will be 0 when this method is called and thus the `withinToleranceLimits()` will return `true` (i.e., we haven't recorded any errors yet) and we will *not* enter the if block due to the negation.\r\n\r\nSeems like we should actually do this check *after* we record the error. That would be something like:\r\n```\r\n        markAsFailed();\r\n        context.consumerRecord(consumerRecord);\r\n        context.currentContext(stage, executingClass);\r\n        context.error(error);\r\n        errorHandlingMetrics.recordError();\r\n        if (!withinToleranceLimits()) {\r\n            errorHandlingMetrics.recordFailure();\r\n            throw new ConnectException(\"Tolerance exceeded in error handler\", error);\r\n        }\r\n        return context.report();\r\n```\r\nNote that I added the `markAsFailed()` call since that's what increments the `totalFailures` field (and calls `errorHandlingMetrics.recordErrorTimestamp()`). \r\n\r\nBTW, I'm not sure whether we should call `errorHandlingMetrics.recordError()` or `errorHandlingMetrics.recordFailure()` or both.\r\n\r\nIIUC, then when we get to the if-block on the first error being reported, the `markAsFailed()` method will have incremented the `totalFailures` (we were not doing that in this method before this PR), and if `errors.tolerance=NONE` is used we will fail on the *first* error -- which is what we want.\r\n\r\nI also think that if we add other error tolerance policies in the future, this logic will work correctly, as long as `withinToleranceLimits()` is implemented to return `false` when we should fail rather than report.\r\n\r\nAlso, it'd be great to have unit tests that verify this behavior.",
+        "createdAt" : "2020-06-07T23:16:37Z",
+        "updatedAt" : "2020-06-11T00:44:25Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0b4dd8d3-cdb6-44b1-a315-5618b6cf3ab6",
+        "parentId" : "2b9aa611-c7b2-4da4-8ba9-7201ece278bd",
+        "authorId" : "4672b6ee-315d-4bd7-b4bb-0c502e9b1e4a",
+        "body" : "Thanks @rhauch for the comments, I agree with what you're saying. I think we should call both `errorHandlingMetrics.recordError()` and `errorHandlingMetrics.recordFailure()`. It seems like `recordError()` and `recordFailure()` represent basically the same thing (failed operations) and they're both called at some point when `execute(...)` is called by the `RetryWithToleranceOperator`, albeit at different times.\r\n\r\nAdditionally, it looks as if in other circumstances, the error is reported to the various reporters even if the error tolerance has been exceeded, so I'll adjust the order of operations accordingly.",
+        "createdAt" : "2020-06-08T03:08:19Z",
+        "updatedAt" : "2020-06-11T00:44:25Z",
+        "lastEditedBy" : "4672b6ee-315d-4bd7-b4bb-0c502e9b1e4a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "791b7459-21b4-4cb6-98d9-7562f3abdc31",
+        "parentId" : "2b9aa611-c7b2-4da4-8ba9-7201ece278bd",
+        "authorId" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "body" : "if we attempt an operation and it fails, `recordFailure` will be incremented, but `recordError` only tracks the cases where the when we encounter a problem that the framework cannot retry or skip. In the first case, we may still be able to retry or skip the record. In the `executeFailed` scenario, we should `recordFailure()` every time, and only `recordError` only when we have to fail the task.",
+        "createdAt" : "2020-06-08T16:39:25Z",
+        "updatedAt" : "2020-06-11T00:44:25Z",
+        "lastEditedBy" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c3324cce90f8379c69c8538b594edd29e83f7fe1",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +88,92 @@                                      ConsumerRecord<byte[], byte[]> consumerRecord,\n                                      Throwable error) {\n\n        markAsFailed();\n        context.consumerRecord(consumerRecord);"
+  }
+]
