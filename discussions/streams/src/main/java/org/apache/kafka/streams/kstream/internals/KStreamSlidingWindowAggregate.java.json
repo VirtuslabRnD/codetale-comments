@@ -108,5 +108,159 @@
     "commit" : "de97db6cf39eb34eab0207f3cc45a5085317b2a4",
     "line" : 122,
     "diffHunk" : "@@ -1,1 +120,124 @@            final long timestamp = context().timestamp();\n            //don't process records that don't fall within a full sliding window\n            if (timestamp < windows.timeDifferenceMs()) {\n                log.warn(\n                    \"Skipping record due to early arrival. value=[{}] topic=[{}] partition=[{}] offset=[{}]\","
+  },
+  {
+    "id" : "3e563f4f-7736-48e1-9e4d-8ec59859c460",
+    "prId" : 9157,
+    "prUrl" : "https://github.com/apache/kafka/pull/9157#pullrequestreview-472822157",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ffec3e5a-956c-46f6-b207-1d430432a1d2",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "This is just a window from [0, timeDifferenceMs] that stores the aggregation of all the \"early\" records, right? I can't really think of a more descriptive name so can we just leave a comment explaining what it's for",
+        "createdAt" : "2020-08-24T23:13:19Z",
+        "updatedAt" : "2020-09-08T23:35:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7d4ca6a3b9ea899afa680ec852fdfdfb5e2f3d58",
+    "line" : 172,
+    "diffHunk" : "@@ -1,1 +249,253 @@\n            // A window from [0, timeDifferenceMs] that holds all early records\n            KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> combinedWindow = null;\n            ValueAndTimestamp<Agg> rightWinAgg = null;\n            boolean rightWinAlreadyCreated = false;"
+  },
+  {
+    "id" : "89c465af-eec2-4749-8b03-fa73e895a985",
+    "prId" : 9157,
+    "prUrl" : "https://github.com/apache/kafka/pull/9157#pullrequestreview-481033464",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d93d770e-155d-4e4d-ac94-ad21b2728ee1",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Same here, can this ever be null? It doesn't seem like it, even if it's a new window we still pass in the initializer value so `valueAndTime` won't ever be null. ...right?",
+        "createdAt" : "2020-09-01T22:27:44Z",
+        "updatedAt" : "2020-09-08T23:35:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85a23154-c389-42ab-87a7-fa2d0488f9f7",
+        "parentId" : "d93d770e-155d-4e4d-ac94-ad21b2728ee1",
+        "authorId" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "body" : "I just ran the tests and it's _mostly_ true that it won't be null. We do have a test, and so it seems like a real life scenario (?), where the reduce initializer is null, so when creating a new window `valueAndTime` is null.",
+        "createdAt" : "2020-09-02T13:51:05Z",
+        "updatedAt" : "2020-09-08T23:35:27Z",
+        "lastEditedBy" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73d71af1-d4b4-491c-a49c-5f35c8194c39",
+        "parentId" : "d93d770e-155d-4e4d-ac94-ad21b2728ee1",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "True, I guess there's no reason the initializer can't return null. Nevermind then",
+        "createdAt" : "2020-09-02T17:13:20Z",
+        "updatedAt" : "2020-09-08T23:35:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7d4ca6a3b9ea899afa680ec852fdfdfb5e2f3d58",
+    "line" : 310,
+    "diffHunk" : "@@ -1,1 +370,374 @@            if (windowEnd > closeTime) {\n                //get aggregate from existing window\n                final Agg oldAgg = getValueOrNull(valueAndTime);\n                final Agg newAgg = aggregator.apply(key, value, oldAgg);\n"
+  },
+  {
+    "id" : "97e44c23-82a1-467b-b476-39ede8cffd1d",
+    "prId" : 9157,
+    "prUrl" : "https://github.com/apache/kafka/pull/9157#pullrequestreview-480230394",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c19c58ea-90e6-45ac-83c4-ed223abb7d01",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "By the way, I think we should also check if the record is so old that even the latest window it could possibly create/affect would be dropped, and then not process the record at all. (ie basically check if the current record's right window would be dropped) We can record on the lateRecordDropSensor and log the message using the current record's left window. ",
+        "createdAt" : "2020-09-02T00:50:36Z",
+        "updatedAt" : "2020-09-08T23:35:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7d4ca6a3b9ea899afa680ec852fdfdfb5e2f3d58",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +121,125 @@            observedStreamTime = Math.max(observedStreamTime, inputRecordTimestamp);\n            final long closeTime = observedStreamTime - windows.gracePeriodMs();\n\n            if (inputRecordTimestamp + 1L + windows.timeDifferenceMs() <= closeTime) {\n                log.warn("
+  },
+  {
+    "id" : "9da0e6f1-f0e4-4d93-b958-ba8c8d749e9e",
+    "prId" : 9157,
+    "prUrl" : "https://github.com/apache/kafka/pull/9157#pullrequestreview-482919463",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "16ea1ebb-819a-4ce4-b7d5-88de1dc80872",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Not sure how this change relates to \"early records\"?",
+        "createdAt" : "2020-09-03T15:37:47Z",
+        "updatedAt" : "2020-09-08T23:35:27Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c13ee5cc-edb9-4cbb-8a0f-aeec578ecb0f",
+        "parentId" : "16ea1ebb-819a-4ce4-b7d5-88de1dc80872",
+        "authorId" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "body" : "I think it might've gotten pulled over when updating from the original PR",
+        "createdAt" : "2020-09-04T16:05:12Z",
+        "updatedAt" : "2020-09-08T23:35:27Z",
+        "lastEditedBy" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ef5f549-0f07-43b6-bb53-6f1572965af0",
+        "parentId" : "16ea1ebb-819a-4ce4-b7d5-88de1dc80872",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "This was just from the semi-related cleanup of splitting `putAndForward` into a separate method for `createRightWindow`, which was done after the first PR was merged (hence the cleanup occurs in this PR). I think?",
+        "createdAt" : "2020-09-04T20:18:48Z",
+        "updatedAt" : "2020-09-08T23:35:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7d4ca6a3b9ea899afa680ec852fdfdfb5e2f3d58",
+    "line" : 319,
+    "diffHunk" : "@@ -1,1 +371,375 @@                //get aggregate from existing window\n                final Agg oldAgg = getValueOrNull(valueAndTime);\n                final Agg newAgg = aggregator.apply(key, value, oldAgg);\n\n                final long newTimestamp = oldAgg == null ? inputRecordTimestamp : Math.max(inputRecordTimestamp, valueAndTime.timestamp());"
+  },
+  {
+    "id" : "30bcbf3b-a287-4adf-ab7d-cbc09416aab7",
+    "prId" : 9157,
+    "prUrl" : "https://github.com/apache/kafka/pull/9157#pullrequestreview-484522844",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dc3b57e9-0316-4420-8192-80836327ffe8",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "nit: log an error and include the relevant info (eg `windowStart` and `inputRecordTimestamp` at least). Same for the IllegalStateException in `processEarly`",
+        "createdAt" : "2020-09-08T22:03:54Z",
+        "updatedAt" : "2020-09-08T23:35:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7d4ca6a3b9ea899afa680ec852fdfdfb5e2f3d58",
+    "line" : 115,
+    "diffHunk" : "@@ -1,1 +202,206 @@                            startTime, inputRecordTimestamp\n                        );\n                        throw new IllegalStateException(\"Unexpected window found when processing sliding windows\");\n                    }\n                }"
   }
 ]
