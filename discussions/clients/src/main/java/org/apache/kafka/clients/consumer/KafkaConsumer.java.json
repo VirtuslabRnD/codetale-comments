@@ -1087,5 +1087,49 @@
     "commit" : "dc44d7e5e770330d2b85104226f8ed083e03acb7",
     "line" : 23,
     "diffHunk" : "@@ -1,1 +1949,1953 @@            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(\n                    new MetadataRequest.Builder(Collections.singletonList(topic), metadata.allowAutoTopicCreation()), timer);\n            return topicMetadata.getOrDefault(topic, Collections.emptyList());\n        } finally {\n            release();"
+  },
+  {
+    "id" : "4529cbe9-7e67-498b-b373-3c4ab7ef1739",
+    "prId" : 11057,
+    "prUrl" : "https://github.com/apache/kafka/pull/11057#pullrequestreview-713237112",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c41689b3-42a9-4020-825d-fb5891b37df0",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Isn't this actually a blocking call? I couldn't find anything that asserted yes or no in the javadocs, but this ultimately calls down into `Fetcher#fetchOffsetsByTimes` which does seem to wait for the request future to complete (in fact, it seems to be doing a busy wait on the timer...? that doesn't seem right 🤔 )",
+        "createdAt" : "2021-07-22T20:23:02Z",
+        "updatedAt" : "2021-07-22T20:25:07Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f1568d9b-3029-4b8e-b509-aee1f3e9b296",
+        "parentId" : "c41689b3-42a9-4020-825d-fb5891b37df0",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I modified the fetcher so that it would not wait for the future to complete, with timer(0) it would not be a blocking call. Or did I miss anything?",
+        "createdAt" : "2021-07-22T20:58:49Z",
+        "updatedAt" : "2021-07-22T21:00:19Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e6a4bef-3070-4365-b14f-ddfec7c1e52d",
+        "parentId" : "c41689b3-42a9-4020-825d-fb5891b37df0",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Ah sorry, I overlooked that we passed in a timeout of 0 (originally thought that would throw a TimeoutException but I see now it would just return -- nevermind this then)\r\n\r\nHowever I do think it's probably worth taking care not to fire off a million requests per second (possible slight over-exaggeration) when we're just waiting on the same partition(s). It shouldn't be too complicated to avoid sending duplicated requests so imo it's not over-optimization...thoughts?",
+        "createdAt" : "2021-07-22T21:08:21Z",
+        "updatedAt" : "2021-07-22T21:08:22Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dea2825250187e5c59aa95b63908e948bdd78f62",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +2249,2253 @@                    log.info(\"Requesting the log end offset for {} in order to compute lag\", topicPartition);\n                    subscriptions.requestPartitionEndOffset(topicPartition);\n                    fetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));\n                }\n"
   }
 ]

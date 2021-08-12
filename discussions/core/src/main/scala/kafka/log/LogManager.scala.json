@@ -427,5 +427,115 @@
     "commit" : "75439382c50b845f4bfca6563bbc4e9500fd35d4",
     "line" : 21,
     "diffHunk" : "@@ -1,1 +868,872 @@      try {\n        Files.createDirectories(dir.toPath)\n        Utils.flushParentDir(dir.toPath)\n        Success(dir)\n      } catch {"
+  },
+  {
+    "id" : "4a7e3135-1ed2-43a7-81e8-d225c3ad1069",
+    "prId" : 11036,
+    "prUrl" : "https://github.com/apache/kafka/pull/11036#pullrequestreview-707502222",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "31d2df5d-a07f-4c09-82d4-a0d975ce5df3",
+        "parentId" : null,
+        "authorId" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "body" : "The addition of this argument here (and elsewhere in LogManager) is to let us go through the validation/warning logic during startup. Is that right?\r\n\r\nAre the other usages of `currentDefaultConfig` safe as-is? What happens if someone reconfigures the log config? Is that handled via `LogManager#fetchLogConfig`?",
+        "createdAt" : "2021-07-15T14:37:54Z",
+        "updatedAt" : "2021-07-15T15:01:24Z",
+        "lastEditedBy" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b5018143-5cf4-4d9a-a9c9-557866f5d3a9",
+        "parentId" : "31d2df5d-a07f-4c09-82d4-a0d975ce5df3",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "It's to handle topic configs read during startup. The ones updated dynamically go via TopicConfigHandler. The dynamic broker config code never allowed log.message.format.version to be set. There are tests for all the cases.",
+        "createdAt" : "2021-07-15T15:11:53Z",
+        "updatedAt" : "2021-07-15T15:11:53Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b466d394-88f4-4046-9b06-01c9066e1741",
+        "parentId" : "31d2df5d-a07f-4c09-82d4-a0d975ce5df3",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "Regarding `currentDefaultConfig`, the answer is yes for `LogManager`. There is one case in `DynamicBrokerConfig` that could be handled better, I'll submit a separate PR for that (it's unrelated to the changes here).",
+        "createdAt" : "2021-07-15T15:14:48Z",
+        "updatedAt" : "2021-07-15T15:14:48Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6f3303a523bf242f8e98e8a5f8ec04b84961d924",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +263,267 @@                           topicConfigOverrides: Map[String, LogConfig]): Log = {\n    val topicPartition = Log.parseTopicPartitionName(logDir)\n    val config = topicConfigOverrides.getOrElse(topicPartition.topic, defaultConfig)\n    val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)\n    val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)"
+  },
+  {
+    "id" : "062ab1cd-57d5-4405-a6e6-74fdba361c51",
+    "prId" : 11036,
+    "prUrl" : "https://github.com/apache/kafka/pull/11036#pullrequestreview-709492212",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4e6dc743-7522-4434-8cfe-02291cff1acb",
+        "parentId" : null,
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "It seems that we get a copy of the config here so I suppose that we could directly mutate it below instead of making a copy again. What do you think?",
+        "createdAt" : "2021-07-16T16:20:46Z",
+        "updatedAt" : "2021-07-16T16:30:25Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "21951a02-45fe-43c1-8e33-dfda4c542d8e",
+        "parentId" : "4e6dc743-7522-4434-8cfe-02291cff1acb",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "Yes, I thought of that, but we don't specify that the result of `topicConfig` is mutable and we often return unmodifiable collections. Even as it is, we don't do the copy in the common case, so that's why I went with it.",
+        "createdAt" : "2021-07-16T16:40:01Z",
+        "updatedAt" : "2021-07-16T16:40:01Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b12fac9-bede-4501-ae74-d63b3bc4d207",
+        "parentId" : "4e6dc743-7522-4434-8cfe-02291cff1acb",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "For my own education, could `Properties` by unmodifiable somehow? \r\n\r\nI pointed that out because the scaladoc of the `ConfigRepository` trait states the following `@return a copy of the configuration for the given resource`. It seems that the two main implementations respect this however `MockConfigRepository` does not. Therefore, I tend to agree with you.",
+        "createdAt" : "2021-07-19T12:26:13Z",
+        "updatedAt" : "2021-07-19T12:26:13Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3540038-2873-4636-9ed3-082dd5490cce",
+        "parentId" : "4e6dc743-7522-4434-8cfe-02291cff1acb",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "Oh, interesting, so it does specify that a copy is returned. I had missed that. Since the mock config repository does not implement it correctly, as you found, I think it's better to handle this via a separate PR (it's possible that unrelated tests may fail as a result and may need fixing).",
+        "createdAt" : "2021-07-19T12:30:43Z",
+        "updatedAt" : "2021-07-19T12:30:44Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1409e202-2992-46ac-98f9-1ce8228711a7",
+        "parentId" : "4e6dc743-7522-4434-8cfe-02291cff1acb",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "Regarding unmodifiable `Properties`, there is no built-in way. My concern was something like the `MockConfigRepository` issue you found where copies are not done with the assumption that the caller should not mutate (even though there is no simple way to prevent that - another reason not to use `Properties`).",
+        "createdAt" : "2021-07-19T12:33:44Z",
+        "updatedAt" : "2021-07-19T12:33:44Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6f3303a523bf242f8e98e8a5f8ec04b84961d924",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +423,427 @@    val defaultProps = defaultConfig.originals()\n    topicNames.foreach { topicName =>\n      var overrides = configRepository.topicConfig(topicName)\n      // save memory by only including configs for topics with overrides\n      if (!overrides.isEmpty) {"
   }
 ]
