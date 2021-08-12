@@ -460,5 +460,71 @@
     "commit" : "8eca3c9c2852172896001178f8e7a115fd392aeb",
     "line" : 29,
     "diffHunk" : "@@ -1,1 +234,238 @@\n    @Override\n    public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {\n\n        return new MeteredKeyValueIterator(wrapped().prefixScan(prefix, prefixKeySerializer), prefixScanSensor);"
+  },
+  {
+    "id" : "736c34e7-9f0e-49c2-bee6-aea20664c4a4",
+    "prId" : 10548,
+    "prUrl" : "https://github.com/apache/kafka/pull/10548#pullrequestreview-645672681",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d3e9a813-2fea-42b3-a78c-20e70b1ba62e",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "As mentioned by @cadonna the wrapped stores, also check `prefixKeySerializer` for null -- thus might be good to move both check here.\r\n\r\nI think we can also remove both checks in `RocksDBStore` and `InMemoryKeyValueStore` -- they seems to be redundant now? ",
+        "createdAt" : "2021-04-22T21:50:39Z",
+        "updatedAt" : "2021-04-27T10:04:42Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eac13a59-11a0-45a0-b92d-85dcd4bce583",
+        "parentId" : "d3e9a813-2fea-42b3-a78c-20e70b1ba62e",
+        "authorId" : "7c1538d7-69dd-4323-a552-628699aa0b78",
+        "body" : ">I think we can also remove both checks in RocksDBStore and InMemoryKeyValueStore -- they seem to be redundant now?\r\n\r\nthey are both different implementations, aren't they?\r\n![image](https://user-images.githubusercontent.com/44339288/115792580-35255c80-a3d3-11eb-99ea-4e5686dd8556.png)\r\nI don't understand how they will be checked if we only leave it in `MeteredKeyValueStore.`",
+        "createdAt" : "2021-04-22T22:33:02Z",
+        "updatedAt" : "2021-04-27T10:04:42Z",
+        "lastEditedBy" : "7c1538d7-69dd-4323-a552-628699aa0b78",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aef52e01-013a-4bea-bdda-8d318099b16c",
+        "parentId" : "d3e9a813-2fea-42b3-a78c-20e70b1ba62e",
+        "authorId" : "7c1538d7-69dd-4323-a552-628699aa0b78",
+        "body" : "\r\n![image](https://user-images.githubusercontent.com/44339288/115794170-3441fa00-a3d6-11eb-8fd6-ba9a90af3005.png)\r\nI wrote a quick test to see if it still throws NPE in `InMemoryKeyValueStore` without the check - it did, I am confused, but they are, indeed, redundant.\r\nI'll leave the tests in both `RocksDBStoreTest` and `InMemoryKeyValueStore` bc why not.",
+        "createdAt" : "2021-04-22T22:50:41Z",
+        "updatedAt" : "2021-04-27T10:04:42Z",
+        "lastEditedBy" : "7c1538d7-69dd-4323-a552-628699aa0b78",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e09c99af-13c5-4152-ae60-1384caee74bc",
+        "parentId" : "d3e9a813-2fea-42b3-a78c-20e70b1ba62e",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "KafkaStreams runtime _always_ \"wraps\" any store with a corresponding `MeteredXxxStore` (cf https://github.com/apache/kafka/blob/trunk/streams/src/main/java/org/apache/kafka/streams/state/internals/KeyValueStoreBuilder.java#L42-L49) -- those `MeteredXxxStores` do the transaction from objects to bytes (ie they use the serdes) and also track state store metrics. (Note that stores provided to the runtime always have type `<Bytes, byte[]>` while they are exposed to `Processors` as `<K,V>` types.)\r\n\r\nThus, when you call `context.stateStore(...)` you always get a `MeteredXxxStore` object -- of course, those details are hidden behind the interface type.\r\n\r\nThis architecture allows us to unify code and separate concerns. In fact, it also allows us to add/remove more \"layers\": we can insert a \"caching layer\" (cf. https://kafka.apache.org/28/documentation/streams/developer-guide/memory-mgmt.html) and a \"change logging layer\" (both are inserted by default).",
+        "createdAt" : "2021-04-25T23:44:10Z",
+        "updatedAt" : "2021-04-27T10:04:42Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "79beac2b-bf6c-4775-97a6-0b2d6b0d21bb",
+        "parentId" : "d3e9a813-2fea-42b3-a78c-20e70b1ba62e",
+        "authorId" : "7c1538d7-69dd-4323-a552-628699aa0b78",
+        "body" : "Oooooh, I see.",
+        "createdAt" : "2021-04-27T10:03:09Z",
+        "updatedAt" : "2021-04-27T10:04:42Z",
+        "lastEditedBy" : "7c1538d7-69dd-4323-a552-628699aa0b78",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "12038c0fed47c280c9a19a11e54f2714ab1913fc",
+    "line" : 51,
+    "diffHunk" : "@@ -1,1 +241,245 @@    @Override\n    public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {\n        Objects.requireNonNull(prefix, \"key cannot be null\");\n        Objects.requireNonNull(prefixKeySerializer, \"prefixKeySerializer cannot be null\");\n        return new MeteredKeyValueIterator(wrapped().prefixScan(prefix, prefixKeySerializer), prefixScanSensor);"
   }
 ]

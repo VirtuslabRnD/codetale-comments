@@ -471,5 +471,93 @@
     "commit" : "a8de75f6f16cf8bdcccbcb1bc1fc0a11dd40c1d1",
     "line" : 13,
     "diffHunk" : "@@ -1,1 +149,153 @@            final String sourceTopic = storeToChangelogTopic.get(stateStore.name());\n            changelogTopics.add(sourceTopic);\n            stateStore.init((StateStoreContext) globalProcessorContext, stateStore);\n        }\n"
+  },
+  {
+    "id" : "d7583390-ff45-4329-b19c-307f8f6e3a9c",
+    "prId" : 10568,
+    "prUrl" : "https://github.com/apache/kafka/pull/10568#pullrequestreview-651752338",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2554ca0b-316c-4b06-9764-6f138003c1a8",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "We have two data structures that contain state stores but we check only one when we close the state stores. In the error case it can happen that one contains an open store that the other data structure does not contain. This is a quick fix for it, but we should consider whether it is possible to consolidate these two data structures.  ",
+        "createdAt" : "2021-05-04T19:03:35Z",
+        "updatedAt" : "2021-05-06T10:43:27Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "18106fcc-3c75-4869-bd71-2cfaefeb4f7b",
+        "parentId" : "2554ca0b-316c-4b06-9764-6f138003c1a8",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yikes, so it actually was a (possible) leak in production code? I'm almost glad rocksdb had a bug, otherwise we might have never caught it 😅 \r\n\r\nDefinite +1 on consolidating these, can you file a quick ticket for this? It almost sounds like a bug in itself that one might contain stores that the other does not, but I suppose as long as they all get closed it's probably ok. \r\n\r\nI'd bet you could find a community member to pick it up by labeling as `newbie` or `newbie++`",
+        "createdAt" : "2021-05-04T19:31:13Z",
+        "updatedAt" : "2021-05-06T10:43:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "752bc58d-c99c-4c84-8a19-9c0ca5f2057f",
+        "parentId" : "2554ca0b-316c-4b06-9764-6f138003c1a8",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Surprised to see we actually have two as well. Did a quick look at them, and I think they can be consolidated indeed. Some more details:\r\n\r\n1) The `mgr.initialize` would try to register all stores within `globalStateStores`, which would put them into the other `globalStores` map one by one via the `registerStateStore` call. So after the `initialize` call, the two stores should contain the same piece of metadata.\r\n\r\n2) But note that, before `initialize` call, no stores should be opened yet. So if a failure happens before that call, then all stores should be in `closed` form, and this logic would never be triggered.\r\n\r\n3) Within `initialize` we call `restoreState`, and only after that we would add the stores to the `globalStores` here. So if a failure happens during `restoreState`, the `globalStores` would not contain it while we have to rely on `globalStateStores`.\r\n\r\nBased on that, I can file a quick follow-up fix after your PR to consolidate these two.",
+        "createdAt" : "2021-05-04T22:55:54Z",
+        "updatedAt" : "2021-05-06T10:43:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88d0bc09-4ebb-4837-a75d-8e4939dd69ed",
+        "parentId" : "2554ca0b-316c-4b06-9764-6f138003c1a8",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Looking through the code in this class,  this feels a bit weird. Seems like the only way we could have (open) stores in `globalStateStores` but not in `globalStores` is when we hit an exception while trying to close the store in `globalStores`. I'm all for retrying in theory (though I'm willing to bet 99% of the time it's either permanent/fatal) but if that's what we intend to do, we should just retry it right after we hit that exception so it's clear what we're doing. Looping through this other structure like this feels very odd, as it implies these are distinct sets of StateStores instead of two data structures which should reflect the same set of underlying StateStores",
+        "createdAt" : "2021-05-04T23:23:47Z",
+        "updatedAt" : "2021-05-06T10:43:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8ceb9488-1a46-441e-87e2-0b1eff0271c1",
+        "parentId" : "2554ca0b-316c-4b06-9764-6f138003c1a8",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Heh, @guozhangwang and I reviewed at the same time. I didn't notice that `globalStores` would not be populated until restoration, whereas `globalStateStores` is populated in the constructor. Imo we should just populate `globalStores` in the constructor as well, but I guess that won't be necessary if @guozhangwang does a quick followup to consolidate them",
+        "createdAt" : "2021-05-04T23:37:40Z",
+        "updatedAt" : "2021-05-06T10:43:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e258ebfbaa270e178fe8a39f107a36e0738008b",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +397,401 @@            }\n        }\n        for (final StateStore store : globalStateStores) {\n            if (store.isOpen()) {\n                try {"
+  },
+  {
+    "id" : "e82dd0db-3f00-4a38-a46f-64134958f822",
+    "prId" : 10568,
+    "prUrl" : "https://github.com/apache/kafka/pull/10568#pullrequestreview-651584022",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ee442e43-956a-4c32-a940-047d62af48c2",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "What even is the difference between `globalStateStores` and `globalStores`? I'm not surprised we had a leak, I'm pretty sure if I was looking at this code I wouldn't remember that these were actually two different variables. Maybe we can give them slightly more descriptive names in the meantime?",
+        "createdAt" : "2021-05-04T23:18:57Z",
+        "updatedAt" : "2021-05-06T10:43:27Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e258ebfbaa270e178fe8a39f107a36e0738008b",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +375,379 @@    @Override\n    public void close() {\n        if (globalStateStores.isEmpty() && globalStores.isEmpty()) {\n            return;\n        }"
   }
 ]
