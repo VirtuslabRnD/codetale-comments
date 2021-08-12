@@ -317,5 +317,181 @@
     "commit" : "e3083f90f519a9105426668b891c8e803f066119",
     "line" : 33,
     "diffHunk" : "@@ -1,1 +93,97 @@    int cacheWidth,\n    int cacheHeight,\n    bool allowUpscaling = false,\n  }) {\n    assert(cacheWidth == null || cacheWidth > 0);"
+  },
+  {
+    "id" : "9288fd47-aa94-4fba-8aa3-30cb34293c53",
+    "prId" : 62696,
+    "prUrl" : "https://github.com/flutter/flutter/pull/62696#pullrequestreview-460511805",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "parentId" : null,
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "When is the imageCache ever expected to be null?\r\n\r\n/cc @dnfield ",
+        "createdAt" : "2020-08-03T17:16:37Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c945513d-2b34-48d6-8ff2-0673784230ee",
+        "parentId" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "authorId" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "body" : "No but it gets created by a virtual method. Can we make it late?",
+        "createdAt" : "2020-08-03T17:51:25Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c971c410-a82a-495e-8af7-b18d2c6f59c6",
+        "parentId" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "authorId" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "body" : "I made it nullable because L117 there's `imageCache?.clear();`. I will change it to late non-nullable",
+        "createdAt" : "2020-08-03T19:24:57Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b221f8fd-d09b-49ac-a7d4-f3c256d0955b",
+        "parentId" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "authorId" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "body" : "This change makes the following test fails:\r\n\r\n```dart\r\n  test('PaintingBinding with memory pressure before initInstances', () {\r\n    // Observed in devicelab: the device sends a memory pressure event to us\r\n    // after PaintingBinding has been created but before initInstances called,\r\n    // meaning the imageCache member is still null.\r\n    final PaintingBinding binding = TestPaintingBinding();\r\n    expect(binding.imageCache, null);\r\n    binding.handleMemoryPressure();\r\n    expect(binding.imageCache, null);\r\n    binding.initInstances();\r\n    expect(binding.imageCache, isNotNull);\r\n    expect(binding.imageCache.currentSize, 0);\r\n  });\r\n```\r\n\r\nI guess I can remove it?",
+        "createdAt" : "2020-08-03T19:35:00Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9dc0fed9-2574-496c-b98d-97f157c7028b",
+        "parentId" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "authorId" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "body" : "Ahh I remember now.  This caused flakes sometimes because the memory pressure would get processed before finishing binding initialization on rare occasions.  I guess we have to leave it as nullable.",
+        "createdAt" : "2020-08-03T19:36:34Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ceef2262-3d92-4ae2-8f6f-d1726a41819b",
+        "parentId" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "authorId" : "e73873df-c6ef-4dd5-ad17-dc7a574dcf0b",
+        "body" : "Please don't remove this test, this was a real failure. @dnfield I think re-ordered some of the initialization but I don't think it is solved.\r\n\r\nSpecifically, we can have a queued up message for us when initializing the binding, which might be a low memory event. I believe that gets forwarded immediately, but due to the binding order will run before the image cache is initialized. That doesn't mean that the image cache needs to be nullable, since this state isn't generally observable - but you do need to track whether it has been initialized somewhere.",
+        "createdAt" : "2020-08-03T19:37:38Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "e73873df-c6ef-4dd5-ad17-dc7a574dcf0b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ae23dbc8-c49a-4f87-8dd8-a287dd0a759a",
+        "parentId" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "authorId" : "e73873df-c6ef-4dd5-ad17-dc7a574dcf0b",
+        "body" : "Something like:\r\n```dart\r\nlate ImageCache imageCache;\r\nbool _imageCacheSetup = false;\r\n\r\n```",
+        "createdAt" : "2020-08-03T19:38:35Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "e73873df-c6ef-4dd5-ad17-dc7a574dcf0b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a014582-636e-4dcb-82a0-97ef8d309288",
+        "parentId" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "authorId" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "body" : "ok, after reading more carefully the comment I understood that it was not a good idea to remove it :)",
+        "createdAt" : "2020-08-03T19:39:29Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5a871ba-ef6e-425e-b6f2-f9255d7c7448",
+        "parentId" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "authorId" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "body" : "@jonahwilliams I'm not sure to follow. Do you expect a change in this PR or are you just talking about a future change that could happen?",
+        "createdAt" : "2020-08-03T19:48:02Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d8c84c7-d83a-4c62-a623-b1a7fd02f963",
+        "parentId" : "87c1cd58-400d-4991-bbf3-91326a24a2bc",
+        "authorId" : "e73873df-c6ef-4dd5-ad17-dc7a574dcf0b",
+        "body" : "nullable is fine for now",
+        "createdAt" : "2020-08-04T05:47:17Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "e73873df-c6ef-4dd5-ad17-dc7a574dcf0b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "934a64f6650c8ac5bb6247a29b78120439c62e0e",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +60,64 @@  /// The image cache is created during startup by the [createImageCache]\n  /// method.\n  ImageCache? get imageCache => _imageCache;\n  ImageCache? _imageCache;\n"
+  },
+  {
+    "id" : "884494a2-72c4-4fb5-acfc-318d222594b7",
+    "prId" : 62696,
+    "prUrl" : "https://github.com/flutter/flutter/pull/62696#pullrequestreview-460238944",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "43a4398b-ac29-4350-bb4c-63f942419a14",
+        "parentId" : null,
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "Same question about the image cache here.\r\n\r\n@dnfield (unrelated to this PR): Why do we expose the image cache twice: as part of the binding and as a global? Should one of them be deprecated?",
+        "createdAt" : "2020-08-03T17:18:24Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c8174ad-ff71-4fa5-bae3-3203d3f21a8d",
+        "parentId" : "43a4398b-ac29-4350-bb4c-63f942419a14",
+        "authorId" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "body" : "That predates my work.  @jonahwilliams might know.  I would be fine with deprecating the global.",
+        "createdAt" : "2020-08-03T17:51:59Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3c19d035-46aa-401b-823b-7f0cbc2f99a8",
+        "parentId" : "43a4398b-ac29-4350-bb4c-63f942419a14",
+        "authorId" : "e73873df-c6ef-4dd5-ad17-dc7a574dcf0b",
+        "body" : "I don't quite remember. It might have been global before we moved it into a binding",
+        "createdAt" : "2020-08-03T17:56:42Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "e73873df-c6ef-4dd5-ad17-dc7a574dcf0b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4571a0b3-27da-4e0e-b79e-25cf937db78c",
+        "parentId" : "43a4398b-ac29-4350-bb4c-63f942419a14",
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "Did some digging, looks like it was moved into the binding in https://github.com/flutter/flutter/pull/13409 and the global was kept. I'll prepare a PR to deprecate the global similarly to how we deprecated the global `defaultBinaryMessenger`.",
+        "createdAt" : "2020-08-03T18:11:01Z",
+        "updatedAt" : "2020-08-04T06:54:24Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "934a64f6650c8ac5bb6247a29b78120439c62e0e",
+    "line" : 73,
+    "diffHunk" : "@@ -1,1 +168,172 @@/// The image cache is created during startup by the [PaintingBinding]'s\n/// [PaintingBinding.createImageCache] method.\nImageCache? get imageCache => PaintingBinding.instance!.imageCache;"
   }
 ]
