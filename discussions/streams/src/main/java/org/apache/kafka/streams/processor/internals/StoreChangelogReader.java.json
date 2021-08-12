@@ -515,5 +515,137 @@
     "commit" : "ffe90a4254278614feeb110dbd3bde4687e82676",
     "line" : 49,
     "diffHunk" : "@@ -1,1 +176,180 @@    }\n\n    private final static long DEFAULT_OFFSET_UPDATE_MS = Duration.ofMinutes(5L).toMillis();\n\n    private ChangelogReaderState state;"
+  },
+  {
+    "id" : "0fc998f2-15b9-477a-bbc9-0530209244e7",
+    "prId" : 8235,
+    "prUrl" : "https://github.com/apache/kafka/pull/8235#pullrequestreview-371545424",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "96a412c8-ca8d-45ea-9edb-23e1e8676ac0",
+        "parentId" : null,
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Could we just add one more boolean condition into the filter and check whether `changelogsWithLimitOffsets` is empty or not.",
+        "createdAt" : "2020-03-09T19:33:54Z",
+        "updatedAt" : "2020-03-09T21:35:06Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b6d3e85a-be55-4c4c-9968-3852a4e918ac",
+        "parentId" : "96a412c8-ca8d-45ea-9edb-23e1e8676ac0",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "If `changelogsWithLimitOffsets` is empty then the for loop would be a no-op and the `updateLimitOffsetsForStandbyChangelogs` would not be called.",
+        "createdAt" : "2020-03-09T21:37:31Z",
+        "updatedAt" : "2020-03-09T21:37:38Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "00390129ed6c84be7b74018e60f4e6f764efeab9",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +465,469 @@                .filter(entry -> entry.getValue().stateManager.taskType() == Task.TaskType.STANDBY &&\n                    entry.getValue().stateManager.changelogAsSource(entry.getKey()))\n                .map(Map.Entry::getKey).collect(Collectors.toSet());\n\n            for (final TopicPartition partition : changelogsWithLimitOffsets) {"
+  },
+  {
+    "id" : "9f04031b-df52-46f7-8700-f6a987d8b08c",
+    "prId" : 8248,
+    "prUrl" : "https://github.com/apache/kafka/pull/8248#pullrequestreview-420331881",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4ea9f949-bf5f-4b74-975d-faa166f0af23",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Alright, the situation here is that we need to make sure we toggle bulk loading off for any active restoring tasks that convert to standby. Rather than try and force a direct call to toggleForBulkLoading on the store itself I figured we should just call onRestoreEnd. Technically, restoration is ending. It just happens to be due to type transition, rather than restore completion.\r\n\r\nI figured this might be relevant for users of custom stores, which might do something similar to bulk loading that they wish to turn off for standbys. But since this is only relevant to the underlying store, and doesn't mean we have actually finished restoring a task, we should only call the specific store's listener -- and not the user registered global listener.\r\nWDYT?",
+        "createdAt" : "2020-05-27T04:02:26Z",
+        "updatedAt" : "2020-05-28T23:49:30Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3bf24ab5-f746-4156-bba2-6088d81598fc",
+        "parentId" : "4ea9f949-bf5f-4b74-975d-faa166f0af23",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I think this makes sense. The restore listener / bulk loading interaction is a bit wacky, but it seems reasonable to just work around it for now.\r\n\r\nJust to play devil's advocate briefly, though, is it not true for _all_ listeners that the restore has ended, for exactly the reason you cited above?",
+        "createdAt" : "2020-05-27T17:40:36Z",
+        "updatedAt" : "2020-05-28T23:49:30Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "693e5ced-bc14-421b-aad3-f9aa0a542c21",
+        "parentId" : "4ea9f949-bf5f-4b74-975d-faa166f0af23",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I assume you're referring to the user registered global listener? I was trying to imagine what users actually might be using this for, and figured a major reason was to alert when a store is ready for IQ. Obviously, the store is not in fact ready for IQ in this case. I assume the worst that could happen is they'll just get an exception saying the store is not in fact ready if they do try to query it, but it still seems likely to cause confusion. \r\n\r\nIf you're also wondering about the seemingly arbitrary distinction made between the store-specific listener and the global one, it seems like the intent of the store-specific listener is to take action on a particular store as it transitions between restoring and not. The store-specific listener has a reference to the actual store, and can for example toggle it for bulk loading.\r\n\r\nBut IIUC the global listener does not have a reference to any actual stores and thus it's purpose seems more for alerting on the completion of restoration rather than taking some action on the store as restoration begins/ends. \r\n\r\nRestoration completion =/= restoration ending, but unfortunately we just have the one callback",
+        "createdAt" : "2020-05-27T22:37:18Z",
+        "updatedAt" : "2020-05-28T23:49:30Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb64f735-77f0-4698-a254-1030c9ffaa6c",
+        "parentId" : "4ea9f949-bf5f-4b74-975d-faa166f0af23",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Yeah, that last sentence is what I was thinking would make sense to just call all the listeners, not just the inner ones. If you implemented the listener so that you could log or collect metrics to watch the restore process, it seems like it would be strange just to see the restoration disappear, and then a new restoration start (for the post-recycled task), without the prior one ever having \"ended\". It just seems natural to see an end for every start, even if the \"end\" doesn't mean \"completed\". But I can see how that could also be confusing.\r\n\r\nI'm not totally sure what the best call here is, so maybe we should just defer to your judgement, since you're the closest to this code right now.",
+        "createdAt" : "2020-05-27T23:49:14Z",
+        "updatedAt" : "2020-05-28T23:49:30Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c605b6f8-db6b-4bf3-8369-495d50d3229e",
+        "parentId" : "4ea9f949-bf5f-4b74-975d-faa166f0af23",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "> a new restoration start (for the post-recycled task), without the prior one ever having \"ended\".\r\n\r\nThis could happen if you have a restoring task that transitions to standby and then back to restoring. But invoking `onRestoreStart` twice in a row in that case is the current behavior, so your listener should presumably already be handling the situation. My impression is that users understand the global restore listener's `onRestoreEnd` to mean that restoration has completed, and invoking it before this would be an unexpected behavior change. \r\n\r\nI think in an ideal world we would decouple these two callbacks to make the distinction more apparent.",
+        "createdAt" : "2020-05-28T00:15:04Z",
+        "updatedAt" : "2020-05-28T23:49:30Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3f7ea98c-645d-496e-bcc1-b747c4655c91",
+        "parentId" : "4ea9f949-bf5f-4b74-975d-faa166f0af23",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Ah actually @guozhangwang filed a ticket recently for exactly that: https://issues.apache.org/jira/browse/KAFKA-10005",
+        "createdAt" : "2020-05-28T00:15:51Z",
+        "updatedAt" : "2020-05-28T23:49:30Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2881bcc1-8505-4f09-983a-313d07a0c0b7",
+        "parentId" : "4ea9f949-bf5f-4b74-975d-faa166f0af23",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Ok, I'm satisfied with this conclusion.",
+        "createdAt" : "2020-05-28T14:29:32Z",
+        "updatedAt" : "2020-05-28T23:49:30Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "11a639ba-b02d-41c9-94e9-7063afe8be07",
+        "parentId" : "4ea9f949-bf5f-4b74-975d-faa166f0af23",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Yup, I propose to decouple these two and only allow restore callback at the per-store level and restore listener at the global level. We will always open the store with compaction disabled etc when we are transiting to restoring, and after we've done the restoration (for active) we will do a one-off compaction, and then reopen the store with configs overridden.",
+        "createdAt" : "2020-05-28T17:22:13Z",
+        "updatedAt" : "2020-05-28T23:49:30Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "30ac7b3ccd47063497c17ac148d90f9b29683e82",
+    "line" : 51,
+    "diffHunk" : "@@ -1,1 +840,844 @@            final ChangelogMetadata changelogMetadata = changelogs.remove(partition);\n            if (changelogMetadata != null) {\n                if (triggerOnRestoreEnd && changelogMetadata.state().equals(ChangelogState.RESTORING)) {\n                    firstException.compareAndSet(null, invokeOnRestoreEnd(partition, changelogMetadata));\n                }"
   }
 ]

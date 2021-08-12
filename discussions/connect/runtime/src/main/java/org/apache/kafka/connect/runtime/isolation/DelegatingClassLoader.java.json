@@ -75,5 +75,82 @@
     "commit" : "8d4993ff956913085852d3b4bf54bd02b8ce144f",
     "line" : 9,
     "diffHunk" : "@@ -1,1 +138,142 @@     * @return the PluginClassLoader that should be used to load this, or null if the plugin is not isolated.\n     */\n    public PluginClassLoader pluginClassLoader(String name) {\n        if (!PluginUtils.shouldLoadInIsolation(name)) {\n            return null;"
+  },
+  {
+    "id" : "a8d10a10-46c5-4cbc-885f-d9a0c3fbb713",
+    "prId" : 8259,
+    "prUrl" : "https://github.com/apache/kafka/pull/8259#pullrequestreview-705557475",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "353bfd5b-059a-4919-8be1-8b5b8f9b6dec",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "I understand why the implementations need to be `ConcurrentMap`, but IIUC we're not using any of the methods specific to `ConcurrentMap`. Is there a reason we don't want to keep `Map` for the type of these fields?",
+        "createdAt" : "2021-05-17T17:35:13Z",
+        "updatedAt" : "2021-05-17T18:44:55Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8295d500-2cbd-42ef-8f0b-5df20b905791",
+        "parentId" : "353bfd5b-059a-4919-8be1-8b5b8f9b6dec",
+        "authorId" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "body" : "This was added by @kkonstantine but it does seem to be non-functional. I'll revert the type change.",
+        "createdAt" : "2021-05-17T18:47:35Z",
+        "updatedAt" : "2021-05-17T18:47:35Z",
+        "lastEditedBy" : "12b658fc-2aaf-48e9-ad8b-15fd33dc8321",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aae5a0cf-0d32-43ff-adae-b609c4c661b5",
+        "parentId" : "353bfd5b-059a-4919-8be1-8b5b8f9b6dec",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "The purpose of this change was to highlight that the data structure is required to be concurrent. \r\n\r\nOf course if a method that existed in `ConcurrentMap` and not in `Map` was used, that would be a hard requirement. \r\n`putIfAbsent` used to be such a method but that's not the case after 1.8. In any case, the use of the more accurate interface is valid even if we don't explicitly use methods that don't exist in the parent. That's because the need for this implementation to be thread safe is a requirement here. ",
+        "createdAt" : "2021-07-13T19:16:10Z",
+        "updatedAt" : "2021-07-13T19:16:10Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "09573d66695a4c663a04dec102ebb14bc372657e",
+    "line" : 37,
+    "diffHunk" : "@@ -1,1 +78,82 @@\n    private final ConcurrentMap<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;\n    private final ConcurrentMap<String, String> aliases;\n    private final SortedSet<PluginDesc<Connector>> connectors;\n    private final SortedSet<PluginDesc<Converter>> converters;"
+  },
+  {
+    "id" : "7e060cc8-fec0-4264-bd20-200748c81359",
+    "prId" : 8259,
+    "prUrl" : "https://github.com/apache/kafka/pull/8259#pullrequestreview-706528747",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2fe26d68-727f-4e9b-bd1b-4b9f1c362e3b",
+        "parentId" : null,
+        "authorId" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "body" : "I think it would be clearer to put this with the static fields rather than here after the member fields.\r\n\r\nAlso, is it worth mentioning that this CL is parallel-capable because it's superclass is, and we haven't overridden loadClass/defineClass, and so no additional sychronization is necessary?",
+        "createdAt" : "2021-07-14T10:41:17Z",
+        "updatedAt" : "2021-07-14T10:51:08Z",
+        "lastEditedBy" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0f0b7b6a-1290-482b-83ca-089adb1cd02a",
+        "parentId" : "2fe26d68-727f-4e9b-bd1b-4b9f1c362e3b",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "Keeping the static block here, because it's a block and that's what we have in `PluginClassLoader`. Our style is not too strict with respect of this ordering. \r\n\r\nThe class overwrites the `loadClass` method. But it's delegating the loading to different classloaders and the locking is embedded in these classes. ",
+        "createdAt" : "2021-07-14T17:17:01Z",
+        "updatedAt" : "2021-07-14T17:17:01Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "09573d66695a4c663a04dec102ebb14bc372657e",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +98,102 @@    // in the latter case, this classloader needs to also be declared as parallel capable to use\n    // fine-grain locking when loading classes.\n    static {\n        ClassLoader.registerAsParallelCapable();\n    }"
   }
 ]
