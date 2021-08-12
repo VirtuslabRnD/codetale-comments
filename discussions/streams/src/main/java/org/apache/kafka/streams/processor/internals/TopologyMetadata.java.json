@@ -185,5 +185,115 @@
     "commit" : "ba4a0da87422fc24bbf190022ddd6b80f784e941",
     "line" : 42,
     "diffHunk" : "@@ -1,1 +54,58 @@\n    private final StreamsConfig config;\n    private final SortedMap<String, InternalTopologyBuilder> builders; // Keep sorted by topology name for readability\n\n    private ProcessorTopology globalTopology;"
+  },
+  {
+    "id" : "641b4b2a-58cd-4f0f-a2c6-6fa8d202e71c",
+    "prId" : 10788,
+    "prUrl" : "https://github.com/apache/kafka/pull/10788#pullrequestreview-723971339",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "04f29c33-762f-4207-a2e5-99bfbd062e2d",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "How about moving this into the TopologyVersion to be guarded within the same lock as well, instead of making itself a concurrent data structure?",
+        "createdAt" : "2021-08-03T23:00:04Z",
+        "updatedAt" : "2021-08-03T23:38:45Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a9e5b833-76a1-4aa4-82bc-80489990d93a",
+        "parentId" : "04f29c33-762f-4207-a2e5-99bfbd062e2d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Also we can optimize the condition on whether we should enforce a new rebalance per-thread in `StreamThread` as: `builders.keySet().equals(assignedNamedTopologies)`. The former is the set of topologies this instance knows, the latter is the set of topologies the leader knows, when they are the same there's no need to trigger rebalance.",
+        "createdAt" : "2021-08-03T23:04:29Z",
+        "updatedAt" : "2021-08-03T23:38:45Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "529ddc2e-98d9-4ff4-b62c-f477cd449c1a",
+        "parentId" : "04f29c33-762f-4207-a2e5-99bfbd062e2d",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Well I removed the whole `assignedNamedTopologies` thing from this PR, but yes, that was one of the original intentions of adding it to the AssignmentInfo. I'm leaning towards keeping things simple for now and avoid adding on to the AssignmentInfo where possible. We can revisit this if the extra rebalances become a problem.\r\n\r\nIt could be sufficient to just use the set of actually-assigned topologies as a proxy. It's not perfect since it could be that the leader was aware of a topology and simply happened to not assign any of its tasks to this client, but I'd bet this gets rid of most of the unnecessary rebalances.\r\n\r\nThat said, I'm saving this optimization for a followup Pt. 4 PR. I'll revisit the best way to handle the `builders` map in that as well",
+        "createdAt" : "2021-08-05T03:32:00Z",
+        "updatedAt" : "2021-08-05T03:32:00Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c31203a8-81af-4b62-bbe3-6d170c88e2b8",
+        "parentId" : "04f29c33-762f-4207-a2e5-99bfbd062e2d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "SGTM.\r\n\r\nWhat about the other comment, i.e. moving the `Map<String, InternalTopologyBuilder> builders` into the `TopologyVersion` itself? Besides the constructors, the only modifiers to `builders` seem to be `register/deregister`, in which we would always try to `getAndIncrement` version. So what about consolidating the modification of builders along with version bump, and hence we would not need to use a `ConcurrentNavigableMap`?",
+        "createdAt" : "2021-08-05T22:22:11Z",
+        "updatedAt" : "2021-08-05T22:31:15Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7e96692-89ff-4b94-9b3e-1a386cfbca7a",
+        "parentId" : "04f29c33-762f-4207-a2e5-99bfbd062e2d",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "> I'll revisit the best way to handle the builders map in that as well\r\n\r\nI was referring to moving the `builders` map to the `TopologyVersion` in the above, ie I want to save that for Pt. 4  if that's ok",
+        "createdAt" : "2021-08-06T00:46:43Z",
+        "updatedAt" : "2021-08-06T00:46:43Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "619347d9-5fa0-4412-a2c8-fb8d59e43b75",
+        "parentId" : "04f29c33-762f-4207-a2e5-99bfbd062e2d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "> I was referring to moving the `builders` map to the `TopologyVersion` in the above, ie I want to save that for Pt. 4 if that's ok\r\n\r\nYup, totally.",
+        "createdAt" : "2021-08-06T04:29:43Z",
+        "updatedAt" : "2021-08-06T04:29:44Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "623e7d3514516f355b468e4b23e45d33b8ecab22",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +61,65 @@    private final TopologyVersion version;\n\n    private final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders; // Keep sorted by topology name for readability\n\n    private ProcessorTopology globalTopology;"
+  },
+  {
+    "id" : "9571a108-5788-41ca-a2af-0c620640f13b",
+    "prId" : 10788,
+    "prUrl" : "https://github.com/apache/kafka/pull/10788#pullrequestreview-721802128",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4607fe97-f4aa-451f-a914-bf6bbaea9687",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Just to clarify: we either support N topologies where none of them have global topologies, or we support just one topology with only global topology? What's the rationale for supporting the second scenario?",
+        "createdAt" : "2021-08-03T23:19:51Z",
+        "updatedAt" : "2021-08-03T23:38:45Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ad02071-232b-4122-bb92-1378004e09e3",
+        "parentId" : "4607fe97-f4aa-451f-a914-bf6bbaea9687",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "The second scenario is called \"Kafka Streams\" 😉  \r\n\r\n(Users who aren't using named topologies should be able to use global stores as they do today)",
+        "createdAt" : "2021-08-04T02:13:44Z",
+        "updatedAt" : "2021-08-04T02:13:45Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "623e7d3514516f355b468e4b23e45d33b8ecab22",
+    "line" : 186,
+    "diffHunk" : "@@ -1,1 +191,195 @@                throw new IllegalStateException(\"Global state stores are not supported with Named Topologies\");\n            } else if (this.globalTopology == null) {\n                this.globalTopology = globalTopology;\n            } else {\n                throw new IllegalStateException(\"Topology builder had global state, but global topology has already been set\");"
   }
 ]

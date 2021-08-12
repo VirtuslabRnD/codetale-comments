@@ -218,5 +218,71 @@
     "commit" : "0755d439ecef512cb5d689d52d661fd55848e424",
     "line" : 8,
     "diffHunk" : "@@ -1,1 +61,65 @@         * @param epoch the epoch that the leader is resigning from\n         */\n        default void handleResign(int epoch) {}\n    }\n"
+  },
+  {
+    "id" : "344af820-1584-412f-8ac6-0e75132adfcf",
+    "prId" : 10705,
+    "prUrl" : "https://github.com/apache/kafka/pull/10705#pullrequestreview-664719693",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b4110f68-1d56-44a8-874a-f5408c6c803f",
+        "parentId" : null,
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "It's fine to combine these APIs, but we need to document what happens if the current leader resigns, but we don't know who the new leader is yet. Do we get passed a LeaderAndEpoch with the current epoch + 1 and a node ID of -1? If so, do we then expect to see another LeaderAndEpoch with the current epoch + 1 and a valid node -1?\r\n\r\nIn other words, let's say node 0 is the leader and then resigns, and then node 1 becomes the leader. Does it look like this:\r\n```\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=0, epoch=0))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=-1, epoch=1))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=1, epoch=1))\r\n```\r\n\r\nOr would you rather have something like this?\r\n```\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=0, epoch=0))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=-1, epoch=0))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=1, epoch=1))\r\n```\r\n\r\nIt seems like the second one will break a lot of invariants, so probably should be avoided. The first one might break some invariants too, though. We'd have to look.\r\n\r\nOr you could choose to burn an epoch like this:\r\n```\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=0, epoch=0))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=-1, epoch=1))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=1, epoch=2))\r\n```\r\nGiven that we only have a 31-bit epoch in the first place, that seems unwise, though.",
+        "createdAt" : "2021-05-17T22:53:30Z",
+        "updatedAt" : "2021-05-17T22:53:31Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8bbcc08-4063-4575-9665-84ec0f3d3537",
+        "parentId" : "b4110f68-1d56-44a8-874a-f5408c6c803f",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "I'll update the documentation but in Raft epochs are not guarantee to have a leader. If there is a leader for an epoch then there is one and only one leader. So that means that the client could see.\r\n```\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=0, epoch=0))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=-1, epoch=1))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=1, epoch=1))\r\n```\r\nOr this for that matter\r\n```\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=0, epoch=0))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=-1, epoch=1))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=-1, epoch=2))\r\nhandleLeaderChange(LeaderAndEpoch(nodeId=1, epoch=2))\r\n```",
+        "createdAt" : "2021-05-17T23:31:30Z",
+        "updatedAt" : "2021-05-17T23:31:30Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "72b312c1-f9cb-4195-a867-2206a332d468",
+        "parentId" : "b4110f68-1d56-44a8-874a-f5408c6c803f",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "> Or you could choose to burn an epoch like this...\r\n\r\nThis is not how leader election works in Raft. When a leader fails or steps down an epoch starts without a leader, only candidate(s). If leader election succeeds for a given epoch only one leader is guaranteed to be elected for that epoch and will remain leader for the duration of that epoch.",
+        "createdAt" : "2021-05-17T23:46:54Z",
+        "updatedAt" : "2021-05-17T23:47:27Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "001c9472-c91c-4bfe-bf7a-f23cf1ee23f0",
+        "parentId" : "b4110f68-1d56-44a8-874a-f5408c6c803f",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "It sounds like the invariant here is that while `handleLeaderChange` may be called multiple times for the same epoch, only the last call will have a valid (non-negative) node id associated with it. Can you add a JavaDoc comment like this to the API?",
+        "createdAt" : "2021-05-19T22:05:09Z",
+        "updatedAt" : "2021-05-19T22:05:09Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4fadde51-a7d9-4848-9c05-45561629c63f",
+        "parentId" : "b4110f68-1d56-44a8-874a-f5408c6c803f",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "Yes. I added a few more sentences to make this clear.",
+        "createdAt" : "2021-05-20T18:18:02Z",
+        "updatedAt" : "2021-05-20T18:18:02Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2dc57d09cb99c67a452902f07cdcec3b615a88b7",
+    "line" : 11,
+    "diffHunk" : "@@ -1,1 +57,61 @@        void handleSnapshot(SnapshotReader<T> reader);\n\n        /**\n         * Called on any change to leadership. This includes both when a leader is elected and\n         * when a leader steps down or fails."
   }
 ]

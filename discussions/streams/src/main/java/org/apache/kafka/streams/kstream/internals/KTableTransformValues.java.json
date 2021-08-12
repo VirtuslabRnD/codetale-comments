@@ -75,5 +75,181 @@
     "commit" : "33adaa715c6b8d930bb8a901a7406d9f0904e81a",
     "line" : 36,
     "diffHunk" : "@@ -1,1 +34,38 @@    private boolean sendOldValues = false;\n\n    KTableTransformValues(final KTableImpl<K, ?, V> parent,\n                          final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends V1> transformerSupplier,\n                          final String queryableName) {"
+  },
+  {
+    "id" : "c9e9bb63-dc68-477b-b483-13436d339709",
+    "prId" : 10720,
+    "prUrl" : "https://github.com/apache/kafka/pull/10720#pullrequestreview-662706771",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bca9b355-e118-4674-8d0b-69fec21f763f",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "This is the actual fix. Before calling `valueTransformer.transform()` we need to set a different record context to allow `Transform` to access the correct metadata of the record it processed.\r\n\r\nBefore this fix, the context would contain metadata (in particular record timestamp) or the \"currently processed record\" that triggers the lookup. This breaks the applied `Transformer` if it accessed the record timestamp via `context.timestamp()` that is supposed to return the timestamp of the record `Transform` processes (ie, the timestamp store next to the value in the state store).",
+        "createdAt" : "2021-05-19T01:48:59Z",
+        "updatedAt" : "2021-05-19T01:48:59Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a33cbcefebf49f483ef99817a0eb380bfe6cff40",
+    "line" : 53,
+    "diffHunk" : "@@ -1,1 +154,158 @@            final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);\n\n            final ProcessorRecordContext currentContext = internalProcessorContext.recordContext();\n\n            internalProcessorContext.setRecordContext(new ProcessorRecordContext("
+  },
+  {
+    "id" : "1e1e578d-1540-4d7e-852d-2577a9f7ffc2",
+    "prId" : 10720,
+    "prUrl" : "https://github.com/apache/kafka/pull/10720#pullrequestreview-663370052",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4e5f6950-fbaa-4d3d-b073-45cee5404ff2",
+        "parentId" : null,
+        "authorId" : "5fc36c6b-4826-4fcd-bfde-bbcd165a2fdd",
+        "body" : "To confirm my understanding, the reason only `KTableTransformValuesGetter` and not any of the other `KTableValueGetter` implementations are impacted by this bug is because only `KTableTransformValuesGetter` gives users access to the `ProcessorContext`. Is that true?",
+        "createdAt" : "2021-05-19T13:20:40Z",
+        "updatedAt" : "2021-05-19T13:25:04Z",
+        "lastEditedBy" : "5fc36c6b-4826-4fcd-bfde-bbcd165a2fdd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d95b3569-3bb9-4367-aa7a-2c5a3daa8b31",
+        "parentId" : "4e5f6950-fbaa-4d3d-b073-45cee5404ff2",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Correct.",
+        "createdAt" : "2021-05-19T15:38:07Z",
+        "updatedAt" : "2021-05-19T15:38:07Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a33cbcefebf49f483ef99817a0eb380bfe6cff40",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +153,157 @@        public ValueAndTimestamp<V1> get(final K key) {\n            final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);\n\n            final ProcessorRecordContext currentContext = internalProcessorContext.recordContext();\n"
+  },
+  {
+    "id" : "a5410754-d536-4524-ac82-8ef1a1a12451",
+    "prId" : 10720,
+    "prUrl" : "https://github.com/apache/kafka/pull/10720#pullrequestreview-663702827",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "53bc3e61-936d-4d3b-9abc-dd8338e4e2a5",
+        "parentId" : null,
+        "authorId" : "5fc36c6b-4826-4fcd-bfde-bbcd165a2fdd",
+        "body" : "Are there ever situations where users would want the old behavior (to have access to the `ProcessorContext` for the record that triggered the lookup, rather than the context for the record that's being looked up)? For example, if the topic name is relevant for the transformer and all records (including the current one that triggered the lookup and the one being processed) are from the same topic, then the old behavior gives access to the topic name but this new behavior doesn't.",
+        "createdAt" : "2021-05-19T13:24:36Z",
+        "updatedAt" : "2021-05-19T13:25:04Z",
+        "lastEditedBy" : "5fc36c6b-4826-4fcd-bfde-bbcd165a2fdd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8850276-4c64-462d-8679-b602ac2ebed0",
+        "parentId" : "53bc3e61-936d-4d3b-9abc-dd8338e4e2a5",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I don't think so, because when the write the transformer code, they won't even know that it might be executed during a lookup. When they write the transformer, they would assume they process a regular input record, and thus the transformer logic does not know anything about some other record that triggers the lookup.\r\n\r\nAlso, the record that triggers the lookup will be processed by its own processor and will have its own context, to access it's topic name.",
+        "createdAt" : "2021-05-19T15:41:01Z",
+        "updatedAt" : "2021-05-19T15:41:01Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cd101fb7-770b-46cc-912d-0b1dc4ac2741",
+        "parentId" : "53bc3e61-936d-4d3b-9abc-dd8338e4e2a5",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks, all. I share the concern that this change could suddenly break something. Since the transformer has access to the ProcessorContext, people well may be accessing these members within the `transform` method. For example, a transformer may suddenly start to get an NPE on the topic name, and so forth.\r\n\r\nThis behavior change might be ok on the grounds that the context we previously provided was actually incorrect, though. If we do go ahead with this approach, we should be sure to make note of this potential in the upgrade notes. It wouldn't hurt to have a ticket as well, for visibility's sake.",
+        "createdAt" : "2021-05-19T21:19:45Z",
+        "updatedAt" : "2021-05-19T21:22:30Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "833ada0b-7f34-450c-9cdc-aedc538c87ac",
+        "parentId" : "53bc3e61-936d-4d3b-9abc-dd8338e4e2a5",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "For the longer term, I feel that we either need to 1) store the topic / offset information into the upstream materialized store as well, or 2) just disable this optimization for KTable.transformValues(), or at least allow users to either opt-in or opt-out given their knowledge on the context.\r\n\r\nAs for now, I think leaving the offset as -1 and topic as null seems okay -- admittedly this would break someone who's using the context for offset / topic, as they would get unexpected values or even NPE, but that's still a fix forward then getting incorrect values silently.",
+        "createdAt" : "2021-05-19T21:30:28Z",
+        "updatedAt" : "2021-05-20T00:34:38Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35102a40-0e77-4644-b784-7d99b07992fe",
+        "parentId" : "53bc3e61-936d-4d3b-9abc-dd8338e4e2a5",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> This behavior change might be ok on the grounds that the context we previously provided was actually incorrect, though\r\n\r\nAgreed. Also note, that the JavaDocs of `RecordContext` state, that `topic()` might return `null` if it's not available. Of course, user might not know why it's not available and it might be worth to point this out for this case. During regular processing, it's a sane assumption that the context information will always be available.",
+        "createdAt" : "2021-05-19T21:51:08Z",
+        "updatedAt" : "2021-05-19T21:51:08Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5c6ab1c4-791c-4557-a8d8-ed72662c577d",
+        "parentId" : "53bc3e61-936d-4d3b-9abc-dd8338e4e2a5",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Follow up PR: https://github.com/apache/kafka/pull/10731",
+        "createdAt" : "2021-05-19T22:11:44Z",
+        "updatedAt" : "2021-05-19T22:11:44Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a33cbcefebf49f483ef99817a0eb380bfe6cff40",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +156,160 @@            final ProcessorRecordContext currentContext = internalProcessorContext.recordContext();\n\n            internalProcessorContext.setRecordContext(new ProcessorRecordContext(\n                valueAndTimestamp == null ? UNKNOWN : valueAndTimestamp.timestamp(),\n                -1L, // we don't know the original offset"
+  },
+  {
+    "id" : "9ab1440a-feaf-478a-a44a-0f1f5f5b3f8d",
+    "prId" : 10731,
+    "prUrl" : "https://github.com/apache/kafka/pull/10731#pullrequestreview-676681940",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "efab1553-8347-4c94-a048-9252e6e5913c",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "@vvcephei I think it's better to change this...",
+        "createdAt" : "2021-06-03T06:01:15Z",
+        "updatedAt" : "2021-06-03T06:01:15Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "94c4d61f-4bb2-4c06-ab88-b8a82da5824b",
+        "parentId" : "efab1553-8347-4c94-a048-9252e6e5913c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Good point, @mjsax .",
+        "createdAt" : "2021-06-03T18:01:22Z",
+        "updatedAt" : "2021-06-03T18:01:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8eb28932-433f-4434-bc17-40f22c108e84",
+        "parentId" : "efab1553-8347-4c94-a048-9252e6e5913c",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "SGTM, thanks @mjsax to bring to our attention.",
+        "createdAt" : "2021-06-04T21:35:14Z",
+        "updatedAt" : "2021-06-04T21:35:15Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "14138159ffe81c9aaa6e65f326a7911d17229c17",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +163,167 @@                // we won't have the partition information, so it's better to not provide it\n                // here either, to not introduce a regression later on\n                -1,\n                null, // we don't know the upstream input topic\n                new RecordHeaders()"
   }
 ]
