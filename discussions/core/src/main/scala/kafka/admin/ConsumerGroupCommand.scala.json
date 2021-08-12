@@ -196,5 +196,71 @@
     "commit" : "d46a39a67c8313bff14fc4693ccd6692657a7a79",
     "line" : 179,
     "diffHunk" : "@@ -1,1 +208,212 @@\n    private def printOffsets(offsets: Map[String, (Option[String], Option[Seq[PartitionAssignmentState]])]): Unit = {\n      for ((groupId, (state, assignments)) <- offsets) {\n        if (shouldPrintMemberState(groupId, state, size(assignments))) {\n          // find proper columns width"
+  },
+  {
+    "id" : "53ab4928-91ac-4e5b-8f7b-ed2fab056a04",
+    "prId" : 6989,
+    "prUrl" : "https://github.com/apache/kafka/pull/6989#pullrequestreview-254395008",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f5a61561-511f-4e88-8aba-0a84b96bc130",
+        "parentId" : null,
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "I think importing `scala.collection.{Set, Seq, Map, etc}` causes a lot of issues. I think this is going to be even more problematic with 2.13. I think we should ban these imports and only allow the `Predef` imports, `scala.collection.mutable` and `scala.collection.immutable`. What do you think?",
+        "createdAt" : "2019-06-24T16:08:31Z",
+        "updatedAt" : "2019-06-30T07:35:40Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "18ca9ca6-7896-42f3-9efb-335be7c54a47",
+        "parentId" : "f5a61561-511f-4e88-8aba-0a84b96bc130",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "Can you elaborate on the issues you are thinking of? The Predef imports are all about immutable collections and they have different performance characteristics and I don't think it makes sense to make that change for Scala 2.13 support.",
+        "createdAt" : "2019-06-24T18:27:51Z",
+        "updatedAt" : "2019-06-30T07:35:40Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f639dcf0-910f-46c6-a2cb-af0e31e0fa6f",
+        "parentId" : "f5a61561-511f-4e88-8aba-0a84b96bc130",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "If we take `Map` as an example, the issue is that `collection.Map`, `collection.immutable.Map` and `collection.mutable.Map` are all different types. `collection.Map` is a parent both mutable and immutable but the reality is that `collection.Map` cannot be safely downcasted to `collection.immutable.Map` or `collection.mutable.Map`.\r\n\r\n```\r\n[info] Compiling 1 Scala source to target/scala-2.12/classes ...\r\n[error] TestCollection.scala:16:22: type mismatch;\r\n[error]  found   : Map[String,String] (in scala.collection)\r\n[error]  required: Map[String,String] (in scala.collection.immutable)\r\n[error]   expectImmutableMap(map)\r\n[error]                      ^\r\n[error] TestCollection.scala:18:22: type mismatch;\r\n[error]  found   : Map[String,String] (in scala.collection.mutable)\r\n[error]  required: Map[String,String] (in scala.collection.immutable)\r\n[error]   expectImmutableMap(mutableMap)\r\n[error]                      ^\r\n[error] TestCollection.scala:20:20: type mismatch;\r\n[error]  found   : Map[String,String] (in scala.collection)\r\n[error]  required: Map[String,String] (in scala.collection.mutable)\r\n[error]   expectMutableMap(map)\r\n[error]                    ^\r\n[error] TestCollection.scala:21:20: type mismatch;\r\n[error]  found   : Map[String,String] (in scala.collection.immutable)\r\n[error]  required: Map[String,String] (in scala.collection.mutable)\r\n[error]   expectMutableMap(immutableMap)\r\n[error]                    ^\r\n[error] four errors found\r\n```\r\n\r\nIt is very rare that we have code that is generic over mutable vs immutable collection. I think that this conversions are simplify is we require a concrete version like `collection.immtable.Map` or `collection.mutable.Map`.",
+        "createdAt" : "2019-06-24T20:56:31Z",
+        "updatedAt" : "2019-06-30T07:35:40Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a73261a-7c40-463c-ba02-fadf82c336f9",
+        "parentId" : "f5a61561-511f-4e88-8aba-0a84b96bc130",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "> The Predef imports are all about immutable collections\r\n\r\nThis is true except for `Seq` but they are fixing this in Scala 2.13. In the other Scala version `Seq` was a alias for `collection.Seq` which is the parent class for `collection.immutable.Seq` and `collection.mutable.Seq`.",
+        "createdAt" : "2019-06-24T20:58:31Z",
+        "updatedAt" : "2019-06-30T07:35:40Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5de6ade8-ffb6-4716-93e9-cb5f1da9cbe4",
+        "parentId" : "f5a61561-511f-4e88-8aba-0a84b96bc130",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "I think it's worth understanding the context. The Kafka code was written with the assumption that the Seq in Predef was not immutable. In Scala 2.13 it has become immutable. The simplest change to maintain existing assumptions is to add `import scala.collection.Seq` everywhere. In the future, we can consider other changes, I don't think they should be in the Scala 2.13 PR.\r\n\r\nIn this particular class, I did add an import to `scala.collection.Map` and I can remove that if that's what you are objecting to.\r\n\r\n> It is very rare that we have code that is generic over mutable vs immutable collection.\r\n\r\nI don't think this is true, a lot of code just does `map/filter/flatMap/foreach/etc`. Such code doesn't care whether the collection is mutable or immutable.\r\n\r\n> but the reality is that collection.Map cannot be safely downcasted to collection.immutable.Map or collection.mutable.Map\r\n\r\nI don't think you should ever downcast collections outside of very specialized collection utility code (e.g. a method that converts from one collection to another could do this for best performance).",
+        "createdAt" : "2019-06-26T06:00:00Z",
+        "updatedAt" : "2019-06-30T07:35:40Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "36d72d5e6c54f763fa145ca508a203974337e852",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +35,39 @@import scala.collection.JavaConverters._\nimport scala.collection.mutable.ListBuffer\nimport scala.collection.{immutable, Map, Seq, Set, mutable}\nimport scala.util.{Failure, Success, Try}\nimport joptsimple.OptionSpec"
   }
 ]

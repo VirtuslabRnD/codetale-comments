@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "a2f3e0b7-a698-47ff-b0e2-b787f498e73a",
+    "prId" : 6993,
+    "prUrl" : "https://github.com/apache/kafka/pull/6993#pullrequestreview-276745382",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2218bd59-1c71-484f-80bc-4fac0a533ccf",
+        "parentId" : null,
+        "authorId" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "body" : "do we need this? looks like the previous call is sufficient for most cases and is always guaranteed to be called. the only additional benefit here is that we would skip producing records.",
+        "createdAt" : "2019-06-28T23:06:40Z",
+        "updatedAt" : "2019-07-19T20:23:29Z",
+        "lastEditedBy" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5c8f5b3-8a08-41dc-8a6a-e7aca0e6f0c8",
+        "parentId" : "2218bd59-1c71-484f-80bc-4fac0a533ccf",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "> the only additional benefit here is that we would skip producing records\r\n\r\nI think that's a pretty large benefit and warrants the extra line here. Happy to remove if others disagree, though.",
+        "createdAt" : "2019-07-02T18:43:45Z",
+        "updatedAt" : "2019-07-19T20:23:29Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ead5ea8-a7b2-4379-bb9d-b0ffcc07ac83",
+        "parentId" : "2218bd59-1c71-484f-80bc-4fac0a533ccf",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "If the producer failed to send a record, don't we want to stop immediately? Otherwise, we'd end up producing potentially out of order. The producer is set to allow at most only 1 in-flight record at a time, so it seems like we'd want to void producing as soon as we do this.\r\n\r\nI guess the question is: will the producer ever fail on one message with a non-retriable exception, and then be good enough to continue writing any other records. If not, then we don't need this check. However, if that's a possibility, doesn't having this check here help us prevent writing a record after another record failed to send?",
+        "createdAt" : "2019-08-16T23:33:09Z",
+        "updatedAt" : "2019-08-16T23:35:35Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "50e97c12-bfaf-4984-b1f0-92f44132c6b1",
+        "parentId" : "2218bd59-1c71-484f-80bc-4fac0a533ccf",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "> will the producer ever fail on one message with a non-retriable exception, and then be good enough to continue writing any other records\r\n\r\nThis is definitely a possibility. One example where this might come up is if two consecutive records are sent to two different topics; if the producer lacks permission to write to the first topic but has permission to write to the second, then the second will be sent successfully even though the first failed. This wouldn't be too big of an issue as long as the source partitions mapped nicely to Kafka topic partitions since that would ensure that the first record's source offset wouldn't be committed and would be re-sent as soon as the connector gets restarted, but since there's no enforced contract for those mappings I'd say it's not fair to make that assumption.",
+        "createdAt" : "2019-08-19T18:45:00Z",
+        "updatedAt" : "2019-08-19T18:45:00Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70c30c49ba205f606bb3805038f53f55f07ad6ef",
+    "line" : 53,
+    "diffHunk" : "@@ -1,1 +303,307 @@        final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);\n        for (final SourceRecord preTransformRecord : toSend) {\n            maybeThrowProducerSendException();\n\n            retryWithToleranceOperator.sourceRecord(preTransformRecord);"
+  },
+  {
+    "id" : "431e2e76-90c9-4df4-a183-e818085f0854",
+    "prId" : 6993,
+    "prUrl" : "https://github.com/apache/kafka/pull/6993#pullrequestreview-276205923",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dce1592d-5b1c-48a9-a515-fe0330a60b74",
+        "parentId" : null,
+        "authorId" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "body" : "@C0urante I am wondering if we should incorporate the `producer.send()` as a step in the source pipeline that must be handled by the `RetryAndToleranceOperator`. This can allow you to skip certain errors (for example, the RecordTooLargeException) which can be useful in certain use cases. ",
+        "createdAt" : "2019-06-28T23:24:19Z",
+        "updatedAt" : "2019-07-19T20:23:29Z",
+        "lastEditedBy" : "1462ba0d-5f6b-4517-98de-68943d892c2b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa60b607-725b-45d1-96c2-7d3b4895bb59",
+        "parentId" : "dce1592d-5b1c-48a9-a515-fe0330a60b74",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "That's a fascinating idea, @wicknicks. I like it and would be happy to take a stab at implementing it, but first I think we should clarify if that qualifies as a bug fix (which this PR is intended to be so that it can be backported to older branches) or a feature addition. I'm leaning slightly toward the latter but if others feel differently we can add it to this PR as well.",
+        "createdAt" : "2019-07-02T18:49:14Z",
+        "updatedAt" : "2019-07-19T20:23:29Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b374d424-32b0-47ce-b039-1f6ad32f4f04",
+        "parentId" : "dce1592d-5b1c-48a9-a515-fe0330a60b74",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "+1 for a separate PR.",
+        "createdAt" : "2019-08-16T23:34:05Z",
+        "updatedAt" : "2019-08-16T23:35:35Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70c30c49ba205f606bb3805038f53f55f07ad6ef",
+    "line" : 68,
+    "diffHunk" : "@@ -1,1 +340,344 @@                                    log.error(\"{} failed to send record to {}:\", WorkerSourceTask.this, topic, e);\n                                    log.debug(\"{} Failed record: {}\", WorkerSourceTask.this, preTransformRecord);\n                                    producerSendException.compareAndSet(null, e);\n                                } else {\n                                    recordSent(producerRecord);"
+  }
+]
