@@ -438,5 +438,71 @@
     "commit" : "dbce05f7ed9985e33ea4ef848fa2a6b8bf3c1d1d",
     "line" : 156,
     "diffHunk" : "@@ -1,1 +403,407 @@          }());\n          if (FlutterError.onError != null) {\n            FlutterError.onError!(FlutterErrorDetails(\n              context: ErrorDescription('while checking the cache location of an image'),\n              informationCollector: collector,"
+  },
+  {
+    "id" : "86fee1ad-dd57-4e67-90a9-61a2e542a893",
+    "prId" : 63602,
+    "prUrl" : "https://github.com/flutter/flutter/pull/63602#pullrequestreview-467066663",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0380dfd5-a33e-4927-8385-edaba31ddd04",
+        "parentId" : null,
+        "authorId" : "621f7b96-9114-4a1e-8f40-96ef1d15c812",
+        "body" : "Note: I'm not 100% sure this is the right approach.  Is it possible for the user to provide their own implementation of `AssetBundle.load`?  If not, maybe it would be better to change the type of `data` to a `ByteData` (removing the `?` on line 666) and just remove this check.\r\n\r\nActually, that might be a reasonable approach anyhow, even if it is user-overridable, since the user will still get an exception when `data` gets dereferenced on line 682; the only difference will be that the exception will be marginally less comprehensible, and the key won't be evicted from the image cache.  But maybe that's ok.\r\n\r\nAnyhow, I'm open to suggestions.",
+        "createdAt" : "2020-08-12T19:24:34Z",
+        "updatedAt" : "2020-08-13T16:30:05Z",
+        "lastEditedBy" : "621f7b96-9114-4a1e-8f40-96ef1d15c812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3438c21b-58e8-4e02-a9ed-d44e05dca895",
+        "parentId" : "0380dfd5-a33e-4927-8385-edaba31ddd04",
+        "authorId" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "body" : "yes `?` could be removed. But for now I would keep the `if (data==null)` for now.",
+        "createdAt" : "2020-08-12T19:35:44Z",
+        "updatedAt" : "2020-08-13T16:30:05Z",
+        "lastEditedBy" : "56ac428d-9cbf-4129-a73c-504eecfd585b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f5c02533-a91c-49c8-9e57-8eb4fe95ae2d",
+        "parentId" : "0380dfd5-a33e-4927-8385-edaba31ddd04",
+        "authorId" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "body" : "I think we can probably just drop this. If the method is not supposed to return null, we can assume it's handled by throwing an exception.\r\n\r\nI'm not quite clear though on when weak checking would be used. Could you explain a bit more about how that would happen?",
+        "createdAt" : "2020-08-13T16:43:35Z",
+        "updatedAt" : "2020-08-13T16:43:35Z",
+        "lastEditedBy" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7181d778-973c-4fd4-856c-5b44ed4bd8ef",
+        "parentId" : "0380dfd5-a33e-4927-8385-edaba31ddd04",
+        "authorId" : "621f7b96-9114-4a1e-8f40-96ef1d15c812",
+        "body" : "@dnfield \r\nWeak checking is when the user's app contains some files that are opted in to null safety (e.g. flutter) and others that aren't (e.g. their app and packages).  It does all the static checks for null safety, but the type system is fundamentally unsound at the boundary between opted in and opted out code.  For example, if you invoke an abstract method in an opted-in class that has a return type of `int`, that's supposed to guarantee that you'll never receive `null` as a result.  But if the concrete implementation of that abstract method is in opted-out code, it could return `null` without causing a compile time errors.  That's the sense in which it's unsound: your opted-in code can have a variable of type non-nullable `int` that contains a `null` value.  Effectively, non-nullable types can't be completely trusted if there is some opted-out code somewhere in the program.  Once the entire program has been migrated to null safety, the unsoundness goes away and `int`s are really `int`s.\r\n\r\nBecause of this, we have code in Flutter that looks to be dead code, but we want to keep it around until most users have upgraded their apps to null safety, so that we can continue reporting useful exceptions to them if they pass `null` to us where they shouldn't.  The type system thinks that code is dead but the reality is it's not, so we have to add the `// ignore:` comment.  The reason I'm having to make this CL now is because fixing a bug in the analyzer that was preventing some of the \"supposedly dead\" code from being recognized.\r\n\r\nDoes that help?  If not, I'm happy to discuss over VC.",
+        "createdAt" : "2020-08-13T18:29:31Z",
+        "updatedAt" : "2020-08-13T18:29:31Z",
+        "lastEditedBy" : "621f7b96-9114-4a1e-8f40-96ef1d15c812",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38b9c078-3bd4-4b13-9de1-93bbb049c9fb",
+        "parentId" : "0380dfd5-a33e-4927-8385-edaba31ddd04",
+        "authorId" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "body" : "Ahhh ok that makes sense.  Yeah we should leave this then.",
+        "createdAt" : "2020-08-13T19:27:16Z",
+        "updatedAt" : "2020-08-13T19:27:16Z",
+        "lastEditedBy" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5c64c4fb0ef2391fab63297f7ad085c1b23727b1",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +676,680 @@    // running with weak checking, so we need to null check it anyway (and\n    // ignore the warning that the null-handling logic is dead code).\n    if (data == null) { // ignore: dead_code\n      PaintingBinding.instance!.imageCache!.evict(key);\n      throw StateError('Unable to read data');"
   }
 ]
