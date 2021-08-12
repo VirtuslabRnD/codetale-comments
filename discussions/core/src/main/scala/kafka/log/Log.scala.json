@@ -328,5 +328,60 @@
     "commit" : "e0cafe042f395068cab7dc3bdd079745960b4a37",
     "line" : 42,
     "diffHunk" : "@@ -1,1 +1580,1584 @@                 s\"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries},\" +\n                 s\" size of offset index: ${activeSegment.offsetIndex.entries}.\")\n            deleteSegment(activeSegment)\n          } else {\n            throw new KafkaException(s\"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset\" +"
+  },
+  {
+    "id" : "e52d2abc-9126-4bbf-bab6-5e45bd58c943",
+    "prId" : 6009,
+    "prUrl" : "https://github.com/apache/kafka/pull/6009#pullrequestreview-236337100",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ac8e2528-370b-41a4-b314-2606ee16801c",
+        "parentId" : null,
+        "authorId" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "body" : "One Optimization we can have here is to lock only when we need to populate firsBatchTimestamp, for example:\r\nin LogSegment.scala , we can add:\r\ndef isFirstBatchTimestampLoaded : Boolean = {\r\n    rollingBasedTimestamp match {\r\n      case Some(t) => true\r\n      case _ => false\r\n    }\r\n  }\r\n\r\nIn log.scala, we can have:\r\n\r\n@threadsafe\r\n  private[log] def getFirstBatchTimestampForSegments2(segments: Iterable[LogSegment]): Iterable[Long] = {\r\n\r\n    val needLoadTimestampSegments = segments.filter {\r\n      segment =>\r\n        !segment.isFirstBatchTimestampLoaded\r\n    }\r\n\r\n    if (needLoadTimestampSegments.nonEmpty) {\r\n      lock synchronized {\r\n        needLoadTimestampSegments.foreach {\r\n          segment =>\r\n            segment.loadFirstBatchTimestamp()\r\n        }\r\n      }\r\n    }\r\n\r\n    segments.map {\r\n      segment =>\r\n        segment.getFirstBatchTimestampWithoutLoading()\r\n    }\r\n  }\r\n\r\nThis optimization will reduce lock contention on the log.  However, each time we call log.logSegments,  we are acquiring the locks.  log.logSegments has been called multiple times (e.g, cleanableOffsets, LogToClean, etc.) during the log compaction . \r\n\r\nThe choice here is :  reduced potential lock contention versus simplified code. ",
+        "createdAt" : "2019-01-29T02:03:24Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "002cf52f-5f28-4fd8-b422-e15cb14a808e",
+        "parentId" : "ac8e2528-370b-41a4-b314-2606ee16801c",
+        "authorId" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "body" : "This isn't exactly introduced by your patch, but I'm not very clear on the thread-safety semantics offered by the log lock. E.g., in `getEstimatedEarliestTime` the first line grabs log segments using the underlying log lock but then relinquishes it.\r\n\r\nThat said, do you even need to lock? What is the worst that can happen? e.g., this could result in a failed attempt to read the earliest batch timestamp of a segment that may have been deleted after listing all the segments but I don't think this is actually an issue.",
+        "createdAt" : "2019-02-05T06:21:48Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d006bc93-d06c-4c5d-85ad-5c5a8cb7bb98",
+        "parentId" : "ac8e2528-370b-41a4-b314-2606ee16801c",
+        "authorId" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "body" : "This is really good point.  I don't see lock is hold when logcleaner performs the actual compaction IOs : cleanSegments -> cleanInto.   Maybe we can skip the lock. Let me double check.",
+        "createdAt" : "2019-02-05T18:47:09Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a32f87a8-f237-40dc-b1af-eebf9619683f",
+        "parentId" : "ac8e2528-370b-41a4-b314-2606ee16801c",
+        "authorId" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "body" : "can you add a comment here explaining why this is safe? per your explanation offline, segments cannot be removed outside of the cleaner (for log compacted topics).",
+        "createdAt" : "2019-05-10T23:04:50Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e66773e6c3db8cb602bb365130ef2345eaf36123",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +2027,2031 @@    * to ensure no other logcleaner threads and retention thread can work on the same segment.\n    */\n  private[log] def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] = {\n    segments.map {\n      segment =>"
   }
 ]

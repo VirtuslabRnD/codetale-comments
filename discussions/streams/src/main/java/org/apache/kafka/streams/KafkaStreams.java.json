@@ -306,5 +306,324 @@
     "commit" : "65462041543d7f9f12ffa5fab6c0bcc45403e83d",
     "line" : 29,
     "diffHunk" : "@@ -1,1 +811,815 @@     */\n    public void close() {\n        close(Long.MAX_VALUE);\n    }\n"
+  },
+  {
+    "id" : "3213f5d7-b9f5-42ec-86eb-ddf58739cef1",
+    "prId" : 6018,
+    "prUrl" : "https://github.com/apache/kafka/pull/6018#pullrequestreview-184656205",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5f18710d-807b-4baa-8129-80ee7dc3843f",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is for 1).",
+        "createdAt" : "2018-12-09T23:22:45Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f09a998-9753-4c8a-b92a-4d6fa3a1772d",
+        "parentId" : "5f18710d-807b-4baa-8129-80ee7dc3843f",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I don't get why we need this? `onChange()` is `synchronized`, so how can a race condition happen?",
+        "createdAt" : "2018-12-13T14:08:22Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a32c0e8aeca9e6a022faa4f72d679f75214b1868",
+    "line" : 175,
+    "diffHunk" : "@@ -1,1 +395,399 @@        private GlobalStreamThread.State globalThreadState;\n        // this lock should always be held before the state lock\n        private final Object threadStatesLock;\n\n        StreamStateListener(final Map<Long, StreamThread.State> threadState,"
+  },
+  {
+    "id" : "3882b8bc-8648-4081-a40c-e511db48f44e",
+    "prId" : 6018,
+    "prUrl" : "https://github.com/apache/kafka/pull/6018#pullrequestreview-185286174",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ee712804-dd02-4022-baf5-fbd520aa6218",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is for 1) as well: we allow REBALANCE -> REBALANCE and RUNNING -> RUNNING because of the deferred check.",
+        "createdAt" : "2018-12-09T23:24:08Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4a91920c-3466-4260-9c29-2fbeca41a6f6",
+        "parentId" : "ee712804-dd02-4022-baf5-fbd520aa6218",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Just looking at this, it seems we need to assign `oldState = state` after we go the lock?",
+        "createdAt" : "2018-12-13T13:55:37Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "296baa8c-a29c-47ab-8c02-51155629d3ff",
+        "parentId" : "ee712804-dd02-4022-baf5-fbd520aa6218",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Also below, when calling `stateListener.onChange(state, oldState);` -- would we need to call `stateListener.onChange(newState, oldState);` instead? Otherwise, `state` could change before we do the callback because the lock is released already.\r\n\r\n",
+        "createdAt" : "2018-12-13T13:56:45Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fcf7a0f8-d100-48d4-a2bb-7473616e50fe",
+        "parentId" : "ee712804-dd02-4022-baf5-fbd520aa6218",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I cannot follow here. Why would this happen? Similar for RUNNING?",
+        "createdAt" : "2018-12-13T14:05:41Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d0f9d087-e20d-4cd1-8c73-cb127f9ee51a",
+        "parentId" : "ee712804-dd02-4022-baf5-fbd520aa6218",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Re first two comments: good call, lgtm.\r\n\r\nRe last comment: REBALANCING -> REBALANCING is quite normal, note that before this PR we check this before calling `setState(State.REBALANCING);` so this is prevented, but part of this fix is to move the logic that needs to access the state into a single place (here). Similarly RUNNING -> RUNNING is possible during starting up phase, where we first set the instance state to RUNNING directly to avoid it transit from CREATED -> REBALANCING, and then when threads are starting, it is possible that `maybeSetRunning` went through and hence calls `setState(RUNNING)` again.",
+        "createdAt" : "2018-12-14T21:09:58Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a32c0e8aeca9e6a022faa4f72d679f75214b1868",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +252,256 @@                // will be refused but we do not throw exception here, to allow idempotent close calls\n                return false;\n            } else if (state == State.REBALANCING && newState == State.REBALANCING) {\n                // when the state is already in REBALANCING, it should not transit to REBALANCING\n                return false;"
+  },
+  {
+    "id" : "3af27371-8d50-4ae3-a3c3-287c33ec2540",
+    "prId" : 6018,
+    "prUrl" : "https://github.com/apache/kafka/pull/6018#pullrequestreview-183000687",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "81eed83d-de45-4312-9d03-20ec2d2e082f",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This one-liner is for 2).",
+        "createdAt" : "2018-12-09T23:24:36Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a32c0e8aeca9e6a022faa4f72d679f75214b1868",
+    "line" : 210,
+    "diffHunk" : "@@ -1,1 +426,430 @@            // state can be transferred to RUNNING if all threads are either RUNNING or DEAD\n            for (final StreamThread.State state : threadState.values()) {\n                if (state != StreamThread.State.RUNNING && state != StreamThread.State.DEAD) {\n                    return;\n                }"
+  },
+  {
+    "id" : "7cb0566d-4b87-47e8-b5de-e66e67ad3c4d",
+    "prId" : 6018,
+    "prUrl" : "https://github.com/apache/kafka/pull/6018#pullrequestreview-185282740",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a590d369-4518-43b2-9cff-536e6386f5c6",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Does it make sense to set the instance to RUNNING if all threads are DEAD ?",
+        "createdAt" : "2018-12-13T13:21:11Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38c58a07-ff20-4981-ba68-ed0a28195c79",
+        "parentId" : "a590d369-4518-43b2-9cff-536e6386f5c6",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Note this is triggered only when a thread transited to RUNNING.\r\n\r\nWhen all threads are DEAD, by the time the last thread transited to DEAD the `maybeSetError` will proceed and the state will transit to ERROR.",
+        "createdAt" : "2018-12-14T20:58:37Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a32c0e8aeca9e6a022faa4f72d679f75214b1868",
+    "line" : 207,
+    "diffHunk" : "@@ -1,1 +424,428 @@         */\n        private void maybeSetRunning() {\n            // state can be transferred to RUNNING if all threads are either RUNNING or DEAD\n            for (final StreamThread.State state : threadState.values()) {\n                if (state != StreamThread.State.RUNNING && state != StreamThread.State.DEAD) {"
+  },
+  {
+    "id" : "46f0327d-6f21-4dc0-bd6e-0c8e17167446",
+    "prId" : 6018,
+    "prUrl" : "https://github.com/apache/kafka/pull/6018#pullrequestreview-189542384",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4e75185e-ecad-4265-82ae-45d344ed785c",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "With the state transitions changes for `StreamThread` is this still possible?",
+        "createdAt" : "2018-12-19T09:40:03Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3f9d1d61-a0a6-4ba3-b9e3-94121d792fa0",
+        "parentId" : "4e75185e-ecad-4265-82ae-45d344ed785c",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Good point, I can remove it here.",
+        "createdAt" : "2019-01-04T21:53:34Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a32c0e8aeca9e6a022faa4f72d679f75214b1868",
+    "line" : 73,
+    "diffHunk" : "@@ -1,1 +256,260 @@                return false;\n//            } else if (state == State.RUNNING && newState == State.RUNNING) {\n                // when the state is already in RUNNING, it should not transit to RUNNING\n                // this can happen during starting up\n//                return false;"
+  },
+  {
+    "id" : "ebcbb2c3-5331-44b5-bc24-e2143bf92711",
+    "prId" : 6018,
+    "prUrl" : "https://github.com/apache/kafka/pull/6018#pullrequestreview-189509479",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "81951a80-c33d-45bd-b259-c41be193ed3d",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Why do we need `threadStateLock`? Can't we use `this`?",
+        "createdAt" : "2018-12-19T09:43:40Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f9445e7e-ea74-42db-850e-926fadfde2e1",
+        "parentId" : "81951a80-c33d-45bd-b259-c41be193ed3d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "We can; but since we have a `stateLock` already I want to distinguish it with another dedicated object.",
+        "createdAt" : "2019-01-04T20:03:25Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a32c0e8aeca9e6a022faa4f72d679f75214b1868",
+    "line" : 242,
+    "diffHunk" : "@@ -1,1 +445,449 @@                                          final ThreadStateTransitionValidator abstractNewState,\n                                          final ThreadStateTransitionValidator abstractOldState) {\n            synchronized (threadStatesLock) {\n                // StreamThreads first\n                if (thread instanceof StreamThread) {"
+  },
+  {
+    "id" : "5f3155d9-4fd0-4db7-8d50-3bfc38a3a225",
+    "prId" : 6018,
+    "prUrl" : "https://github.com/apache/kafka/pull/6018#pullrequestreview-189510538",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c68db677-5dd7-43bb-917e-efd9028596f0",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "If we want to encapsulate state handling at instance/thread level, maybe rewrite this to:\r\n```\r\nif (newState == GlobalStreamThread.State.DEAD) {\r\n    setState(State.ERROR);\r\n    log.error(\"Global thread has died. The instance will be in error state and should be closed.\");\r\n}\r\n```\r\n\r\nGlobalStreamThread would call this method only once anyway, and `setState()` should handle idempotent `setState(State.ERROR)` internally?",
+        "createdAt" : "2018-12-19T09:51:04Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b4d7031f-57dd-4e7e-a60d-8193b96c96ea",
+        "parentId" : "c68db677-5dd7-43bb-917e-efd9028596f0",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I can do that, but I need to let `State.ERROR` transit to `State.ERROR` (currently it is not allowed, and hence will cause illegal state exception). Will do that.",
+        "createdAt" : "2019-01-04T20:06:58Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a32c0e8aeca9e6a022faa4f72d679f75214b1868",
+    "line" : 263,
+    "diffHunk" : "@@ -1,1 +466,470 @@                    if (newState == GlobalStreamThread.State.DEAD) {\n                        setState(State.ERROR);\n                        log.error(\"Global thread has died. The instance will be in error state and should be closed.\");\n                    }\n                }"
+  },
+  {
+    "id" : "1cd4e424-e639-4c62-ab64-25fd5c13710f",
+    "prId" : 6018,
+    "prUrl" : "https://github.com/apache/kafka/pull/6018#pullrequestreview-189512662",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e9365ee7-fbe7-4def-9293-29b7c697a9be",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Not sure if this holds. Don't we need to block state transitions while we cleanup is running?",
+        "createdAt" : "2018-12-19T09:54:14Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2288ce29-5f71-434b-90af-7839cc75fd32",
+        "parentId" : "e9365ee7-fbe7-4def-9293-29b7c697a9be",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "`stateDirectory.cleanRemovedTasks(cleanupDelay);` itself have synchronization barriers as well, so we do not need to have the whole function in `synchronized(stateLock)`; and in that case, just locking `stateLock` for reading its value does not bring any additional guarantees.",
+        "createdAt" : "2019-01-04T20:14:10Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a32c0e8aeca9e6a022faa4f72d679f75214b1868",
+    "line" : 286,
+    "diffHunk" : "@@ -1,1 +791,795 @@            final Long cleanupDelay = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);\n            stateDirCleaner.scheduleAtFixedRate(() -> {\n                // we do not use lock here since we only read on the value and act on it\n                if (state == State.RUNNING) {\n                    stateDirectory.cleanRemovedTasks(cleanupDelay);"
+  },
+  {
+    "id" : "8e6a0b59-271a-4b46-8bbf-03437c1e7d4e",
+    "prId" : 6018,
+    "prUrl" : "https://github.com/apache/kafka/pull/6018#pullrequestreview-189514003",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "688c09f2-dfbb-4dcc-9487-e03cc74ab8b8",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Why do we want to disallow calling `start()` twice? Could be idempotent no-op, too.",
+        "createdAt" : "2018-12-19T09:55:45Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3826ab16-f13b-4a52-8db5-5e32154fb561",
+        "parentId" : "688c09f2-dfbb-4dcc-9487-e03cc74ab8b8",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Good question.. this was added at the very beginning when we try to fix a few state transition bugs, and one of them as calling start() twice which may re-create threads etc. Arguably we can still allow calling it twice while making second / future calls no-op.\r\n\r\nI'd suggest we leave it as a separate improvement.",
+        "createdAt" : "2019-01-04T20:18:22Z",
+        "updatedAt" : "2019-01-04T22:37:02Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a32c0e8aeca9e6a022faa4f72d679f75214b1868",
+    "line" : 298,
+    "diffHunk" : "@@ -1,1 +797,801 @@            }, cleanupDelay, cleanupDelay, TimeUnit.MILLISECONDS);\n        } else {\n            throw new IllegalStateException(\"The client is either already started or already stopped, cannot re-start\");\n        }\n    }"
   }
 ]

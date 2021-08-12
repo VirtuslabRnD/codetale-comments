@@ -130,5 +130,181 @@
     "commit" : "f3efb8ceab14c3414c7cf1d08512eb40b128515a",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +76,80 @@  /* the set of uncleanable partitions (partitions that have raised an unexpected error during cleaning)\n   *   for each log directory */\n  private val uncleanablePartitions = mutable.HashMap[String, mutable.Set[TopicPartition]]()\n\n  /* the set of directories marked as uncleanable and therefore offline */"
+  },
+  {
+    "id" : "a2141a6f-2127-415c-9645-a797cbd8eb49",
+    "prId" : 6009,
+    "prUrl" : "https://github.com/apache/kafka/pull/6009#pullrequestreview-236355983",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9f176dbd-aa9f-48ad-968e-15b6bfb6db41",
+        "parentId" : null,
+        "authorId" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "body" : "I think this might bother some users in that the main motivation of this feature is timely deletion. Ideally, a partition that ends up in an uncleanable state due to a cleaner error for e.g., should still be counted toward the `max-compaction-delay` metric. Although there is a separate metric that counts uncleanable partitions I don't think we want to overload the meaning of that metric to convey that we may be violating max compaction lag. i.e., it is reasonable and clearer to allow the `max-compaction-delay` metric to keep climbing since the records in those partitions are still exposed for consumption.",
+        "createdAt" : "2019-02-04T23:36:58Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "72ebe47a-3aa3-4b3b-8d94-73e697a6b86c",
+        "parentId" : "9f176dbd-aa9f-48ad-968e-15b6bfb6db41",
+        "authorId" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "body" : "Uncleanable partitions may come a result of IOException.  It is not always safe to obtain compaction lag for those uncleanable partitions since obtaining the firstbatchtime stamp might require some IOs.  We already have metrics for uncleanable partitions. I think it is safe not to account for uncleanable partitions in this case.",
+        "createdAt" : "2019-02-06T02:17:25Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35895986-e189-4d6c-a25a-0b8eaf61e877",
+        "parentId" : "9f176dbd-aa9f-48ad-968e-15b6bfb6db41",
+        "authorId" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "body" : "Which metrics?",
+        "createdAt" : "2019-05-10T22:37:46Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef94ad4e-a64f-4724-925e-af28325d4821",
+        "parentId" : "9f176dbd-aa9f-48ad-968e-15b6bfb6db41",
+        "authorId" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "body" : "uncleanable-partitions-count",
+        "createdAt" : "2019-05-11T01:14:59Z",
+        "updatedAt" : "2019-05-11T01:14:59Z",
+        "lastEditedBy" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e66773e6c3db8cb602bb365130ef2345eaf36123",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +176,180 @@        case (topicPartition, log) =>\n          // skip any logs already in-progress and uncleanable partitions\n          inProgress.contains(topicPartition) || isUncleanablePartition(log, topicPartition)\n      }.map {\n        case (topicPartition, log) => // create a LogToClean instance for each"
+  },
+  {
+    "id" : "226af44f-a076-478e-8847-57f25a77bcd2",
+    "prId" : 6009,
+    "prUrl" : "https://github.com/apache/kafka/pull/6009#pullrequestreview-236337100",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fab2fd0f-7b71-4c0d-a90a-d4843221e5d9",
+        "parentId" : null,
+        "authorId" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "body" : "This works, but I think we should try and avoid passing in a new `preCleanStats` param with default.\r\nE.g., we could separate out updating max compaction delay (i.e., separate function from this) and all it does is update the stat; alternately just have a volatile `maxCompactionDelay` member and update that from this method. A minor disadvantage of a snapshot stats object is that it is necessary to drive its progress from the cleaner thread - for bulk stats such as cleaner stats it is okay. For a metric that you might rely on for alerting, its true value would be delayed by up to `log.cleaner.backoff` in low volume scenarios.",
+        "createdAt" : "2019-02-05T00:58:12Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "87530a46-3ac0-49c2-8077-d5ce446f15fd",
+        "parentId" : "fab2fd0f-7b71-4c0d-a90a-d4843221e5d9",
+        "authorId" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "body" : "Since grabFilthiestCompactedLog and cleaner stats are defined in two classes. Volatile global variables doesn't make our life easier.  The default \"new PreCleanStats()\" is mainly for the purposes not to change many test cases that use this function directly.   \r\nIn terms of delay,  the max delay can only be safely populated in log cleaner thread, and it reflects the correct view when the delay is calculated.  So the next update of maxdelay might be delayed by the backoff and the time spent in the actual compaction. ",
+        "createdAt" : "2019-02-06T02:25:24Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c716e1b1-f4b7-4d07-b4a1-8fe071fb51eb",
+        "parentId" : "fab2fd0f-7b71-4c0d-a90a-d4843221e5d9",
+        "authorId" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "body" : "I still dislike the \"step\"-effect that this has. i.e., from the point in time any log is due for compaction, the `maxCompactionDelay` metric should be increasing with time. This is minor in the sense that you will record it the next time the cleaner gets around to computing it. I think this can be addressed in a follow-up.",
+        "createdAt" : "2019-05-10T22:36:05Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e66773e6c3db8cb602bb365130ef2345eaf36123",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +166,170 @@    * the log manager maintains.\n    */\n  def grabFilthiestCompactedLog(time: Time, preCleanStats: PreCleanStats = new PreCleanStats()): Option[LogToClean] = {\n    inLock(lock) {\n      val now = time.milliseconds"
+  },
+  {
+    "id" : "c59a806e-9e9b-4753-a267-98e73838f5bf",
+    "prId" : 6009,
+    "prUrl" : "https://github.com/apache/kafka/pull/6009#pullrequestreview-200393193",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8d4a4c6b-217a-452a-b141-45d52a6dd586",
+        "parentId" : null,
+        "authorId" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "body" : "I think it would also be useful to log a count of how many logs are unclean and of those, how many logs are cleanable due to violating the max compaction lag constraint.",
+        "createdAt" : "2019-02-05T23:46:36Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f29c9fdc-91ba-49c5-b582-f95c29e6f1a5",
+        "parentId" : "8d4a4c6b-217a-452a-b141-45d52a6dd586",
+        "authorId" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "body" : "I added related logs : see PreCleanStats",
+        "createdAt" : "2019-02-06T02:26:36Z",
+        "updatedAt" : "2019-05-11T01:11:28Z",
+        "lastEditedBy" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e66773e6c3db8cb602bb365130ef2345eaf36123",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +190,194 @@      this.dirtiestLogCleanableRatio = if (dirtyLogs.nonEmpty) dirtyLogs.max.cleanableRatio else 0\n      // and must meet the minimum threshold for dirty byte ratio or have some bytes required to be compacted\n      val cleanableLogs = dirtyLogs.filter { ltc =>\n        (ltc.needCompactionNow && ltc.cleanableBytes > 0) || ltc.cleanableRatio > ltc.log.config.minCleanableRatio\n      }"
+  },
+  {
+    "id" : "c156dbbf-c23c-4938-a3e5-ff9f887a41a5",
+    "prId" : 6009,
+    "prUrl" : "https://github.com/apache/kafka/pull/6009#pullrequestreview-236773239",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "981c0961-a9ae-4051-a1bb-b92408620e72",
+        "parentId" : null,
+        "authorId" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "body" : "Sorry I didn't notice earlier: should we actually prioritize a log that is past its max compaction delay over a log that is more dirty?",
+        "createdAt" : "2019-05-11T06:03:28Z",
+        "updatedAt" : "2019-05-11T06:03:28Z",
+        "lastEditedBy" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "69bb80ad-e8e9-4bb5-b212-c1e835067e36",
+        "parentId" : "981c0961-a9ae-4051-a1bb-b92408620e72",
+        "authorId" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "body" : "The original idea is to sort the log based on the compaction delay that passed the the max delay. But a log with a very short compaction delay may always takes priority over a very dirty log (with high dirty ratio).  I think it is better not to prioritize it since the the compaction finish time is not actually guaranteed since log cleaner thread can take a long time for compaction, and it can work on other log when a log go beyond the max compaction lag.",
+        "createdAt" : "2019-05-11T07:07:20Z",
+        "updatedAt" : "2019-05-11T07:07:20Z",
+        "lastEditedBy" : "bb1ec2c6-60d3-4dc3-99ad-5798eedf84b2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d721fd53-b225-4999-8a41-7fb4c8bb9a9e",
+        "parentId" : "981c0961-a9ae-4051-a1bb-b92408620e72",
+        "authorId" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "body" : "This really depends on the interpretation of the config. For PII data for e.g., you should be able to provide some guarantee. Either way, there is the possibility of starvation. However, we do have sensors to indicate this situation, so I think we can leave it as is and revisit if people want harder guarantees.",
+        "createdAt" : "2019-05-13T16:04:07Z",
+        "updatedAt" : "2019-05-13T16:04:07Z",
+        "lastEditedBy" : "aa2f3d2f-93f8-421b-a14a-37805d03ea87",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e66773e6c3db8cb602bb365130ef2345eaf36123",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +197,201 @@      } else {\n        preCleanStats.recordCleanablePartitions(cleanableLogs.size)\n        val filthiest = cleanableLogs.max\n        inProgress.put(filthiest.topicPartition, LogCleaningInProgress)\n        Some(filthiest)"
   }
 ]
