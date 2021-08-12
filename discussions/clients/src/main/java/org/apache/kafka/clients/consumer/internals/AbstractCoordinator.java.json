@@ -1494,5 +1494,126 @@
     "commit" : "34cd77113701ff54ef1c90cde12497e5c01132ca",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +949,953 @@        log.debug(\"Resetting generation after encountering {} from {} response and requesting re-join\", error, api);\n\n        resetStateAndRejoin();\n    }\n"
+  },
+  {
+    "id" : "5d78ea84-8263-44b6-bc5b-bbc3b0ab37d9",
+    "prId" : 9667,
+    "prUrl" : "https://github.com/apache/kafka/pull/9667#pullrequestreview-545184579",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "22cdbb71-2589-473a-9bbd-aa7fe861c663",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "Is ```JoinGroupResponseHandler``` a better place to log error? For example, the error ```UNKNOWN_MEMBER_ID``` is log twice. \r\n(https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/clients/consumer/internals/AbstractCoordinator.java#L605)\r\n",
+        "createdAt" : "2020-12-04T07:48:18Z",
+        "updatedAt" : "2020-12-04T18:08:03Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "78762530-757d-4da8-a3e3-7a8651443449",
+        "parentId" : "22cdbb71-2589-473a-9bbd-aa7fe861c663",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "For another, does it need some comment to explain why ```MemberIdRequiredException``` is excluded.",
+        "createdAt" : "2020-12-04T07:50:39Z",
+        "updatedAt" : "2020-12-04T18:08:03Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a26f8c2-7187-4a8d-8c1e-835a29c6a6f7",
+        "parentId" : "22cdbb71-2589-473a-9bbd-aa7fe861c663",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I think I agree with you: it is a bit redundant. I think originally it is because this future may contain the error that is either from join-response or from sync-response, but at the moment both errors are logged inside the Join/SyncGroupHandler anyways. Just to maintain compatibility in case some trouble shooting scenarios are dependent on this summary entry for now.",
+        "createdAt" : "2020-12-04T18:06:56Z",
+        "updatedAt" : "2020-12-04T18:08:03Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "51dcab57ea74a07df1b6cd7937e2fb2bbf0c1380",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +469,473 @@                // we do not need to log error for memberId required,\n                // since it is not really an error and is transient\n                if (!(exception instanceof MemberIdRequiredException)) {\n                    log.info(\"Rebalance failed.\", exception);\n                }"
+  },
+  {
+    "id" : "0fb45de8-f55c-4ef4-a4fb-1405702ae742",
+    "prId" : 9671,
+    "prUrl" : "https://github.com/apache/kafka/pull/9671#pullrequestreview-548514208",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a0adefef-40f2-403e-83f8-9c697dbabf81",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I think this is a better approach, but we need to be careful about the callee inside hb thread:\r\n\r\n```\r\nif (findCoordinatorFuture != null || lookupCoordinator().failed())\r\n```\r\n\r\ni.e. a hb thread sending a discover-coordinator request would also cause a future to be assigned, but that future would only be cleared by the main thread caller. Thinking about that for a sec I think this is okay, but maybe worth having a second pair of eyes over it.",
+        "createdAt" : "2020-12-02T18:24:25Z",
+        "updatedAt" : "2021-01-26T23:14:19Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4aa1c835-0e16-4517-95da-db5606a2db0e",
+        "parentId" : "a0adefef-40f2-403e-83f8-9c697dbabf81",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Ah, good point...actually I think that's probably not ok for it to only ever be cleared in the main thread, since eg the main thread might be stuck in long processing while the hb threads should not be blocked from looking up the coordinator.\r\nSo, maybe we should also call `clearFindCoordinatorFuture` inside the hb thread in the `if (findCoordinatorFuture != null || lookupCoordinator().failed())` block (if it did indeed finish and has failed) -- WDYT?",
+        "createdAt" : "2020-12-08T02:44:39Z",
+        "updatedAt" : "2021-01-26T23:14:19Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "218b6308-8a5b-4060-b494-8abff62c4716",
+        "parentId" : "a0adefef-40f2-403e-83f8-9c697dbabf81",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "That makes sense, we can `clearFindCoordinatorFuture` inside the hb thread as well.",
+        "createdAt" : "2020-12-09T19:02:22Z",
+        "updatedAt" : "2021-01-26T23:14:19Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5d111d889e7b994b2c9d6f2d522dc032ff7237d9",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +267,271 @@            }\n\n            clearFindCoordinatorFuture();\n            if (fatalException !=  null)\n                throw fatalException;"
+  },
+  {
+    "id" : "94c38577-1663-4734-8b59-ec65bda1e4bd",
+    "prId" : 9671,
+    "prUrl" : "https://github.com/apache/kafka/pull/9671#pullrequestreview-576845742",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c4e33731-0718-4ec0-a3e4-7b5508ccb9a7",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I think the issue is spot-on! The logic here becomes a bit hard to understand for other readers now and I'd suggest update the cmment as:\r\n\r\n\"Clear the future so that after the backoff in the next iteration, if hb still sees coordinator unknown it will try re-discover the coordinator in case the main thread cannot\"\r\n\r\nOtherwise, LGTM.",
+        "createdAt" : "2021-01-26T23:06:49Z",
+        "updatedAt" : "2021-01-26T23:14:19Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a8a75e4-f792-4a0d-a61b-e2459b0d2d00",
+        "parentId" : "c4e33731-0718-4ec0-a3e4-7b5508ccb9a7",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "SG",
+        "createdAt" : "2021-01-26T23:13:53Z",
+        "updatedAt" : "2021-01-26T23:14:19Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5d111d889e7b994b2c9d6f2d522dc032ff7237d9",
+    "line" : 116,
+    "diffHunk" : "@@ -1,1 +1369,1373 @@\n                        if (coordinatorUnknown()) {\n                            if (findCoordinatorFuture != null) {\n                                // clear the future so that after the backoff, if the hb still sees coordinator unknown in\n                                // the next iteration it will try to re-discover the coordinator in case the main thread cannot"
   }
 ]

@@ -1054,5 +1054,115 @@
     "commit" : "ac3eec11505bace6c3302ad982d6418d30f26313",
     "line" : 443,
     "diffHunk" : "@@ -1,1 +1283,1287 @@\n  private def expandIsrWithAlterIsr(newInSyncReplica: Int): Unit = {\n    // This is called from maybeExpandIsr which holds the ISR write lock\n    if (!isrState.isInflight) {\n      // When expanding the ISR, we can safely assume the new replica will make it into the ISR since this puts us in"
+  },
+  {
+    "id" : "0a114259-196f-4c55-83c2-4c1e95e50038",
+    "prId" : 9631,
+    "prUrl" : "https://github.com/apache/kafka/pull/9631#pullrequestreview-541368077",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5b47fb37-ed52-40a0-88dd-e488c8ae55cb",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "For the reassignment case, once the controller shrinks the assigned replica set, the next step is for the controller to remove the remove replica from ISR and bump up the leader epoch. The shrunk isr will then be propagated to the leader. With `fold(true)`, we allow to leader to shrink ISR immediately. This might be ok, but is unnecessary work since the controller will be doing that soon.\r\n\r\nAnother option is to use `fold(false)`. This way, the leader won't shrink the removed replica from ISR. Only the controller will do.\r\n",
+        "createdAt" : "2020-11-23T23:49:22Z",
+        "updatedAt" : "2021-02-19T15:52:15Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0dda049f-2f34-4e35-ac48-e0c3d1291a0d",
+        "parentId" : "5b47fb37-ed52-40a0-88dd-e488c8ae55cb",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "Thanks for the review!\r\n\r\n> This might be ok, but is unnecessary work since the controller will be doing that soon.\r\n\r\nAccording to some users and the report from KAFKA-9672, it looks like under some conditions the controller is writing to ZK that it removed the replica from the assignment but not from the ISR. I am unable to reproduce this or convince myself from the code on how this can happen.\r\n\r\nI was thinking of defensively letting the leader also remove the replica from the ISR so that Kafka can recover from this case. If the leader is not allowed to do this then `ack=all` produce messages will continue to fail.\r\n\r\nWhat do you think @junrao?",
+        "createdAt" : "2020-11-24T01:25:59Z",
+        "updatedAt" : "2021-02-19T15:52:15Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "794608ee-9828-4470-a4c8-678a85e557a8",
+        "parentId" : "5b47fb37-ed52-40a0-88dd-e488c8ae55cb",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@jsancio : Yes, we can keep the logic in the PR. On the leader, the logic for shrinking ISR is checked every 10 secs by default. So, in the common case when completing a reassignment, the reduced ISR by the controller will be propagated to the leader before the leader's ISR shrinking logic kicks in.",
+        "createdAt" : "2020-11-30T23:10:37Z",
+        "updatedAt" : "2021-02-19T15:52:15Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "21449ce80b5f09d7facd6bc9ac91619564e31f37",
+    "line" : 45,
+    "diffHunk" : "@@ -1,1 +941,945 @@                                  currentTimeMs: Long,\n                                  maxLagMs: Long): Boolean = {\n    getReplica(replicaId).fold(true) { followerReplica =>\n      followerReplica.logEndOffset != leaderEndOffset &&\n        (currentTimeMs - followerReplica.lastCaughtUpTimeMs) > maxLagMs"
+  },
+  {
+    "id" : "a4663a53-9aed-49eb-8deb-13473b1df2bb",
+    "prId" : 9677,
+    "prUrl" : "https://github.com/apache/kafka/pull/9677#pullrequestreview-543236184",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "57592558-c9bf-4b78-8076-23139bed7a37",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Maybe `IsrChangeMetrics`?",
+        "createdAt" : "2020-12-02T21:05:53Z",
+        "updatedAt" : "2020-12-03T21:00:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7b686bde9dc8ee56d4758aca578e65add96da8b5",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +46,50 @@import scala.jdk.CollectionConverters._\n\ntrait IsrChangeListener {\n  def markExpand(): Unit\n  def markShrink(): Unit"
+  },
+  {
+    "id" : "5cab5e25-bb1b-47e6-a36a-020fb469d146",
+    "prId" : 9677,
+    "prUrl" : "https://github.com/apache/kafka/pull/9677#pullrequestreview-543284253",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eaccf48b-ecf5-4f68-b176-cb06eee041ea",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm.. I had forgotten about this. The purpose of this call is so that we can propagate the ISR change to the controller, but we shouldn't need to do this down the AlterIsr path. This also makes your initial name `IsrChangeListener` a bit more accurate 😅 .",
+        "createdAt" : "2020-12-02T22:17:53Z",
+        "updatedAt" : "2020-12-03T21:00:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7b686bde9dc8ee56d4758aca578e65add96da8b5",
+    "line" : 66,
+    "diffHunk" : "@@ -1,1 +110,114 @@    val isrChangeListener = new IsrChangeListener {\n      override def markExpand(): Unit = {\n        replicaManager.recordIsrChange(topicPartition)\n        replicaManager.isrExpandRate.mark()\n      }"
+  },
+  {
+    "id" : "9165e868-068a-457b-9518-acadfd9ff58a",
+    "prId" : 9677,
+    "prUrl" : "https://github.com/apache/kafka/pull/9677#pullrequestreview-544223801",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c96dc848-6e74-4653-b2c1-72280f4dec57",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "nit: now the block below is misaligned",
+        "createdAt" : "2020-12-03T17:51:10Z",
+        "updatedAt" : "2020-12-03T21:00:41Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "7b686bde9dc8ee56d4758aca578e65add96da8b5",
+    "line" : 164,
+    "diffHunk" : "@@ -1,1 +1429,1433 @@        case Left(error: Errors) =>\n          isrChangeListener.markFailed()\n          error match {\n            case Errors.UNKNOWN_TOPIC_OR_PARTITION =>\n              debug(s\"Controller failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.\")"
   }
 ]
