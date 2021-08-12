@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "ea584942-e7d8-4f94-affa-7b26f490023c",
+    "prId" : 32192,
+    "prUrl" : "https://github.com/flutter/flutter/pull/32192#pullrequestreview-242895927",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f5b02baa-997b-4e17-b912-6b22b92135be",
+        "parentId" : null,
+        "authorId" : "4aacccb7-c2f8-4a9b-81c0-714c41049f7e",
+        "body" : "Having this test with a transformation containing an out of plane rotation (rotateX or rotateY) would be useful as that is a less obvious case that has a bug in the Transform widget.",
+        "createdAt" : "2019-05-18T19:06:06Z",
+        "updatedAt" : "2019-05-31T20:12:18Z",
+        "lastEditedBy" : "4aacccb7-c2f8-4a9b-81c0-714c41049f7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d784372-e039-4d22-8b4a-dbeb600dfcd9",
+        "parentId" : "f5b02baa-997b-4e17-b912-6b22b92135be",
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "There's the complex \"Perspective transform on scrollable\" test at the very bottom of the PR that rotates around X and verifies that scrolling still works.",
+        "createdAt" : "2019-05-23T22:02:56Z",
+        "updatedAt" : "2019-05-31T20:12:18Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "54ba86cf-263c-4393-8341-856112e5f58c",
+        "parentId" : "f5b02baa-997b-4e17-b912-6b22b92135be",
+        "authorId" : "4aacccb7-c2f8-4a9b-81c0-714c41049f7e",
+        "body" : "I hope it's okay, but created the test that I proposed to show that it fails: https://github.com/goderbauer/flutter/compare/s2...spkersten:goderbauer-s2-rotation-test?expand=1 \r\n\r\nEdit: If I replace:\r\n`final Matrix4 inverseTransform = Matrix4.inverted(transform);`\r\nwith\r\n`final Matrix4 inverseTransform = Matrix4.inverted(PointerEvent.removePerspectiveTransform(transform));`\r\nthe test passes.\r\n\r\nSo it probably comes down to me misunderstanding the code. Played around with some hit testing an transformations and it all seems to work fine. I'm sorry for the confusion.",
+        "createdAt" : "2019-05-24T17:15:39Z",
+        "updatedAt" : "2019-05-31T20:12:18Z",
+        "lastEditedBy" : "4aacccb7-c2f8-4a9b-81c0-714c41049f7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8b745119-0514-4ddd-895b-38b990ad82ad",
+        "parentId" : "f5b02baa-997b-4e17-b912-6b22b92135be",
+        "authorId" : "4aacccb7-c2f8-4a9b-81c0-714c41049f7e",
+        "body" : "I've looked at the \"Perspective transform on scrollable\" test and it made me really confused. It also fails when I removed the perspective (`setEntry(3,2, 0.001)`) and only keep the rotation. So I add the widget tree in an app to see what happens:\r\n```dart\r\nclass MyApp extends StatelessWidget {\r\n  @override\r\n  Widget build(BuildContext context) => MaterialApp(home: Foo());\r\n}\r\n\r\nclass Foo extends StatelessWidget {\r\n  @override\r\n  Widget build(BuildContext context) {\r\n    return Transform(\r\n      transform: Matrix4.identity()\r\n        ..setEntry(3, 2, 0.001)\r\n        ..rotateX(math.pi / 4)\r\n      ,\r\n      child: Container(\r\n        padding: EdgeInsets.all(16),\r\n        color: Colors.yellow,\r\n        child: Center(\r\n          child: Container(\r\n            width: 200,\r\n            child: ListView.builder(\r\n//            controller: controller,\r\n              cacheExtent: 0.0,\r\n              itemBuilder: (BuildContext context, int index) {\r\n                return Container(\r\n                  height: 100.0,\r\n                  color: index % 2 == 0 ? Colors.blue : Colors.red,\r\n                  child: Text('Tile $index'),\r\n                );\r\n              },\r\n            ),\r\n          ),\r\n        ),\r\n      ),\r\n    );\r\n  }\r\n}\r\n```\r\nI've added the `DecoratedBox` to see more clearly what is going on. Here is a screenshot:\r\n<img width=\"581\" alt=\"Screenshot 2019-05-24 at 19 42 30\" src=\"https://user-images.githubusercontent.com/4456832/58346827-651cfb80-7e5c-11e9-8e5c-61171c3fc31e.png\">\r\nSo it looks like the children aren't transformed at all!",
+        "createdAt" : "2019-05-24T17:46:45Z",
+        "updatedAt" : "2019-05-31T20:12:18Z",
+        "lastEditedBy" : "4aacccb7-c2f8-4a9b-81c0-714c41049f7e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d279b94d-a0c5-4ef8-bba1-6befbe59a7c6",
+        "parentId" : "f5b02baa-997b-4e17-b912-6b22b92135be",
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "> https://github.com/goderbauer/flutter/compare/s2...spkersten:goderbauer-s2-rotation-test?expand=1\r\n\r\nYes, applying `MatrixUtils.transformPoint` in both directions will not work as that method completely drops the z value on the floor as you already found out. If you use that method to transform a point P(x, y, 0) on the xy-plane of a x-rotated render plane you will end up with a point P'(x', y', z') and z' will most likely not be 0. If you now take the x' and y' of that point and run it through `transformPoint` again (which just sets z to 0), you will not end up with x and y again.\r\n\r\nIn combination with `PointerEvent.removePerspectiveTransform` it works because that method modifies the transform matrix in a way to map point P(x, y, 0) from the xy-plane of the render plane to the point P'(x', y', 0) on the xy-plane of the screen (that's the point on the screen at which P will be drawn). Because z is zero for both points, we can now use `MatrixUtils.transformPoint` to correctly transform between the two.\r\n\r\nHope this makes sense? Looking at the other example you posted now...",
+        "createdAt" : "2019-05-28T17:30:12Z",
+        "updatedAt" : "2019-05-31T20:12:18Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34917c53-8e2f-4206-b90f-bd47f8afc07d",
+        "parentId" : "f5b02baa-997b-4e17-b912-6b22b92135be",
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "About your second comment: That looks like an iOS-specific rendering bug. On Android your example renders fine. Let me do a little investigation and file a separate bug about it.",
+        "createdAt" : "2019-05-28T19:27:04Z",
+        "updatedAt" : "2019-05-31T20:12:18Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5996ffcc-c360-424c-9e35-b9da4af8796f",
+        "parentId" : "f5b02baa-997b-4e17-b912-6b22b92135be",
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "Actually, it looks like it was a bug with the old engine version that this PR was synced to. I just pulled in master and everything renders correctly. (And hit testing also works as expected.)",
+        "createdAt" : "2019-05-28T20:12:40Z",
+        "updatedAt" : "2019-05-31T20:12:18Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2017e9ba6d7e04e47e73a55670b541697bb4049e",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +148,152 @@    final Matrix4 transform = Matrix4.translationValues(10, 20, 0);\n    expect(PointerEvent.transformPosition(transform, position), const Offset(20.0 + 10.0, 30.0 + 20.0));\n  });\n\n  test('transformDeltaViaPositions', () {"
+  }
+]
