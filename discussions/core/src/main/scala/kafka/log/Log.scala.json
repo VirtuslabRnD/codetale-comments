@@ -526,5 +526,214 @@
     "commit" : "bd0147f53eb4a7af432a773c222a16a4837a409c",
     "line" : 22,
     "diffHunk" : "@@ -1,1 +578,582 @@      // reset the index size of the currently active log segment to allow more entries\n      activeSegment.resizeIndexes(config.maxIndexSize)\n      nextOffset\n    } else {\n      0"
+  },
+  {
+    "id" : "6a0c5dc8-f460-4e5e-8520-4ce1fcc31665",
+    "prId" : 6832,
+    "prUrl" : "https://github.com/apache/kafka/pull/6832#pullrequestreview-257575024",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "843c3dce-2c24-4eab-a77e-cb6d9df395ef",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm.. I think we might need to do the lookup while holding the lock. Otherwise we may overwrite a different value than we are expecting. Same for `lso` below.\r\n\r\nAlso, we have a related method `maybeFetchHighWatermarkOffsetMetadata`. Perhaps we should try to consolidate?",
+        "createdAt" : "2019-06-20T22:46:03Z",
+        "updatedAt" : "2019-07-04T02:59:14Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dff0e648-80c3-4780-87d3-08e24fbd55e1",
+        "parentId" : "843c3dce-2c24-4eab-a77e-cb6d9df395ef",
+        "authorId" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "body" : "`maybeFetchHighWatermarkOffsetMetadata` is used when we initialized a replica as a leader. It loads the HW metadata and falls back to LSO if it's out of range. Seems like enough of a separate usage to keep separate maybe?\r\n\r\nBut now that you mention it, should `maybeFetchHighWatermarkOffsetMetadata` be synchronized as well? It probably only gets called by a single thread (Partition#makeLeader), but that doesn't guard against future usages.",
+        "createdAt" : "2019-06-21T12:37:55Z",
+        "updatedAt" : "2019-07-04T02:59:14Z",
+        "lastEditedBy" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "be8b0fd8-625b-4b1d-a3d3-fb4159de7830",
+        "parentId" : "843c3dce-2c24-4eab-a77e-cb6d9df395ef",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I guess it depends on whether the fallback logic makes sense in this context. I guess it is reasonable to raise an out of range error here since we expect the high watermark to exist in the log. \r\n\r\nAgreed that `maybeFetchHighWatermarkOffsetMetadata` should be locked. Possibly we skipped it because this was only used in initialization. I don't see the harm adding it now.",
+        "createdAt" : "2019-06-24T17:35:42Z",
+        "updatedAt" : "2019-07-04T02:59:14Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a9e0812b-2193-4b92-8fdf-c505be6feb18",
+        "parentId" : "843c3dce-2c24-4eab-a77e-cb6d9df395ef",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Were we going to add the locking to `initializeHighWatermarkOffsetMetadata`?",
+        "createdAt" : "2019-07-03T15:49:58Z",
+        "updatedAt" : "2019-07-04T02:59:14Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4649c14a969cd8c88d06cad68f65d39a0cfdd905",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +370,374 @@      lock.synchronized {\n        val fullOffset = convertToOffsetMetadataOrThrow(_highWatermarkMetadata.messageOffset)\n        _highWatermarkMetadata = fullOffset\n        highWatermark = _highWatermarkMetadata\n      }"
+  },
+  {
+    "id" : "eb677eba-05cd-4831-940e-ec59db2339ed",
+    "prId" : 6841,
+    "prUrl" : "https://github.com/apache/kafka/pull/6841#pullrequestreview-247308445",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "75e24aec-768d-4117-aae0-95ddf9abacbd",
+        "parentId" : null,
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : ":+1: ",
+        "createdAt" : "2019-06-07T21:39:15Z",
+        "updatedAt" : "2019-06-14T23:20:28Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f6524debfbc275fe7f58c41b87c3daeb3f4c0aa6",
+    "line" : 148,
+    "diffHunk" : "@@ -1,1 +1981,1985 @@    logString.append(s\", logEndOffset=$logEndOffset\")\n    logString.append(\")\")\n    logString.toString\n  }\n"
+  },
+  {
+    "id" : "76b51a58-0114-4686-a0dc-7bc7d1b3f4b9",
+    "prId" : 6841,
+    "prUrl" : "https://github.com/apache/kafka/pull/6841#pullrequestreview-249513836",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "97642443-5e44-49f1-9366-bca19ae5738c",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I think the intent of `LogOffsetSnapshot` is to ensure we get a consistent view of these offsets (e.g. to ensure that the high watermark must be less than or equal to the log end offset). As far as I can tell, the only lock that is held when accessing this method is the read-write lock `leaderAndIsrUpdateLock` in `Partition.fetchOffsetSnapshot`. However, we are only accessing the read side of the lock, so it seems these offsets can still be modified by other threads. I think this was already broken, so we can probably try to address it in a follow-up.",
+        "createdAt" : "2019-06-11T23:43:31Z",
+        "updatedAt" : "2019-06-14T23:20:28Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e4358ea-fe89-49f5-b877-6d2b95c99374",
+        "parentId" : "97642443-5e44-49f1-9366-bca19ae5738c",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Actually I was slightly mistaken about this. The main purpose of `fetchOffsetSnapshot` was to protect the epoch check when accessing these offsets. I think we never had any strict guarantee that they were consistent with each other. It may still be worthwhile following up on this and thinking through the implications.",
+        "createdAt" : "2019-06-11T23:55:31Z",
+        "updatedAt" : "2019-06-14T23:20:28Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fded3218-071b-43e9-ad60-4e745fc93b8e",
+        "parentId" : "97642443-5e44-49f1-9366-bca19ae5738c",
+        "authorId" : "e61d770a-e328-41b4-b8c3-6a769370680c",
+        "body" : "Ok. Leaving it out of this PR.",
+        "createdAt" : "2019-06-13T18:00:56Z",
+        "updatedAt" : "2019-06-14T23:20:28Z",
+        "lastEditedBy" : "e61d770a-e328-41b4-b8c3-6a769370680c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f6524debfbc275fe7f58c41b87c3daeb3f4c0aa6",
+    "line" : 75,
+    "diffHunk" : "@@ -1,1 +358,362 @@  def lastStableOffsetLag: Long = highWatermark - lastStableOffset\n\n  def offsetSnapshot: LogOffsetSnapshot = {\n    LogOffsetSnapshot(\n      logStartOffset = logStartOffset,"
+  },
+  {
+    "id" : "4afdc2a1-b65e-456b-bd3a-785c87452db1",
+    "prId" : 6841,
+    "prUrl" : "https://github.com/apache/kafka/pull/6841#pullrequestreview-250051545",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7e8f56a8-f342-4399-a717-6c0f8ae73422",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Since we added high watermark and LSO, perhaps we may as well add the log start and end offsets as well.",
+        "createdAt" : "2019-06-14T07:15:37Z",
+        "updatedAt" : "2019-06-14T23:20:28Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "54480fad-8087-4a03-8438-7be2ec59209e",
+        "parentId" : "7e8f56a8-f342-4399-a717-6c0f8ae73422",
+        "authorId" : "e61d770a-e328-41b4-b8c3-6a769370680c",
+        "body" : "Done.",
+        "createdAt" : "2019-06-14T18:13:59Z",
+        "updatedAt" : "2019-06-14T23:20:28Z",
+        "lastEditedBy" : "e61d770a-e328-41b4-b8c3-6a769370680c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f6524debfbc275fe7f58c41b87c3daeb3f4c0aa6",
+    "line" : 143,
+    "diffHunk" : "@@ -1,1 +1976,1980 @@    logString.append(s\", topic=${topicPartition.topic}\")\n    logString.append(s\", partition=${topicPartition.partition}\")\n    logString.append(s\", highWatermark=$highWatermarkMetadata\")\n    logString.append(s\", lastStableOffset=$lastStableOffsetMetadata\")\n    logString.append(s\", logStartOffset=$logStartOffset\")"
+  },
+  {
+    "id" : "c605b77b-b215-47bf-bb26-e43b43625bb9",
+    "prId" : 6847,
+    "prUrl" : "https://github.com/apache/kafka/pull/6847#pullrequestreview-249670004",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9133aebe-30fe-492b-9e3a-886bbbaf26f3",
+        "parentId" : null,
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "you should also wait until the executor has finished running, with something like `ExecutorService#awaitTermination`",
+        "createdAt" : "2019-06-04T21:09:50Z",
+        "updatedAt" : "2019-06-17T16:34:23Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3eb84865-9704-40ff-894f-446eaae73992",
+        "parentId" : "9133aebe-30fe-492b-9e3a-886bbbaf26f3",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "I don't think you can do that. The executor is shared with other components.",
+        "createdAt" : "2019-06-04T21:10:54Z",
+        "updatedAt" : "2019-06-17T16:34:23Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e658733b-8693-44a8-8429-079b30718dfc",
+        "parentId" : "9133aebe-30fe-492b-9e3a-886bbbaf26f3",
+        "authorId" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "body" : "So should I keep as is or change it?",
+        "createdAt" : "2019-06-04T21:25:09Z",
+        "updatedAt" : "2019-06-17T16:34:23Z",
+        "lastEditedBy" : "a31dcef8-b459-4b48-bb49-44e910fa9f34",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c9b03199-3047-4175-bf49-23ed2081465f",
+        "parentId" : "9133aebe-30fe-492b-9e3a-886bbbaf26f3",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "@ijuma: Good point.  We don't want to wait for the executor to terminate here.",
+        "createdAt" : "2019-06-14T00:57:35Z",
+        "updatedAt" : "2019-06-17T16:34:23Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6a0be6532fabbe65ac4204596bfc5d353eb78b34",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +754,758 @@    lock synchronized {\n      checkIfMemoryMappedBufferClosed()\n      producerExpireCheck.cancel(true)\n      maybeHandleIOException(s\"Error while renaming dir for $topicPartition in dir ${dir.getParent}\") {\n        // We take a snapshot at the last written offset to hopefully avoid the need to scan the log"
   }
 ]

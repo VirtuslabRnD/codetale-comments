@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "cc29b6dd-0447-4959-a561-4162892a477e",
+    "prId" : 6815,
+    "prUrl" : "https://github.com/apache/kafka/pull/6815#pullrequestreview-253152600",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2b9fb624-48cb-45aa-a788-704758d858ad",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "So this will only work if all group ids are the same length? Are they guaranteed to be equal length in practice?",
+        "createdAt" : "2019-06-19T21:58:45Z",
+        "updatedAt" : "2019-06-28T00:09:42Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c7468b2-df58-4191-ab76-c12a17bf3e89",
+        "parentId" : "2b9fb624-48cb-45aa-a788-704758d858ad",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "This is just for testing purpose. On the server side we do UUID generation which IIUC will be guaranteed to be same length.",
+        "createdAt" : "2019-06-19T22:12:05Z",
+        "updatedAt" : "2019-06-28T00:09:42Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "834732f0-dc7c-41ed-a986-4707d2131f1b",
+        "parentId" : "2b9fb624-48cb-45aa-a788-704758d858ad",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Here's just my readings on this:\r\n\r\n1. For range / round-robin assignor, the first priority to still to obey its \"range / round-robin\" behavior, and then we may want to achieve some stickiness if possible. I.e. if achieving stickiness means we are violating the \"range / round-robin\" semantics then we should not do it. As a result we are only trying to be sticky with some weak efforts: i.e we only sort the consumers based on their instance ids if there are any, so that if the number of members be exactly the same and the static members do not change, we can reduce unnecessary partition migration. On the other hand, we still strictly follow the range / round-robin algorithm.\r\n\r\n2. For sticky assignor (https://github.com/apache/kafka/pull/6963), the behavior is a bit different, but as the java docs claimed:\r\n\r\n```\r\n * <p>Starting fresh it would work by distributing the partitions over consumers as evenly as possible. Even though this may sound similar to\r\n * how round robin assignor works, the second example below shows that it is not.\r\n * During a reassignment it would perform the reassignment in such a way that in the new assignment\r\n * <ol>\r\n * <li>topic partitions are still distributed as evenly as possible, and</li>\r\n * <li>topic partitions stay with their previously assigned consumers as much as possible.</li>\r\n * </ol>\r\n * Of course, the first goal above takes precedence over the second one.</p>\r\n```\r\n\r\nIt still values balance over stickiness. So I think we do not need to leverage on instance.id for stickiness any more since the `owned-partitions` is an even stronger signal to do adjustments (i.e. switching partitions) in the second round.",
+        "createdAt" : "2019-06-19T22:23:26Z",
+        "updatedAt" : "2019-06-28T00:09:42Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "81b9201a-63a2-41ec-a7dd-19acf31d8903",
+        "parentId" : "2b9fb624-48cb-45aa-a788-704758d858ad",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "I partially agree here, but do we still maintain the information about `owned-partitions` when we restart a node?",
+        "createdAt" : "2019-06-23T02:31:45Z",
+        "updatedAt" : "2019-06-28T00:09:42Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e024eea1-317d-4ab0-ac9d-051c43fbe6c6",
+        "parentId" : "2b9fb624-48cb-45aa-a788-704758d858ad",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "That's a good point. The `owned-partitions` are only kept in main-memory meaning that after a restart we are not sticky anymore.\r\n\r\nI think it is okay (and straight-forward) if we want to incorporate instance.id: if no one has `owned-partitions` then we just fall back to the round-robin partitioner, and sorting based on instance.id would help; and then if any one has non-empty `owned-partitions` then that \"signal\" should be honored higher than instance.id, and therefore just sorting the members based on instance.ids when we do further adjustments are still sufficient.",
+        "createdAt" : "2019-06-23T22:37:16Z",
+        "updatedAt" : "2019-06-28T00:09:42Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1769d3ca126e7d06f141e3057f8de5028242113",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +70,74 @@        List<MemberInfo> dynamicMemberList = new ArrayList<>();\n        for (int i = 0; i < 100; i++) {\n            // Need to make sure all the ids are defined as 3-digits otherwise\n            // the comparison result will break.\n            String id = Integer.toString(i + 100);"
+  }
+]

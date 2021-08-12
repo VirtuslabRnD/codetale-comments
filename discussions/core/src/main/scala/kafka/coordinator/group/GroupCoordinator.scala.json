@@ -460,5 +460,181 @@
     "commit" : "ab085e9764aa35dece48891a8d707b743b5bf711",
     "line" : 85,
     "diffHunk" : "@@ -1,1 +456,460 @@                      memberLeaveError(leavingMember, Errors.NONE)\n                    }\n                  } else if (!group.has(memberId) && !group.hasStaticMember(groupInstanceId)) {\n                    memberLeaveError(leavingMember, Errors.UNKNOWN_MEMBER_ID)\n                  } else {"
+  },
+  {
+    "id" : "b27876d9-333e-4ae6-b58c-bab829a94f6a",
+    "prId" : 6894,
+    "prUrl" : "https://github.com/apache/kafka/pull/6894#pullrequestreview-246717254",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6f7c3d9e-93a9-4119-93e1-239f34d31b3e",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Use the same `match / case` pattern, and add more log4j entries here: the rationale is that join-group events should not be very frequent so it's worth making more visibility out of it.",
+        "createdAt" : "2019-06-06T17:41:26Z",
+        "updatedAt" : "2019-06-11T01:42:06Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9bb2b5f92caf46b4d78268db42075c829306fe64",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +182,186 @@\n          group.currentState match {\n            case Stable =>\n              info(s\"Static member $groupInstanceId with unknown member id rejoins group ${group.groupId} \" +\n                s\"in ${group.currentState} state. Assigning new member id $newMemberId, while old member $oldMemberId \" +"
+  },
+  {
+    "id" : "114d4f42-3a09-4135-a78c-43cc881a966d",
+    "prId" : 6894,
+    "prUrl" : "https://github.com/apache/kafka/pull/6894#pullrequestreview-246717254",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "87411e20-8631-49a7-94a3-ffa8eb2d7d96",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Again the match / case pattern, and for CompletingRebalance we still return REBALANCE_IN_PROGRESS just to be safe.",
+        "createdAt" : "2019-06-06T17:42:17Z",
+        "updatedAt" : "2019-06-11T01:42:06Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9bb2b5f92caf46b4d78268db42075c829306fe64",
+    "line" : 90,
+    "diffHunk" : "@@ -1,1 +629,633 @@        responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION))\n      } else {\n        group.currentState match {\n          case Stable | PreparingRebalance =>\n            // During PreparingRebalance phase, we still allow a commit request since we rely"
+  },
+  {
+    "id" : "0f9d4dec-0754-42c8-a9ef-a4a9fc5baccd",
+    "prId" : 6894,
+    "prUrl" : "https://github.com/apache/kafka/pull/6894#pullrequestreview-246912923",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "42d4b322-dcc6-4254-b96c-ad6ab271b7e4",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I think you mentioned there are some implication for KIP-429. In theory, if the consumer knows it will continue to own some partitions, it _could_ continue to commit offsets before it has the assignment for the latest generation. It seems we should either explicitly allow this or treat it as an illegal state?",
+        "createdAt" : "2019-06-06T20:38:55Z",
+        "updatedAt" : "2019-06-11T01:42:06Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "faa9f7d7-de70-4988-8f93-48832e47848b",
+        "parentId" : "42d4b322-dcc6-4254-b96c-ad6ab271b7e4",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I've thought about that, and it is actually a bit complicated for consumer to do so. Because if you get a retriable error code from commit response in commitSync (in commitAsync we do not retry but just set the error back to user), the re-try logic is:\r\n\r\n1) ensureCoordinatorReady.\r\n2) resend commit request\r\n\r\nWhich means that we would not re-join group since we do not check `ensureActiveGroup` at all. On the other hand, `ensureActiveGroup` makes sure that the whole rebalance is done including `onPartitionRevoked / onPartitionAssigned` callback, and therefore some partitions may already be revoked -- and in practice we are going to commit offsets in `onPartitionRevoked` successfully since the group state would be in `stable` anyways. Hence for this `commitSync`, it is better still fail and throw.\r\n\r\nHowever, I'm thinking that instead of throwing CommitFailed, we can instead throw a different exception (e.g. we can just throw `RebalanceInProgressException` all the way to the caller). In callers like Streams then, we should handle CommitFailed and RebalanceInProgress differently: e.g. for the former we treat it as \"task being migrated\", while for the latter, since we know we are going to call `commitSync` again in `onPartitionsRevoked` we can just swallow it and proceed.",
+        "createdAt" : "2019-06-07T00:09:59Z",
+        "updatedAt" : "2019-06-11T01:42:06Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc2ead0c-9b6a-4a54-b2f6-48ad52d92aa0",
+        "parentId" : "42d4b322-dcc6-4254-b96c-ad6ab271b7e4",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Note though, it would require a minor public API change that `commitSync` could throw `RebalanceInProgressException`. I'd just piggy back with KIP-429.",
+        "createdAt" : "2019-06-07T00:10:55Z",
+        "updatedAt" : "2019-06-11T01:42:06Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41128e95-3035-4bfc-9267-1a7aee89dad7",
+        "parentId" : "42d4b322-dcc6-4254-b96c-ad6ab271b7e4",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Ok, let's keep it as is.",
+        "createdAt" : "2019-06-07T04:46:31Z",
+        "updatedAt" : "2019-06-11T01:42:06Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9bb2b5f92caf46b4d78268db42075c829306fe64",
+    "line" : 98,
+    "diffHunk" : "@@ -1,1 +637,641 @@            groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)\n\n          case CompletingRebalance =>\n            // We should not receive a commit request if the group has not completed rebalance;\n            // but since the consumer's member.id and generation is valid, it means it has received"
+  },
+  {
+    "id" : "761f609b-9fd0-49b2-9074-fe8bc3b57e8e",
+    "prId" : 6899,
+    "prUrl" : "https://github.com/apache/kafka/pull/6899#pullrequestreview-247929583",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a2a4526c-9ecc-46b6-8a89-408845f5205c",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I think it's worth a comment explaining the use of the old leaderId here.",
+        "createdAt" : "2019-06-11T16:17:31Z",
+        "updatedAt" : "2019-06-12T04:56:07Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3d2900439cab3b6134ba74dab5d231c1380edb6",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +206,210 @@                // as a leader based on the returned message, since the new member.id won't match\n                // returned leader id, therefore no assignment will be performed.\n                leaderId = currentLeader,\n                error = Errors.NONE))\n            case Empty | Dead =>"
+  },
+  {
+    "id" : "48e37daf-265d-4af7-b9b5-9109655070c4",
+    "prId" : 6899,
+    "prUrl" : "https://github.com/apache/kafka/pull/6899#pullrequestreview-248315304",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a620b155-d38a-4659-9753-ce4d1a40d372",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "The call to `replaceGroupInstance` also updates the leaderId. If the leader is replaced twice, there will be a different leaderId each time. This is probably harmless, just mentioning it since the behavior is slightly inconsistent. The other option would be to lock in the leaderId when the generation is bumped. The advantage of the approach here is that the leaderId set in `GroupMetadata` always corresponds to one of the existing members, which may be less error-prone.",
+        "createdAt" : "2019-06-11T16:39:51Z",
+        "updatedAt" : "2019-06-12T04:56:07Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dedcfbb6-f791-4381-9aff-fbb5871b3979",
+        "parentId" : "a620b155-d38a-4659-9753-ce4d1a40d372",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Yes, agree it's a trade-off.",
+        "createdAt" : "2019-06-11T17:04:27Z",
+        "updatedAt" : "2019-06-12T04:56:07Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3d2900439cab3b6134ba74dab5d231c1380edb6",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +184,188 @@\n          val currentLeader = group.leaderOrNull\n          val member = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)\n          // Heartbeat of old member id will expire without effect since the group no longer contains that member id.\n          // New heartbeat shall be scheduled with new member id."
+  },
+  {
+    "id" : "51e80296-78dd-437d-b4cb-d779e012c653",
+    "prId" : 6899,
+    "prUrl" : "https://github.com/apache/kafka/pull/6899#pullrequestreview-248439856",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "00fbb064-ed30-4109-8d12-81eed02364e9",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Perhaps if you want to move this, we may as well put it in the `JoinGroupResult` companion object.\r\n```scala\r\nobject JoinGroupResult {\r\n  def apply(memberId: String, error: Errors): JoinGroupResult = {\r\n...\r\n  }\r\n}\r\n```",
+        "createdAt" : "2019-06-11T21:10:15Z",
+        "updatedAt" : "2019-06-12T04:56:07Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d3d2900439cab3b6134ba74dab5d231c1380edb6",
+    "line" : 195,
+    "diffHunk" : "@@ -1,1 +1095,1099 @@  }\n\n  def joinError(memberId: String, error: Errors): JoinGroupResult = {\n    JoinGroupResult(\n      members = List.empty,"
   }
 ]
