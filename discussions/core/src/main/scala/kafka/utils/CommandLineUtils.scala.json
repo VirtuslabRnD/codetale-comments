@@ -31,5 +31,104 @@
     "commit" : "4036b5cfdcd92b27a136fe5cb335ee9a29978edd",
     "line" : 12,
     "diffHunk" : "@@ -1,1 +58,62 @@\n  /**\n   * Parse key-value pairs in the form key=value\n   * value may contain equals sign\n   */"
+  },
+  {
+    "id" : "a598b132-48b0-49fe-843c-6075abea9ce2",
+    "prId" : 6481,
+    "prUrl" : "https://github.com/apache/kafka/pull/6481#pullrequestreview-227647890",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "06aeb198-c41e-49a6-a859-792e4c37bec9",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm.. I'm not sure this is called by all the commands that go through `kafka-run-class.sh`. For example, `kafka.Kafka` does not seem to hit this path.",
+        "createdAt" : "2019-04-10T02:50:35Z",
+        "updatedAt" : "2019-04-24T19:11:44Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "858bf6f0-8d84-4cb1-919d-a853443ab328",
+        "parentId" : "06aeb198-c41e-49a6-a859-792e4c37bec9",
+        "authorId" : "2f3fbc93-2875-4df0-8f43-329c41f891e4",
+        "body" : "I've been through the scripts in bin/ and looked at how many would be affected by this.  There are three classes that use CommandLineUtils but don't hit this method:  ReplicaVerificationTool, Kafka, StreamsResetter. \r\nCoincidentally for StreamsResetter this means that the \"--help\" option, while listed in the output still results in an error.\r\n\r\nThe issue with these classes is, I think, that they internally do not use an object that extends CommandDefaultOptions - hence ignore those options completely.\r\n\r\nThe rest of the tools either call this method or handle argument parsing in a totally different way.\r\n\r\nNot sure what the correct way forward is, to be honest, command line parsing seems a little all over the place in general, so the only place where this is truly global is indeed in kafka-run-class.sh, but that doesn't feel right either, as it is a completely undocumented on the command line that way.\r\n\r\n\r\n",
+        "createdAt" : "2019-04-12T14:51:52Z",
+        "updatedAt" : "2019-04-24T19:11:44Z",
+        "lastEditedBy" : "2f3fbc93-2875-4df0-8f43-329c41f891e4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "30e09462-12ad-4cde-94dd-28606ea8ca61",
+        "parentId" : "06aeb198-c41e-49a6-a859-792e4c37bec9",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "If there only 3 exceptions, do you think it would be reasonable to implement `--version` separately for each of them? Perhaps in a follow-up we can consider how to refactor so that they all use `CommandDefaultOptions`. What do you think?",
+        "createdAt" : "2019-04-12T17:28:42Z",
+        "updatedAt" : "2019-04-24T19:11:44Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "328243cd-4bbf-4461-b5cd-72281dcefdb5",
+        "parentId" : "06aeb198-c41e-49a6-a859-792e4c37bec9",
+        "authorId" : "2f3fbc93-2875-4df0-8f43-329c41f891e4",
+        "body" : "Hi @hachikuji \r\nI am happy to implement those three separately for now.\r\n\r\nIn the interest of completion, handling those three would leave the following classes that do not support the version option (or help for that matter unless they implemented that separately):\r\n\r\n- ConnectDistributed - Doesn't use CommandLine\r\n- ConnectStandalone - Doesn't use CommandLine\r\n- ProducerPerformance - Uses argparse4j instead\r\n- VerifiableConsumer - Uses argparse4j instead\r\n- VerifiableProducer - Uses argparse4j instead\r\n- QuorumPeerMain - Zookeeper class\r\n- ZooKeeperMain - Zookeeper class\r\n\r\nI'm not sure why a small subset of these uses argparse4j, I briefly looked around but couldn't find a larger scheme to adopt this over the CommandLineUtils, do you know anything more about that?\r\n\r\nShould we extend these classes as well to honor the version flag? Should be simple-ish, but still requires adding an option to all parsers, unless we create the equivalent of the CommandDefaultOptions for argparse4j classes. But I'd say this is better suited for the follow-up PR you mentioned to standardize command line parsing.\r\n\r\nSo, my proposal woud be:\r\nadd very simple implementations to ConnectDistributed and ConnectStandalone as well, leave the rest be for now and look at the larger parsing picture in a follow up PR.\r\n\r\nFair?",
+        "createdAt" : "2019-04-15T08:04:01Z",
+        "updatedAt" : "2019-04-24T19:11:44Z",
+        "lastEditedBy" : "2f3fbc93-2875-4df0-8f43-329c41f891e4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5693a53a-2967-4658-ae90-a95523cb015e",
+        "parentId" : "06aeb198-c41e-49a6-a859-792e4c37bec9",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Yeah, I'm not sure why they use argparse4j. Maybe just to make our lives harder. Your suggestion sounds fine to me. Would you mind filing JIRAs for the remaining work?",
+        "createdAt" : "2019-04-15T23:04:13Z",
+        "updatedAt" : "2019-04-24T19:11:44Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "57435908-9c94-4f10-8025-90ce8dde4ccc",
+        "parentId" : "06aeb198-c41e-49a6-a859-792e4c37bec9",
+        "authorId" : "2f3fbc93-2875-4df0-8f43-329c41f891e4",
+        "body" : "Happy to!\r\nI'll kick off a thread on the mailing list first though, to ask around what people think we should do, personally, I'd like us to use just one command line parser, don't really care which one, but two is one too many for my liking.\r\nBut maybe there were reasons for the split. ",
+        "createdAt" : "2019-04-16T07:48:02Z",
+        "updatedAt" : "2019-04-24T19:11:44Z",
+        "lastEditedBy" : "2f3fbc93-2875-4df0-8f43-329c41f891e4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb121fb3-e6b3-4fec-89e6-0f2fe08f55b4",
+        "parentId" : "06aeb198-c41e-49a6-a859-792e4c37bec9",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I suspect there are no good reasons, but starting a discussion is a good idea. There is an ancient KIP which was attempting to consolidate these tools: https://cwiki.apache.org/confluence/display/KAFKA/KIP-14+-+Tools+Standardization. If you have any interest, it would really be helpful for someone to pick that up again. I think one of the reasons for the naming inconsistencies has been the fact that we are using different libraries.",
+        "createdAt" : "2019-04-16T16:45:12Z",
+        "updatedAt" : "2019-04-24T19:11:44Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7d56d9dc-ab33-4b12-88d3-9f8587ba9ed4",
+        "parentId" : "06aeb198-c41e-49a6-a859-792e4c37bec9",
+        "authorId" : "2f3fbc93-2875-4df0-8f43-329c41f891e4",
+        "body" : "Having looked some more at the two Connect classes, there is a small catch: everything we'd need to add the --version parameter to those classes is in the core Kafka project which Connect currently does not declare as a dependency. It seems a bit excessive to add that just for this purpose. \r\nSo I'll reword my suggestion to ignore these two for now and come up with an overall action plan first, before making any larger changes.",
+        "createdAt" : "2019-04-17T09:35:59Z",
+        "updatedAt" : "2019-04-24T19:11:44Z",
+        "lastEditedBy" : "2f3fbc93-2875-4df0-8f43-329c41f891e4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "049be2c27d9832140a1ff0c81460a8632d2eddb9",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +57,61 @@    if (isPrintHelpNeeded(commandOpts))\n      printUsageAndDie(commandOpts.parser, message)\n    if (isPrintVersionNeeded(commandOpts))\n      printVersionAndDie()\n  }"
   }
 ]
