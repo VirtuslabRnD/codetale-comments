@@ -1,0 +1,189 @@
+[
+  {
+    "id" : "e4d02203-bcd4-4c9c-913a-d69e3b9ce373",
+    "prId" : 5273,
+    "prUrl" : "https://github.com/apache/kafka/pull/5273#pullrequestreview-195210871",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3695b30b-ee89-43cb-87d4-dc3f6263b8eb",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "The JavaDocs says, the return value must not be `null`. With with check, this is actually not true and `null` will be interpreted as empty/zero output records.\r\n\r\nI am wondering if we should keep the code as-is and update the JavaDoc, or if we would want to be strict and remove this check and let the for-loop throw an NPE?\r\n\r\n\\cc @guozhangwang @bbejeck @vvcephei WDYT?",
+        "createdAt" : "2019-01-16T18:18:52Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "51ff3391-384f-4e2f-a63c-02393a289863",
+        "parentId" : "3695b30b-ee89-43cb-87d4-dc3f6263b8eb",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "You mean the javadoc of `Transformer`? It says:\r\n\r\n```\r\n@return new {@link KeyValue} pair&mdash;if {@code null} no key-value pair will\r\n     * be forwarded to down stream\r\n```\r\n\r\nSo I think this logic here is fine?",
+        "createdAt" : "2019-01-19T18:41:04Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "63ac2848-ab8b-4888-a716-e8cd24296dba",
+        "parentId" : "3695b30b-ee89-43cb-87d4-dc3f6263b8eb",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "Do you refer to the `flatTransform` JavaDocs? There it says\r\n```\r\n     * Method {@link Transformer#transform(Object, Object) transform()} must return an {@link java.util.Iterable} (e.g.,\r\n     * any {@link java.util.Collection} type) and the return value must not be {@code null}.\r\n```\r\nApparently, I copied this sentence from the `flatMap` JavaDocs. I would remove this sentence from the `flatTransform` JavaDocs because I guess that the only reason to not allow `null`s in a map operation is to distinguish it from a filter operation. This is not needed for a transform operation. Is this correct?",
+        "createdAt" : "2019-01-20T21:10:48Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bfd67af2-3219-405a-9c99-d68b7b97ac40",
+        "parentId" : "3695b30b-ee89-43cb-87d4-dc3f6263b8eb",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Ack.\r\nPlease update the JavaDocs accordingly.\r\n\r\nFor `flatMap()` as it can return zero (ie, empty collection), too, we could also allow to return `null` and interpret it as zero. Don't see a big difference here -- however, for a functional style API it might be ok to be more restrictive and not allow `null`.",
+        "createdAt" : "2019-01-21T04:12:17Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "34b5810c-ab33-4c0a-9323-7756d781f79c",
+        "parentId" : "3695b30b-ee89-43cb-87d4-dc3f6263b8eb",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "No strong opinion, but it seems like we might want to stick close to the behavior of `flatMap`.\r\n\r\n1. If we're permissive with the return value of `flatTransform`, but not with `flatMap`, then it might be a confusing asymmetry with `flatMap`.\r\n2. Also, if we want to change the return behavior of `flatMap`, don't we need a KIP?\r\n\r\nTogether, it would suggest that we should not permit null returns from `flatTransform`.",
+        "createdAt" : "2019-01-21T19:29:34Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dc19fe93-0182-4f24-a31d-24e3e6b75c09",
+        "parentId" : "3695b30b-ee89-43cb-87d4-dc3f6263b8eb",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "While I agree that the asymmetry between `flatTransform` and `flatMap` may be confusing, I would also like to note that, we have already a similar asymmetry between `transform` and `map`. The transformer for `transform` has to return `null` to represent the empty result. Consequently, we would also have an asymmetry between `transform` and `flatTransform` if we forbade `null` as a representation of the empty output for `flatTransform`. \r\n\r\nDo we want to have an asymmetry between `flatTransform` and `transform` or between `flatMap` and `flatTransform`?\r\n\r\nOne option could be to go for the former -- i.e., forbidding `null` output for `flatTransform` -- and to create a JIRA issue to change the transformer for `transform` to return `java.util.Optional<KeyValue<KOut, VOut>>` instead of KeyValue<KOut, VOut> to restore symmetry regarding `null` output values. This solution would break backward compatibility, though.",
+        "createdAt" : "2019-01-21T22:22:37Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53980903-4184-43b0-8bc8-0e363578e762",
+        "parentId" : "3695b30b-ee89-43cb-87d4-dc3f6263b8eb",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "One thing to consider: `map()` is a 1:1 operation while `flatMap()` is a 1:[0,...,n] operation. Also `transform()` in existing API is a 1:[0,...,n] operations. Thus, the grouping and comparison of map/transform and flatMap/flatTransform cannot really be applied.\r\n\r\nNote that `map()` and `flatMap()` are DSL operators while `transform()` is PAPI integration. Also note, that `flatMap()` has a different return type compared to `transform()`, that makes it possible to require non-null output for `flatMap()` but not for `transform()` in old Java7 API. \r\n\r\nWe introduce `flatTransform()` as new 1:[0,...,n] transformation now and also have Java8. However, as @cadonna mentioned, we cannot simply change the return type for `transform()` to `Optional` though. Also, for PAPI integration I think it's not required to apply the same rules as for DSL operators and to disallow `null` necessarily.\r\n\r\nThus the base question seems to be, should we change the \"contract\" of `transform() from 1:[0,...,n] to a 1:1 operator because `flatTransform()` is the preferred operation for 1:[0,...,n] now.   I think the answer is _no_, because `transform()` still allows to emit records via `context.forward()`.\r\n\r\nThus, I would keep `map()`, `flatMap()`, and `transform()` as-is, and I would allow `null` as return type for `flatTransform()`, because it's \"just\" a type safe alternative to `transform()` anyway.\r\n\r\nJust my 2 cents.",
+        "createdAt" : "2019-01-22T01:20:15Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e23b9736-d97d-46cb-96a1-237f8ca3cb09",
+        "parentId" : "3695b30b-ee89-43cb-87d4-dc3f6263b8eb",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "That sounds fine to me @mjsax . I think we can possibly find a better way to unify all this stuff, but it would require some structural changes in the processor context.\r\n\r\nI'm happy with permitting null return in `flatTransform`.",
+        "createdAt" : "2019-01-22T15:55:42Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "82e11feb-b633-4fa9-814d-f0c29a99a6f2",
+        "parentId" : "3695b30b-ee89-43cb-87d4-dc3f6263b8eb",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "I removed the above sentence from the javadocs of `flatTransform`.",
+        "createdAt" : "2019-01-22T20:17:22Z",
+        "updatedAt" : "2019-01-22T20:17:44Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "defa40188505accf8d98fbba94c63445beccf197",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +55,59 @@        public void process(final KIn key, final VIn value) {\n            final Iterable<KeyValue<KOut, VOut>> pairs = transformer.transform(key, value);\n            if (pairs != null) {\n                for (final KeyValue<KOut, VOut> pair : pairs) {\n                    context().forward(pair.key, pair.value);"
+  },
+  {
+    "id" : "2ca304c9-78c7-4d4e-ae94-570fa443966a",
+    "prId" : 5273,
+    "prUrl" : "https://github.com/apache/kafka/pull/5273#pullrequestreview-210138736",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0c8fcd46-5488-4401-b26a-7cf4239e14dc",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is out of the scope but the previous discussion makes me thinking: do we have a similar issue with KStreamFlatMap / FlatMapValues that takes `? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>>`, that blocks lambda functions? @cadonna @vvcephei ",
+        "createdAt" : "2019-01-19T18:34:22Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b5a9f49b-22af-42bf-ac4a-db9a79be05a7",
+        "parentId" : "0c8fcd46-5488-4401-b26a-7cf4239e14dc",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Possibly, it might be worth a Jira to create tests demonstrating the desired source code. Then, not only do we prove it works (or discover it doesn't), we also have a regression test in case we change the generic bounds in the future.",
+        "createdAt" : "2019-01-21T19:32:36Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c30856a-92b3-43bc-b37d-d8a0247e562b",
+        "parentId" : "0c8fcd46-5488-4401-b26a-7cf4239e14dc",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "I was able to compile the following code\r\n```\r\nstream\r\n    .flatMap((Integer key, Integer value) -> Arrays.asList(\r\n        KeyValue.pair(key, value),\r\n        KeyValue.pair(key, value),\r\n        KeyValue.pair(key, value)))\r\n    .foreach(action);\r\n```\r\nI guess in the `flatTransform` case it is the `TransformerSupplier` which makes the code not compile.\r\nI agree with @vvcephei that a Jira to create tests demonstrating the desired source code might be beneficial. ",
+        "createdAt" : "2019-01-21T21:03:09Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "212b07d5-9ad3-4306-8f3a-802daa4a5388",
+        "parentId" : "0c8fcd46-5488-4401-b26a-7cf4239e14dc",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : ":+1: Thanks for checking, @cadonna ",
+        "createdAt" : "2019-01-22T15:29:33Z",
+        "updatedAt" : "2019-01-22T20:16:23Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3d248712-f848-4cdb-86a6-217ff8d0bc50",
+        "parentId" : "0c8fcd46-5488-4401-b26a-7cf4239e14dc",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "@cadonna Can you create a JIRA for tracking?",
+        "createdAt" : "2019-01-26T21:22:22Z",
+        "updatedAt" : "2019-01-26T21:29:46Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fade51a5-f48d-4534-840e-6e2809ac1ab2",
+        "parentId" : "0c8fcd46-5488-4401-b26a-7cf4239e14dc",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "Created ticket [KAFKA-8035](https://issues.apache.org/jira/browse/KAFKA-8035). \r\n\r\nShould I label it as a newbie issue?",
+        "createdAt" : "2019-03-04T13:31:59Z",
+        "updatedAt" : "2019-03-04T13:39:41Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "defa40188505accf8d98fbba94c63445beccf197",
+    "line" : 8,
+    "diffHunk" : "@@ -1,1 +27,31 @@public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn> {\n\n    private final TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier;\n\n    public KStreamFlatTransform(final TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier) {"
+  }
+]
