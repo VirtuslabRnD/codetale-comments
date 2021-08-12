@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "5a450f04-f22b-4e3a-9291-335f69c3c97a",
+    "prId" : 8338,
+    "prUrl" : "https://github.com/apache/kafka/pull/8338#pullrequestreview-389511153",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9ec10da5-47d8-45ac-b30d-dafa93b59d96",
+        "parentId" : null,
+        "authorId" : "355e14de-1b26-40ff-b34b-fd3a7820713a",
+        "body" : "Please make it possible to load the keystore not from a file but e.g. from a variable. This could be easily done by providing a protected method \"byte[] getKeyStoreContent\" (or similar). The default impl. would read the contents from the file. But I caould subclass the default impl. and just use a property set from outside.\r\n\r\nThe same applies for the truststore.",
+        "createdAt" : "2020-03-27T16:11:35Z",
+        "updatedAt" : "2020-04-08T00:30:36Z",
+        "lastEditedBy" : "355e14de-1b26-40ff-b34b-fd3a7820713a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c0949775-36ba-4198-a4ba-e83da7e6e259",
+        "parentId" : "9ec10da5-47d8-45ac-b30d-dafa93b59d96",
+        "authorId" : "4f11d9a4-4514-4317-b1ec-b7eef5eef84f",
+        "body" : "@fml2 Currently the DefaultSslEngineFactory class is 'final' so you won't be able to override. I wrote my custom implementation for our needs for SslEngineFactory, primary reason for the KIP, and it resulted in total of 246 LOC with imports and 213 LOC without imports. I think it is reasonably good to have such a great flexibility with just 200+ LOC. Can you please try writing your custom impl (may be just by copying DefaultSslEngineFactory to start with) and see if it serves your needs? I completely agree that there will be duplicate code for your custom implementation but unless we get enough convincing case on making some methods overridable it is better to keep it the way it is.",
+        "createdAt" : "2020-04-03T06:15:42Z",
+        "updatedAt" : "2020-04-08T00:30:36Z",
+        "lastEditedBy" : "4f11d9a4-4514-4317-b1ec-b7eef5eef84f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dba05471-eb96-4169-a19b-362c81d2b527",
+        "parentId" : "9ec10da5-47d8-45ac-b30d-dafa93b59d96",
+        "authorId" : "355e14de-1b26-40ff-b34b-fd3a7820713a",
+        "body" : "@maulin-vasavada Do you know the reason for making the class final? What is the rationale? Why make the developer's life harder than it is? :-)",
+        "createdAt" : "2020-04-03T11:33:33Z",
+        "updatedAt" : "2020-04-08T00:30:36Z",
+        "lastEditedBy" : "355e14de-1b26-40ff-b34b-fd3a7820713a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41b82b05-37e4-4a69-a74d-3f962ee0e44c",
+        "parentId" : "9ec10da5-47d8-45ac-b30d-dafa93b59d96",
+        "authorId" : "4f11d9a4-4514-4317-b1ec-b7eef5eef84f",
+        "body" : "@fml2 Your requirements are byte[], somebody else might require PEM format string. Sometimes you could have List<X509..cert> objects for Truststore etc. Due to various formats it is not easy to generalize it in a way which will fit every possible use-case if we expose the extension the way you are suggesting. Ultimately it is all byte[] but the formats matter.",
+        "createdAt" : "2020-04-06T19:51:05Z",
+        "updatedAt" : "2020-04-08T00:30:36Z",
+        "lastEditedBy" : "4f11d9a4-4514-4317-b1ec-b7eef5eef84f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "19fa7933-2c3a-4711-bf01-9ce49a4a765b",
+        "parentId" : "9ec10da5-47d8-45ac-b30d-dafa93b59d96",
+        "authorId" : "355e14de-1b26-40ff-b34b-fd3a7820713a",
+        "body" : "Sure, the format matters. If I need a very custom loading routine then I'd reimplement the whole SslEngineFactory. But if I have a plain scenario (I bet it occurs quite often) that I have a standard keystore from the JDK but the application runs in a read only container then it would be a natural enhancement point to let the deployer specify the keystore contents via property. This does not prevent complex cases from being implemented and makes simple situations easy to implement. Having to work with files is a big limitation IMO.\r\n\r\nUpdate: I think I only understand your objection because of PEM format etc. I should have explained my idea better.\r\n\r\nI do NOT propose to introduce a property of type `byte[]`. My proposal is as follows.\r\n\r\n**In DefaultSslEngineFactory.java**\r\nIntroduce a protected method with an implementation like this:\r\n\r\n```\r\nprotected byte[] getKeyStoreContents() {\r\n    // Read and return the bytes from the path specified in the config\r\n}\r\n```\r\n\r\nThen use this method when loading the keystore (in the `load()` method):\r\n`InputStream in = new ByteArrayInputStream(getKeyStoreContents())`\r\n\r\nThus, the DefaultSslEngineFactory fully retains its functionality (and even becomes better testable because now the getKeyStoreContents method can be mocked if necessary).\r\n\r\n**In my custom implementation I'd do the following:**\r\n```\r\npublic MyCustomImpl extends DefaultSslEngineFactory {\r\n    private String keystoreContents; // E.g. in PEM format or... Require here whatever format you like\r\n\r\n@Override\r\nprotected byte[] getKeyStoreContents() {\r\n   // Decode the property 'keystoreContents' according to the appropriate rules and return the bytes\r\n}\r\n```\r\n\r\nNow I can provide the contents in a format I like. It could be a PEM string, a base64 string etc. It could be multiple properties, if needed. The main thing is that I'm able to produce the byte contents out of them.",
+        "createdAt" : "2020-04-06T20:33:52Z",
+        "updatedAt" : "2020-04-08T00:30:36Z",
+        "lastEditedBy" : "355e14de-1b26-40ff-b34b-fd3a7820713a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5ea8dbbe-834c-4b5c-b345-332b59ffc542",
+        "parentId" : "9ec10da5-47d8-45ac-b30d-dafa93b59d96",
+        "authorId" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "body" : "DefaultSslEngineFactory is an internal class. We don't encourage extending this for custom implementations since there is no guarantee that we won't change it in future. For custom implementations of SslEngineFactory, it would be better to rely on the interface.",
+        "createdAt" : "2020-04-07T09:44:56Z",
+        "updatedAt" : "2020-04-08T00:30:36Z",
+        "lastEditedBy" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "382042c8-215f-4ddd-9a5d-fec5dfd01fcc",
+        "parentId" : "9ec10da5-47d8-45ac-b30d-dafa93b59d96",
+        "authorId" : "355e14de-1b26-40ff-b34b-fd3a7820713a",
+        "body" : "OK, I see. But it's a pity I have to write/copy more than 200 lines of code to just have a functionality many systems (I'm quite sure) need.",
+        "createdAt" : "2020-04-07T21:41:33Z",
+        "updatedAt" : "2020-04-08T00:30:36Z",
+        "lastEditedBy" : "355e14de-1b26-40ff-b34b-fd3a7820713a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "15e6ec5575bf5f55d1f81c2ec738f25282f153ad",
+    "line" : 276,
+    "diffHunk" : "@@ -1,1 +297,301 @@         */\n        private KeyStore load() {\n            try (InputStream in = Files.newInputStream(Paths.get(path))) {\n                KeyStore ks = KeyStore.getInstance(type);\n                // If a password is not set access to the truststore is still available, but integrity checking is disabled."
+  }
+]

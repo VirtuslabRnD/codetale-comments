@@ -1153,5 +1153,126 @@
     "commit" : "a757918bbbf7c4b27aa29720e540a5603f890b1e",
     "line" : 164,
     "diffHunk" : "@@ -1,1 +470,474 @@            final long offset = changelogEntry.getValue();\n\n            offsetSum += offset;\n            if (offsetSum < 0) {\n                log.warn(\"Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE\", id);"
+  },
+  {
+    "id" : "3557d012-91df-4aad-a904-f65d934e7c90",
+    "prId" : 8327,
+    "prUrl" : "https://github.com/apache/kafka/pull/8327#pullrequestreview-379069920",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f6b866c4-b00c-4703-8f35-fb725cb1b18f",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I think we can consolidate the three blocks 1) prepareClose / committableOffsetsAndMetadata and 2) commitOffsetsOrTransaction, and 3) closeClean which are all wrapping runtime exceptions and updating exception / dirty tasks map into a single one.\r\n\r\nThis can be done in another PR.",
+        "createdAt" : "2020-03-22T23:44:09Z",
+        "updatedAt" : "2020-03-24T03:46:30Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3de186888785fdd16bc40ad29cd7f94de997b336",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +238,242 @@            }\n\n            try {\n                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);\n"
+  },
+  {
+    "id" : "e6e200b6-e07f-4951-9afd-ac5fd7f720e8",
+    "prId" : 8327,
+    "prUrl" : "https://github.com/apache/kafka/pull/8327#pullrequestreview-379943085",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4c3ab746-8262-4080-8996-a49f6da598af",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "A `CommitFaileException` should result in a `TaskMigratedException` -- should we only catch this one? Catching a generic `RuntimeException` does seem to be a little coarse grained?\r\n\r\nAlso, I am wondering why this case is not handled by the caller, ie, the exception should finally pop out of `Consumer#poll()` and the thread would handle this case and close all tasks?\r\n\r\nAlso, why do we only handle it at this place explicitly? We call `commitOffsetsOrTransaction` on multiple places and never handle it, but just let upper layer take care?",
+        "createdAt" : "2020-03-23T19:24:52Z",
+        "updatedAt" : "2020-03-24T03:46:30Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f1263697-5545-4119-805c-08800f1003d0",
+        "parentId" : "4c3ab746-8262-4080-8996-a49f6da598af",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "The reason is because here we are removing the tasks before the commit block, so effectively this would be the last time we are going to see these tasks before we do a lostAll. I checked other `commitOffsetsOrTransaction` cases which are ok because there would be error handling in place or it is not inside a closing place. And if the current thread crashes for some non-recoverable exception during `commit`, these half-closed tasks are already polluting the rocksDBMetricsRecordingTrigger which later will bring down other stream threads as well. \r\n",
+        "createdAt" : "2020-03-23T21:12:19Z",
+        "updatedAt" : "2020-03-24T03:46:30Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "671c8f53-5ec9-49b1-9845-a5d391b76992",
+        "parentId" : "4c3ab746-8262-4080-8996-a49f6da598af",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Ack. Thanks for clarifying.",
+        "createdAt" : "2020-03-24T00:18:15Z",
+        "updatedAt" : "2020-03-24T03:46:30Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1089d908-b531-4dc2-9db3-28d38376412f",
+        "parentId" : "4c3ab746-8262-4080-8996-a49f6da598af",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "One more follow up question: With incremental rebalancing and eos-beta, we might commit RUNNING tasks (that were never suspended etc) and task that got assigned to another thread/instance within the same transaction. Hence, if committing fails, we would also need to rollback those RUNNING tasks (that we track via `additionalTasksForCommitting`) -- is this rolling back ensured by upper levels or do we need to do something special here, too?",
+        "createdAt" : "2020-03-24T00:25:25Z",
+        "updatedAt" : "2020-03-24T03:46:30Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2d351e7a-7f71-43b3-b167-e9cf53a7397d",
+        "parentId" : "4c3ab746-8262-4080-8996-a49f6da598af",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "My understanding is that the tasks in `additionalTasksForCommitting` are not wiped out during the task iterations, so if we through all the way up to the thread level, we should still have one last chance to call `handleLostAll` to clean them up.",
+        "createdAt" : "2020-03-24T01:25:24Z",
+        "updatedAt" : "2020-03-24T03:46:30Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b2928737-4d3f-458f-8031-12ed1eedba28",
+        "parentId" : "4c3ab746-8262-4080-8996-a49f6da598af",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I agree that we would not loose the reference to those tasks -- just wondering if the cleanup would be done correctly? (I believe yes, but worth to verify)",
+        "createdAt" : "2020-03-24T01:33:35Z",
+        "updatedAt" : "2020-03-24T03:46:30Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "3de186888785fdd16bc40ad29cd7f94de997b336",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +244,248 @@                    task.postCommit();\n                }\n            } catch (final RuntimeException e) {\n                log.error(\"Failed to commit tasks that are \" +\n                    \"prepared to close clean, will close them as dirty instead\", e);"
+  },
+  {
+    "id" : "17e0a711-cf19-4007-ae56-c32637878e42",
+    "prId" : 8331,
+    "prUrl" : "https://github.com/apache/kafka/pull/8331#pullrequestreview-380549304",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8e4aa24a-0d14-4516-baa4-afd50ff7d74c",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "See my other comment above: with eos-beta I think this should not be triggered by ProducerFencedException ever?",
+        "createdAt" : "2020-03-24T18:02:20Z",
+        "updatedAt" : "2020-03-30T21:41:00Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c01468233fc24b2deb017a7bdf80dc2c644d92fc",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +479,483 @@\n        if (processingMode == EXACTLY_ONCE_BETA) {\n            activeTaskCreator.reInitializeThreadProducer();\n        }\n    }"
   }
 ]

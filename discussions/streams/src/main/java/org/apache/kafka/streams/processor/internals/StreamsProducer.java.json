@@ -86,5 +86,115 @@
     "commit" : "4b03a487a518756f7c9acd1f3177b12b407867d5",
     "line" : 32,
     "diffHunk" : "@@ -1,1 +80,84 @@     * @throws IllegalStateException if EOS is disabled\n     */\n    void initTransaction() {\n        if (!eosEnabled) {\n            throw new IllegalStateException(formatException(\"EOS is disabled\"));"
+  },
+  {
+    "id" : "eeaae4f6-0bc6-4bd8-b9c6-c2f29b6d360a",
+    "prId" : 8313,
+    "prUrl" : "https://github.com/apache/kafka/pull/8313#pullrequestreview-377192749",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ea369846-a998-4dcf-862c-7d2ab8c6022c",
+        "parentId" : null,
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "I'm not sure this will actually log as it looks like because `debug` log could reserve one slot for error. Could we have a unit test to check the log appender capturing result?",
+        "createdAt" : "2020-03-18T19:58:50Z",
+        "updatedAt" : "2020-03-18T19:58:53Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "655b7787-6dad-4738-973c-d118f61f11f6",
+        "parentId" : "ea369846-a998-4dcf-862c-7d2ab8c6022c",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "In log4j, if there's one more parameter than the `{}` in string which is an exception, it would log the exception trace.\r\n\r\nHere we do not want the trace to be logged and hence we just log the message as `{}`.",
+        "createdAt" : "2020-03-18T20:00:37Z",
+        "updatedAt" : "2020-03-18T20:00:38Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "97360bcd8e16c08b2af54ffc2e6e7c8e69273f9d",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +203,207 @@                // something else (e.g. task corrupted) we can still ignore the exception here\n                // since transaction already got aborted by brokers/transactional-coordinator if this happens\n                log.debug(\"Encountered {} while aborting the transaction; this is expected and hence swallowed\", error.getMessage());\n            } catch (final KafkaException error) {\n                throw new StreamsException("
+  },
+  {
+    "id" : "2454f60c-1dc3-41b2-950a-d52d97c31d05",
+    "prId" : 8318,
+    "prUrl" : "https://github.com/apache/kafka/pull/8318#pullrequestreview-378681560",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a08f7c31-bd1d-4da4-8b26-6d34833450ec",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Not for this PR: `FencedInstanceIdException` should not be handled as a task-migration exception since it indicates some other instance with the same instance.id has started, and hence this instance should really be closed as a whole.\r\n\r\nJust to clarify your PR did the right thing to not capture it, I just set it as a reminder for myself since I found that some other places we capture `FencedInstanceIdException` incorrectly.",
+        "createdAt" : "2020-03-20T17:31:56Z",
+        "updatedAt" : "2020-03-21T18:49:58Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "59154ab4ee7c4f24706911fb37b8118510d1a3a1",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +168,172 @@            producer.commitTransaction();\n            transactionInFlight = false;\n        } catch (final ProducerFencedException | CommitFailedException error) {\n            throw new TaskMigratedException(\n                formatException(\"Producer got fenced trying to commit a transaction\"),"
+  },
+  {
+    "id" : "9a2f69ec-d24e-4adb-b0af-3b7183e041b5",
+    "prId" : 8331,
+    "prUrl" : "https://github.com/apache/kafka/pull/8331#pullrequestreview-382458566",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c15fa6b2-799e-4440-8ce6-723d9adf2fd6",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Why we need to keep both processingMode and eosEnabled?",
+        "createdAt" : "2020-03-24T18:01:04Z",
+        "updatedAt" : "2020-03-30T21:41:00Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0eb013f4-5132-49e4-bca4-382c64fec1b2",
+        "parentId" : "c15fa6b2-799e-4440-8ce6-723d9adf2fd6",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "It's simpler IMHO -- for most duties like \"initTx\" or \"beginTx\" we don't care if its eos-alpha or eos-beta. If we only keep `processingMode` we need to rewrite:\r\n```\r\nif (eosEnabled) {\r\n...\r\n}\r\n```\r\nto\r\n```\r\nif (processingMode == EXACTLY_ONCE_ALPHA || processingMode == EXACTLY_ONCE_BETA) {\r\n...\r\n}\r\n```\r\n\r\nwhat seem to be more \"clumsy\" ?",
+        "createdAt" : "2020-03-25T00:05:32Z",
+        "updatedAt" : "2020-03-30T21:41:00Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fce7d45c-c8e4-428d-bc78-e3ac6590e276",
+        "parentId" : "c15fa6b2-799e-4440-8ce6-723d9adf2fd6",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "My concern is that keep two variables is always more vulnerable to bugs where the two mistakenly have different values (e.g. eosEnabled == false while mode == EXACTLY_ONCE). Instead, we can have a private method `eosEabled()` which is based on the mode variable and then be called whenever possible.",
+        "createdAt" : "2020-03-26T20:35:57Z",
+        "updatedAt" : "2020-03-30T21:41:00Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2cae502b-c360-4036-babe-0080791b88d0",
+        "parentId" : "c15fa6b2-799e-4440-8ce6-723d9adf2fd6",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Works for me",
+        "createdAt" : "2020-03-26T22:14:01Z",
+        "updatedAt" : "2020-03-30T21:41:01Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c01468233fc24b2deb017a7bdf80dc2c644d92fc",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +57,61 @@\n    private Producer<byte[], byte[]> producer;\n    private final StreamThread.ProcessingMode processingMode;\n\n    private boolean transactionInFlight = false;"
   }
 ]

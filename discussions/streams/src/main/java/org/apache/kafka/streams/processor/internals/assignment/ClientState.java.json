@@ -31,5 +31,137 @@
     "commit" : "0a87bd5254155a9d60ba479371305ddaae99282d",
     "line" : 17,
     "diffHunk" : "@@ -1,1 +41,45 @@    }\n\n    private ClientState(final Set<TaskId> activeTasks,\n                        final Set<TaskId> standbyTasks,\n                        final Set<TaskId> assignedTasks,"
+  },
+  {
+    "id" : "bbbf6f03-f642-4007-aef6-86ad92c9b5c7",
+    "prId" : 8330,
+    "prUrl" : "https://github.com/apache/kafka/pull/8330#pullrequestreview-379860752",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "This is the fix, to return an accurate estimate instead of throwing an exception. I felt a warning was appropriate, given that this does indicate task corruption, or some other unexpected situation.",
+        "createdAt" : "2020-03-22T23:29:25Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "475fcc7b-f15c-40ad-a829-1aba90f28609",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Should we report the lag as the whole log in this case? Even if the log is truncated it is not guaranteed to throw the invalid offset exception and hence task-corruption logic would not necessarily triggered.",
+        "createdAt" : "2020-03-23T00:18:04Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "12fd4165-4415-44bc-9ca0-7a88862521ce",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "Do we know the exact reason, why the offset sum on the client is larger than the end offset sum on the broker? Before we change this invariant we should make sure we understand why it is not satisfied. Is it our code that breaks it or some external influences that we cannot control? ",
+        "createdAt" : "2020-03-23T10:21:24Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe956383-0adc-44bd-9341-fe3db65993d8",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "@guozhangwang if the end offset is less than the checkpointed offset, how is it possible to _not_ throw a `TaskCorruptedException`? I thought that was thrown after checking this exact condition?\r\nedit: what I mean is, do we think this is a possible state? If so, we should explicitly check for it and throw `TaskCorrupted` if detected. (If not, it's an illegal state and thus the check here is appropriate)",
+        "createdAt" : "2020-03-23T17:58:02Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0727e63f-eacc-439a-937d-ddc63e3e5c51",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "~~Also, @vvcephei , if a single task is corrupted and we do hit the `TaskCorruptedException` don't we close, wipe, and recreate stores of all tasks in the thread? Seems we would need to keep track of the thread ownership, and if we detect this condition then set the lag for all tasks owned by that thread to the `endOffset`~~\r\nedit: nevermind, I checked the `TaskCorruptedExcepion` PR, looks like we ended up just setting the invalid offsets to 0 instead of wiping everything. So, disregard this comment 🙂 ",
+        "createdAt" : "2020-03-23T18:09:52Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f1707111-2d11-42f6-81ca-eb1e26cf0410",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "A task is corrupted if the store changelogs in the checkpoint file don't match the store changelogs in the assigned task.\r\n\r\nWhen the member sends its lag estimate, it doesn't validate whether the task is valid or corrupted. It just reads the values out of the checkpoint files and sums them. I think this is fine, actually, but if we want to check for task corrupted at that time, we can add that in.\r\n\r\nI don't think it really changes how the assignor should behave, though. I think it's could easily happen that any past, present, or future versioned member reports a task sum that's beyond the end-offset sum of what the leader thinks the task contains. If that happens, it doesn't seem like it's a good idea to just crash the leader's thread. It would be better to handle it gracefully in some way.\r\n\r\nIt seems like assuming the task is corrupted, and therefore essentially that it isn't cached at all, is reasonable. This just de-prioritizes that member to get assigned the task, which is harmless.",
+        "createdAt" : "2020-03-23T18:46:56Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca6a7e84-62af-4280-8093-a0247f148bf9",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Whoops, edited my previous comment before refreshing & seeing your response. Makes sense, although I still believe we should be checking for this and throwing `TaskCorrupted` if we detect this case (in the owning StreamThread, not in the leader during assignment)",
+        "createdAt" : "2020-03-23T18:57:52Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a23007a-77c8-44f2-8fbe-0041e6d4e043",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "> I think it's could easily happen that any past, present, or future versioned member reports a task sum that's beyond the end-offset sum of what the leader thinks the task contains.\r\n\r\nIf the corruption comes from our code, we should throw. The leader fetches the end offset shortly before that code, so they are most probably up-to-date. If the corruption is caused by failure we should handle it gracefully.",
+        "createdAt" : "2020-03-23T19:15:40Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e776dd2-e5ac-4f2a-a790-fe286cf2cfab",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Let's think about cases where this could possibly go wrong. We know it must reach or already be in standby/restoring phase. I will use `logEndOffset` for the actual `endOffset` of the partition, and `endOffset` for the offset a standby/restoring task is allowed to restore up to.\r\n\r\nNewly-assigned: we read the invalid offset from the checkpoint, and determine the endOffset as either `logEndOffset` (normal) or `min(logEndOffset, LCO)` (optimized-source-changelog). In both cases, the `endOffset` <= `logEndOffset` so the invalid offset should also satisfy `offset` > `endOffset` which we can detect and throw as `TaskCorrupted`. \r\nAlready-assigned: in this case, we must have been the ones who wrote the invalid offset and/or have it in our `checkpointableOffsets` map. But we still need to fetch the `endOffset` to know when to stop, so the above applies here as well and we can detect the corruption. \r\n\r\nIn either case, I'd agree the leader should not throw and should just treat that task's offset sum as 0. But, we should make sure that on the other end we actually do detect this case and handle it the way the assignor expects.",
+        "createdAt" : "2020-03-23T19:59:46Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "03e63e14-73ac-4dc5-ad75-ef70f8b01f99",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@ableegoldman If the log is truncated and then immediately more records are appended to go beyond the original log-end-offset, in old versions we would not throw the exception.\r\n\r\nAfter some thoughts I think it makes sense to report the lag as the whole log.",
+        "createdAt" : "2020-03-23T21:35:29Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e2aed314-d63b-4f2c-a185-044f57b2badf",
+        "parentId" : "4246db04-0a61-4799-b64e-6f6f29a1acbb",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks for the conversation, all. I think where it nets out for me is that we don't really expect this to happen for non-bugged code, but there are a few edge cases where it could. Thus, logging a warning actually seems reasonable.\r\n\r\nSince the graceful handling option is still safe in any case, and since there do exist edge cases where this condition doesn't indicate a bug in Streams, we'll just keep the proposed graceful handling of reporting the lag as the whole log. Either the member in question won't get assigned the task (because it's de-prioritized wrt to other members who report valid positions), and it winds up cleaning up its state dir on its own, or it gets assigned the task, detects the corruption on its side, and recovers appropriately.",
+        "createdAt" : "2020-03-23T22:13:06Z",
+        "updatedAt" : "2020-03-23T22:24:38Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "06c17350dac09c8b4a35edeb1b3c8e29132dfa17",
+    "line" : 60,
+    "diffHunk" : "@@ -1,1 +205,209 @@                             \" The assignor will de-prioritize returning this task to this member in the hopes that\" +\n                             \" some other member may be able to re-use its state.\");\n                taskLagTotals.put(task, endOffsetSum);\n            } else if (offsetSum == Task.LATEST_OFFSET) {\n                taskLagTotals.put(task, Task.LATEST_OFFSET);"
   }
 ]
