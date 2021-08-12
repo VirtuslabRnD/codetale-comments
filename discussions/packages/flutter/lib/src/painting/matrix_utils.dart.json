@@ -42,5 +42,192 @@
     "commit" : "055c174e43c6b538743a697cd31ae5dbb0412950",
     "line" : 79,
     "diffHunk" : "@@ -1,1 +245,249 @@\n    // Essentially perspective * view * model.\n    return result;\n  }\n}"
+  },
+  {
+    "id" : "98424018-56e2-4e2e-9b46-e0c5fa28de00",
+    "prId" : 36396,
+    "prUrl" : "https://github.com/flutter/flutter/pull/36396#pullrequestreview-269478587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "parentId" : null,
+        "authorId" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "body" : "Let's move `rw` above `rx`, and rewrite it to:\r\n\r\n```dart\r\nfinal double rw = storage[15] + storage[3] * x + storage[7] * y;\r\n```\r\n\r\nThe goal is to read `storage[15]` first. This way the compiler can do the range check once and then not do any extra range checks. When you read from `Float64List` using increasing array index, each access has to be range checked.",
+        "createdAt" : "2019-07-19T20:58:25Z",
+        "updatedAt" : "2019-07-19T21:04:56Z",
+        "lastEditedBy" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c1479965-83b5-4bdc-be96-191f2ebca0be",
+        "parentId" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "OK, that explains some of the backwards code I saw in the vector_math package.\r\n\r\n(I'm used to Java which would have handled this differently.)",
+        "createdAt" : "2019-07-22T22:53:55Z",
+        "updatedAt" : "2019-07-22T22:53:55Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41b0656a-7cdf-4ffb-a98b-17a5b6896c19",
+        "parentId" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "I'm not sure this makes sense, but I implemented both of these \"range check\" proposals and they slowed it down on both of my test devices.  I got the following results:\r\n\r\nMoto E2:\r\n```\r\nI/flutter ( 5449): MatrixUtils.transformRectPerspective: 1038.7 ns per iteration\r\nI/flutter ( 5449): MatrixUtils.transformRectAffine: 663.2 ns per iteration\r\nI/flutter ( 5449): MatrixUtils.transformPointPerspective: 514.4 ns per iteration\r\nI/flutter ( 5449): MatrixUtils.transformPointAffine: 489.8 ns per iteration\r\n```\r\n\r\nSamsung Note 9:\r\n```\r\nI/flutter (14052): MatrixUtils.transformRectPerspective: 86.3 ns per iteration\r\nI/flutter (14052): MatrixUtils.transformRectAffine: 56.2 ns per iteration\r\nI/flutter (14052): MatrixUtils.transformPointPerspective: 44.1 ns per iteration\r\nI/flutter (14052): MatrixUtils.transformPointAffine: 41.6 ns per iteration\r\n```\r\n\r\nI ran it multiple times to see if they were flukes, but they never were as fast as the runs I did on the last commit. :(",
+        "createdAt" : "2019-07-22T23:24:37Z",
+        "updatedAt" : "2019-07-22T23:24:37Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8270c9eb-2889-4c23-addb-99ea875e86ab",
+        "parentId" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "To be specific, here is the actual change I made to put a reference to storage[15] first in both methods:\r\n\r\n```\r\ndiff --git a/packages/flutter/lib/src/painting/matrix_utils.dart b/packages/flutter/lib/src/painting/matrix_utils.dart\r\nindex c6da1c550..55b5ab742 100644\r\n--- a/packages/flutter/lib/src/painting/matrix_utils.dart\r\n+++ b/packages/flutter/lib/src/painting/matrix_utils.dart\r\n@@ -131,9 +131,9 @@ class MatrixUtils {\r\n     // dropping the resulting Z coordinate, and normalizing only\r\n     // if needed.\r\n \r\n-    final double rx = storage[0] * x + storage[4] * y + storage[12];\r\n-    final double ry = storage[1] * x + storage[5] * y + storage[13];\r\n-    final double rw = storage[3] * x + storage[7] * y + storage[15];\r\n+    final double rw = storage[15] + storage[3] * x + storage[7] * y;\r\n+    final double rx = storage[12] + storage[0] * x + storage[4] * y;\r\n+    final double ry = storage[13] + storage[1] * x + storage[5] * y;\r\n     if (rw == 1.0) {\r\n       return Offset(rx, ry);\r\n     } else {\r\n@@ -301,6 +301,10 @@ class MatrixUtils {\r\n     // optimized perspective = 12 mul + 39 add/sub/compare\r\n     // optimized affine      =  8 mul + 17 add/sub/compare\r\n \r\n+    final bool isAffine = storage[15] == 1.0 &&\r\n+                          storage[ 3] == 0.0 &&\r\n+                          storage[ 7] == 0.0;\r\n+\r\n     final double wx = storage[0] * w;\r\n     final double hx = storage[4] * h;\r\n     final double rx = storage[0] * x + storage[4] * y + storage[12];\r\n@@ -309,7 +313,7 @@ class MatrixUtils {\r\n     final double hy = storage[5] * h;\r\n     final double ry = storage[1] * x + storage[5] * y + storage[13];\r\n \r\n-    if (storage[3] == 0.0 && storage[7] == 0.0 && storage[15] == 1.0) {\r\n+    if (isAffine) {\r\n       double left  = rx;\r\n       double right = rx;\r\n       if (wx < 0) {\r\n```",
+        "createdAt" : "2019-07-23T00:58:16Z",
+        "updatedAt" : "2019-07-23T00:58:16Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3beaeaaa-23c6-4392-b1b6-ccf6839e8398",
+        "parentId" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "I tried this again with back to back runs on both devices with and without that patch and the benchmark modified to use a lot more runs and the timings I got with the proposed commit were faster than the timings I got with the additional patch in the previous comment in most cases. The cases where changing the order showed a win were isolated and slim. The cases where leaving it as submitted showed a win were more significant and more numerous and the averages were in favor of the fix as submitted.  This is really in the noise in the end so I'm going to leave it as I've already submitted it.\r\n\r\nhttps://docs.google.com/spreadsheets/d/1FhOgYeEfpY52iUQiUGvx3xWi4ROd2HuGyIvsy1lgqms/edit?usp=sharing",
+        "createdAt" : "2019-07-23T22:31:42Z",
+        "updatedAt" : "2019-07-23T22:31:42Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f274a498-b108-4c50-a557-e868af1393ff",
+        "parentId" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "authorId" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "body" : "/cc @mraleph, who could shed some light on what's going on behind the scenes. I didn't expect a huge improvement from eliminating range checks, but I certainly didn't expect a slow down 😕 \r\n\r\n**tl;dr** an optimization we tried is to read the last index out of a `Float64List` first so that the compiler only range checks once and lets smaller indices bypass the range check, i.e.:\r\n\r\n```\r\nfinal a = ...;\r\n// The following should be faster\r\na[15]; a[10]; a[5]; a[0];\r\n// than this\r\na[0]; a[5]; a[10]; a[15];\r\n```\r\n\r\nBecause in the first case if `a[15]` doesn't throw a range error, the following statements cannot possibly throw due to smaller indices, so a range check isn't necessary. But @flar is observing a _slow down_.",
+        "createdAt" : "2019-07-31T00:46:01Z",
+        "updatedAt" : "2019-07-31T00:46:01Z",
+        "lastEditedBy" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8b545c8b-2835-4ad0-9047-54d4b4c88c36",
+        "parentId" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "authorId" : "45727d35-317d-432d-b0c6-83fc042c0c8a",
+        "body" : "The slow down most likely originated from creating boolean and the dispatching on the boolean `if (isAffine) {` part of the change. Materialising boolean and dispatching on it later is more expensive than the chain of comparisons. \r\n\r\n... but I also discovered that we have a regression in our bounds check elimination - we no longer would eliminate bounds checks in a sequence like what @yjbanov written. We used to be able to do that, but that got broken - and we did not have tests for it. I filed https://github.com/dart-lang/sdk/issues/37687 to address that. \r\n\r\n[Benefits of eliminating bounds checks are pretty minimal though especially on the code where the performance is dominated by memory traffic and floating point math]",
+        "createdAt" : "2019-07-31T13:50:30Z",
+        "updatedAt" : "2019-07-31T13:50:30Z",
+        "lastEditedBy" : "45727d35-317d-432d-b0c6-83fc042c0c8a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e24b0af5-311c-4de3-bd9f-53e4227d3b82",
+        "parentId" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "A question on bounds check elimination...\r\n\r\nIf the code had `if (a.length < 16) return null;` towards the top (with the understanding that it would never happen so returning null is mostly vestigial), would the compiler be able to eliminate all bounds checking for constant integer indices < 16?\r\n\r\n(The idea behind adding a statement like that would be to enable the bounds check elimination without having to reorder the equations that follow which may be in a logical and more easily understood/maintainable order...)",
+        "createdAt" : "2019-07-31T22:16:01Z",
+        "updatedAt" : "2019-07-31T22:17:48Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b33939a4-a9cc-4687-bf37-a9cfc851f126",
+        "parentId" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "authorId" : "45727d35-317d-432d-b0c6-83fc042c0c8a",
+        "body" : "The answer to that question is complicated... Theoretically `if (a.length < 16) return null;` should have the same effect as just loading `a[15]`... And in JIT it would, but in practice it is broken right now too :-/  ",
+        "createdAt" : "2019-08-01T08:46:35Z",
+        "updatedAt" : "2019-08-01T08:46:35Z",
+        "lastEditedBy" : "45727d35-317d-432d-b0c6-83fc042c0c8a",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9fc0e11a-20b1-411e-8710-fe1d009cb662",
+        "parentId" : "994374ae-a925-4122-95ce-9dd0c56aa6d6",
+        "authorId" : "45727d35-317d-432d-b0c6-83fc042c0c8a",
+        "body" : "(`if (a.length < 16) throw 'impossible';` would be better because it does not polute type information about the return value).",
+        "createdAt" : "2019-08-01T08:47:46Z",
+        "updatedAt" : "2019-08-01T08:47:46Z",
+        "lastEditedBy" : "45727d35-317d-432d-b0c6-83fc042c0c8a",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2efaf51610d11a9f7f8ed1e7c9ad83e2fdcdf3e0",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +134,138 @@    final double rx = storage[0] * x + storage[4] * y + storage[12];\n    final double ry = storage[1] * x + storage[5] * y + storage[13];\n    final double rw = storage[3] * x + storage[7] * y + storage[15];\n    if (rw == 1.0) {\n      return Offset(rx, ry);"
+  },
+  {
+    "id" : "7df733b5-87d3-4ab1-8f02-3d5bc5eea47e",
+    "prId" : 36396,
+    "prUrl" : "https://github.com/flutter/flutter/pull/36396#pullrequestreview-265105633",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6c881f53-ed27-461a-89dc-9bcfb54364e7",
+        "parentId" : null,
+        "authorId" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "body" : "Same here. Let's read `storage[13]` first. Or better yet, we can put `storage[15]` into a variable that's initialized first and use it in the expressions below.",
+        "createdAt" : "2019-07-19T20:59:44Z",
+        "updatedAt" : "2019-07-19T21:04:56Z",
+        "lastEditedBy" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8497304c-c794-43fc-a8c2-48fc24b4f95f",
+        "parentId" : "6c881f53-ed27-461a-89dc-9bcfb54364e7",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "See above. Resolving this as a dup.",
+        "createdAt" : "2019-07-22T23:24:50Z",
+        "updatedAt" : "2019-07-22T23:24:50Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2efaf51610d11a9f7f8ed1e7c9ad83e2fdcdf3e0",
+    "line" : 207,
+    "diffHunk" : "@@ -1,1 +308,312 @@    final double wy = storage[1] * w;\n    final double hy = storage[5] * h;\n    final double ry = storage[1] * x + storage[5] * y + storage[13];\n\n    if (storage[3] == 0.0 && storage[7] == 0.0 && storage[15] == 1.0) {"
+  },
+  {
+    "id" : "ef5e7959-7357-4b23-8b31-d8273f400305",
+    "prId" : 36396,
+    "prUrl" : "https://github.com/flutter/flutter/pull/36396#pullrequestreview-265099150",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3587012e-9742-413f-a561-fec58c31e41e",
+        "parentId" : null,
+        "authorId" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "body" : "I'd expect `math.min` to be inlined and intrisified, but this should work too.",
+        "createdAt" : "2019-07-19T21:03:46Z",
+        "updatedAt" : "2019-07-19T21:04:56Z",
+        "lastEditedBy" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bcab35b3-f3e7-457b-8306-16f6bb845b49",
+        "parentId" : "3587012e-9742-413f-a561-fec58c31e41e",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "I got a minor improvement out of this. It wouldn't cost a lot to remove it if it looks confusing. It would be nice if the Dart math package provided min3 and min4 for us.\r\n\r\nA tree of comparisons was actually the most optimal, but was way too wordy for being just a helper function for this more complicated operation in a package that wasn't designed to be a general math facility. This was the best blend of being simple code and almost as fast as the completely unrolled version.\r\n\r\nI'll also point out that I optimized this at a time when the non-perspective case was using it, but then I later realized that there was an even simpler way to construct the bounds of a delta parallelogram and now only the rarer and longer perspective case uses this code.",
+        "createdAt" : "2019-07-22T23:00:36Z",
+        "updatedAt" : "2019-07-22T23:00:37Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2efaf51610d11a9f7f8ed1e7c9ad83e2fdcdf3e0",
+    "line" : 264,
+    "diffHunk" : "@@ -1,1 +364,368 @@    final double e = (a < b) ? a : b;\n    final double f = (c < d) ? c : d;\n    return (e < f) ? e : f;\n  }\n  static double _max4(double a, double b, double c, double d) {"
   }
 ]
