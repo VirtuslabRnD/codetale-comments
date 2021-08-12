@@ -1912,5 +1912,115 @@
     "commit" : "548b602633c3665c328f870251ee7672041b0af1",
     "line" : 206,
     "diffHunk" : "@@ -1,1 +2483,2487 @@  }\n\n  // TODO(ianh): The intrinsic dimensions of this box are wrong.\n\n  @override"
+  },
+  {
+    "id" : "836d0e5c-f542-4d56-83fa-4827ff29671f",
+    "prId" : 76742,
+    "prUrl" : "https://github.com/flutter/flutter/pull/76742#pullrequestreview-630534825",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c90bfd0f-6f1c-44b0-9d11-829b14041c41",
+        "parentId" : null,
+        "authorId" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "body" : "I don't believe you need the `!` because `as ImageFilterLayer` already asserts a non-null type.",
+        "createdAt" : "2021-03-11T22:53:31Z",
+        "updatedAt" : "2021-05-05T07:20:48Z",
+        "lastEditedBy" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ffd111a8-6d47-45a0-a7cf-d665d98b20a5",
+        "parentId" : "c90bfd0f-6f1c-44b0-9d11-829b14041c41",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "It does assert it, but you get a warning with no `!` so I added it.",
+        "createdAt" : "2021-04-07T20:27:16Z",
+        "updatedAt" : "2021-05-05T07:20:48Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "09aeb23567204f3e676617910019187d937f1667",
+    "line" : 82,
+    "diffHunk" : "@@ -1,1 +2413,2417 @@        );\n        if (layer is ImageFilterLayer) {\n          final ImageFilterLayer filterLayer = layer! as ImageFilterLayer;\n          filterLayer.imageFilter = filter;\n        } else {"
+  },
+  {
+    "id" : "ed7cc8e4-c5ec-47ab-a0bd-9652ac3ccff2",
+    "prId" : 76742,
+    "prUrl" : "https://github.com/flutter/flutter/pull/76742#pullrequestreview-647420928",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7f5dbbed-1ef4-4e6b-82c6-3b0abfeaaa17",
+        "parentId" : null,
+        "authorId" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "body" : "If this layer it going to unconditionally push a layer, then we need to make sure that we set `needsCompositing` to true, or that `alwaysNeedsCompositing` is set to true.",
+        "createdAt" : "2021-03-11T22:55:42Z",
+        "updatedAt" : "2021-05-05T07:20:48Z",
+        "lastEditedBy" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f3d6884-877e-4944-9e85-d954d3f85899",
+        "parentId" : "7f5dbbed-1ef4-4e6b-82c6-3b0abfeaaa17",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "Adding/removing a child (via adoptChild) will request an update to the compositing bits. It looks like the update method here will look for a child that requires compositing.\r\n\r\nWhat I think may be missing (and it was missing before my modifications) is that if the transform evaluates to a translation then we avoid a layer and that won't be reflected in the value of `needsCompositing` for this RO or its parents. That issue is not changed here.",
+        "createdAt" : "2021-04-07T20:32:09Z",
+        "updatedAt" : "2021-05-05T07:20:48Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "16b98867-e62f-41f6-82d8-d04be395c55d",
+        "parentId" : "7f5dbbed-1ef4-4e6b-82c6-3b0abfeaaa17",
+        "authorId" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "body" : "I'm not sure that's the case. Previously we had:\r\n\r\n```dart\r\nif (childOffset == null) {\r\n  layer = context.pushTransform(needsCompositing, ..., oldLayer: layer);\r\n} else {\r\n  super.paint(context, offset + childOffset);\r\n  layer = null;\r\n}\r\n```\r\n\r\nThis says that if it's not a simple translation (the `if` branch), then `context.pushTransform` will either push a layer or inject a canvas transform, depending on the value of `needsCompositing`. If it's a simple transform (the `else` branch), we don't push layers. So there are 3 possible outcomes:\r\n\r\n1. Not simple translation, needs compositing: push layer\r\n2. Not simple translation, needs not compositing: no layer\r\n3. Simple translation: delegate to children\r\n\r\nThere's no situation when `needsCompositing == false` and we push a layer.\r\n\r\nAfter this PR, we have the following situation: `filterQuality != null`, `needsCompositing == false` => push a layer.\r\n\r\nIt's OK to push a layer when none of the descendants need compositing, but we still need to set the render object's _own_ `needsCompositing` to `true`. Otherwise, its ancestors will do wrong things.",
+        "createdAt" : "2021-04-21T22:15:35Z",
+        "updatedAt" : "2021-05-05T07:20:48Z",
+        "lastEditedBy" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dacf5dbc-db08-41dd-a5ab-847f32b4dfb4",
+        "parentId" : "7f5dbbed-1ef4-4e6b-82c6-3b0abfeaaa17",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "I see. Basically it would only push a transform layer if a child was already planning to composite (push a layer?). So, it was impartial wrt whether it was going to push a layer itself - if no children were planning to, then it didn't. Thus, this layer used to not have any additional requirements as to the compositing bits other than the \"standard\" pass through from the children.\r\n\r\nNow that FQ means we will be pushing a layer, that needs to factor in...",
+        "createdAt" : "2021-04-27T00:18:39Z",
+        "updatedAt" : "2021-05-05T07:20:48Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "69f0ff64-19c9-4e20-96d6-ce4b879e0fc4",
+        "parentId" : "7f5dbbed-1ef4-4e6b-82c6-3b0abfeaaa17",
+        "authorId" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "body" : "I have now updated the alwaysNeedsCompositing handling to match what I think you were saying here.",
+        "createdAt" : "2021-04-27T23:01:02Z",
+        "updatedAt" : "2021-05-05T07:20:48Z",
+        "lastEditedBy" : "56d84530-1d58-4dbf-af8a-6916988ae943",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d61ac602-0c4a-47da-84d7-099da5a67ba5",
+        "parentId" : "7f5dbbed-1ef4-4e6b-82c6-3b0abfeaaa17",
+        "authorId" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "body" : "Yep, the latest iteration looks correct.",
+        "createdAt" : "2021-04-28T19:04:35Z",
+        "updatedAt" : "2021-05-05T07:20:48Z",
+        "lastEditedBy" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "09aeb23567204f3e676617910019187d937f1667",
+    "line" : 87,
+    "diffHunk" : "@@ -1,1 +2418,2422 @@          layer = ImageFilterLayer(imageFilter: filter);\n        }\n        context.pushLayer(layer!, super.paint, offset);\n      }\n    }"
   }
 ]
