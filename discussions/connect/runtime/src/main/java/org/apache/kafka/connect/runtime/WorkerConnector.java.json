@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "19cb7834-fc08-486f-aca1-e6725488a10d",
+    "prId" : 8069,
+    "prUrl" : "https://github.com/apache/kafka/pull/8069#pullrequestreview-428293231",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a9dd2f1b-22b4-444c-b1c2-93066bbcbac6",
+        "parentId" : null,
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "same question here and below about locking around a `volatile` variable. Is this the only reason to lock here? One would think so based on previous usage. ",
+        "createdAt" : "2020-04-28T05:51:25Z",
+        "updatedAt" : "2020-06-11T04:43:53Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "28120519-df71-4c6f-b2a7-e3163569379d",
+        "parentId" : "a9dd2f1b-22b4-444c-b1c2-93066bbcbac6",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "The locking here is to ensure that, upon being cancelled, the very last status update that this connector makes is to set its state to `UNASSIGNED`.\r\n\r\nThere's a potential race if its status is scheduled to be updated to, e.g., `PAUSED` and the check for `cancelled` goes through because it isn't set to `true` yet, then the task gets cancelled on another thread and its status gets set to `UNASSIGNED`, then the original thread proceeds with execution and sets the status to `PAUSED`.",
+        "createdAt" : "2020-05-04T17:14:24Z",
+        "updatedAt" : "2020-06-11T04:43:53Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8c737fa-84ee-44d6-9317-c4872bb7f49d",
+        "parentId" : "a9dd2f1b-22b4-444c-b1c2-93066bbcbac6",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "I don't think locking buys you anything w/r/t to that. The producer#send in the status backing store is asynchronous. So what would describe above can happen anyways, regardless of whether you lock this object. \r\n\r\nOf course, if it wasn't asynchronous things would be much worse. A bottleneck would be created by the lock, waiting for the `send` to finish in every locked block, so that's not an option. Wdyt? \r\nThat's what I see at the high level without spending to much time on it, but see if you can check this assumption and we can return to this question. ",
+        "createdAt" : "2020-05-06T16:19:07Z",
+        "updatedAt" : "2020-06-11T04:43:53Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a9d7733d-f42a-4e81-8b64-d2432c9f60c7",
+        "parentId" : "a9dd2f1b-22b4-444c-b1c2-93066bbcbac6",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "AFAICT the underlying `KafkaBasedLog` used for the status store does provide ordering guarantees: https://github.com/apache/kafka/blob/1d438033f7f4d7cbdac34e1b57d97b5a647ae4de/connect/runtime/src/main/java/org/apache/kafka/connect/util/KafkaBasedLog.java#L242-L249",
+        "createdAt" : "2020-05-06T16:36:08Z",
+        "updatedAt" : "2020-06-11T04:43:53Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f152fa0-0f81-4279-a21f-b216ba48c8eb",
+        "parentId" : "a9dd2f1b-22b4-444c-b1c2-93066bbcbac6",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "Thanks for checking the underlying implementation @C0urante . \r\n\r\nThat takes us to my earlier concern about this operation potentially blocking for too long to be in a `synchronized` block. And the potential of blocking does not have to do with acknowledging that the record was written only. The producer call has a metadata update call too. \r\n\r\nGoing over the uses of `KafkaBasedLog` in Connect, I didn't find an example where we have `KafkaBasedLog#send` running  in mutual exclusion. Contrary, similar concerns are probably the reason why we call `OffsetStorageWriter#doFlush` outside the synchronized block in `WorkerSourceTask`. \r\n\r\nI think we might be able to live with a rare race condition as the one you described, in order to avoid introducing unintended side-effects due to locking. ",
+        "createdAt" : "2020-06-10T00:44:48Z",
+        "updatedAt" : "2020-06-11T04:43:53Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa4ec970-49ed-4d59-b5e1-58ff7fc33c41",
+        "parentId" : "a9dd2f1b-22b4-444c-b1c2-93066bbcbac6",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "I'd rather not knowingly allow a race here if possible, and I think it should be fine to synchronize here, but if we do go that route I can file a pre-emptive jira ticket and link to it in the source code so that anyone who does run into it has at least some chance of understanding what's going on (and possibly refactoring the framework to improve things).\r\n\r\nThe framework does synchronize around all status updates for tasks, as you can see in the `WorkerTask` class:\r\n\r\n`TaskStatus.Listener::onStartup`: https://github.com/apache/kafka/blob/0f68dc7a640b26a8edea154ea4ea2b6d93b5104b/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/WorkerTask.java#L172-L182\r\n\r\n`TaskStatus.Listener::onShutdown`: https://github.com/apache/kafka/blob/0f68dc7a640b26a8edea154ea4ea2b6d93b5104b/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/WorkerTask.java#L195-L202\r\n\r\n`TaskStatus.Listener::onFailure`: https://github.com/apache/kafka/blob/0f68dc7a640b26a8edea154ea4ea2b6d93b5104b/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/WorkerTask.java#L206-L213\r\n\r\n`TaskStatus.Listener::onPause`: https://github.com/apache/kafka/blob/0f68dc7a640b26a8edea154ea4ea2b6d93b5104b/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/WorkerTask.java#L216-L218\r\n\r\n`TaskStatus.Listener::onResume`: https://github.com/apache/kafka/blob/0f68dc7a640b26a8edea154ea4ea2b6d93b5104b/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/WorkerTask.java#L220-L222",
+        "createdAt" : "2020-06-10T17:12:09Z",
+        "updatedAt" : "2020-06-11T04:43:53Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d851d120-b691-49af-ab67-66e9e7602ee1",
+        "parentId" : "a9dd2f1b-22b4-444c-b1c2-93066bbcbac6",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "Yeah, good point. I've been on the fence here, because the calls might block one way or the other anyway. Good thing is that the locking is per connector instance. \r\n\r\nLet's keep the synchronization. We can always return with some performance benchmarking on the topic and revisit locking for connectors _and_ tasks if we can afford to do that.\r\n\r\nBut let's follow the `synchronized` method style (e.g. `onPause`, `onResume` in your examples above) if the synchronization applies to the whole method. ",
+        "createdAt" : "2020-06-10T17:37:00Z",
+        "updatedAt" : "2020-06-11T04:43:53Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8932b8e2-5dc7-429c-ad38-7fcf468cba7e",
+        "parentId" : "a9dd2f1b-22b4-444c-b1c2-93066bbcbac6",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "Sounds good, will address the synchronization style in the next commit.",
+        "createdAt" : "2020-06-10T17:49:17Z",
+        "updatedAt" : "2020-06-11T04:43:54Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bfb1bc04832b342e614e891d6da5af1f8ebe30a5",
+    "line" : 312,
+    "diffHunk" : "@@ -1,1 +421,425 @@        public void onStartup(String connector) {\n            state = AbstractStatus.State.RUNNING;\n            synchronized (this) {\n                if (!cancelled) {\n                    delegate.onStartup(connector);"
+  }
+]

@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "ee1db198-c36c-4919-bff4-7ef459c5ba5a",
+    "prId" : 8054,
+    "prUrl" : "https://github.com/apache/kafka/pull/8054#pullrequestreview-356975688",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f2ef3835-2269-41a4-971f-6fb368791691",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "We're ignoring the passed-in topic so that we can use the same pseudo-topic to (de)serialize the primary key as we do elsewhere. Also because the values in the passed-in topic is _not_ the result of `primaryKeySerializer.serialize(...,data.getPrimaryKey())`, but is rather a bigger data structure that contains that data. So, we can avoid misleading users for whom a schema registry would claim that the subscription topic has a certain schema when in fact it doesn't. Now, it would tell them that the PK pseudo-topic has that schema, which at least can't be inconsistent with data they might observe in Kafka.",
+        "createdAt" : "2020-02-07T21:56:27Z",
+        "updatedAt" : "2020-02-11T20:47:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3ebcc7e2-20ea-4082-bc62-7e22b68ee29b",
+        "parentId" : "f2ef3835-2269-41a4-971f-6fb368791691",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "qq For my own education: what would be the topic name for this subscription topic? For my understanding that topic name is not the same as `primaryKeySerializationPseudoTopic`, but I cannot remember why we decided to do so.",
+        "createdAt" : "2020-02-11T17:56:47Z",
+        "updatedAt" : "2020-02-11T20:47:22Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6001ea8d-9ca1-40fb-bbda-392a16968af6",
+        "parentId" : "f2ef3835-2269-41a4-971f-6fb368791691",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Hey @guozhangwang , the actual subscription topic name is defined here: https://github.com/apache/kafka/pull/8054/files#diff-05872eec0e2733128854406f87979013R959\r\n```\r\nfinal String subscriptionTopicName = renamed.suffixWithOrElseGet(\"-subscription-registration\", builder, SUBSCRIPTION_REGISTRATION) + TOPIC_SUFFIX;\r\n```\r\n\r\nThe reason we're not using that topic name for the \"primary key\" (which is actually part of the _value_ here) is what I explained above. I see that my statement wasn't super clear, though...\r\n1. we're already using that pseudo-topic for the primary key in the CombinedKeySchema, so we can avoid proliferating schemas we're registering\r\n2. using the subscription topic would mean that we register the primary key as the \"value serde\" of the subscription topic, but the values in the topic are actually SubscriptionWrappers, not primary keys. So it would actually be misleading to use the subscription topic for this purpose. At least for the pseudo-topic, it doesn't actually exist in the brokers, so it's not possible to have an inconsistency between the registered serde and the log data.\r\n\r\nThe actual data in the subscription topic is like:\r\n```\r\nkey: foreign key; value: subscription-wrapper (contains the primary-key)\r\n```",
+        "createdAt" : "2020-02-11T20:36:46Z",
+        "updatedAt" : "2020-02-11T20:47:22Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0e0feed4c2e6d2bce99962d332fa5516970aad69",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +69,73 @@\n        @Override\n        public byte[] serialize(final String ignored, final SubscriptionWrapper<K> data) {\n            //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}\n"
+  }
+]
