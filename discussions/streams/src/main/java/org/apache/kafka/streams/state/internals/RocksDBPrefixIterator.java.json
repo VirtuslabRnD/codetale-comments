@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "de10b6a0-f5f5-4c83-ba53-596d65e70ae6",
+    "prId" : 5527,
+    "prUrl" : "https://github.com/apache/kafka/pull/5527#pullrequestreview-255182565",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e2c7c80e-4d64-437c-aa9c-66ae45b5770a",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Just a thought, does Rocks return in sorted order? If so, we can probably\r\ndo better by comparing backwards from the end of the prefix.\r\nThen again, that might screw up cache locality, not sure...\r\n",
+        "createdAt" : "2019-06-20T22:15:38Z",
+        "updatedAt" : "2019-10-02T17:56:32Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0be8ab40-6b8a-4e17-872b-fb9cf03d0547",
+        "parentId" : "e2c7c80e-4d64-437c-aa9c-66ae45b5770a",
+        "authorId" : "d8d11f3d-4fbd-4882-a206-bfece798cdcd",
+        "body" : "According to their wiki ( https://github.com/facebook/rocksdb/wiki/Basic-Operations ) it does provide a sorted iterator. The range function operates on this principle too, which confirms this to be the case in the code.\r\n\r\nWe have to validate the entire prefix for each event either way, forwards or backwards. As soon as we run into an event which does not have the full prefix, we terminate and hasNext() will from then on return false.\r\n\r\nI don't think there's anything in terms of efficiency to be done here, but let me know if I misunderstood.",
+        "createdAt" : "2019-06-27T12:10:41Z",
+        "updatedAt" : "2019-10-02T17:56:32Z",
+        "lastEditedBy" : "d8d11f3d-4fbd-4882-a206-bfece798cdcd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6e1b6a1a41c8e05ff009ad988b705baeb42800ad",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +41,45 @@        }\n\n        final byte[] rawNextKey = super.peekNextKey().get();\n        for (int i = 0; i < rawPrefix.length; i++) {\n            if (i == rawNextKey.length) {"
+  },
+  {
+    "id" : "25444318-2764-4f4e-a31b-c5797508971d",
+    "prId" : 5527,
+    "prUrl" : "https://github.com/apache/kafka/pull/5527#pullrequestreview-253584014",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cc07f1dc-19eb-41fb-ae81-11ccb0e6d455",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Huh, neat...\r\nAs I read it, the serial format for our CombinedKeys is [FK length][FK bytes][PK bytes]\r\nThis means that all the records with same-length foreign keys are sorted together, a prefix scan won't\r\nsuffer any ambiguity between FK and prefixes of the PK.\r\nThis seems to avoid a problem we face in the session window store. Putting it in terms of this key\r\nIf we have two records with r1.FK=aa r1.PK=b and r2.FK=a and r2.PK=ab,\r\nthey are both serialized as aab, and in particular,\r\na prefix scan would get pseudomatches that are out of the range and\r\nhave to handle it by decomposing the serial form and then double-checking the prefix.\r\nBut since you prefix by the size of the FK, there's no ambiguity, even if the FKs are variably sized!\r\n\r\nBut it is worth noting that this depends on the exact serialization format.\r\n",
+        "createdAt" : "2019-06-20T22:16:47Z",
+        "updatedAt" : "2019-10-02T17:56:32Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "82785112-2fd0-4d69-88a4-07e85612c72f",
+        "parentId" : "cc07f1dc-19eb-41fb-ae81-11ccb0e6d455",
+        "authorId" : "d8d11f3d-4fbd-4882-a206-bfece798cdcd",
+        "body" : "Yep, this is the intended design. It definitely is sensitive to how the serialization is handled, but I think that it's okay as it currently stands.",
+        "createdAt" : "2019-06-24T18:29:39Z",
+        "updatedAt" : "2019-10-02T17:56:32Z",
+        "lastEditedBy" : "d8d11f3d-4fbd-4882-a206-bfece798cdcd",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6e1b6a1a41c8e05ff009ad988b705baeb42800ad",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +50,54 @@            }\n        }\n        return true;\n    }\n}"
+  }
+]
