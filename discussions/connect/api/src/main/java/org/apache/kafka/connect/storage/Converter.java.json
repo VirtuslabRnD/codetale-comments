@@ -1,0 +1,101 @@
+[
+  {
+    "id" : "a94a8f57-908f-47dc-b080-1907dc5296f0",
+    "prId" : 6362,
+    "prUrl" : "https://github.com/apache/kafka/pull/6362#pullrequestreview-210839125",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "add0bc79-bbd5-44f3-8d0b-737bd2b9ae32",
+        "parentId" : null,
+        "authorId" : "d874be1c-ef19-48b0-9fa7-2f43a8f96d37",
+        "body" : "Headers aren't encoded in the message payload, so why would this method serialize them into a byte array?",
+        "createdAt" : "2019-03-04T20:57:22Z",
+        "updatedAt" : "2019-09-20T21:40:53Z",
+        "lastEditedBy" : "d874be1c-ef19-48b0-9fa7-2f43a8f96d37",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "509f5c54-7fe0-4931-8146-90a3c0ec95bd",
+        "parentId" : "add0bc79-bbd5-44f3-8d0b-737bd2b9ae32",
+        "authorId" : "e13c4d2f-dcc5-4ca4-9ec8-4bbea21537ea",
+        "body" : "They aren't, but they could be needed as metadata for serializing the payload into a byte array.",
+        "createdAt" : "2019-03-04T21:21:50Z",
+        "updatedAt" : "2019-09-20T21:40:53Z",
+        "lastEditedBy" : "e13c4d2f-dcc5-4ca4-9ec8-4bbea21537ea",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22ecf38f-461d-4184-9d56-b5bd214563e0",
+        "parentId" : "add0bc79-bbd5-44f3-8d0b-737bd2b9ae32",
+        "authorId" : "f4cc0a00-0225-4972-8b58-0b97edf58337",
+        "body" : "http headers are an example of how headers could affect this implementation (whether I think it is a good idea or not :)). http headers could indicate `Content-Type` and `Content-Encoding` headers, which would affect how the message body is decoded. extremely simple version of this would be if you decoded as ASCII, UTF-8, or something else.\r\n\r\nthere are compatibility concerns, and I think discussion as to the best interfaces to dealing with the successive translations of data in a multilayered messages (similar to http, and kafka w/ headers) is worthwhile. for the most part, kafka has treated each field independently but with more layers in the message, this is likely unrealistic.\r\n\r\ni think careful evolution of these interfaces would be valuable. I think it probably *also* makes sense to think of this holistically -- core, connect, streams -- though I recognize the challenge and barrier to doing that. In particular, passing an entire `Record` object seems like a more uniform approach and one which requires less future evolution (e.g. how many `fromConnectData()` methods will we need?). However, I also recognize the challenge in unifying this type (across consumers, producers, connect source, connect sink, streams input/output).\r\n\r\nThat said, I think it is worth evaluating before allowing the set of APIs to sprawl as it might start to do here.",
+        "createdAt" : "2019-03-05T06:40:29Z",
+        "updatedAt" : "2019-09-20T21:40:53Z",
+        "lastEditedBy" : "f4cc0a00-0225-4972-8b58-0b97edf58337",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "28fcc777-e450-42d5-9831-a280d791cd80",
+        "parentId" : "add0bc79-bbd5-44f3-8d0b-737bd2b9ae32",
+        "authorId" : "e13c4d2f-dcc5-4ca4-9ec8-4bbea21537ea",
+        "body" : "Holistic approach sounds like a good option, however it's a bigger and riskier change. My motivation was existing [Serializer](https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/serialization/Serializer.java#L61-L63) and [Deserializer](https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/serialization/Deserializer.java) interfaces, so I'm going to target my KIP to bring Converter to the same level. ",
+        "createdAt" : "2019-03-05T18:23:23Z",
+        "updatedAt" : "2019-09-20T21:40:53Z",
+        "lastEditedBy" : "e13c4d2f-dcc5-4ca4-9ec8-4bbea21537ea",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4b91ff4e732275778c44e2649f7c7da5849b6937",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +59,63 @@     * @return the serialized value\n     */\n    default byte[] fromConnectData(String topic, Headers headers, Schema schema, Object value) {\n        return fromConnectData(topic, schema, value);\n    }"
+  },
+  {
+    "id" : "f39a35c8-2be7-4e0b-a9d9-02ed893b4ab1",
+    "prId" : 6362,
+    "prUrl" : "https://github.com/apache/kafka/pull/6362#pullrequestreview-210833502",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "61580325-6e39-4784-b99c-daf102813bdd",
+        "parentId" : null,
+        "authorId" : "d874be1c-ef19-48b0-9fa7-2f43a8f96d37",
+        "body" : "SchemaAndValue doesn't include headers, so why would this method try to stuff them in there?",
+        "createdAt" : "2019-03-04T20:59:15Z",
+        "updatedAt" : "2019-09-20T21:40:53Z",
+        "lastEditedBy" : "d874be1c-ef19-48b0-9fa7-2f43a8f96d37",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f256020c-110c-4f69-afc6-33dd81700611",
+        "parentId" : "61580325-6e39-4784-b99c-daf102813bdd",
+        "authorId" : "e13c4d2f-dcc5-4ca4-9ec8-4bbea21537ea",
+        "body" : "Correct, but what if I need to get access to the headers in order to transform a raw Kafka message payload to a SchemaAndValue object?\r\n\r\nAn example here can be specifying a Schema Id as a header and using Schema Registry to get it.",
+        "createdAt" : "2019-03-04T21:20:19Z",
+        "updatedAt" : "2019-09-20T21:40:53Z",
+        "lastEditedBy" : "e13c4d2f-dcc5-4ca4-9ec8-4bbea21537ea",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "44a9ca59-ba4b-4c08-9925-30f7362dc323",
+        "parentId" : "61580325-6e39-4784-b99c-daf102813bdd",
+        "authorId" : "d874be1c-ef19-48b0-9fa7-2f43a8f96d37",
+        "body" : "I see. That makes sense, but perhaps we should pass the entire record instead of a growing list of parameters that are usually not used.",
+        "createdAt" : "2019-03-05T18:11:02Z",
+        "updatedAt" : "2019-09-20T21:40:53Z",
+        "lastEditedBy" : "d874be1c-ef19-48b0-9fa7-2f43a8f96d37",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4b91ff4e732275778c44e2649f7c7da5849b6937",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +83,87 @@     * @return an object containing the {@link Schema} and the converted value\n     */\n    default SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {\n        return toConnectData(topic, value);\n    }"
+  }
+]

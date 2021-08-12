@@ -108,5 +108,71 @@
     "commit" : "32105c2d2a50fa9b3e10e1bacfd544ee1f143433",
     "line" : 77,
     "diffHunk" : "@@ -1,1 +303,307 @@            return KeyValue.pair(\n                serdes.keyFrom(keyValue.key.get()),\n                outerValue(keyValue.value));\n        }\n"
+  },
+  {
+    "id" : "5e978ed7-5000-403b-b51a-df816e849cc4",
+    "prId" : 6331,
+    "prUrl" : "https://github.com/apache/kafka/pull/6331#pullrequestreview-208843548",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a0f2b212-8044-42ab-aa13-6e2805d1729c",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "We know the wrapping order, thus, this is safe. Intercepting the callback below to deserialize.",
+        "createdAt" : "2019-02-27T02:23:33Z",
+        "updatedAt" : "2019-02-28T00:49:23Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4f52f66-5184-49ce-bac1-4b55e969a696",
+        "parentId" : "a0f2b212-8044-42ab-aa13-6e2805d1729c",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Meta: I like this approach slightly more than the previous one, and wondering if we can sort-of combine these two to make the logic more readable (and also the metered store lost the topic name info when calling serde which may not be acceptable):\r\n\r\n1) Metered store do not need to inherited CachedStateStore, instead inherit a SerdeStateStore interface which just expose the getter of the serdes (note we cannot use `serdes` since it is only constructed at initialization, we have to use `keySerde` and `valueSerde` instead`).\r\n2) In TupleForwarder we get both the SerdeStateStore, and check if its wrapped store is a CachedStateStore, if yes call `cachedStore.setFlushListener(... listener.apply(serdeStore.keySerde().deser ...))` -- i.e. basically the code below.\r\n\r\nWDYT?",
+        "createdAt" : "2019-02-27T17:35:48Z",
+        "updatedAt" : "2019-02-28T00:49:23Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4aba2d4d-6234-4af9-b5ef-3a50dcb96471",
+        "parentId" : "a0f2b212-8044-42ab-aa13-6e2805d1729c",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> and also the metered store lost the topic name info when calling serde which may not be acceptable\r\n\r\nFixed this part. Compare my other comments.\r\n\r\nAbout your proposal: that is certainly possible, it's similar (or even the same?) to the original PR introducing `TypedStore` (your suggested `SerdeStateStore` is the same thing). So I am wondering what the difference to the original proposal would be -- seems you suggest to go back to the original one.",
+        "createdAt" : "2019-02-27T17:56:31Z",
+        "updatedAt" : "2019-02-28T00:49:23Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b4a506f2-5458-4a18-a8d2-203800069538",
+        "parentId" : "a0f2b212-8044-42ab-aa13-6e2805d1729c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "At a high level, our store ecosystem looks like an onion. On the outside, we have a <K,V> store, and on the inside, we have a <bytes,bytes> store. All the layers in between have different responsibilities, like changelogging, caching, add metrics, etc.\r\n\r\nThe nice thing about this PR is that it gives us one clean layer that's responsible for the transition `<K,V> <=> <bytes, bytes>`. When we need to look at the de/serialization into/out-of the stores, we have exactly one place to look.\r\n\r\nThe prior code did mostly this, but to accommodate cache flushing in conjunction with the fact that the cache layer is below the transition from objects to bytes, we had to poke a hole in the onion and tell the caching layer (a bytes layer) how to deserialize. So, then there were two layers that independently know how to de/serialize, and the onion had a hole in it.\r\n\r\nThis idea to move the serialization out to the TupleForwarder is basically the same, but in the opposite direction. Again, there are two components that need to perform serialization (the serialization layer and the tuple forwarder), and again, we need to poke a hole in the onion so that the tuple forwarder can communicate directly with an inner layer.\r\n\r\nIt's not always practical to go for a \"pure\" design, but if readability is the goal, then it seems like we should try to avoid mixing layers, unwrapping layers, etc. as much as possible. To be fair, this is just my take on the situation.",
+        "createdAt" : "2019-02-27T20:57:02Z",
+        "updatedAt" : "2019-02-28T00:49:23Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3e29ad0e-f139-4c27-ba2f-23cf297bd4ea",
+        "parentId" : "a0f2b212-8044-42ab-aa13-6e2805d1729c",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I also think that using two nested `CacheFlushListener` is better instead of \"drilling\" whole into the APIs. So I prefer to stay with the current design.",
+        "createdAt" : "2019-02-28T00:48:39Z",
+        "updatedAt" : "2019-02-28T00:49:23Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5d95689529bd3b0aa046c37df59896930b9226bb",
+    "line" : 28,
+    "diffHunk" : "@@ -1,1 +123,127 @@                                    final boolean sendOldValues) {\n        final KeyValueStore<Bytes, byte[]> wrapped = wrapped();\n        if (wrapped instanceof CachedStateStore) {\n            return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(\n                (key, newValue, oldValue, timestamp) -> listener.apply("
   }
 ]

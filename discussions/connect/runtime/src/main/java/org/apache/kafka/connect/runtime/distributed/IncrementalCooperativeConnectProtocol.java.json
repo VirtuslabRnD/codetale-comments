@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "ae8218f0-a54d-4021-a4f8-cfc1ef7e0734",
+    "prId" : 6363,
+    "prUrl" : "https://github.com/apache/kafka/pull/6363#pullrequestreview-222511189",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8933a480-ec9a-47ec-ae86-27202e237e43",
+        "parentId" : null,
+        "authorId" : "f5ac54e5-ad95-49b9-b49a-3fd091e917ae",
+        "body" : "Why not return `ConnectAssignment.empty()`?  I found 2 callers to this method:  `IncrementalCooperativeConnectProtocol.derserializeMetadata` sends the result to the `ExtendedWorkerState` constructor, which replaces null with `ConnectAssignment.empty()`.  The other caller,  `WorkerCoordinator.onJoinComplete()`, tries to call `version()` and would get an NPE.",
+        "createdAt" : "2019-04-03T20:51:08Z",
+        "updatedAt" : "2019-05-17T01:31:30Z",
+        "lastEditedBy" : "f5ac54e5-ad95-49b9-b49a-3fd091e917ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4504263d-81f2-427d-ad9d-50abab5d940d",
+        "parentId" : "8933a480-ec9a-47ec-ae86-27202e237e43",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "see explanation above. This ties back to what we send over the wire. A `ConnectAssignment.empty` assignment is never sent over the wire (you'll always have the leader and the leader url fields for instance, even if you receive an empty assignment). ",
+        "createdAt" : "2019-04-16T00:01:33Z",
+        "updatedAt" : "2019-05-17T01:31:30Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eb1853d8040f29948c1b9e54f95c0c2400d5b66e",
+    "line" : 230,
+    "diffHunk" : "@@ -1,1 +228,232 @@    public static ExtendedAssignment deserializeAssignment(ByteBuffer buffer) {\n        if (buffer == null) {\n            return null;\n        }\n        Struct header = CONNECT_PROTOCOL_HEADER_SCHEMA.read(buffer);"
+  },
+  {
+    "id" : "cdbb0822-4452-472e-941c-03a1d4903778",
+    "prId" : 6363,
+    "prUrl" : "https://github.com/apache/kafka/pull/6363#pullrequestreview-222511189",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "87f96e7a-f7d6-4f2d-b0d3-b4f25ebdfe53",
+        "parentId" : null,
+        "authorId" : "f5ac54e5-ad95-49b9-b49a-3fd091e917ae",
+        "body" : "nit: could add `throws SchemaException` to the method declaration if you want",
+        "createdAt" : "2019-04-03T20:55:39Z",
+        "updatedAt" : "2019-05-17T01:31:30Z",
+        "lastEditedBy" : "f5ac54e5-ad95-49b9-b49a-3fd091e917ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3558ae68-164f-4f15-a7bd-19aab0c66cac",
+        "parentId" : "87f96e7a-f7d6-4f2d-b0d3-b4f25ebdfe53",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "It's not a checked exception. We don't add unchecked exception to the signature. Only in javadoc. This method is `private`, so I'm adding the javadoc mention on the `public` methods that check version.  ",
+        "createdAt" : "2019-04-15T20:48:59Z",
+        "updatedAt" : "2019-05-17T01:31:30Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eb1853d8040f29948c1b9e54f95c0c2400d5b66e",
+    "line" : 239,
+    "diffHunk" : "@@ -1,1 +237,241 @@    }\n\n    private static void checkVersionCompatibility(short version) {\n        // check for invalid versions\n        if (version < CONNECT_PROTOCOL_V0)"
+  },
+  {
+    "id" : "5fd3f24f-adf1-4115-8ec5-ce7852707618",
+    "prId" : 6363,
+    "prUrl" : "https://github.com/apache/kafka/pull/6363#pullrequestreview-237583371",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d09a24cd-f727-4c04-b1a5-16b7fe08afaa",
+        "parentId" : null,
+        "authorId" : "f5ac54e5-ad95-49b9-b49a-3fd091e917ae",
+        "body" : "Should this return an empty `ByteBuffer`?  I think one of the callers will get a NPE otherwise.",
+        "createdAt" : "2019-04-03T21:08:51Z",
+        "updatedAt" : "2019-05-17T01:31:30Z",
+        "lastEditedBy" : "f5ac54e5-ad95-49b9-b49a-3fd091e917ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b97e1ed0-f27f-4ea2-acca-8eafea4ea861",
+        "parentId" : "d09a24cd-f727-4c04-b1a5-16b7fe08afaa",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "Currently this doesn't seem possible because we never send a `ConnectAssignment.empty()` intentionally unless this is called in a metadata request. We might send an assignment that is practically empty on an error, but in this case equality here is not true. However, I'll tighten the checks and will increase coverage. \r\n\r\nWe might end up diverging, depending on who's using this call. However, again for metadata we need `null` because this goes to a nullable field. ",
+        "createdAt" : "2019-04-15T23:55:41Z",
+        "updatedAt" : "2019-05-17T01:31:30Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a946e07f-32cb-4de3-8b99-a97e6b543c8b",
+        "parentId" : "d09a24cd-f727-4c04-b1a5-16b7fe08afaa",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "I added a comment regarding this regarding the `ConnectAssignor.performAssignment(...)` method's JavaDoc. IIUC, it's possible that the returned `Map<String, ByteBuffer>` can contain a null byte buffer reference. Is null allowed / handled everywhere this method (and others) are used?",
+        "createdAt" : "2019-05-15T02:57:18Z",
+        "updatedAt" : "2019-05-17T01:31:31Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "eb1853d8040f29948c1b9e54f95c0c2400d5b66e",
+    "line" : 209,
+    "diffHunk" : "@@ -1,1 +207,211 @@        // comparison depends on reference equality for now\n        if (assignment == null || ExtendedAssignment.empty().equals(assignment)) {\n            return null;\n        }\n        Struct struct = assignment.toStruct();"
+  }
+]
