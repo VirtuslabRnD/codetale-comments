@@ -339,5 +339,137 @@
     "commit" : "87b556fa57d970f19118351887298946b695ebe3",
     "line" : 52,
     "diffHunk" : "@@ -1,1 +519,523 @@  final DragTargetWillAccept<T> onWillAccept;\n\n  /// Called when an acceptable piece of data was dropped over this drag target.\n  ///\n  /// Equivalent to [onAcceptWithDetails], but only includes the data."
+  },
+  {
+    "id" : "e9240bf9-e5c3-4e7f-80d7-a76e49a011df",
+    "prId" : 60174,
+    "prUrl" : "https://github.com/flutter/flutter/pull/60174#pullrequestreview-441131530",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "60a02f40-7238-4dfe-b9fa-1f4b6c076a74",
+        "parentId" : null,
+        "authorId" : "5ad28324-7a27-4eb5-87df-c2d51dd6c21e",
+        "body" : "Is a public `onMove` property necessary for your demand?",
+        "createdAt" : "2020-06-26T00:49:28Z",
+        "updatedAt" : "2020-07-24T18:19:59Z",
+        "lastEditedBy" : "5ad28324-7a27-4eb5-87df-c2d51dd6c21e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "69fda881-cf9d-446c-8bfd-3cd1acae35dc",
+        "parentId" : "60a02f40-7238-4dfe-b9fa-1f4b6c076a74",
+        "authorId" : "56c382db-27c4-408a-97dd-acecc5538648",
+        "body" : "Yes, in order to trigger logic (outside of the build tree) in the same way as onLeave, etc.",
+        "createdAt" : "2020-07-01T19:13:31Z",
+        "updatedAt" : "2020-07-24T18:19:59Z",
+        "lastEditedBy" : "56c382db-27c4-408a-97dd-acecc5538648",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5b3d3e04c76f317990bf7cbb804adc26e42f6ac",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +510,514 @@    this.onAcceptWithDetails,\n    this.onLeave,\n    this.onMove,\n  }) : super(key: key);\n"
+  },
+  {
+    "id" : "61a1cedb-5735-4484-89a0-4ea71b776f0f",
+    "prId" : 60174,
+    "prUrl" : "https://github.com/flutter/flutter/pull/60174#pullrequestreview-445892057",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c6eb58ba-2ad2-4051-8368-ba64a42caf93",
+        "parentId" : null,
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "Actually, why do you need the detailsBuilder? Doesn't the onMove callback give you enough information to change the state from the outside to what you want?",
+        "createdAt" : "2020-07-01T20:07:06Z",
+        "updatedAt" : "2020-07-24T18:19:59Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c85d63c8-a454-415e-b731-03c577d69239",
+        "parentId" : "c6eb58ba-2ad2-4051-8368-ba64a42caf93",
+        "authorId" : "56c382db-27c4-408a-97dd-acecc5538648",
+        "body" : "See my original bug description: https://github.com/flutter/flutter/issues/58982\r\nIt would be unergonomic to trigger a second rebuild outside (of the initial movement rebuild) when the user wants to update children.",
+        "createdAt" : "2020-07-01T21:32:41Z",
+        "updatedAt" : "2020-07-24T18:19:59Z",
+        "lastEditedBy" : "56c382db-27c4-408a-97dd-acecc5538648",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3f3b19a2-e539-4821-8930-6d9a7278b91c",
+        "parentId" : "c6eb58ba-2ad2-4051-8368-ba64a42caf93",
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "Why would there be a second rebuild? If I remember correctly, onMove is executed between frame (before DragTarget can rebuild in response to the move), so any state changes that are triggered in the onMove would be applied in the same frame as the DragTarget rebuild, no?",
+        "createdAt" : "2020-07-01T22:02:49Z",
+        "updatedAt" : "2020-07-24T18:19:59Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b6fadea8-cdf0-45d1-bbfe-881ff431ef6a",
+        "parentId" : "c6eb58ba-2ad2-4051-8368-ba64a42caf93",
+        "authorId" : "56c382db-27c4-408a-97dd-acecc5538648",
+        "body" : "Here's didDrop (existing code) and didMove (new code, modeled on the existing patterns). It calls setState() first, then calls any relevant callbacks. \r\n\r\n```\r\n  void didDrop(_DragAvatar<Object> avatar) {\r\n    assert(_candidateAvatars.contains(avatar));\r\n    if (!mounted)\r\n      return;\r\n    setState(() {\r\n      _candidateAvatars.remove(avatar);\r\n    });\r\n    if (widget.onAccept != null)\r\n      widget.onAccept(avatar.data as T);\r\n    if (widget.onAcceptWithDetails != null)\r\n      widget.onAcceptWithDetails(DragTargetDetails<T>(data: avatar.data as T, offset: avatar._lastOffset));\r\n  }\r\n\r\n  void didMove(_DragAvatar<Object> avatar) {\r\n    if (!mounted)\r\n      return;\r\n    if (widget.detailedMovementBuilder != null)\r\n      setState(() {});\r\n    if (widget.onMove != null)\r\n      widget.onMove(DragTargetDetails<dynamic>(data: avatar.data, offset: avatar._lastOffset));\r\n  }\r\n```\r\n\r\nEven if it were to work without needing to add it to the next frame, that's not apparent to the caller. I feel that most Dart/Flutter developers will instead assume that callbacks may be called during rebuild, and will always schedule it on the next frame, e.g. would use onMove:\r\n```\r\nonMove:(details) => SchedulerBinding.instance.addPostFrameCallback((_) => setState(()=>_coords = details.offset));\r\n```\r\n",
+        "createdAt" : "2020-07-01T23:14:22Z",
+        "updatedAt" : "2020-07-24T18:19:59Z",
+        "lastEditedBy" : "56c382db-27c4-408a-97dd-acecc5538648",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6c9ff8a4-58a7-4ab2-9062-8278207606f1",
+        "parentId" : "c6eb58ba-2ad2-4051-8368-ba64a42caf93",
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "The order of calling setState and calling the callbacks doesn't matter here. setState just marks this widget to need rebuild in the next frame. It doesn't actually do the rebuild.\r\n\r\nScheduling a postFrameCallback like that in response to a gesture callback is also very unusual. You wouldn't do that in a GestureDetector's onDrag/onTap/etc. either.",
+        "createdAt" : "2020-07-08T17:10:49Z",
+        "updatedAt" : "2020-07-24T18:19:59Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6f8406a0-ae12-4471-920f-8313555a6168",
+        "parentId" : "c6eb58ba-2ad2-4051-8368-ba64a42caf93",
+        "authorId" : "56c382db-27c4-408a-97dd-acecc5538648",
+        "body" : "I've confirmed that the postFrameCallback is not required, i.e. I can just call setState() in the onMove() callback. However, I think many flutter coders instinctivly avoid setState() within a build _method_ out of habit, even though it is ok in this context since it is part of a callback outside of the build phase. But yes, I agree it's not needed. More thoughts in the other comment below.\r\n\r\n",
+        "createdAt" : "2020-07-09T19:05:28Z",
+        "updatedAt" : "2020-07-24T18:19:59Z",
+        "lastEditedBy" : "56c382db-27c4-408a-97dd-acecc5538648",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5b3d3e04c76f317990bf7cbb804adc26e42f6ac",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +545,549 @@  ///\n  /// Note that this includes entering and leaving the target.\n  final DragTargetMove onMove;\n\n  @override"
+  },
+  {
+    "id" : "dea47e0f-fd1b-4651-9f04-233e599d701c",
+    "prId" : 60174,
+    "prUrl" : "https://github.com/flutter/flutter/pull/60174#pullrequestreview-455075746",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3dea0011-1635-4dc8-91be-193a456896fd",
+        "parentId" : null,
+        "authorId" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "body" : "Maybe extract this out into a private method and call it below as well.",
+        "createdAt" : "2020-07-24T17:48:40Z",
+        "updatedAt" : "2020-07-24T18:19:59Z",
+        "lastEditedBy" : "d61ab95a-0bf0-4571-9098-19991dd821ca",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5b3d3e04c76f317990bf7cbb804adc26e42f6ac",
+    "line" : 56,
+    "diffHunk" : "@@ -1,1 +703,707 @@      for (final _DragTargetState<T> target in _enteredTargets) {\n        target.didMove(this);\n      }\n      return;\n    }"
   }
 ]
