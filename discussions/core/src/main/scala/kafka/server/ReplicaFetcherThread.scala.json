@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "e5877f8d-91d2-4922-9513-497d9ae41b6e",
+    "prId" : 4882,
+    "prUrl" : "https://github.com/apache/kafka/pull/4882#pullrequestreview-118089156",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9ac5e961-fc81-489f-a566-9f42599a1cf6",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Now that we have 2 different versions of the LeaderEpochRequest, we need to use the right version of the request depending on inter broker protocol version.",
+        "createdAt" : "2018-05-01T00:24:43Z",
+        "updatedAt" : "2018-05-09T21:46:13Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c5818e6d-e1a8-4e2e-acdc-8633c10f5826",
+        "parentId" : "9ac5e961-fc81-489f-a566-9f42599a1cf6",
+        "authorId" : "e235ea82-83a9-41e5-8e3a-15b2e1b6f350",
+        "body" : "I have a question regarding this. In OffsetsForLeaderEpochResponse, I used `partitionStruct.setIfExists` and `partitionAndEpoch.getOrElse` for new leader epoch field vs. explicitly checking version for setting/getting fields. I think, it should be correct to e.g., return the leader epoch but make sure to use the older protocol in fetcher if the inter-broker protocol is below 2.0. Or is it preferred to check the version and not set the field in OffsetsForLeaderEpochResponse? I looked at the code, and it looks like different request/response use different approaches (either one I described).\r\n\r\nThis particular line of code is correct independent of version, since undefined offsets means falling back to high watermark, independent if epoch is set or not (or defined or not defined). \r\n\r\nI agree I need to update the truncation logic to make sure the behavior is consistent with the protocol version.",
+        "createdAt" : "2018-05-01T19:01:19Z",
+        "updatedAt" : "2018-05-09T21:46:13Z",
+        "lastEditedBy" : "e235ea82-83a9-41e5-8e3a-15b2e1b6f350",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a016045-a2ff-46df-b277-9e51a73c69bb",
+        "parentId" : "9ac5e961-fc81-489f-a566-9f42599a1cf6",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Using setIfExists seems fine. However, we need to pass in the version number to OffsetsForLeaderEpochRequest.Builder based on inter broker protocol version. Similar to what we do when building the fetch request.",
+        "createdAt" : "2018-05-02T22:00:27Z",
+        "updatedAt" : "2018-05-09T21:46:13Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "896473ef-6ff5-4b08-94cb-f32134e306ff",
+        "parentId" : "9ac5e961-fc81-489f-a566-9f42599a1cf6",
+        "authorId" : "e235ea82-83a9-41e5-8e3a-15b2e1b6f350",
+        "body" : "I looked at OffsetsForLeaderEpochRequest.Builder, and I see that we pass version to the builder:\r\n`public OffsetsForLeaderEpochRequest build(short version) {`\r\n` public OffsetsForLeaderEpochRequest(Struct struct, short version) {`\r\n` @Override\r\n    protected Struct toStruct() {\r\n        Struct requestStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.requestSchema(version()));\r\n... `\r\nOr am I missing something?",
+        "createdAt" : "2018-05-07T17:46:19Z",
+        "updatedAt" : "2018-05-09T21:46:13Z",
+        "lastEditedBy" : "e235ea82-83a9-41e5-8e3a-15b2e1b6f350",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e0de71d-6dbf-4213-a69b-ac4b8cbae33f",
+        "parentId" : "9ac5e961-fc81-489f-a566-9f42599a1cf6",
+        "authorId" : "e235ea82-83a9-41e5-8e3a-15b2e1b6f350",
+        "body" : "Oh I see now, version is not in OffsetForLeaderEpochResponse constructor, not request. Will fix.",
+        "createdAt" : "2018-05-07T17:58:28Z",
+        "updatedAt" : "2018-05-09T21:46:13Z",
+        "lastEditedBy" : "e235ea82-83a9-41e5-8e3a-15b2e1b6f350",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "544f4fdf83ce6f540124668d95a58d2cdebc1ea8",
+    "line" : 88,
+    "diffHunk" : "@@ -1,1 +353,357 @@          // if we get any unexpected exception, mark all partitions with an error\n          result = partitions.map { case (tp, _) =>\n            tp -> new EpochEndOffset(Errors.forException(t), UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)\n          }\n      }"
+  }
+]

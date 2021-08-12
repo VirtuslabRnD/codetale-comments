@@ -20,5 +20,148 @@
     "commit" : "86c2892f6a2ac5462862eed2e1d49c13b545d04e",
     "line" : 138,
     "diffHunk" : "@@ -1,1 +226,230 @@            return this.db.get(rawKey);\n        } catch (final RocksDBException e) {\n            throw new ProcessorStateException(\"Error while getting value for key from store \" + this.name, e);\n        }\n    }"
+  },
+  {
+    "id" : "ed455118-79f0-431d-b95f-0cdf41d67d85",
+    "prId" : 4801,
+    "prUrl" : "https://github.com/apache/kafka/pull/4801#pullrequestreview-126084193",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3473a5f1-ed2e-41ad-9211-64fb87d0e05c",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Not sure if required but this method was `synchronized` in the first place so I've kept it that way.",
+        "createdAt" : "2018-06-05T14:15:48Z",
+        "updatedAt" : "2018-06-05T14:27:55Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "704ca040-aeed-4bea-b75f-47395945532d",
+        "parentId" : "3473a5f1-ed2e-41ad-9211-64fb87d0e05c",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Ack.",
+        "createdAt" : "2018-06-05T17:55:45Z",
+        "updatedAt" : "2018-06-05T17:55:45Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "01be095ec6d013ca54bd0774f915922b0911dff2",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +467,471 @@        @Override\n        public synchronized KeyValue<Bytes, byte[]> next() {\n            return super.next();\n        }\n"
+  },
+  {
+    "id" : "9f7fc9d1-2075-417a-b05f-1b0575c1bb83",
+    "prId" : 4801,
+    "prUrl" : "https://github.com/apache/kafka/pull/4801#pullrequestreview-126082591",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "091032f0-db38-4256-919e-8a02306dc7b8",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Having this check here has got me to thinking more about this issue.  \r\n\r\nWithout this guard condition, we have some failing unit tests. \r\n\r\nIn both the `RocksDBIterator` and the `AbstractIterator` all calls to `next()` make a call to `hasNext()` first before returning the next object.  I'm not sure about changing the semantics where we return from `next()` without calling `hasNext()` first (which if we end up keeping those semantics, leaves us in the same position as before extending `AbstractIterator`).   \r\n\r\nI guess the question is, do we want to continue to throw an exception when `hasNext()` is called (when the store is closed) or simply return `false`?\r\n\r\nI could be overthinking this, but I'm not entirely comfortable with returning a value from `next()` after closing the store.  I feel like that creates more corner cases for potential errors or unexpected behavior.\r\n\r\nWDYT?  \r\n\r\n",
+        "createdAt" : "2018-06-05T14:25:36Z",
+        "updatedAt" : "2018-06-05T14:35:26Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f5c4306a-1f39-4154-9d65-1d1d3aa9378a",
+        "parentId" : "091032f0-db38-4256-919e-8a02306dc7b8",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@bbejeck That is a good question!\r\n\r\nOriginally I thought it is okay to always calling `hasNext` inside `next()`, as long as we make sure `hasNext` implementation is idempotent, i.e. calling it multiple times before `next()` does not have side effect is sufficient. But by making it idempotent we could have the corner case you mentioned. For example:\r\n\r\n```\r\nt0: call `hasNext()` -> store is still open -> call `makeNext` -> `next` field is set.\r\nt1: store is closed.\r\nt2: call `next()` -> call `hasNext()` again\r\n```\r\n\r\nWithout this check, at `t3` we would still return the `next` field. \r\n",
+        "createdAt" : "2018-06-05T17:51:37Z",
+        "updatedAt" : "2018-06-05T17:51:37Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "01be095ec6d013ca54bd0774f915922b0911dff2",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +461,465 @@            if (!open) {\n                throw new InvalidStateStoreException(String.format(\"RocksDB store %s has closed\", storeName));\n            }\n            return super.hasNext();\n        }"
+  },
+  {
+    "id" : "e1e0b2aa-c16e-4c2a-ae1c-b240d20b5bc3",
+    "prId" : 4801,
+    "prUrl" : "https://github.com/apache/kafka/pull/4801#pullrequestreview-126139332",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "17ea091a-2353-4cdc-8964-9623ddc98ded",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "A nit (and paranoid) comment: maybe we can reuse the same `KeyValue` object, but just set its key / value fields since they are public and not final. So we do not create those short-lived objects for young gen GC. Not sure how much it will really get us, but just want to be safer since it is part of a critical code path (i.e. one object per each iterated element).",
+        "createdAt" : "2018-06-05T17:58:19Z",
+        "updatedAt" : "2018-06-05T17:58:19Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a187e108-089e-49fd-ae13-79f9304989b4",
+        "parentId" : "17ea091a-2353-4cdc-8964-9623ddc98ded",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "ack",
+        "createdAt" : "2018-06-05T18:22:59Z",
+        "updatedAt" : "2018-06-05T18:22:59Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4209c3e5-1fbf-4218-9057-62631afeb24a",
+        "parentId" : "17ea091a-2353-4cdc-8964-9623ddc98ded",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "With another look, `KeyValue` is immutable `key` and `value` fields are final.  We could extend `KeyValue` as an inner class of `RocksDBStore` to accomplish this.  WDYT?\r\n\r\nNM that won't work. ",
+        "createdAt" : "2018-06-05T18:28:11Z",
+        "updatedAt" : "2018-06-05T18:38:40Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "52ad38a5-a738-4242-a124-52463a749820",
+        "parentId" : "17ea091a-2353-4cdc-8964-9623ddc98ded",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I see. Do not bother then :) At lease we are not introduce a regression to make perf worse :)",
+        "createdAt" : "2018-06-05T18:43:18Z",
+        "updatedAt" : "2018-06-05T18:43:18Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "27992e75-55d0-4d0b-9a88-a867d255f2a3",
+        "parentId" : "17ea091a-2353-4cdc-8964-9623ddc98ded",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I am late thus just a meta comment: we hand the `KeyValue` object to the user and user might actually keep a reference. Thus, we cannot reuse an object anyway, because we might mess up user code if they access an earlier return `KeyValue` again, after they retrieved newer ones.",
+        "createdAt" : "2018-06-05T20:00:49Z",
+        "updatedAt" : "2018-06-05T20:00:49Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c09b10a5-fa72-4e24-bb4c-811a0d4420ae",
+        "parentId" : "17ea091a-2353-4cdc-8964-9623ddc98ded",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "yeah, that's an excellent point.",
+        "createdAt" : "2018-06-05T20:28:34Z",
+        "updatedAt" : "2018-06-05T20:28:34Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "01be095ec6d013ca54bd0774f915922b0911dff2",
+    "line" : 70,
+    "diffHunk" : "@@ -1,1 +482,486 @@\n        private KeyValue<Bytes, byte[]> getKeyValue() {\n            return new KeyValue<>(new Bytes(iter.key()), iter.value());\n        }\n"
   }
 ]
