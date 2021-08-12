@@ -240,5 +240,38 @@
     "commit" : "b2b340f502a469ff68f66da24b711aa969891779",
     "line" : 343,
     "diffHunk" : "@@ -1,1 +1703,1707 @@        opts.reassignmentJsonFileOpt\n      ),\n      opts.listOpt -> collection.immutable.Seq.empty\n    )\n    CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, requiredArgs(action): _*)"
+  },
+  {
+    "id" : "668b31f3-5c68-4262-9a3d-e4df93638719",
+    "prId" : 9807,
+    "prUrl" : "https://github.com/apache/kafka/pull/9807#pullrequestreview-562841122",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bc4b450b-533e-4b2f-a654-2137a9d92693",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "It might be just me, but the logic in this method is as clear as mud to me. At a high level, we are just trying to identify the sources and the destinations to fill a `PartitionMove`. The destinations are the adding replicas (AR) and the sources are the current replicas (CR) without the adding replicas. The current logic below first calls `calculateCurrentMoveMap` which does the following:\r\n\r\n1. Add each replica to both sources and destinations\r\n2. Add all AR to destinations \r\n3. Remove all removing replicas (RR) from destinations\r\n\r\nI think this computes the destinations correctly (even if it does so in an odd way), but sources will include all replicas, which is wrong. You have fixed this by removing AR from sources explicitly, but I think we can simplify a bit more. Maybe something like this\r\n\r\n```scala\r\nmove.destinations = reassignment.addingReplicas\r\nmove.sources = reassignment.replicas - reassignment.addingReplicas\r\n```\r\n\r\nAfter computing the current move map, the current logic tries to account for the proposed reassignments. It does the following:\r\n\r\n1. Overwrite current move with an empty move and set destinations to the target replicas (TR)\r\n2. Iterate through all moves and check if sources is empty, which means we have overwritten the move in step 1. If so, then we add all of CR to sources.\r\n3. Now we do one more pass over the moves and remove all of the destinations from sources.\r\n\r\nI have a hard time making sense of this logic. The main problem is that it assumes that TR are only destinations, but that is wrong. For example, if we reassign [1, 2] to [1, 3], then 1 should be a source, not a destination even though it is present in TR. I think the correct logic should be the following:\r\n\r\n1. for each proposed assignment TR, check if there is already a reassignment in progress:\r\n2. if there is a reassignment in progress, then we need to account for the current AR. We can compute sources as CR - AR, which is what we already did when calculating the current move map\r\n3. if there is no reassignment in progress, then we set sources to CR\r\n4. regardless of whether there is a reassignment in progress, we set destinations to TR - sources\r\n\r\nSomething like this?\r\n```scala\r\nproposedParts.foreach {\r\n  case (part, targetReplicas) =>\r\n    val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])\r\n    val sources = partMoves.get(part) match {\r\n      case Some(move) => move.sources\r\n      case None => currentParts.get(part)\r\n    }\r\n    val destinations = targetReplicas - sources\r\n    partMoves.put(part.partition, PartitionMove(sources, destinations))\r\n}\r\n```\r\n\r\nCheck that over and see if it makes sense to you. Basically I think the current logic is unnecessarily complicated and probably wrong in multiple ways.",
+        "createdAt" : "2021-01-06T03:06:26Z",
+        "updatedAt" : "2021-01-07T12:09:08Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7cae4c85-9719-4ff4-aa03-8c9fe55e3f4e",
+        "parentId" : "bc4b450b-533e-4b2f-a654-2137a9d92693",
+        "authorId" : "12f98c82-b9ef-4668-aa6f-5a62bf3439bb",
+        "body" : "Thank you @hachikuji , I also spend much time making sense of this logic since it's unnecessarily complicated and I tried to solve the issue with the least code change, which made it even much more untidy. Now I have rewritten the code according to your suggestions and have simplified it tremendously, PTAL.",
+        "createdAt" : "2021-01-06T16:13:04Z",
+        "updatedAt" : "2021-01-07T12:09:08Z",
+        "lastEditedBy" : "12f98c82-b9ef-4668-aa6f-5a62bf3439bb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "191b4f4c09ab94fc98c27b2360546d9014c5748a",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +1262,1266 @@   *                                the movements for that partition.\n   */\n  def calculateProposedMoveMap(currentReassignments: Map[TopicPartition, PartitionReassignment],\n                               proposedParts: Map[TopicPartition, Seq[Int]],\n                               currentParts: Map[TopicPartition, Seq[Int]]): MoveMap = {"
   }
 ]

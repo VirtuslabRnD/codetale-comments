@@ -163,5 +163,49 @@
     "commit" : "df0302628a9211c8e628e70e57a2788e4a92fa45",
     "line" : 14,
     "diffHunk" : "@@ -1,1 +115,119 @@            case USE_ALL_DNS_IPS:\n            case RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY:\n                return filterPreferredAddresses(addresses);\n        }\n"
+  },
+  {
+    "id" : "69da0acf-e9e5-4998-8dfd-200024f662d9",
+    "prId" : 9902,
+    "prUrl" : "https://github.com/apache/kafka/pull/9902#pullrequestreview-583097262",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ed7d9060-f618-4f2e-a35a-f7677266338e",
+        "parentId" : null,
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "This method and its usages look a bit weird to me now. It resolves an `host` based on `clientDnsLookup` and a `hostResolver` which resolves an `host` at its turn. We also have to pass the `HostResolver` wherever it is called now. I wonder if we should avoid this level of indirection here and directly encapsulate the entire logic in the `HostResolver`.\r\n\r\n`HostResolver` would look like this:\r\n```\r\npublic interface HostResolver {\r\n    List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException;\r\n}\r\n```\r\n\r\nIn `NodeConnectionState#currentAddress`, we could replace `addresses = ClientUtils.resolve(host, clientDnsLookup, hostResolver)` by `addresses = hostResolver.resolve(host, clientDnsLookup)`.\r\n\r\nThe `DefaultHostResolver` would do what `ClientUtils.resolve` does today and we can mock it in tests like you did.\r\n\r\nIs this something that you have considered?",
+        "createdAt" : "2021-02-03T10:28:44Z",
+        "updatedAt" : "2021-02-04T09:30:34Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7565272-fa39-438a-ae0f-845a376320e6",
+        "parentId" : "ed7d9060-f618-4f2e-a35a-f7677266338e",
+        "authorId" : "e88252f3-8879-452a-8098-afb39cb614dc",
+        "body" : "@dajac I started making this change, but while working on it, I realized that I don't think I like requiring the `HostResolver` to understand the `client.dns.lookup` config. In the same way that `MockTime` is only used to mock Java built-in methods, I think the `HostResolver` should only be responsible for the DNS resolution (either real or mocked), and that `ClientUtils` should be responsible for understanding the Kafka application behavior. That way, tests that mock DNS still test the actual `ClientDnsLookup` behavior, rather than relying on both the default resolver and any mocked resolvers handle it correctly. It also means that if we ever add an option for `ClientDnsLookup` or change its behavior, we don't need to remember to update all `HostResolver` implementations. ",
+        "createdAt" : "2021-02-04T07:12:52Z",
+        "updatedAt" : "2021-02-04T09:30:34Z",
+        "lastEditedBy" : "e88252f3-8879-452a-8098-afb39cb614dc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a9b138ce-40fd-40e9-99c8-e0d5e2aea9a9",
+        "parentId" : "ed7d9060-f618-4f2e-a35a-f7677266338e",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Thanks @bob-barrett. I do agree with your point. Let's keep it as you suggested.",
+        "createdAt" : "2021-02-04T07:25:29Z",
+        "updatedAt" : "2021-02-04T09:30:34Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2de336f515a4c216afeb9a7c038ca6614be6dda3",
+    "line" : 7,
+    "diffHunk" : "@@ -1,1 +108,112 @@\n    static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup,\n                                     HostResolver hostResolver) throws UnknownHostException {\n        InetAddress[] addresses = hostResolver.resolve(host);\n"
   }
 ]

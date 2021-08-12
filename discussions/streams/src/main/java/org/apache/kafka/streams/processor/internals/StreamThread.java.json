@@ -2473,5 +2473,137 @@
     "commit" : "e235b62f67fd1b2ab2323750f748e28ad87f9a98",
     "line" : 32,
     "diffHunk" : "@@ -1,1 +553,557 @@     * @throws StreamsException      if the store's change log does not contain the partition\n     */\n    boolean runLoop() {\n        subscribeConsumer();\n"
+  },
+  {
+    "id" : "2dac332e-d988-467b-b900-33f57885df0e",
+    "prId" : 9863,
+    "prUrl" : "https://github.com/apache/kafka/pull/9863#pullrequestreview-575726914",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b9d5b15f-8754-43ac-90d4-a3a049690b7d",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I am still a bit concerned about `#removeStreamThread` potentially hanging indefinitely...maybe we should add a timeout to this API? If we want to do so, it would need to be soon since the 2.8 release is coming up. WDYT @cadonna @wcarlson5 ?",
+        "createdAt" : "2021-01-22T18:08:06Z",
+        "updatedAt" : "2021-01-22T18:08:07Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "350e511c-6059-4cd2-a1b5-6227316d2936",
+        "parentId" : "b9d5b15f-8754-43ac-90d4-a3a049690b7d",
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "This particular bit would only hang if the thread is not shutting down. If that is happening maybe we are already in an unrecoverable state? \r\n\r\nOverall I wouldn't mind having some sort of timeout but I am not very worried about it. @cadonna maybe you have any insights from writing the KIP?",
+        "createdAt" : "2021-01-22T18:15:21Z",
+        "updatedAt" : "2021-01-22T18:15:21Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48f069c2-7415-4f75-adcc-346a37df4192",
+        "parentId" : "b9d5b15f-8754-43ac-90d4-a3a049690b7d",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Maybe I'm just paranoid from going through some incidents where the thread really did never shut down. I would agree we're probably in a bad & unrecoverable state at that point, but hanging indefinitely is not the right answer. What happens when a program freezes on your laptop? I usually just try to force quit it -- the user might want to do the same. But if we never return control of their thread then it's hard for them to know to shut it down",
+        "createdAt" : "2021-01-22T20:13:00Z",
+        "updatedAt" : "2021-01-22T20:13:00Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ee097528-cf09-4f33-a83d-fb10e71718f8",
+        "parentId" : "b9d5b15f-8754-43ac-90d4-a3a049690b7d",
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "That is a fair concern. Based on the interrupt documentation I would hope that force quit doesn't use the interrupt path. As Bruno said \r\n\r\n> In the words of \"Java Concurrency in Practice\":\r\n\"Thread interruption is a cooperative mechanism for a thread to signal another thread that it should, at its convenience and if it feels like it, stop what it is doing and do something else.\"\r\n \r\nThe \"at its convenience\" is what makes me less concerned ",
+        "createdAt" : "2021-01-22T21:40:58Z",
+        "updatedAt" : "2021-01-22T21:46:26Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2fc0154e-53a8-4967-8aa6-21d2894d7406",
+        "parentId" : "b9d5b15f-8754-43ac-90d4-a3a049690b7d",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "That's right, I don't think force quit uses the interrupt path. But anyways I don't think it's possible to force quit a Kafka Streams application until we get around to making it a desktop application. I was just trying to draw a parallel -- my concern here is just that there is absolutely no way to recover should a StreamThread hang during shutdown, meaning you will just need to kill the process and do an unclean shutdown. With ALOS it's maybe not so bad, but with EOS an unclean shutdown requires wiping out all state stores and completely restoring them from scratch. So there is absolutely something to lose besides just the annoyance of having to manually kill the Streams process.\r\n\r\nI just got a notification from a report of Streams being stuck during shutdown in an EOS application, so I promise I'm not making this up 🙂 . I can point you to it if you'd like -- unfortunately we never even managed to determine the root cause, so there may be more bugs out there which cause this besides just the ones we currently know",
+        "createdAt" : "2021-01-25T19:15:05Z",
+        "updatedAt" : "2021-01-25T19:15:05Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ae50d84983f51ca7d1340a36634a14607964579f",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +617,621 @@                while (state != targetState) {\n                    try {\n                        stateLock.wait();\n                    } catch (final InterruptedException e) {\n                        interrupted = true;"
+  },
+  {
+    "id" : "c2d3e951-9b3c-4a67-8d89-aaff208ff4ba",
+    "prId" : 9875,
+    "prUrl" : "https://github.com/apache/kafka/pull/9875#pullrequestreview-567710419",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3d09d13a-e249-4ed1-93f8-582956dd983b",
+        "parentId" : null,
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "Maybe we do this else where but can we log at DEBUG if there is nothing done and there is tasks assigned to the thread? It might be good to be able to confirm that its not getting stuck here or its actually not polling anything.",
+        "createdAt" : "2021-01-12T21:04:28Z",
+        "updatedAt" : "2021-01-12T21:06:07Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "395e5356-d06a-4a5d-aac1-35d9a76ea6a8",
+        "parentId" : "3d09d13a-e249-4ed1-93f8-582956dd983b",
+        "authorId" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "body" : "I have a similar question here, other than that LGTM",
+        "createdAt" : "2021-01-12T22:44:32Z",
+        "updatedAt" : "2021-01-12T22:44:32Z",
+        "lastEditedBy" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "717ade2a-6657-43a9-903d-2d6d9f57ca70",
+        "parentId" : "3d09d13a-e249-4ed1-93f8-582956dd983b",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Good thought, but don't worry, we already do. John added some pretty thorough logging at the DEBUG level after an escalation a while back",
+        "createdAt" : "2021-01-13T22:28:12Z",
+        "updatedAt" : "2021-01-13T22:28:12Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f648cb27b1604cc20ac63fabcd03ef640929737d",
+    "line" : 9,
+    "diffHunk" : "@@ -1,1 +752,756 @@            // Don't log summary if no new records were processed to avoid spamming logs for low-traffic topics\n            if (totalProcessed > 0 || totalPunctuated > 0 || totalCommitted > 0) {\n                log.info(\"Processed {} total records, ran {} punctuators, and committed {} total tasks\",\n                         totalProcessed, totalPunctuated, totalCommitted);\n            }"
+  },
+  {
+    "id" : "e5b2d1dc-8feb-446b-aaaa-3a42f18fd0b9",
+    "prId" : 9875,
+    "prUrl" : "https://github.com/apache/kafka/pull/9875#pullrequestreview-566699420",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "553595d0-1b1f-442c-9045-015ef4853603",
+        "parentId" : null,
+        "authorId" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "body" : "The above probably doesn't need to be applied here as well, i don't think",
+        "createdAt" : "2021-01-12T21:05:36Z",
+        "updatedAt" : "2021-01-12T21:06:07Z",
+        "lastEditedBy" : "e4e906b3-d01a-4fe6-ad3e-ccca19a6df5c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f648cb27b1604cc20ac63fabcd03ef640929737d",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +827,831 @@\n        final int numRecords = records.count();\n        if (numRecords > 0) {\n            log.info(\"Main Consumer poll completed in {} ms and fetched {} records\", pollLatency, numRecords);\n        }"
   }
 ]
