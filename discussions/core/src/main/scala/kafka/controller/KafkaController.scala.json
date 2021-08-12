@@ -273,5 +273,203 @@
     "commit" : "a88df990ba29bfc85ca4ab2096d225a80a3a7641",
     "line" : 26,
     "diffHunk" : "@@ -1,1 +1080,1084 @@        controllerContext.partitionLeadershipInfo.filter {\n          case (topicPartition, leaderIsrAndControllerEpoch) =>\n            !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic) &&\n              leaderIsrAndControllerEpoch.leaderAndIsr.leader == id &&\n              controllerContext.partitionReplicaAssignment(topicPartition).size > 1"
+  },
+  {
+    "id" : "bb5cde64-e46d-46a0-8337-c9067df552b7",
+    "prId" : 5821,
+    "prUrl" : "https://github.com/apache/kafka/pull/5821#pullrequestreview-179630545",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c5284d66-6829-45c1-9b98-bd47e80bf6c4",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Could we fix the javadoc above?",
+        "createdAt" : "2018-11-13T23:11:36Z",
+        "updatedAt" : "2018-12-01T16:57:02Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d4e305f3-3bac-48e4-b386-043fc3e9ef71",
+        "parentId" : "c5284d66-6829-45c1-9b98-bd47e80bf6c4",
+        "authorId" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "body" : "Fixed.",
+        "createdAt" : "2018-11-29T05:09:40Z",
+        "updatedAt" : "2018-12-01T16:57:02Z",
+        "lastEditedBy" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aec83c36f2b7f46b7ffc1990f56e60f0a9811149",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +201,205 @@   * @return The number of partitions that the broker still leads.\n   */\n  def controlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {\n    val controlledShutdownEvent = ControlledShutdown(id, brokerEpoch, controlledShutdownCallback)\n    eventManager.put(controlledShutdownEvent)"
+  },
+  {
+    "id" : "25bee507-7738-44c3-890e-0b94c610d6ce",
+    "prId" : 5821,
+    "prUrl" : "https://github.com/apache/kafka/pull/5821#pullrequestreview-179631110",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "80234995-6e59-4a51-968b-4786e66fa0be",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Normally, when we call onBrokerFailure(), the passed in deadbrokers won't be in controllerContext.liveBrokers, which is used by onBrokerFailure() through PartitionStateMachine/ReplicaStateMachine. With this change, this may not be true. Will that have any impact?",
+        "createdAt" : "2018-11-15T22:15:45Z",
+        "updatedAt" : "2018-12-01T16:57:02Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "83b496dd-578d-417c-9077-9dd735494298",
+        "parentId" : "80234995-6e59-4a51-968b-4786e66fa0be",
+        "authorId" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "body" : "This is a very good point. I think it is fine because the bounced broker will reject the control requests anyway because the cached broker epoch has not been updated yet. \r\n\r\nHowever, this brings up another question: do we actually need to call `onBrokerFailure()` for bounced brokers? \r\nAfter a second thought, I think the answer is no because the end goal of controller handling bounced brokers in BrokerChange event is to make sure the quickly bounced brokers will be initialized correctly and the end partition/replica states will be the same with and without calling `onBrokerFailure` for the bounced brokers (if there are no new brokers and dead brokers). In this case, only calling `onBrokerStartup` is sufficient. Invoking `onBrokerFailure` first is a correct and safe option but it comes with some overhead because we need to perform leader election and send out the StopReplica/LeaderAndIsr/UpdateMetadata, which are not necessary. Previously I thought that missing `onBrokerFailure` will cause correctness issue because we might miss some state clean up but looks like it is not the case. Also note that if we use controlled shutdown to shutdown and restart the broker, the leadership election actually happens before processing the BrokerChangeEvent.\r\n\r\nTL;DR:\r\nTo be more specific for your original question (why updating the live brokers first then invoke `onBrokerFailure` is fine), there are three places where we use the live brokers informartion in `onBrokerFailure`:\r\n1. Determine whether we need to transition partition states to OfflinePartition: since at the time of the BrokerChange event processing, the bounced brokers are alive so there will not be offline partitions.\r\n2. Determine which brokers we want to consider when performing leader election in `partitionStateMachine.triggerOnlinePartitionStateChange()`: since the bounced brokers are online at that time so we should consider them.\r\n3. Determine which brokers we need to send out control requests and which brokers we need to include in the live brokers field in UpdateMetadataRequest: since the bounced brokers will not accept control requests anyway so the first point doesn't matter. For the second point, the bounced brokers are live so we don't want to exclude them in the UpdateMetadataRequest.",
+        "createdAt" : "2018-11-16T09:48:12Z",
+        "updatedAt" : "2018-12-01T16:57:02Z",
+        "lastEditedBy" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "52c8db54-15b3-442d-9563-555dd5c67d6f",
+        "parentId" : "80234995-6e59-4a51-968b-4786e66fa0be",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@hzxa21 : Overall, I agree with your assessment that the onBrokerFailure() call seems redundant. The only thing is that it can force a leader epoch change. Suppose that broker 1 is a bounced broker and is the current leader. If we skip onBrokerFailure(), the controller just keeps broker 1 as the leader w/o bumping the leader epoch. This means that the follower won't go through leader epoch based log truncation, which maybe needed since broker 1 may not have all the data in its local log after the bounce. So, perhaps we can't skip onBrokerFailure(). The next question is should the live broker list exclude the bounced brokers when we call onBrokerFailure(). It seems that we should since live broker list influences which broker is the new leader. If the bounced brokers are still in the live broker list and are the current leaders, those leaders' epoch won't change. So, in summary, it seems that we should still call onBrokerFailure() but excluding bounced brokers from live broker list first. We then add the bounced brokers to live broker list and call onBrokerStartup().",
+        "createdAt" : "2018-11-28T00:36:16Z",
+        "updatedAt" : "2018-12-01T16:57:02Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6b037fdc-c822-4a22-9eb8-0c8faf6c71b7",
+        "parentId" : "80234995-6e59-4a51-968b-4786e66fa0be",
+        "authorId" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "body" : "I agree. Also after an offline discussion with Dong, we agree that the benefit of optimizing for quickly bounced brokers is minor and since in normal scenario we will go through onBrokerFailure and then onBrokerStartup for the bounce brokers, it is better to do the same thing here ( invoke onBrokerFailure() and then update live brokers).\r\n\r\nThanks for the comment. I will update the PR accordingly.",
+        "createdAt" : "2018-11-28T00:57:13Z",
+        "updatedAt" : "2018-12-01T16:57:02Z",
+        "lastEditedBy" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "36903fde-5687-4aa0-8f59-eceb2587e09a",
+        "parentId" : "80234995-6e59-4a51-968b-4786e66fa0be",
+        "authorId" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "body" : "Done.",
+        "createdAt" : "2018-11-29T05:13:31Z",
+        "updatedAt" : "2018-12-01T16:57:02Z",
+        "lastEditedBy" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aec83c36f2b7f46b7ffc1990f56e60f0a9811149",
+    "line" : 142,
+    "diffHunk" : "@@ -1,1 +1292,1296 @@      if (bouncedBrokerIds.nonEmpty) {\n        controllerContext.removeLiveBrokersAndEpochs(bouncedBrokerIds)\n        onBrokerFailure(bouncedBrokerIdsSorted)\n        controllerContext.addLiveBrokersAndEpochs(bouncedBrokerAndEpochs)\n        onBrokerStartup(bouncedBrokerIdsSorted)"
+  },
+  {
+    "id" : "1b1a0fd8-1a26-42d8-8642-531e97a68db5",
+    "prId" : 5821,
+    "prUrl" : "https://github.com/apache/kafka/pull/5821#pullrequestreview-179631276",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "68140097-d07a-4e5f-9275-f41e4017a392",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Should we log the broker epoch in addition to the broker id?",
+        "createdAt" : "2018-11-15T22:18:43Z",
+        "updatedAt" : "2018-12-01T16:57:02Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0793d8e7-e7cd-487e-999a-d68dad7b99b3",
+        "parentId" : "68140097-d07a-4e5f-9275-f41e4017a392",
+        "authorId" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "body" : "The broker epoch is already logged at the end of the broker change event: https://github.com/apache/kafka/pull/5821/files/88e4eb606fc72761a17378ee6bdf6732765808ef#diff-ed90e8ecc5439a5ede5e362255d11be1R1305",
+        "createdAt" : "2018-11-29T05:14:32Z",
+        "updatedAt" : "2018-12-01T16:57:02Z",
+        "lastEditedBy" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "aec83c36f2b7f46b7ffc1990f56e60f0a9811149",
+    "line" : 127,
+    "diffHunk" : "@@ -1,1 +1280,1284 @@        s\"deleted brokers: ${deadBrokerIdsSorted.mkString(\",\")}, \" +\n        s\"bounced brokers: ${bouncedBrokerIdsSorted.mkString(\",\")}, \" +\n        s\"all live brokers: ${liveBrokerIdsSorted.mkString(\",\")}\")\n\n      newBrokerAndEpochs.keySet.foreach(controllerContext.controllerChannelManager.addBroker)"
+  },
+  {
+    "id" : "e558401d-06f0-4d35-9caf-88d508102e19",
+    "prId" : 5869,
+    "prUrl" : "https://github.com/apache/kafka/pull/5869#pullrequestreview-171845373",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a078c5c7-3e9d-4f6e-abf9-03cb62d61362",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Should we change the comment in line 361 and 362 accordingly?",
+        "createdAt" : "2018-11-05T23:36:05Z",
+        "updatedAt" : "2018-11-06T02:47:03Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1808e02f-c6dc-4a4b-8e6a-6a98029a97f1",
+        "parentId" : "a078c5c7-3e9d-4f6e-abf9-03cb62d61362",
+        "authorId" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "body" : "Done.",
+        "createdAt" : "2018-11-06T02:31:49Z",
+        "updatedAt" : "2018-11-06T02:47:03Z",
+        "lastEditedBy" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2093c8673a07898cf2271274efe351d2b8e64fa",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +358,362 @@    newBrokers.foreach(controllerContext.replicasOnOfflineDirs.remove)\n    val newBrokersSet = newBrokers.toSet\n    val existingBrokers = controllerContext.liveOrShuttingDownBrokerIds -- newBrokers\n    // Send update metadata request to all the existing brokers in the cluster so that they know about the new brokers\n    // via this update. No need to include any partition states in the request since there are no partition state changes."
+  },
+  {
+    "id" : "f7109a2c-971c-47b1-a664-342760b5ad94",
+    "prId" : 5869,
+    "prUrl" : "https://github.com/apache/kafka/pull/5869#pullrequestreview-171847733",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "47c80126-ee04-407a-bcc0-36fef8390bbd",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Probably change the comment above from \"inform brokers of the offline replica\" to \"inform brokers of the offline brokers\"?",
+        "createdAt" : "2018-11-06T02:35:25Z",
+        "updatedAt" : "2018-11-06T02:47:03Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5bb98877-1545-4f13-b3da-6435902ad3ed",
+        "parentId" : "47c80126-ee04-407a-bcc0-36fef8390bbd",
+        "authorId" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "body" : "Done.",
+        "createdAt" : "2018-11-06T02:47:08Z",
+        "updatedAt" : "2018-11-06T02:47:08Z",
+        "lastEditedBy" : "e9f2a5b6-a46b-4418-b0e8-3a587ddbbf67",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f2093c8673a07898cf2271274efe351d2b8e64fa",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +465,469 @@    // Note that during leader re-election, brokers update their metadata\n    if (partitionsWithoutLeader.isEmpty) {\n      sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)\n    }\n  }"
   }
 ]
