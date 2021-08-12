@@ -273,5 +273,49 @@
     "commit" : "9eda58c38bbc5f2936654e768d67eea4742a831f",
     "line" : 57,
     "diffHunk" : "@@ -1,1 +106,110 @@                log.info(\"Reinitializing StreamTask {} for changelog {}\", task, partition);\n\n                needsInitializing.remove(partition);\n                needsRestoring.remove(partition);\n"
+  },
+  {
+    "id" : "a557089c-1098-4147-9658-096bf4762b70",
+    "prId" : 5767,
+    "prUrl" : "https://github.com/apache/kafka/pull/5767#pullrequestreview-176440736",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "88efebdc-c094-474d-a4b9-39a045cfc973",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I have some questions just for my education.\r\n\r\nI think I get it what the issue is.  The `ProcessorStateManager#register` creates a new `StateRestorer` each time, and it gets passed in here, so without reusing the `existingRestorer` restoring never completes. Is that correct?  My question is `StateRestorer` should contain the same state even if a new instance, so how does using the existing restorer solve the issue? From what I can see the state should be the same between the new and existing restorer.  Since the fix seems to be the same as #5915, I'll ask my question here.",
+        "createdAt" : "2018-11-15T15:44:35Z",
+        "updatedAt" : "2018-11-15T15:49:18Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4c72857-acb7-4f9a-b7de-51f13af69ee9",
+        "parentId" : "88efebdc-c094-474d-a4b9-39a045cfc973",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : ">  Is that correct?\r\n\r\nYes.\r\n\r\nFor EOS, on startup, we read the checkpoint file, store the information in the restorer, and delete the checkpoint file (we only write one on clean shutdown). The magic happens in L173/180 `if (restorer.checkpoint() != StateRestorer.NO_CHECKPOINT) {` and L204 `restorer.setCheckpointOffset(restoreConsumer.position(restoringPartition));`. \r\n\r\nIf there is no checkpoint store in the restorer, we seekToBeginning and mark as `needsPositionUpdate`. Later, we wipe out the store and put the current beginningOffset as checkpoint to the restorer. Thus, when we re-register, we need to preserve this checkpoint information. The newly created `StateRestored` would get initialized by looking if there is checkpoint file on disk and would be initialized with \"no checkpoint\".\r\n\r\nIt's a little hacky... Maybe we can revisit this design at some point and make it cleaner.\r\n\r\nMakes sense?",
+        "createdAt" : "2018-11-17T02:40:48Z",
+        "updatedAt" : "2018-11-17T02:42:15Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "87c9e33a-0e1d-4f22-92e6-c20c6263b225",
+        "parentId" : "88efebdc-c094-474d-a4b9-39a045cfc973",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Yes, thanks for the clarification.",
+        "createdAt" : "2018-11-19T18:41:03Z",
+        "updatedAt" : "2018-11-19T18:41:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5256317b9b3d01ba50c6287c6b88216dcc588498",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +68,72 @@            needsInitializing.put(restorer.partition(), restorer);\n        } else {\n            needsInitializing.put(restorer.partition(), existingRestorer);\n        }\n    }"
   }
 ]

@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "261cf302-1f03-43f8-9f94-64cbcae456ea",
+    "prId" : 5709,
+    "prUrl" : "https://github.com/apache/kafka/pull/5709#pullrequestreview-159716169",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "31f2de84-df8c-49c4-ba14-c5bab35b80c9",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Most of the LOC in this class are boilerplate to create the topologies for the tests, and the expected optimized and non-optimized topologies.",
+        "createdAt" : "2018-09-28T04:34:12Z",
+        "updatedAt" : "2018-10-02T03:08:38Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1865cefcf62b3da85b2bff112296d49717891c34",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +39,43 @@import static org.junit.Assert.fail;\n\npublic class RepartitionTopicNamingTest {\n\n    private final KeyValueMapper<String, String, String> kvMapper = (k, v) -> k + v;"
+  },
+  {
+    "id" : "59be4ba2-f1d1-4072-b144-9ece3ff52ab7",
+    "prId" : 5709,
+    "prUrl" : "https://github.com/apache/kafka/pull/5709#pullrequestreview-160387002",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6f06356b-004e-417a-b888-e166b8c64dba",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Not sure why this should not be allowed? To be more precise: I understand why the code fails, however, it's very unintuitive for the user why this would fail -- looks like valid code and IMHO, users should be allowed to write this code: Both operations can reuse the same repartition topic anyway (and with optimization turned on, they will, if I don't miss anything).\r\n\r\nNot sure if we can fix this easily to be honest, but accepting this as \"by design\" would not be user friendly. Maybe we can merge both repartition topics into one for this case, too?",
+        "createdAt" : "2018-09-30T00:20:43Z",
+        "updatedAt" : "2018-10-02T03:08:38Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5c31e5a6-0124-4357-9915-08714d0aa26d",
+        "parentId" : "6f06356b-004e-417a-b888-e166b8c64dba",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "+1",
+        "createdAt" : "2018-09-30T20:07:31Z",
+        "updatedAt" : "2018-10-02T03:08:38Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e26ed9a-a20f-403c-b996-c412a22f8cd9",
+        "parentId" : "6f06356b-004e-417a-b888-e166b8c64dba",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I agree, but IMHO it's exposing some unintuitive behavior with respect to creating multiple repartition topics.  And yes with optimizations turned on users will be able to write code in this form. \r\n\r\nBut as it stands now, by explicitly naming a repartition I don't see how we can re-use a single `KGroupedStream` instance, as before we relied on the auto-generated names to handle the creation of multiple repartition topics.  \r\n\r\n>Maybe we can merge both repartition topics into one for this case, too?\r\n\r\nI'm not sure I follow, do you mean in this case we do an automatic optimization and merge repartition topics \"in-line\"?   If so, I'm inclined to say yes we can, but I'm thinking this may be done best in a follow-on PR.\r\n\r\nWDYT?",
+        "createdAt" : "2018-10-01T05:12:28Z",
+        "updatedAt" : "2018-10-02T03:08:38Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "46a009ae-9df6-4b01-abb0-ea45359b37c7",
+        "parentId" : "6f06356b-004e-417a-b888-e166b8c64dba",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Something like this -- the idea would be to set a \"flag\" on the `KGroupedStream` (same for `KGroupedTable`?) after the first `count()/reduce()/aggregate()` is executed and to remember the created repartition topic. And for this case, consecutive `count()/reduce()/aggregate()` would skip creating a new changelog topic but reuse the already created one.\r\n\r\nFor backward compatibility, we would only do this if `Grouped.as` is specified. It might be a little bit hacky, but might be worth it...\r\n\r\nThoughts?",
+        "createdAt" : "2018-10-01T07:08:07Z",
+        "updatedAt" : "2018-10-02T03:08:38Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "751a11c9-1672-407a-9a03-eafc07e68cb3",
+        "parentId" : "6f06356b-004e-417a-b888-e166b8c64dba",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I like the idea; I'll try and implement that now\r\n\r\nEDIT: Looking at this  I have some more thoughts.\r\n\r\nWhy limit to just when people name the repartition topic?  Since we have a graph now, we can keep a reference to the repartition graph node and at this point in the code always re-use this node for repartitioning.  But this could be tricky as this will still affect an existing topology. \r\n\r\nFor example, consider a user with multiple `KGroupedStream` calls where a repartition is required.  While this means we have created multiple repartition topics, this also means that we have incremented the processor counter N times (N being the number of repartition topics).  If we adopt this approach, and the user names the repartition topic, and we reuse the first created repartition topic, we'll change the number of all downstream operations including changelog topics and any other repartition topics.  This \"skipping incrementing\" is similar to what happened when re-using a source topic for source `KTable` changelogs.\r\n\r\nWhile I realize most users will probably name all repartition topics, by doing so, they'll have to ensure they name any changelog topics as well if we reuse the repartition topics in-line.  With the current optimization approach the numbering isn't affected, we move the nodes around.\r\n\r\nAdditionally,  I\"m not sure how this will affect the current optimization approach (maybe change it, as I think if we keep repartition node references as we go we could have \"automatic\" partial merging ?)\r\n\r\nI'm thinking this approach is could worth looking into, but as an immediate follow-on PR to this one as this requires some thought.\r\n\r\nWDYT?\r\n\r\n\r\n\r\n",
+        "createdAt" : "2018-10-01T14:29:31Z",
+        "updatedAt" : "2018-10-02T03:08:38Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "112bbcd3-0de2-41a8-af0b-6d357c99f89d",
+        "parentId" : "6f06356b-004e-417a-b888-e166b8c64dba",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> Why limit to just when people name the repartition topic?\r\n\r\nFor backward compatibility.\r\n\r\nFor new topologies, we should not need to care, because I would assume that users turn on optimization.",
+        "createdAt" : "2018-10-01T16:47:28Z",
+        "updatedAt" : "2018-10-02T03:08:38Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1865cefcf62b3da85b2bff112296d49717891c34",
+    "line" : 100,
+    "diffHunk" : "@@ -1,1 +98,102 @@    // see test shouldHandleUniqueGroupedInstances below for an example\n    @Test\n    public void shouldFailWithSameRepartitionTopicNameUsingSameKGroupedStream() {\n        try {\n            final StreamsBuilder builder = new StreamsBuilder();"
+  },
+  {
+    "id" : "74241bba-2644-47f9-b3f0-4c1c8f05756b",
+    "prId" : 5709,
+    "prUrl" : "https://github.com/apache/kafka/pull/5709#pullrequestreview-160149620",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f8813666-7034-4be7-931a-198e34beabf6",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Seems for Joined we do not have a test to check for naming uniqueness yet, could we add one?",
+        "createdAt" : "2018-09-30T20:14:32Z",
+        "updatedAt" : "2018-10-02T03:08:38Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f69ff781-b4c7-4dd6-a60f-e46b02d02776",
+        "parentId" : "f8813666-7034-4be7-931a-198e34beabf6",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "ack",
+        "createdAt" : "2018-10-01T03:50:34Z",
+        "updatedAt" : "2018-10-02T03:08:38Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1865cefcf62b3da85b2bff112296d49717891c34",
+    "line" : 146,
+    "diffHunk" : "@@ -1,1 +144,148 @@\n    @Test\n    public void shouldKeepRepartitionTopicNameForJoins() {\n\n        final String expectedLeftRepartitionTopic = \"(topic: my-join-left-repartition)\";"
+  }
+]

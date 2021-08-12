@@ -152,5 +152,104 @@
     "commit" : "1aee2f257ef30db4902789058e2dcba7faff678c",
     "line" : 79,
     "diffHunk" : "@@ -1,1 +297,301 @@   * @see `org.apache.kafka.streams.kstream.KStream#transform`\n   */\n  def transform[K1, V1](transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],\n                        stateStoreNames: String*): KStream[K1, V1] =\n    inner.transform(transformerSupplier, stateStoreNames: _*)"
+  },
+  {
+    "id" : "25bcf384-c795-4cfe-a698-4da7de825e31",
+    "prId" : 5793,
+    "prUrl" : "https://github.com/apache/kafka/pull/5793#pullrequestreview-164481804",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8eac71fd-c8a6-4b24-b8e9-42f871abde4c",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "hmm :/ I guess we can't deprecate the old variant without creating ambiguities in the implicits?",
+        "createdAt" : "2018-10-12T18:29:10Z",
+        "updatedAt" : "2018-10-16T04:26:05Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "66e6d8fe-a938-454b-b60d-1748613bd5eb",
+        "parentId" : "8eac71fd-c8a6-4b24-b8e9-42f871abde4c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "This is my only semi-major concern.",
+        "createdAt" : "2018-10-12T19:02:15Z",
+        "updatedAt" : "2018-10-16T04:26:05Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1d3a5989-969e-48f4-9cb0-e263fcdf1a70",
+        "parentId" : "8eac71fd-c8a6-4b24-b8e9-42f871abde4c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "tl;dr: we can't do this in a way that breaks no one. We have to choose between two populations of users to break.\r\n\r\nAfter actually trying this, we face the following dilemma:\r\n\r\n1. **if our users are importing the implicit conversions with a wildcard** (`import org.apache.kafka.streams.scala.ImplicitConversions._`), **then having both overloads in `KStream` will break them.**\r\nThis is because the compiler says \"I have some serdes. I need either a `Grouped` or a `Serialized`. I know how to make both `Grouped` and `Serialized` from the serdes I have. Therefore, I need the programmer to resolve this ambiguity.\"\r\n**On the other hand, if we just drop the Serialized overload, their code will continue to work**, since the compiler will just use the implicit conversion to produce a Grouped instead of a Serialized.\r\n\r\n2. **if they are only importing the implicit conversions they need** (`import org.apache.kafka.streams.scala.ImplicitConversions.serializedFromSerde`), **then dropping the Serialized overload will break them**.\r\nThis is because the compiler only knows how to implicitly produce a Serialized, not a Grouped.\r\nOn the other hand, **if we keep both overloads, their code will continue to work**, and in fact, they'll get a deprecation warning to switch to grouped, which they could do by just omitting `serializedFromSerde` and importing `groupedFromSerde` instead.\r\n\r\nJust to preach for a second, this is why it's dangerous to use wildcard imports with implicit conversions... you have no idea what is actually happening. Implicits are nice for saving boilerplate, not for saving you from knowing what your program is doing.\r\n\r\nSo my opinionated preference is that our users should be going with the specific imports (2), and therefore we should do the same thing with the scala API as we do with the java one: deprecate old methods.\r\n\r\nBut pragmatically, I think the fact that the original contributors used the wildcard pattern (1) suggests that our scala users in general are more likely to also be using pattern 1. In turn, this suggests we should just go ahead and replace the Serialized method with the Grouped one.",
+        "createdAt" : "2018-10-12T21:12:45Z",
+        "updatedAt" : "2018-10-16T04:26:05Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "20eba14a-6a4b-418d-beb2-09bf7eb943ff",
+        "parentId" : "8eac71fd-c8a6-4b24-b8e9-42f871abde4c",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "I've been thinking about this and just yanking out `Serialized` with no prior warning doesn't feel like it's the correct thing to do, so I have an another proposal\r\n\r\n1. I'll submit another minor PR where we deprecate `Serialized` in the Scala API.  This PR should get merged to trunk and cherry-picked to 2.1 and go with the 2.1 release. Also, update the docs stating we'll remove `Serialized` (from the Scala API) in the next release.\r\n\r\n2. Update this PR to remove `Serialized` (per @vvcephei comments above) and associated methods and tests. Then merge it after the code freeze, so that it ships with 2.2.  Then we will have provided one release \"warning\" so to speak.\r\n\r\nIMHO it's import to take these steps now, as it's too easy to let the Scala API \"drift\" some.\r\n\r\nWDYT?\r\n\r\n\\cc @guozhangwang @mjsax @vvcephei ",
+        "createdAt" : "2018-10-13T15:49:37Z",
+        "updatedAt" : "2018-10-16T04:26:05Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "17e6bc42-a601-4bed-a0e7-c1f8c05e76de",
+        "parentId" : "8eac71fd-c8a6-4b24-b8e9-42f871abde4c",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I agree. Scala API is public API same as Java. Deprecating `Serialized` in Scala should be part of the KIP (Bill, can you update it?) -- I think, we need to be more careful in the future and include Scala API impact in all KIP discussions (guess, Scala API is still too new, so we tend to let it slip, what we should do better in the future).\r\n\r\nI am just not sure, if we can/should remove the `Serialized` in 2.2 already. In the past, we used only mayor releases to remove deprecate APIs, so for this, it might be 3.0 (I say 'might' because, we should keep deprecates API for a year, too, so only remove if both conditions are met).\r\n\r\nThoughts?",
+        "createdAt" : "2018-10-13T19:00:18Z",
+        "updatedAt" : "2018-10-16T04:26:05Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6da3b7c3-ed9b-4439-9176-3d1fd2604510",
+        "parentId" : "8eac71fd-c8a6-4b24-b8e9-42f871abde4c",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "@mjsax - I agree with your thoughts on keeping the deprecated API until  3.0. And yes I can update the KIP to mention Scala API deprecation.\r\n\r\nBut as I look at the bigger picture, the driving factor behind adding `Grouped` is that users can name repartition topics and then not break the ability to do a rolling upgrade when adding or removing operations from their topology.\r\n\r\nIMHO by not putting in `Grouped` we are unnecessarily penalizing Scala API users (and I realize it was my suggestion just to deprecate `Serialized` and leave out `Grouped` in this release).\r\n\r\nSo I'm going to amend my proposal to this:\r\n\r\n1. Deprecate `Serialized` as planned\r\n2. Add the `Grouped` updates to the Scala API.\r\n3. Per @vvcephei original suggestions we explicitly list imports concerning implicit converters which will resolve the ambiguous method reference errors.  And to preserve compatibility, we'd include `serializedFromSerde` and not import `groupedFromSerde`.\r\n\r\nI _think_ this approach will work because if a user wants to name a repartition topic, she will have to provide a `Grouped.as(\"name\")` argument (the name can 't be provided implicitly).\r\n\r\nAt that point importing both implicit converters should not cause any ambiguity as `Serialized` is chosen for no args and `Grouped` is used due to the multiple parameter lists of the function  `Grouped.with[K, V](name: String)(implicit keySerde: Serde[K], valueSerde: Serde[V])`.\r\n\r\nI'll verify this approach with some updated tests; then we can include everything in this PR for 2.1 and remove `Serialized` in a future release when deeming necessary.  Also, I can update the documentation to explain this situation to users and not to\r\n\r\nThoughts?",
+        "createdAt" : "2018-10-13T20:11:53Z",
+        "updatedAt" : "2018-10-16T04:26:05Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "800282c0-e374-45d8-80c7-c55d41c4fd44",
+        "parentId" : "8eac71fd-c8a6-4b24-b8e9-42f871abde4c",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> Add the Grouped updates to the Scala API.\r\n\r\nAbsolutely.\r\n\r\n(Don't now enough about Scala to comment on the rest. Leave this part to @guozhangwang and @vvcephei.)",
+        "createdAt" : "2018-10-13T21:01:20Z",
+        "updatedAt" : "2018-10-16T04:26:05Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "af65f311-2733-47f4-a639-3e5c23254e5a",
+        "parentId" : "8eac71fd-c8a6-4b24-b8e9-42f871abde4c",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Update I've got something working that will work for everyone I believe, and I'll post a PR tomorrow",
+        "createdAt" : "2018-10-14T02:02:52Z",
+        "updatedAt" : "2018-10-16T04:26:05Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "34689d1b46eae10b205ca8666d0b530924b2ae6c",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +379,383 @@   * @see `org.apache.kafka.streams.kstream.KStream#groupByKey`\n   */\n  def groupByKey(implicit grouped: Grouped[K, V]): KGroupedStream[K, V] =\n    inner.groupByKey(grouped)\n"
   }
 ]
