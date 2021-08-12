@@ -2869,5 +2869,214 @@
     "commit" : "f3fcf016539392f428d56a7b0ef7f35ff3f47d48",
     "line" : 32,
     "diffHunk" : "@@ -1,1 +1117,1121 @@                    processed++;\n                }\n            } catch (final TimeoutException timeoutException) {\n                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);\n                log.debug("
+  },
+  {
+    "id" : "9a75a507-7fda-49d1-b80d-77c8cf27b45e",
+    "prId" : 10407,
+    "prUrl" : "https://github.com/apache/kafka/pull/10407#pullrequestreview-622714000",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d5388216-6573-4695-a5dc-8a421ae55f9b",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I think we could also catch `TimeoutException` here and just mark tasks as corrupted if we cannot commit them? (We would need to disable the `TImeoutException` handling within `commit()` for this case...)",
+        "createdAt" : "2021-03-27T21:54:20Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1888294f-357e-48ae-84b0-4a99a9507b52",
+        "parentId" : "d5388216-6573-4695-a5dc-8a421ae55f9b",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yeah, look at what I have now which is what I was doing before I backtracked and thought we wanted to kill the thread if we hit the task.timeout on a TimeoutException in commit. TimeoutException handling here should be ok now -- regarding the rest, seems like we should\r\n1) always clear the timeout inside `Task#revive`\r\n2) refactor `commit` a bit and pull the `prepareCommit` + `commitOffsetsORTransaction` + `postCommit` stuff out into a separate method we can invoke from `handleCorrupted`",
+        "createdAt" : "2021-03-28T01:46:14Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b2f5040b-2978-4517-a3ec-832979462f9f",
+        "parentId" : "d5388216-6573-4695-a5dc-8a421ae55f9b",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "The only semantic difference that 2) would make is to have `prepareCommit` inside the try block we would catch TimeoutException for. I assume that's ok, not sure if it was left out for a reason...?",
+        "createdAt" : "2021-03-28T01:48:25Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa4cde53e6e3f60b90fafa2ec54fba011e6aba6c",
+    "line" : 43,
+    "diffHunk" : "@@ -1,1 +182,186 @@                                new HashMap<>()\n            );\n        } catch (final TaskCorruptedException e) {\n            log.info(\"Some additional tasks were found corrupted while trying to commit, these will be added to the \" +\n                         \"tasks to clean and revive: {}\", e.corruptedTasks());"
+  },
+  {
+    "id" : "93fcf876-a4b3-4e12-90d6-63921ca6d74d",
+    "prId" : 10407,
+    "prUrl" : "https://github.com/apache/kafka/pull/10407#pullrequestreview-622712885",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5b258ab7-0136-49f0-8890-d7817458109e",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Not sure if I understand why we pulled this into this method? Not saying it's wrong, but I don't really understand right now. Can you elaborte?",
+        "createdAt" : "2021-03-27T21:56:33Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3565b015-32dd-4e7f-97c7-7ff847437d2a",
+        "parentId" : "5b258ab7-0136-49f0-8890-d7817458109e",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "This was your suggestion? Or maybe your question is directed at something else..?",
+        "createdAt" : "2021-03-28T01:26:06Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa4cde53e6e3f60b90fafa2ec54fba011e6aba6c",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +202,206 @@\n            // mark corrupted partitions to not be checkpointed, and then close the task as dirty\n            if (markAsCorrupted) {\n                task.markChangelogAsCorrupted(corruptedPartitions);\n            }"
+  },
+  {
+    "id" : "bfcede68-d548-4cf6-976d-e760e8f5d310",
+    "prId" : 10407,
+    "prUrl" : "https://github.com/apache/kafka/pull/10407#pullrequestreview-622794732",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "37b443cb-ebf7-4b1b-8832-d545f534eb72",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Just pulled all the actual contents, excluding the TimeoutException + `maybeInitTaskTimeoutOrThrow` handling, so we could use it in `handleCorruption` without that stuff",
+        "createdAt" : "2021-03-28T23:12:18Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa4cde53e6e3f60b90fafa2ec54fba011e6aba6c",
+    "line" : 204,
+    "diffHunk" : "@@ -1,1 +1032,1036 @@     * @param consumedOffsetsAndMetadataPerTask an empty map that will be filled in with the prepared offsets\n     */\n    private int commitAndFillInConsumedOffsetsAndMetadataPerTaskMap(final Collection<Task> tasksToCommit,\n                                                                    final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask) {\n        int committed = 0;"
+  },
+  {
+    "id" : "560c783b-763a-4b31-afb6-2956d11e6f77",
+    "prId" : 10407,
+    "prUrl" : "https://github.com/apache/kafka/pull/10407#pullrequestreview-622794749",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b4064277-d177-4c7c-aa36-2adc1fa09916",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "One nit: maybe explain in a comment, we we don't add the tasks to `dirtyTasks`?",
+        "createdAt" : "2021-03-28T23:12:24Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa4cde53e6e3f60b90fafa2ec54fba011e6aba6c",
+    "line" : 121,
+    "diffHunk" : "@@ -1,1 +544,548 @@            log.warn(\"Timed out while trying to commit all tasks during revocation, these will be cleaned and revived\");\n\n            // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state\n            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());\n            closeDirtyAndRevive(dirtyTasks, false);"
+  },
+  {
+    "id" : "daa1c714-9655-4c8b-a5cf-ab365202d32f",
+    "prId" : 10407,
+    "prUrl" : "https://github.com/apache/kafka/pull/10407#pullrequestreview-623645759",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "88e778d4-fd9b-4fef-9d8e-1e396d6095d7",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Thanks for the cleanup! I think in the past we may only mark some subset of changelog partitions as corrupted, but later we would always just mark all of them as corrupted. Just following that thought, maybe in `task.markChangelogAsCorrupted` we do not need to pass in parameters either but just mark all changelog partitions as corrupted?",
+        "createdAt" : "2021-03-29T04:43:58Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67614495-7a25-4745-a00e-976d7f12243d",
+        "parentId" : "88e778d4-fd9b-4fef-9d8e-1e396d6095d7",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I didn't want to go all the way with consolidating this logic since eventually we may want to have it so that only the subset of partitions/stores which are actually corrupted will need to be wiped out. So I'd prefer to leave this as-is for now and keep the places in which we infer the changelogs from the task restricted to just the TaskManager for now",
+        "createdAt" : "2021-03-29T21:00:08Z",
+        "updatedAt" : "2021-03-29T21:00:08Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa4cde53e6e3f60b90fafa2ec54fba011e6aba6c",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +162,166 @@            final Task task = tasks.task(taskId);\n            if (task.isActive()) {\n                corruptedActiveTasks.add(task);\n            } else {\n                corruptedStandbyTasks.add(task);"
+  },
+  {
+    "id" : "38af3203-2275-4ba4-aef6-ff59ac0a3032",
+    "prId" : 10407,
+    "prUrl" : "https://github.com/apache/kafka/pull/10407#pullrequestreview-623648069",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c2f1f111-579f-461b-99ad-a431a1ae6481",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "If `closeDirtyAndRevive` throws here, then the next `closeDirtyAndRevive` would not be triggered. Is that okay, or do we guarantee that `closeDirtyAndRevive` would not throw at all now?",
+        "createdAt" : "2021-03-29T04:45:53Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0fd0fb2-cf89-4e12-a664-7bbf8a2a36a0",
+        "parentId" : "c2f1f111-579f-461b-99ad-a431a1ae6481",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "It seems we guarantee that `closeDirtyAndRevive` does not throw -- this isn't a new assumption, since prior to this it was possible for `closeDirtyAndRevive` to throw for standby tasks which means we would not invoke it for active tasks. We're just doing the same thing here. (Even if we did throw I think it would be ok under both ALOS or EOS, as for EOS this would cause an unclean shutdown which would mean wiping the store anyway, and for ALOS we would just be closing dirty which again is what we were about to do anyway)",
+        "createdAt" : "2021-03-29T21:03:12Z",
+        "updatedAt" : "2021-03-29T21:03:12Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa4cde53e6e3f60b90fafa2ec54fba011e6aba6c",
+    "line" : 52,
+    "diffHunk" : "@@ -1,1 +191,195 @@            uncorruptedTasks.removeAll(corruptedActiveTasks);\n            // Those tasks which just timed out can just be closed dirty without marking changelogs as corrupted\n            closeDirtyAndRevive(uncorruptedTasks, false);\n        }\n"
+  },
+  {
+    "id" : "76a420ec-c885-4198-9ecc-9cc93ec39936",
+    "prId" : 10444,
+    "prUrl" : "https://github.com/apache/kafka/pull/10444#pullrequestreview-624791928",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7e0cfa2a-478b-4bc6-afa3-1099371296d3",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "This is the only logical change, I moved this check from `TaskManager#commit` to this method. And added a bunch of comments/docs so we don't forget this again",
+        "createdAt" : "2021-03-30T23:57:19Z",
+        "updatedAt" : "2021-03-30T23:57:19Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e20926fa83e5ff2ba74931a8c047e26836eddcda",
+    "line" : 51,
+    "diffHunk" : "@@ -1,1 +1042,1046 @@        if (rebalanceInProgress) {\n            return -1;\n        }\n\n        int committed = 0;"
   }
 ]

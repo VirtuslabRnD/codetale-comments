@@ -174,5 +174,82 @@
     "commit" : "4fc7bf96b2722317ac418a1d6ff0dedbc01a9ea8",
     "line" : 140,
     "diffHunk" : "@@ -1,1 +198,202 @@                        \"end offset: \" + currentEndOffset.offset + \" -> \" + endOffsetMetadata.offset);\n                } else {\n                    log.warn(\"Detected non-monotonic update of fetch offset from nodeId {}: {} -> {}\",\n                        state.nodeId, currentEndOffset.offset, endOffsetMetadata.offset);\n                }"
+  },
+  {
+    "id" : "0979c725-2674-4af2-9035-b2f6fd87dd39",
+    "prId" : 10480,
+    "prUrl" : "https://github.com/apache/kafka/pull/10480#pullrequestreview-647456191",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "91780cbc-582a-45c8-a23a-5bb5af211960",
+        "parentId" : null,
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "We `forceDrain` inside `appendLeaderChangeMessage` before adding the leader change message to `completed`. Is this `forceDrain()` a no-op? Should the current batch be empty at this point? If we don't need to call this method, I say we remove it all together.",
+        "createdAt" : "2021-04-28T18:57:06Z",
+        "updatedAt" : "2021-04-28T19:54:04Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26a2bdf3-ccef-4604-9fde-89e47e8bfca9",
+        "parentId" : "91780cbc-582a-45c8-a23a-5bb5af211960",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "It was my suggestion in order to keep the contract of `BatchAccumulator` tight. We do \"know\" in this usage that the accumulator should be empty, but it costs us very little to protect the API without relying on external assumptions.",
+        "createdAt" : "2021-04-28T19:19:30Z",
+        "updatedAt" : "2021-04-28T19:54:04Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "69033c29-3878-469a-a748-f462441899ea",
+        "parentId" : "91780cbc-582a-45c8-a23a-5bb5af211960",
+        "authorId" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "body" : "Okay. We are attempting to keep the semantic for `appendLeaderChangeMessage` similar to that of the other `append` methods. In that case I am okay with this API.",
+        "createdAt" : "2021-04-28T19:50:02Z",
+        "updatedAt" : "2021-04-28T19:54:04Z",
+        "lastEditedBy" : "4a7c311c-0954-4671-a0d2-266cb67437ad",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d043ff6bcf43648ef34031594a8620e64761618a",
+    "line" : 70,
+    "diffHunk" : "@@ -1,1 +98,102 @@        \n        accumulator.appendLeaderChangeMessage(leaderChangeMessage, currentTimeMs);\n        accumulator.forceDrain();\n    }\n"
+  },
+  {
+    "id" : "7e91e756-6c2d-4dab-904b-9ddd69b537a4",
+    "prId" : 10481,
+    "prUrl" : "https://github.com/apache/kafka/pull/10481#pullrequestreview-631671846",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2e4264b9-3178-4fde-9e26-47031940adb4",
+        "parentId" : null,
+        "authorId" : "12f98c82-b9ef-4668-aa6f-5a62bf3439bb",
+        "body" : "I was also confused by this logic for a while and I got an optimization idea from the [Raft dissertation](http://wcl.cs.rpi.edu/pilots/library/papers/consensus/RAFTOngaroPhD.pdf) about this, The sentence below is taken from section \"5.4.2 Committing entries from previous terms\":\r\n```\r\nThere are some situations where a leader could safely conclude that an older log entry is committed (for example, if that entry is stored on every server), but Raft takes a more conservative approach for simplicity.\r\n```\r\nso we can also update commitIndex(highWatermark) if logEndOffset of all followers have passed the highWatermark.\r\n\r\nI don't think this is a good idea since it makes the logic opaque but will not necessarily really optimize any performance, so I just mention it here and feel free to ignore it 🙈.\r\n\r\n",
+        "createdAt" : "2021-04-08T11:22:45Z",
+        "updatedAt" : "2021-04-08T11:24:50Z",
+        "lastEditedBy" : "12f98c82-b9ef-4668-aa6f-5a62bf3439bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "61e0caa8-f4d4-4691-9c7f-dacf8b94262e",
+        "parentId" : "2e4264b9-3178-4fde-9e26-47031940adb4",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "That makes sense. I guess it could save a round-trip in some cases, but I'm also inclined to leave it for potential future investigation.",
+        "createdAt" : "2021-04-08T17:38:57Z",
+        "updatedAt" : "2021-04-08T17:38:58Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "21da5e8df50a9b73e7564668f09b482fb965c21c",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +125,129 @@            long highWatermarkUpdateOffset = highWatermarkUpdateMetadata.offset;\n\n            if (highWatermarkUpdateOffset > epochStartOffset) {\n                if (highWatermark.isPresent()) {\n                    LogOffsetMetadata currentHighWatermarkMetadata = highWatermark.get();"
   }
 ]

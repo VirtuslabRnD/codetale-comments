@@ -20,5 +20,159 @@
     "commit" : "295398d006e707a60672b3898068cac2049a0f7f",
     "line" : 7,
     "diffHunk" : "@@ -1,1 +79,83 @@\n        final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream<?, ?>) lhs).streamsGraphNode;\n        final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream<?, ?>) other).streamsGraphNode;\n\n        final StoreBuilder<WindowStore<K1, V1>> thisWindowStore;"
+  },
+  {
+    "id" : "e7cbc3e7-3d4e-47d0-b07b-0560f61fbdca",
+    "prId" : 10462,
+    "prUrl" : "https://github.com/apache/kafka/pull/10462#pullrequestreview-634785209",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "44121e5b-e986-4a60-b1c0-a2f158102391",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Since this is only accessed single-thread, using an atomic long feels a bit overkill. We could probably maintain the \"long maxObservedStreamTime\" in this class, and pass in a `ObservedStreamTime` interface to the two joiners which just have a setter / getter to read and write to the local variable.",
+        "createdAt" : "2021-04-07T17:43:05Z",
+        "updatedAt" : "2021-04-28T11:46:56Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f70fd08b-f9bf-4dd1-a10e-dd93f5f4ac66",
+        "parentId" : "44121e5b-e986-4a60-b1c0-a2f158102391",
+        "authorId" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "body" : "Done",
+        "createdAt" : "2021-04-09T20:34:45Z",
+        "updatedAt" : "2021-04-28T11:46:56Z",
+        "lastEditedBy" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7a2d6edd-b3ed-4cdc-b1a3-56e7f763885f",
+        "parentId" : "44121e5b-e986-4a60-b1c0-a2f158102391",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "One disadvantage compared to using `context.streamTime()` would be, that `MaxObservedStreamTime` would be reset to zero on rebalance/restart. (Or we need to add additional code to preserve it...)",
+        "createdAt" : "2021-04-13T03:17:48Z",
+        "updatedAt" : "2021-04-28T11:46:56Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4d273b47-fb47-4395-aa24-169d3544993f",
+        "parentId" : "44121e5b-e986-4a60-b1c0-a2f158102391",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "It's extremely subtle, but we cannot use `context.streamTime()` because of the time-delay effects of upstream record caches. This was the cause of a severe bug in `suppress` that went undetected until after it was released.\r\n\r\nFor example: if we have a record cache upstream of this join, it will delay the propogation of records (and their accompanying timestamps) by time amount `D`. Say we ingest some record with timestamp `T`. If we reference the context's stream time, our processor will think it is at time `T`, when it is really at time `T - D`, leading it to behave wrongly, such as enforcing the grace period prematurely, which will manifest to users as data loss.",
+        "createdAt" : "2021-04-13T16:12:37Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "311c0e9b-0eb9-43f2-b23f-372d2e4234a0",
+        "parentId" : "44121e5b-e986-4a60-b1c0-a2f158102391",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "@mjsax is correct that there is a bug that the processor-local stream time gets reset on rebalance/restart. It would be good to fix it, but with the current architecture, the only correct solution is to persist the processor-local stream time. Another approach we've discussed is to remove the time-delay effect of the record cache.",
+        "createdAt" : "2021-04-13T16:15:25Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f10ff2ca65515666c40469de2b8cc81f5c78c509",
+    "line" : 76,
+    "diffHunk" : "@@ -1,1 +159,163 @@        }\n\n        // Time shared between joins to keep track of the maximum stream time\n        final MaxObservedStreamTime maxObservedStreamTime = new MaxObservedStreamTime();\n"
+  },
+  {
+    "id" : "5cf2f634-4bfd-47ef-82a4-97df30f9133f",
+    "prId" : 10462,
+    "prUrl" : "https://github.com/apache/kafka/pull/10462#pullrequestreview-637303069",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "75fa835f-ef35-488e-8824-5a6fd4420077",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Not sure if I understand? Why use \"outer\" or \" this\" here? If the store is shared, neither one seems to make sense? Overall naming of processor and stores is tricky.. Can we actually add a corresponding test that compares generated and expected `TopologyDescription` for this case?",
+        "createdAt" : "2021-04-13T03:12:49Z",
+        "updatedAt" : "2021-04-28T11:46:56Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3d8de0f2-5164-41d1-be6b-1eefcb06946a",
+        "parentId" : "75fa835f-ef35-488e-8824-5a6fd4420077",
+        "authorId" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "body" : "I initially generated a name with a new index for the shared store. However, seems this was going to cause incompatibilities in the topology because the new indexed increasing. Instead, now I just get the index from one of the current join stores. Why doesn't make sense? Is there another way to get an index? Or, do I really need to append an index at the end of the shared store?",
+        "createdAt" : "2021-04-15T14:11:35Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a50348c0-69e3-48aa-a1e5-3c93f79b757c",
+        "parentId" : "75fa835f-ef35-488e-8824-5a6fd4420077",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I agree that we should not use one more index to avoid compatibility issues... Maybe the question is really (just for my better understanding), what would the name be, ie, could be give a concrete example (with and without `Named` parameter)? That is also why I asked for a test using `TopologyDescription` -- makes it easier to wrap my head around.",
+        "createdAt" : "2021-04-16T03:28:33Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f10ff2ca65515666c40469de2b8cc81f5c78c509",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +152,156 @@                    rightOuter\n                        ? KStreamImpl.OUTERTHIS_NAME.length()\n                        : KStreamImpl.JOINTHIS_NAME.length());\n\n            final String outerJoinStoreName = userProvidedBaseStoreName == null ? outerJoinStoreGeneratedName : userProvidedBaseStoreName + outerJoinSuffix;"
+  },
+  {
+    "id" : "4c4ba917-e432-4b15-91d8-3ec7f96fe5e0",
+    "prId" : 10462,
+    "prUrl" : "https://github.com/apache/kafka/pull/10462#pullrequestreview-637303851",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "050000b3-57f9-4b6a-876e-6ee55a10931f",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Should we pass a `Time` reference here to allow us to mock time in tests if necesssary?",
+        "createdAt" : "2021-04-13T03:20:22Z",
+        "updatedAt" : "2021-04-28T11:46:56Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1e84d142-bed1-4bb6-ba5a-f1c7997d4191",
+        "parentId" : "050000b3-57f9-4b6a-876e-6ee55a10931f",
+        "authorId" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "body" : "It will require more changes just to allow that. The `KStreamImplJoin` constructor, where we could overload to pass a `Time` mock object, is only used by the `KStreamImplJoinImpl` class. The tests use the `StreamsBuilder` to create the joins, and they do not accept a Time object. \r\n\r\nAlso, the `Stores` class, which is called by `KStreamImplJoin`, does not mock it. Maybe because the same code changes required just for that?",
+        "createdAt" : "2021-04-15T18:47:52Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d7e56fae-af63-4170-a487-64548eb1fb66",
+        "parentId" : "050000b3-57f9-4b6a-876e-6ee55a10931f",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Ok. Maybe good enough as-is. (Fair point that we don't mock it in other stores either -- maybe there was never any demand to be able to mock it. As you said, we could change it as follow up if needed.)",
+        "createdAt" : "2021-04-16T03:31:23Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f10ff2ca65515666c40469de2b8cc81f5c78c509",
+    "line" : 130,
+    "diffHunk" : "@@ -1,1 +276,280 @@            new KeyAndJoinSideSerde<>(streamJoinedInternal.keySerde()),\n            new LeftOrRightValueSerde(streamJoinedInternal.valueSerde(), streamJoinedInternal.otherValueSerde()),\n            Time.SYSTEM\n        );\n        if (streamJoinedInternal.loggingEnabled()) {"
   }
 ]

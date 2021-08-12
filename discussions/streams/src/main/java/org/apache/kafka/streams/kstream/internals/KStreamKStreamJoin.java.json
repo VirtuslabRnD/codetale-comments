@@ -42,5 +42,192 @@
     "commit" : "99988da93bfdb13aaed4a0391620e29f0d2c3e3d",
     "line" : 32,
     "diffHunk" : "@@ -1,1 +99,103 @@                        key,\n                        joiner.apply(value, otherRecord.value),\n                        To.all().withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));\n                }\n"
+  },
+  {
+    "id" : "ea408bf6-0b56-432d-b413-b389a71a7000",
+    "prId" : 10462,
+    "prUrl" : "https://github.com/apache/kafka/pull/10462#pullrequestreview-647742112",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "04fe9c47-fbde-4cb4-be1a-6118a9eb0a3b",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Not sure if I understand the second condition?",
+        "createdAt" : "2021-04-13T04:10:32Z",
+        "updatedAt" : "2021-04-28T11:46:56Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d17589a-c196-485a-b49e-371bb8468dec",
+        "parentId" : "04fe9c47-fbde-4cb4-be1a-6118a9eb0a3b",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I think the motivation is that if the current record's timestamp is too small (i.e. it is too late), then it should not be added into the book-keeping store but can be \"expired\" immediately. But I also feel the condition seems a bit off here: for the record to be \"too late\", its timestamp just need to be smaller than the expiration boundary, which is observed-stream-time - join-after - grace-period, right?",
+        "createdAt" : "2021-04-19T23:29:55Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "17cd325b-04ea-43e2-b77b-f72e8523ba1d",
+        "parentId" : "04fe9c47-fbde-4cb4-be1a-6118a9eb0a3b",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Well, while we should have a check like this, it seems it should go to the top of this method, next to the key/value `null` check? We should also add a corresponding `lateRecordDropSensor` (cf `KStreamWindowAggregate.java`).\r\n\r\nWe can also `return` from `process()` early, as if we have a late record, we know that stream-time does not advance and thus we don't need to emit anything downstream.",
+        "createdAt" : "2021-04-20T00:54:13Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b1acb59-33c8-4a59-8d96-c5f7670675f7",
+        "parentId" : "04fe9c47-fbde-4cb4-be1a-6118a9eb0a3b",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@spena seems there are a few different conditions we can consider here:\r\n\r\n1) record time < stream time - window length - grace length: the record is too late, we should drop it up front and also record the `droppedRecordsSensorOrExpiredWindowRecordDropSensor`.\r\n\r\n2) record time >= stream time - window length - grace length, but < stream time: the record is still late, but joinable, since the stream time would not be advanced we would not have to check and emit non-joined records, but just try to join this record with the other window. Note that like @mjsax said, for the returned matching record, we also need to check if the other record time >= stream time - window length - grace length or not.\r\n\r\n3) record time > stream time, we would first try to emit non-joined records, and then try to join this record.",
+        "createdAt" : "2021-04-29T00:29:15Z",
+        "updatedAt" : "2021-04-29T00:55:54Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f10ff2ca65515666c40469de2b8cc81f5c78c509",
+    "line" : 138,
+    "diffHunk" : "@@ -1,1 +164,168 @@                    // This condition below allows us to process the out-of-order records without the need\n                    // to hold it in the temporary outer store\n                    if (!outerJoinWindowStore.isPresent() || timeTo < maxObservedStreamTime.get()) {\n                        context().forward(key, joiner.apply(key, value, null));\n                    } else {"
+  },
+  {
+    "id" : "92e2640c-c680-4b7b-8099-0fcd5cd87621",
+    "prId" : 10462,
+    "prUrl" : "https://github.com/apache/kafka/pull/10462#pullrequestreview-647742112",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "58728c36-cb26-4b3f-b06c-327a4c392b31",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Side improvement: I think we should skip late record directly and also record it in `TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor` ",
+        "createdAt" : "2021-04-13T04:12:52Z",
+        "updatedAt" : "2021-04-28T11:46:56Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6bf30871-dd56-4913-8c1b-8664db9915ff",
+        "parentId" : "58728c36-cb26-4b3f-b06c-327a4c392b31",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@spena @mjsax I left another comment below regarding the time. Please LMK id you think that makes sense.",
+        "createdAt" : "2021-04-29T00:54:44Z",
+        "updatedAt" : "2021-04-29T00:55:54Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f10ff2ca65515666c40469de2b8cc81f5c78c509",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +123,127 @@\n            maxObservedStreamTime.advance(inputRecordTimestamp);\n\n            // Emit all non-joined records which window has closed\n            if (inputRecordTimestamp == maxObservedStreamTime.get()) {"
+  },
+  {
+    "id" : "3be9d8f3-8f1a-4e48-aebe-32a802b20927",
+    "prId" : 10462,
+    "prUrl" : "https://github.com/apache/kafka/pull/10462#pullrequestreview-647742112",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "290b83de-bd79-496d-9288-f248f9010a54",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Side improvement: atm `windowStore` does not have a guarantee of a strict retention time, ie, even if retention time passed, it may still have expired data in it, and return it. Thus, we should have an additional check if `otherRecordTimestamp < stream-time - windowSize - gracePeriod` and drop the \"other record\" for this case, to get a strict time bound (we don't need to report this in any metric).\r\n\r\nWe should extend our tests accordingly.",
+        "createdAt" : "2021-04-13T04:14:56Z",
+        "updatedAt" : "2021-04-28T11:46:56Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa224880-1c71-467a-afb5-e478d89c2a17",
+        "parentId" : "290b83de-bd79-496d-9288-f248f9010a54",
+        "authorId" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "body" : "Interesting. Is this a current bug with the old join semantics?",
+        "createdAt" : "2021-04-15T18:35:16Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c9af3347-f78f-4101-9d4f-017d3479a571",
+        "parentId" : "290b83de-bd79-496d-9288-f248f9010a54",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Yes, it a bug in the current implementation...",
+        "createdAt" : "2021-04-16T03:33:00Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d12344b6-fcc3-40ea-b6bc-d223029f8f9e",
+        "parentId" : "290b83de-bd79-496d-9288-f248f9010a54",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Seems this comment was not address yet. Or do you not want to add this additional fix into this PR?",
+        "createdAt" : "2021-04-20T00:49:53Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80fdde9a-dc84-4723-8b69-6eb1c996697c",
+        "parentId" : "290b83de-bd79-496d-9288-f248f9010a54",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@spena just ping to make sure you get this on the follow-up PR.",
+        "createdAt" : "2021-04-29T00:55:29Z",
+        "updatedAt" : "2021-04-29T00:55:54Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f10ff2ca65515666c40469de2b8cc81f5c78c509",
+    "line" : 105,
+    "diffHunk" : "@@ -1,1 +133,137 @@                    needOuterJoin = false;\n                    final KeyValue<Long, V2> otherRecord = iter.next();\n                    final long otherRecordTimestamp = otherRecord.key;\n\n                    outerJoinWindowStore.ifPresent(store -> {"
+  },
+  {
+    "id" : "94770135-847b-4964-aee7-a3895a1458f0",
+    "prId" : 10462,
+    "prUrl" : "https://github.com/apache/kafka/pull/10462#pullrequestreview-640052938",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c542a7a7-a720-4cc2-b22b-c62e9423ae7c",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "nit : I think this function can just be inlined now?",
+        "createdAt" : "2021-04-19T22:28:55Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a94cd1f9-be09-4f43-bfe7-46bc4a7ab6eb",
+        "parentId" : "c542a7a7-a720-4cc2-b22b-c62e9423ae7c",
+        "authorId" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "body" : "Done",
+        "createdAt" : "2021-04-20T14:49:51Z",
+        "updatedAt" : "2021-04-28T11:46:57Z",
+        "lastEditedBy" : "92abc720-96d9-4067-bc18-9bf1fa4019a1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f10ff2ca65515666c40469de2b8cc81f5c78c509",
+    "line" : 65,
+    "diffHunk" : "@@ -1,1 +81,85 @@\n    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {\n        private final Predicate<Windowed<KeyAndJoinSide<K>>> recordWindowHasClosed =\n            windowedKey -> windowedKey.window().start() + joinAfterMs + joinGraceMs < maxObservedStreamTime.get();\n"
   }
 ]

@@ -911,5 +911,60 @@
     "commit" : "33a99d7cf089d144fdfd5f3aa9d3015f53409d30",
     "line" : 45,
     "diffHunk" : "@@ -1,1 +3140,3144 @@\n        @Override\n        public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {\n            Objects.requireNonNull(topicPartition);\n            assertThat(\"It must be from an owned topic\", inputPartitions.contains(topicPartition));"
+  },
+  {
+    "id" : "a9726f71-6f20-4635-a3ed-53e73c76d412",
+    "prId" : 10407,
+    "prUrl" : "https://github.com/apache/kafka/pull/10407#pullrequestreview-622788490",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "14be5a14-d071-4068-9a1d-328c09c4809f",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "The corrupted tasks should be revived? Those this case, should this flag be reset?",
+        "createdAt" : "2021-03-28T02:29:20Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ad3226fe-19e2-4940-8f9f-63c455f14ae9",
+        "parentId" : "14be5a14-d071-4068-9a1d-328c09c4809f",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Seems like we don't reset the `commitPrepared` during revive, ~good point. I guess we should reset all of those in the `StateMachineTask#revive`~\r\nedit: actually I think for `commitPrepared` at least we should _not_ reset it, since we just use this to verify that we did, indeed, prepare a commit. But `commitNeeded` should probably be cleared in `StateMachineTask#revive` (and ultimately in `StateMachineTask#close` but I don't want to mess with this in this PR since it's used very heavily in these tests, see below)",
+        "createdAt" : "2021-03-28T21:55:01Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "04451335-b4fb-422a-a921-1198fcfb4cc4",
+        "parentId" : "14be5a14-d071-4068-9a1d-328c09c4809f",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Hm...seems like we actually may not even clear `commitNeeded` (or the other commit-related flags) in the actual StreamTask's `close` or `revive`. We need to be clearing those in `revive` or `closeDirty` (`closeClean` would have cleared during `postCommit`) This has probably been a long lurking bug, although a minor one",
+        "createdAt" : "2021-03-28T22:06:33Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a999b746-dee8-408c-b263-a21542fe6fdb",
+        "parentId" : "14be5a14-d071-4068-9a1d-328c09c4809f",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Side note: seems weird that StateMachineTask has its own `commitNeeded` field rather than making the one in StreamTask `protected` and use it for active tasks (edit: there's actually a valid-ish reason for this, the StateMachineTask just mocks the behavior of most methods and rarely calls the super's method, so even if we used the same `commitNeeded` flag across the field we'd still have to remember to manually set/clear it in the same way in StateMachineTask any time we do so in Abstract/StreamTask.).\r\n\r\n Looks like we use `commitNeeded` in kind of a risky way in the tests, eg to indirectly indicate that it was closed clean, or infer that we successfully committed, etc Cleaner/safer to not reuse this variable to mean so many different things and just introduce a `closedClean`, `commitSuccessful`, etc wherever needed...\r\n But I  don't want to mess with it in this PR so I'll just file a ticket to clean this up later if that makes sense. ",
+        "createdAt" : "2021-03-28T22:09:32Z",
+        "updatedAt" : "2021-03-29T20:53:44Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa4cde53e6e3f60b90fafa2ec54fba011e6aba6c",
+    "line" : 84,
+    "diffHunk" : "@@ -1,1 +877,881 @@        assertThat(uncorruptedActive.commitNeeded, is(false));\n        assertThat(uncorruptedActive.commitCompleted, is(false)); //if not corrupted, we should close dirty without committing\n        assertThat(corruptedActive.commitPrepared, is(true));\n        assertThat(corruptedActive.commitNeeded, is(false));\n        assertThat(corruptedActive.commitCompleted, is(true)); //if corrupted, should enforce checkpoint with corrupted tasks removed"
   }
 ]
