@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "2396e873-4fce-462f-92f2-c4e10f621baf",
+    "prId" : 8135,
+    "prUrl" : "https://github.com/apache/kafka/pull/8135#pullrequestreview-369057992",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4629724d-d1a5-4ba0-8fc0-bc6050406ecb",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Wouldn't it be simpler and easier to understand the differences between the tests by pulling out the common objects? The whole class would then be something like:\r\n```\r\n    private static final String HTTPS_LISTENER_PREFIX = \"listeners.https.\";\r\n\r\n    private static final Map<String, Object> EXPECTED;\r\n    static {\r\n        Map<String, Object> settings = new HashMap<>();\r\n        settings.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, \"ssl_key_password\");\r\n        settings.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, \"ssl_keystore\");\r\n        settings.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, new Password(\"ssl_keystore_password\"));\r\n        settings.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, \"ssl_truststore\");\r\n        settings.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, new Password(\"ssl_truststore_password\"));\r\n        EXPECTED = Collections.unmodifiableMap(settings);\r\n    }\r\n\r\n    private static final Map<String, String> STANDALONE;\r\n    static {\r\n        Map<String, String> settings = new HashMap<>();\r\n        settings.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, \"org.apache.kafka.connect.json.JsonConverter\");\r\n        settings.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, \"org.apache.kafka.connect.json.JsonConverter\");\r\n        settings.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, \"/tmp/foad\");\r\n        STANDALONE = Collections.unmodifiableMap(settings);\r\n    }\r\n\r\n    private static Map<String, String> withStringValues(Map<String, ?> inputs, String prefix) {\r\n        return inputs.entrySet().stream()\r\n                     .collect(Collectors.toMap(\r\n                              entry -> prefix + entry.getKey(),\r\n                              entry -> literalValue(entry.getValue())\r\n                      ));\r\n    }\r\n\r\n    private static String literalValue(Object value) {\r\n        return value instanceof Password ? ((Password)value).value() : value.toString();\r\n    }\r\n\r\n    @Test\r\n    public void testRestServerPrefixedSslConfigs() {\r\n        Map<String, String> props = new HashMap<>(STANDALONE);\r\n        props.putAll(withStringValues(EXPECTED, HTTPS_LISTENER_PREFIX));\r\n\r\n        StandaloneConfig config = new StandaloneConfig(props);\r\n        assertEquals(EXPECTED, config.valuesWithPrefixAllOrNothing(HTTPS_LISTENER_PREFIX));\r\n    }\r\n\r\n    @Test\r\n    public void testRestServerNonPrefixedSslConfigs() {\r\n        Map<String, String> props = new HashMap<>(STANDALONE);\r\n        props.putAll(withStringValues(EXPECTED, \"\"));\r\n\r\n        StandaloneConfig config = new StandaloneConfig(props);\r\n        Map<String, Object> actualProps = config.valuesWithPrefixAllOrNothing(HTTPS_LISTENER_PREFIX)\r\n                                                .entrySet().stream()\r\n                                                .filter(entry -> EXPECTED.containsKey(entry.getKey()))\r\n                                                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));\r\n        assertEquals(EXPECTED, actualProps);\r\n    }\r\n```",
+        "createdAt" : "2020-02-25T20:45:36Z",
+        "updatedAt" : "2020-05-25T19:38:51Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0924f408-ea2b-4017-9b35-0eca9325ebb3",
+        "parentId" : "4629724d-d1a5-4ba0-8fc0-bc6050406ecb",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "I like a lot of this and will incorporate it. I'd rather not declare constants like `STANDALONE` and `EXPECTED` just because they seem pretty specific to these two tests and may not be applicable to other tests that get added to this class, but pretty much everything else (especially the handling of `Password`-type configs) is great.",
+        "createdAt" : "2020-03-04T19:21:18Z",
+        "updatedAt" : "2020-05-25T19:38:51Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53cfb5e0-2e6e-412f-86d6-ced01b37c02a",
+        "parentId" : "4629724d-d1a5-4ba0-8fc0-bc6050406ecb",
+        "authorId" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "body" : "Actually, it looks like the `ConfigDef` class already has some logic to convert parsed types (including `Password`s) into strings: https://github.com/apache/kafka/blob/f35e6496aa003dc0667dc338001a5b51be78fe76/clients/src/main/java/org/apache/kafka/common/config/ConfigDef.java#L761-L783\r\n\r\nSo we can even just use that and remove the `literalValue` method",
+        "createdAt" : "2020-03-04T19:26:34Z",
+        "updatedAt" : "2020-05-25T19:38:51Z",
+        "lastEditedBy" : "f1480a85-4082-46f9-89c6-fe7231733b83",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cf679d3622d2ee45441810be1122234a4dd3c008",
+    "line" : 54,
+    "diffHunk" : "@@ -1,1 +52,56 @@                put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, \"/tmp/foo\");\n            }\n        };\n    }\n"
+  }
+]
