@@ -559,5 +559,82 @@
     "commit" : "f54b0ad975cb48bea99429fedf4785b35503bf6c",
     "line" : 73,
     "diffHunk" : "@@ -1,1 +556,560 @@  void _start() {\n    iMobileDevice.startLogger(device.id).then<void>((Process process) {\n      process.stdout.transform<String>(utf8.decoder).transform<String>(const LineSplitter()).listen(_newLineHandler());\n      process.stderr.transform<String>(utf8.decoder).transform<String>(const LineSplitter()).listen(_newLineHandler());\n      process.exitCode.whenComplete(() {"
+  },
+  {
+    "id" : "3a867a26-7877-4452-a2dc-34e2f9c0f3d3",
+    "prId" : 42964,
+    "prUrl" : "https://github.com/flutter/flutter/pull/42964#pullrequestreview-307432003",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "69fa588f-d34b-44e8-8cd1-c226f95b1af9",
+        "parentId" : null,
+        "authorId" : "7aa08a6b-0a3c-421c-b2e6-22899e9af9e4",
+        "body" : "Looking at this again, does `iosApp.id` have the value we want instead?  It looks like it's populated by parsing the plist AND falling back to the PRODUCT_BUNDLE_IDENTIFIER. https://github.com/flutter/flutter/blob/08c645b3b2da8c66b945fe701be99c52c0d11f5b/packages/flutter_tools/lib/src/project.dart#L381",
+        "createdAt" : "2019-10-25T01:25:21Z",
+        "updatedAt" : "2019-10-25T01:25:22Z",
+        "lastEditedBy" : "7aa08a6b-0a3c-421c-b2e6-22899e9af9e4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f39c2ff4-aac1-45ed-873c-c81ba8fc04e7",
+        "parentId" : "69fa588f-d34b-44e8-8cd1-c226f95b1af9",
+        "authorId" : "7aa08a6b-0a3c-421c-b2e6-22899e9af9e4",
+        "body" : "AND the test I attached passes on master!  Is it possible `package.id` is already pulling from the PRODUCT_BUNDLE_IDENTIFIER?",
+        "createdAt" : "2019-10-25T01:28:16Z",
+        "updatedAt" : "2019-10-25T01:28:16Z",
+        "lastEditedBy" : "7aa08a6b-0a3c-421c-b2e6-22899e9af9e4",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c9a3ecc1-fa6e-40e8-84c3-1cf7ceac3b7c",
+        "parentId" : "69fa588f-d34b-44e8-8cd1-c226f95b1af9",
+        "authorId" : "5c07c522-2bb6-4389-ac6d-835daeb0b482",
+        "body" : "I don' think so.\r\nThe iosApp is just the \"package\", that gets passed into the method from **before** the app is built.\r\n\r\n```dart\r\n    // Step 2: Check that the application exists at the specified path.\r\n    final IOSApp iosApp = package;\r\n```\r\n\r\nIn this case, `Info.plist` that gets parsed is not the Info.plist from the compiled app, but the one in the xcode project, which still has unsubstituted variables set, so parsing the bundle if from fails if custom flavors are set.\r\nSo if falls back to parsing the `project.pbxproj` file.\r\nHowever, since this file holds the build configuration for all build schemes, it just returns the **first match** of PRODUCT_BUNDLE_IDENTIFIER which is not necessarily the PRODUCT_BUNDLE_IDENTIFIER with which the app is going to be built (because if you use flavors, you will use a custom build configuration).\r\n\r\n```dart\r\n final String fromPbxproj = _firstMatchInFile(xcodeProjectInfoFile, _productBundleIdPattern)?.group(2);\r\n    if (fromPbxproj != null && (fromPlist == null || fromPlist == _productBundleIdVariable)) {\r\n      // Common case. Avoids parsing build settings.\r\n      return fromPbxproj;\r\n    }\r\n```\r\n\r\nIt seems that setting the default configuration (see https://imgur.com/a/atu7Kki) \"Use <Scheme> for command-line builds\" reorders to entries in `project.pbxproj`, which is why it works if you set this to the configuration which gets used by flutter in the following build (this gets mentioned here as well: https://github.com/flutter/flutter/issues/18342#issuecomment-396881069 )\r\n\r\n\r\nEdit: corrected information about why project.pbxproj gets parsed\r\n",
+        "createdAt" : "2019-10-25T09:21:52Z",
+        "updatedAt" : "2019-10-25T15:45:10Z",
+        "lastEditedBy" : "5c07c522-2bb6-4389-ac6d-835daeb0b482",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "30ebbd21-6f55-48c7-9e53-cc678e9a471d",
+        "parentId" : "69fa588f-d34b-44e8-8cd1-c226f95b1af9",
+        "authorId" : "5c07c522-2bb6-4389-ac6d-835daeb0b482",
+        "body" : "I'll try to come up with a test case that fails on master and succeeds with my fixes, but it will take some time for me to understand the testing architecture.",
+        "createdAt" : "2019-10-25T11:42:59Z",
+        "updatedAt" : "2019-10-25T11:43:00Z",
+        "lastEditedBy" : "5c07c522-2bb6-4389-ac6d-835daeb0b482",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "daa892f7-256a-48d0-8401-738e61076b95",
+        "parentId" : "69fa588f-d34b-44e8-8cd1-c226f95b1af9",
+        "authorId" : "5c07c522-2bb6-4389-ac6d-835daeb0b482",
+        "body" : "The test for this is not going to be trivial.\r\nIn order to really test this, we need to build the app with a custom flavor/scheme that overwrites the $PRODUCT_BUNDLE_IDENTIFIER.\r\nAnd then start the app like this:\r\n\r\n```dart\r\ndevice.startApp(\r\n  app,\r\n  prebuiltApplication: false,\r\n  debuggingOptions: DebuggingOptions.disabled(\r\n     const BuildInfo(\r\n       BuildMode.debug, \r\n       \"testflavor\"  // <-set the flavor\r\n     )\r\n  ), \r\n  platformArgs: <String, dynamic>{},\r\n)\r\n```\r\n\r\nI can't open the ios.tmpl directory in xcode though. Can you give me some pointers on how this templating system works? I could not find any documentation for this.\r\n\r\n",
+        "createdAt" : "2019-10-25T16:12:52Z",
+        "updatedAt" : "2019-10-25T16:26:40Z",
+        "lastEditedBy" : "5c07c522-2bb6-4389-ac6d-835daeb0b482",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29f845b9-cc0f-4479-8ddf-f861c53450f1",
+        "parentId" : "69fa588f-d34b-44e8-8cd1-c226f95b1af9",
+        "authorId" : "7aa08a6b-0a3c-421c-b2e6-22899e9af9e4",
+        "body" : "> returns the first match of PRODUCT_BUNDLE_IDENTIFIER\r\nYikes, you're right.\r\n\r\nThe test I sent doesn't even exercise the code you changed, it only actually gets to the -getObservatoryUri codepath when `DebuggingOptions.enabled` and `prebuiltApplication = false`.\r\nI didn't see a great way to test this either, which probably hints that we should refactor startApp to be more testable.\r\nHonestly what you have is fine, I really appreciate you being thoughtful about this change!",
+        "createdAt" : "2019-10-25T20:18:59Z",
+        "updatedAt" : "2019-10-25T20:18:59Z",
+        "lastEditedBy" : "7aa08a6b-0a3c-421c-b2e6-22899e9af9e4",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f3948072efbf9278ba257ca0f12c58ac0999a7eb",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +299,303 @@    }\n\n    packageId ??= package.id;\n\n    // Step 2: Check that the application exists at the specified path."
   }
 ]
