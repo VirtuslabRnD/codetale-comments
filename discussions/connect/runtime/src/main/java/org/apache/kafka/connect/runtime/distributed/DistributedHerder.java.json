@@ -724,5 +724,82 @@
     "commit" : "37287ea7bb95cf770fe5eccf9414e5f1e928409f",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +403,407 @@                    scheduledRebalance, now, nextRequestTimeoutMs);\n        }\n        if (isLeader() && internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {\n            nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(keyExpiration - now, 0));\n            log.debug(\"Scheduled next key rotation at: {} (now: {} nextRequestTimeoutMs: {}) \","
+  },
+  {
+    "id" : "6cef9c3a-dd02-4edd-a50a-0093498ab044",
+    "prId" : 10822,
+    "prUrl" : "https://github.com/apache/kafka/pull/10822#pullrequestreview-687791305",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dc910169-0ac6-4bbe-aea0-51cbfaaac7ea",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "This method is where the worker restarts connector and task instances assigned to it. Lines 1153 and 1155, along with the `assignedIdsToRestart` are really the only evidence that this method does that. Can we modify the comments and log messages in this method to make that more evident, and maybe add JavaDoc?",
+        "createdAt" : "2021-06-17T15:39:33Z",
+        "updatedAt" : "2021-06-17T16:00:15Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a7ff1c7b-ddae-4381-89f8-1a6569fc0780",
+        "parentId" : "dc910169-0ac6-4bbe-aea0-51cbfaaac7ea",
+        "authorId" : "094f6954-1557-4cfd-9696-2d85b89e8fea",
+        "body" : "added javadoc and cleaned some logs and there are logs in the called methods so didn't added new logs",
+        "createdAt" : "2021-06-19T03:32:23Z",
+        "updatedAt" : "2021-06-19T03:32:23Z",
+        "lastEditedBy" : "094f6954-1557-4cfd-9696-2d85b89e8fea",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "27100a789ac7b44c8bc13a9e1e65713f340be9e0",
+    "line" : 137,
+    "diffHunk" : "@@ -1,1 +1138,1142 @@     * @param request the request to restart connector and tasks\n     */\n    protected synchronized void doRestartConnectorAndTasks(RestartRequest request) {\n        String connectorName = request.connectorName();\n        Optional<RestartPlan> maybePlan = buildRestartPlan(request);"
+  },
+  {
+    "id" : "05f70a8d-69ed-47c6-9b8e-a5b1a51bbbe0",
+    "prId" : 10822,
+    "prUrl" : "https://github.com/apache/kafka/pull/10822#pullrequestreview-688946179",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cf1d2105-6129-4734-9c22-c050f81e5644",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "The `startConnector(...)` method _should_ handle most of the errors by calling the callback, but there are still a few potential errors that could happen before the worker actually tries starting the connector.\r\n\r\nDo you think this try-catch is needed, though, since the try-catch where this `doRestartConnectorAndTasks(...)` is called will catch and log any unexpected change? I guess keeping this will ensure we proceed with starting the tasks, rather than failing quickly.",
+        "createdAt" : "2021-06-21T20:21:36Z",
+        "updatedAt" : "2021-06-21T20:42:36Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e2de7bd-1a0c-4093-8148-68029b6700e0",
+        "parentId" : "cf1d2105-6129-4734-9c22-c050f81e5644",
+        "authorId" : "094f6954-1557-4cfd-9696-2d85b89e8fea",
+        "body" : "@rhauch  I kinda agree with you but I had seen this code in below two links and it had try/catch around both startTask and startConnector .  I added try/catch around startTask so if one tasks fails we can see if others atleasst succeed. The try/catch around startConnector was because I saw the pattern.  But I am torn on this, if you think we should remove the try/catch on connector, I am open to removing the try/catch given its already caught at the higher layer, but IMHO we can keep the startTask try/catch. Wdyt?\r\n\r\nhttps://github.com/apache/kafka/blob/1bd99c809b6546cd6711cc4f2d40785393ca584a/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/distributed/DistributedHerder.java#L1437\r\nhttps://github.com/apache/kafka/blob/1bd99c809b6546cd6711cc4f2d40785393ca584a/connect/runtime/src/main/java/org/apache/kafka/connect/runtime/distributed/DistributedHerder.java#L1490",
+        "createdAt" : "2021-06-21T22:40:23Z",
+        "updatedAt" : "2021-06-21T23:04:27Z",
+        "lastEditedBy" : "094f6954-1557-4cfd-9696-2d85b89e8fea",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ae05e84-ee6f-4111-939b-ca029e0db263",
+        "parentId" : "cf1d2105-6129-4734-9c22-c050f81e5644",
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Yeah, I think it's actually fine the way it is: with the try-catrch around `startConnector(...)`, because that helps us catch any problem _at that point_ and allows us to continue starting the tasks.\r\n\r\nIf we were to remove this try-catch around `startConnector(...)`, then any problem would cause us to return immediately from the method.",
+        "createdAt" : "2021-06-21T23:42:01Z",
+        "updatedAt" : "2021-06-21T23:42:01Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "27100a789ac7b44c8bc13a9e1e65713f340be9e0",
+    "line" : 177,
+    "diffHunk" : "@@ -1,1 +1178,1182 @@            } catch (Throwable t) {\n                log.error(\"Connector '{}' restart failed\", connectorName, t);\n            }\n        }\n        if (restartTasks) {"
   }
 ]

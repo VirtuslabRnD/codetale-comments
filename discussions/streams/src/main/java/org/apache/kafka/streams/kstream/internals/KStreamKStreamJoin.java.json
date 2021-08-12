@@ -229,5 +229,115 @@
     "commit" : "f10ff2ca65515666c40469de2b8cc81f5c78c509",
     "line" : 65,
     "diffHunk" : "@@ -1,1 +81,85 @@\n    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {\n        private final Predicate<Windowed<KeyAndJoinSide<K>>> recordWindowHasClosed =\n            windowedKey -> windowedKey.window().start() + joinAfterMs + joinGraceMs < maxObservedStreamTime.get();\n"
+  },
+  {
+    "id" : "bd4653b4-13f2-4163-af1e-e61cfc829174",
+    "prId" : 10861,
+    "prUrl" : "https://github.com/apache/kafka/pull/10861#pullrequestreview-680578337",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5aeba950-ef9f-4d11-b8ec-c82b0a189435",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "This was done by the caller before, ie, `KStreamImplJoin` from above. As we only pass one parameter now, we need to do the flip here if necessary.",
+        "createdAt" : "2021-06-10T09:54:18Z",
+        "updatedAt" : "2021-06-10T10:08:52Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dad2fe801497ebb301f354af0a48cae6a905722b",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +66,70 @@        this.isLeftSide = isLeftSide;\n        this.otherWindowName = otherWindowName;\n        if (isLeftSide) {\n            this.joinBeforeMs = windows.beforeMs;\n            this.joinAfterMs = windows.afterMs;"
+  },
+  {
+    "id" : "22585a8e-0b10-4b70-b26b-9369dc779231",
+    "prId" : 10861,
+    "prUrl" : "https://github.com/apache/kafka/pull/10861#pullrequestreview-685400743",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a3003565-4b0b-4336-8568-987fa4ca6ede",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "We evaluate the feature flag twice. This is the first time. So we add the new flag, too.",
+        "createdAt" : "2021-06-10T09:55:30Z",
+        "updatedAt" : "2021-06-10T10:08:52Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3258605c-4965-47a9-ae92-6d0a49fa1323",
+        "parentId" : "a3003565-4b0b-4336-8568-987fa4ca6ede",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Thinking a bit more to not evaluate the condition twice: since we call `addStateStore` in the logical plan, a.k.a. `StreamStreamJoinNode` first if both conditions are met, could we just blindly try to get the store from `context.getStateStore()` here, which would return `null` if the store was not added during logical plan and hence does not exist anyways. If it is `null` we can still convert it to an `Optional.empty()`.",
+        "createdAt" : "2021-06-13T00:10:33Z",
+        "updatedAt" : "2021-06-13T00:14:24Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bec73339-91da-4eb2-9152-e2673f29063b",
+        "parentId" : "a3003565-4b0b-4336-8568-987fa4ca6ede",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I don't think that checking the condition twice is a real issue? Also, it seem to be better to do the check, because otherwise (if we might have a bug and incorrectly get a `null` store back) we might mask the bug?",
+        "createdAt" : "2021-06-15T00:29:44Z",
+        "updatedAt" : "2021-06-15T00:29:44Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "87f09a81-dbae-4015-a34f-3650ce23ae60",
+        "parentId" : "a3003565-4b0b-4336-8568-987fa4ca6ede",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I'm thinking exactly the opposite :) if we have a bug which would cause us to create a state store, checking it twice may actually mask the bug: we would end up creating the state store, and then on the second check not getting it, so the behavior is still correct, and it'll be hard for us to discover we are creating state stores unnecessarily.\r\n\r\nIf we have a bug and do not create state stores when needed, then we would behave in the old way without the fix; the key point here is that, we only have one decision point to make, and either that decision is correct or buggy, we can get it surfaced quickly.",
+        "createdAt" : "2021-06-15T17:01:31Z",
+        "updatedAt" : "2021-06-15T17:01:31Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b583be6-0094-422a-998a-3d8dfe7bff35",
+        "parentId" : "a3003565-4b0b-4336-8568-987fa4ca6ede",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "After update the code with the `else` a few tests started to fail. The issue is, that for left/outer join we _always_ set the store name (even if the feature is disabled...) -- only for inner join, we get an `Optinal.empty()`. Thus, we can actually not verify the `else` case (ie, we added a store even if we don't need it) at runtime. I guess we need to rely on the added unit tests instead to cover this case.",
+        "createdAt" : "2021-06-16T05:13:34Z",
+        "updatedAt" : "2021-06-16T05:13:34Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4a116bb-b8f4-41f5-9f50-09a08c2d5a29",
+        "parentId" : "a3003565-4b0b-4336-8568-987fa4ca6ede",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Okay I think I know what's the messy part here: we are setting the stores during KStreamJoin which is only at the parsing phase, but not the logical plan generation phase. The key difference is that the latter has access to the user's configuration whereas the former is not. And because of that we have an unclean settings, we should decide e.g. which stores to create only at the logical plan aka StreamStreamJoinNode.\r\n\r\nThis is a general issue with Streams parsing/logical plan generation, and I will file a ticket for it.",
+        "createdAt" : "2021-06-16T16:24:32Z",
+        "updatedAt" : "2021-06-16T16:24:32Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a81e8f72-cd6e-4d80-aec0-4ddacc2dff4b",
+        "parentId" : "a3003565-4b0b-4336-8568-987fa4ca6ede",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Filed https://issues.apache.org/jira/browse/KAFKA-12957",
+        "createdAt" : "2021-06-16T16:31:33Z",
+        "updatedAt" : "2021-06-16T16:31:33Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dad2fe801497ebb301f354af0a48cae6a905722b",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +98,102 @@            otherWindowStore = context.getStateStore(otherWindowName);\n\n            if (enableSpuriousResultFix\n                && StreamsConfig.InternalConfig.getBoolean(\n                    context().appConfigs(),"
   }
 ]

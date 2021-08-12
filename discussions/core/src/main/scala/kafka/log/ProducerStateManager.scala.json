@@ -284,5 +284,115 @@
     "commit" : "c979bd1e1c0b16659807505afa9ad5b4b6314088",
     "line" : 17,
     "diffHunk" : "@@ -1,1 +220,224 @@      if (appendFirstSeq != 0) {\n        if (updatedEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {\n          throw new OutOfOrderSequenceException(s\"Invalid sequence number for new epoch of producer $producerId \" +\n            s\"at offset $offset in partition $topicPartition: $producerEpoch (request epoch), $appendFirstSeq (seq. number), \" +\n            s\"${updatedEntry.producerEpoch} (current producer epoch)\")"
+  },
+  {
+    "id" : "5819024c-f0ef-4343-8f46-df4c1d5933ad",
+    "prId" : 10896,
+    "prUrl" : "https://github.com/apache/kafka/pull/10896#pullrequestreview-688999009",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "118aac07-5e65-44b3-b36e-e8b3b397c8c3",
+        "parentId" : null,
+        "authorId" : "b4f52e78-c19e-46b4-b486-6da86e32e687",
+        "body" : "I'm not entirely sure I understood this comment. Looking at the `LogLoader` code, it doesn't appear that we use the [intermediate](https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/log/LogLoader.scala#L327) producer state manager to issue async deletions of snapshot files.\r\n\r\nSo, is it still possible that a missing file is a valid case?",
+        "createdAt" : "2021-06-18T08:48:25Z",
+        "updatedAt" : "2021-06-18T08:49:29Z",
+        "lastEditedBy" : "b4f52e78-c19e-46b4-b486-6da86e32e687",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f255e00d-87fe-4c6c-8366-ad84b9d12d4b",
+        "parentId" : "118aac07-5e65-44b3-b36e-e8b3b397c8c3",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Agree with Kowshik. It's not clear if the comment is still valid.",
+        "createdAt" : "2021-06-21T16:01:31Z",
+        "updatedAt" : "2021-06-21T16:13:44Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d65eac92-d16a-41ae-88b7-2201ac676855",
+        "parentId" : "118aac07-5e65-44b3-b36e-e8b3b397c8c3",
+        "authorId" : "851026f6-ef9e-43cc-bb20-4145295d1b95",
+        "body" : "@junrao @kowshik I accidentally included the word `async` here, the deletion performed by the intermediate ProducerStateManager is done synchronously.\r\n\r\nI'm referring to the case where we go through `LogLoader.recoverSegment`. We construct a new \"intermediate\" `ProducerStateManager` for segment recovery which is separate from the \"real\" `ProducerStateManager` captured in `LoadLogParams`. \r\n\r\nSegment recovery can use the intermediate `ProducerStateManager` to truncate snapshot files via `ProducerStateManager.truncateAndReload` in `Log.rebuildProducerState`. The `SnapshotFile` instances will be removed from the in-memory map for the \"intermediate\" `ProducerStateManager` in this case, but will remain for the \"real\" `ProducerStateManager` captured in `LoadLogParams`. \r\n\r\n",
+        "createdAt" : "2021-06-21T16:43:38Z",
+        "updatedAt" : "2021-06-21T16:43:38Z",
+        "lastEditedBy" : "851026f6-ef9e-43cc-bb20-4145295d1b95",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73bb0772-e9f7-45dc-8eaf-e6ae2f430646",
+        "parentId" : "118aac07-5e65-44b3-b36e-e8b3b397c8c3",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@gardnervickers : Good point. It seems that LogLoader.recoverSegment() can both remove and add snapshots, both of which will be missing in the \"real\" ProducerStateManager captured in LoadLogParams. This can lead to the missing file issue you pointed out and also potentially cause LogLoad.load() to do an unnecessary expensive Log.rebuildProducerState().\r\n\r\n@kowshik : I am wondering if we should let LoadLoader reload the snapshots in the \"real\" ProducerStateManager before calling Log.rebuildProducerState() in LogLoad.load().",
+        "createdAt" : "2021-06-21T21:24:10Z",
+        "updatedAt" : "2021-06-21T21:24:56Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "291adca8-cc34-4e71-8000-d05615bc6d3a",
+        "parentId" : "118aac07-5e65-44b3-b36e-e8b3b397c8c3",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@gardnervickers : @kowshik mentioned that params.producerStateManager.removeStraySnapshots(params.segments.baseOffsets.toSeq)\r\nin LogLoad.load() actually reloads the snapshots after log recovery. So, it seems that the issue you mentioned may not be a problem?",
+        "createdAt" : "2021-06-21T21:50:32Z",
+        "updatedAt" : "2021-06-21T21:51:03Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "faadf03b-87bd-4df9-815d-cce9da295b73",
+        "parentId" : "118aac07-5e65-44b3-b36e-e8b3b397c8c3",
+        "authorId" : "851026f6-ef9e-43cc-bb20-4145295d1b95",
+        "body" : "@kowshik @junrao Right, we'll still end up with a a fully in-sync `ProducerStateManager` after `LogLoader.load(..)` runs. \r\n\r\nThe problem can still occur though because we delete snapshots using both the \"intermediate\" and \"real\" `ProducerStateManager` prior to `removeStraySnapshots` at the end of `LogLoader.load`. \r\n\r\n1. `recoverSegment` can delete snapshots with the intermediate `ProducerStateManager`\r\n2. `removeAndDeleteSegmentsAsync` will use the \"real\" `ProducerStateManager` to schedule async deletion. It may have a stale view of the present snapshots on the filesystem if #1 deleted snapshots, causing the rename to fail.\r\n3. At the end of `LogLoader.load`, we will `removeStraySnapshots`, which will fix up any discrepancies between the contents of the log dir and the \"real\" `ProducerStateManager`.\r\n",
+        "createdAt" : "2021-06-21T22:35:14Z",
+        "updatedAt" : "2021-06-21T22:35:14Z",
+        "lastEditedBy" : "851026f6-ef9e-43cc-bb20-4145295d1b95",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4479ef86-0260-41c7-ba38-abf5780fb2a6",
+        "parentId" : "118aac07-5e65-44b3-b36e-e8b3b397c8c3",
+        "authorId" : "b4f52e78-c19e-46b4-b486-6da86e32e687",
+        "body" : "Lets assume `PSM` refers to `ProducerStateManager`.\r\n\r\n@junrao @gardnervickers That feels right to me, thanks for the explanation! Couple things I wanted to ask:\r\n\r\n1. Should we update the comment [here](https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/log/LogLoader.scala#L144-L146) to say:\r\n\r\n```\r\n// Reload all snapshots into the ProducerStateManager cache, the intermediate ProducerStateManager used\r\n// during log recovery may have created or deleted some snapshots\r\n// without the LoadLogParams.producerStateManager instance witnessing the changes.\r\n```\r\n2. `PSM.removeStraySnapshots` and its params could have a better name. Should we call it differently, like `PSM.reloadEssentialSnapshots(essentialSegmentBaseOffsets: Seq[Long])`?\r\n\r\n=== SUMMARY OF CASES ===\r\n\r\nI thought it's useful to summarize. There are few different cases that arise whenever`PSM.removeAndMarkSnapshotForDeletion()` is invoked on the \"real\" PSM instance. I believe all cases are handled with the current code as explained below:\r\n\r\n**Straightforward cases:**\r\n1. Snapshot entry is present in real `PSM` instance and snapshot file is present. This is a straightforward case where we remove the entry and rename the file.\r\n2. Snapshot entry is absent in real `PSM` instance and snapshot file is absent. This is also a more straightforward case where we do nothing.\r\n\r\n**Corner cases:**\r\n1. Snapshot entry is present in the real `PSM` instance, but snapshot file absent. This can happen because intermediate PSM deleted the snapshot file. In this case, we ignore the failure in the file rename.\r\n2. Snapshot entry is absent in the real `PSM` instance, but snapshot file present. This can happen when intermediate PSM takes a snapshot, but the real `PSM` doesn't have the entry (yet). This is handled by the call to `PSM.removeStraySnapshots` [here](https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/log/LogLoader.scala#L147) which corrects such discrepancies by loading all snapshots from disk and eliminating those that don't match the list of segment base offsets post recovery.",
+        "createdAt" : "2021-06-21T23:54:21Z",
+        "updatedAt" : "2021-06-22T00:26:11Z",
+        "lastEditedBy" : "b4f52e78-c19e-46b4-b486-6da86e32e687",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37fd20b8-1fc8-4036-ad51-d60d1acc8fe6",
+        "parentId" : "118aac07-5e65-44b3-b36e-e8b3b397c8c3",
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "@gardnervickers : Thanks for the explanation. Makes sense.\r\n\r\n@kowshik : The source of all the confusing is that we use the real PSM in some cases while using a temporary PSM in some other cases during recovery. The temporary PSM in recoverSegment() is used in 4 different places.\r\n\r\n1. In recoverLog(). this is the case that we could just pass in the real PSM.\r\n2. In completeSwapOperations(). We try to avoid recovering segment here in https://github.com/apache/kafka/pull/10763.\r\n3 and 4. In loadSegmentFiles(). We probably need to clean this part of the logic a bit. If we are missing index file or the index file is corrupted, typically we can just rebuild the index without changing PSM. If the segment is truncated while rebuilding the index, we actually want to follow the process in step 1, by just removing the rest of the segments. So, we could also get rid of the temporary PSM in this case.\r\n\r\nI am wondering if we could have a separate PR to get rid of the temporary PSM complete?\r\n",
+        "createdAt" : "2021-06-22T01:04:39Z",
+        "updatedAt" : "2021-06-22T01:05:08Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "384cd5f2-e34b-4d8f-8be9-eb50624e3ebb",
+        "parentId" : "118aac07-5e65-44b3-b36e-e8b3b397c8c3",
+        "authorId" : "b4f52e78-c19e-46b4-b486-6da86e32e687",
+        "body" : "@junrao That's a good point. Yes, we should get rid of the temporary PSM. I've created a jira tracking this improvement: https://issues.apache.org/jira/browse/KAFKA-12977. It is currently assigned to myself and I'll follow up on it.",
+        "createdAt" : "2021-06-22T02:09:20Z",
+        "updatedAt" : "2021-06-22T02:09:20Z",
+        "lastEditedBy" : "b4f52e78-c19e-46b4-b486-6da86e32e687",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6e2df3c068936a039468540723a07f141213ff88",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +850,854 @@    Option(snapshots.remove(snapshotOffset)).flatMap { snapshot => {\n      // If the file cannot be renamed, it likely means that the file was deleted already.\n      // This can happen due to the way we construct an intermediate producer state manager\n      // during log recovery, and use it to issue deletions prior to creating the \"real\"\n      // producer state manager."
   }
 ]

@@ -86,5 +86,71 @@
     "commit" : "a9a2e7c4186e22fb9c672e18f4da749e3e60ffaa",
     "line" : 350,
     "diffHunk" : "@@ -1,1 +348,352 @@            // the cluster, shuffle the rack list and broker lists to try to avoid\n            // repeating the same assignments again.\n            if (epoch == numUnfencedBrokers) {\n                shuffle();\n                epoch = 0;"
+  },
+  {
+    "id" : "5c4f4cda-e893-4edb-a6c7-7698d3189e51",
+    "prId" : 10823,
+    "prUrl" : "https://github.com/apache/kafka/pull/10823#pullrequestreview-676873208",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "48c94d0f-353c-41e9-ab33-a395ea979e2a",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "It seems that we are doing the same tests in rackList.place(). Should we just do the tests in one place?",
+        "createdAt" : "2021-06-04T23:37:45Z",
+        "updatedAt" : "2021-06-05T00:05:58Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a71057d-4c55-4c63-8ba9-5933098c6c29",
+        "parentId" : "48c94d0f-353c-41e9-ab33-a395ea979e2a",
+        "authorId" : "e0554c25-f6f3-4e49-a325-bcc5d4dc5fb2",
+        "body" : "We have three separate argument checks to perform, each with its separate error message that the test check for:\r\n\r\na) replication factory can't be non-positive\r\nb) unfenced broker count can't be 0\r\nc) unfenced broker count must must not be less than replication factor\r\n\r\n`StripedReplicaPlacer.place()` was performing checks (b) and (c).\r\n`RackList.place()` was performing check (a)\r\n\r\nGiven that `RackList` is publicly accessible within the package, I felt it was important to perform all the sanity checks there. But `StripedReplicaPlacer.place()` also has a loop and allocates an array, so while we could allow the first iteration of the loop to raise the exception, I felt it was clearer to perform the checks there as well.\r\n",
+        "createdAt" : "2021-06-06T14:41:44Z",
+        "updatedAt" : "2021-06-06T14:41:44Z",
+        "lastEditedBy" : "e0554c25-f6f3-4e49-a325-bcc5d4dc5fb2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "91ba0d16106719e6e4a561fddb3cc35cf9805709",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +436,440 @@        throwInvalidReplicationFactorIfNonPositive(replicationFactor);\n        throwInvalidReplicationFactorIfZero(rackList.numUnfencedBrokers());\n        throwInvalidReplicationFactorIfTooFewBrokers(replicationFactor, rackList.numTotalBrokers());\n        List<List<Integer>> placements = new ArrayList<>(numPartitions);\n        for (int partition = 0; partition < numPartitions; partition++) {"
+  },
+  {
+    "id" : "607ef12f-5b69-474a-94be-0239cfd7b4bf",
+    "prId" : 10823,
+    "prUrl" : "https://github.com/apache/kafka/pull/10823#pullrequestreview-676877794",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bbf39c85-ab3d-43a5-8004-ff73828b8c7f",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Which loop loops forever because of this? Also, is there an existing test covering this? ",
+        "createdAt" : "2021-06-05T00:04:38Z",
+        "updatedAt" : "2021-06-05T00:05:58Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef5ae2be-bf66-4621-b6c8-f35b44dc4e89",
+        "parentId" : "bbf39c85-ab3d-43a5-8004-ff73828b8c7f",
+        "authorId" : "e0554c25-f6f3-4e49-a325-bcc5d4dc5fb2",
+        "body" : "There was no test covering this case, but I added one: `testMultiPartitionTopicPlacementOnSingleUnfencedBroker()` will never finish without this fix.  The `while (true)` loop in `RackList.place()` will never exit without this change when placing multiple partitions on a cluster with just a single unfenced broker.  The issue is that the iteration epoch will start at 0 for the first partition but (without the change) will be reset back to 0 for the second partition; the `Rack` instance associated with the broker will see the same iteration epoch for the second partition and therefore says it has no more unfenced brokers available.  The loop moves to the next rack, but there is no next rack -- there's only the one -- so around we go again asking the same question, ad infinitum.\r\n\r\nOne might wonder about the validity of resetting the iteration epoch backwards to zero at all -- if it is possible that a rack with a single broker could see some iteration epoch and then be asked to place another partition just at the moment when the epoch loops back to the same value.  I think this is not possible because the racks are shuffled once every broker gets an assignment (and hence every rack gets at least one assignment); no rack will see the same iteration epoch again without it seeing a different iteration epoch in between.\r\n\r\nThe degenerate case of just 1 broker is the one we are fixing here: we can't reset the epoch because shuffling has no effect.",
+        "createdAt" : "2021-06-06T15:31:56Z",
+        "updatedAt" : "2021-06-06T15:32:33Z",
+        "lastEditedBy" : "e0554c25-f6f3-4e49-a325-bcc5d4dc5fb2",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "91ba0d16106719e6e4a561fddb3cc35cf9805709",
+    "line" : 16,
+    "diffHunk" : "@@ -1,1 +348,352 @@            // repeating the same assignments again.\n            // But don't reset the iteration epoch for a single unfenced broker -- otherwise we would loop forever\n            if (epoch == numUnfencedBrokers && numUnfencedBrokers > 1) {\n                shuffle();\n                epoch = 0;"
   }
 ]
