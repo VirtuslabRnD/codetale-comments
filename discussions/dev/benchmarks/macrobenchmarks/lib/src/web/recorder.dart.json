@@ -526,5 +526,49 @@
     "commit" : "f54df63c1d13910ef049774078339fd5be39846b",
     "line" : 168,
     "diffHunk" : "@@ -1,1 +1021,1025 @@///\n/// If another listener is already registered, overrides it.\nvoid registerEngineBenchmarkValueListener(String name, EngineBenchmarkValueListener listener) {\n  if (listener == null) {\n    throw ArgumentError("
+  },
+  {
+    "id" : "98885b45-2fe5-4b5b-88bd-dca87fd1b7c1",
+    "prId" : 57576,
+    "prUrl" : "https://github.com/flutter/flutter/pull/57576#pullrequestreview-426546086",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0e0a5b36-c652-4bb9-b2e8-2689f9f84a5e",
+        "parentId" : null,
+        "authorId" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "body" : "What do you think of using a strategy pattern? We could have an abstract `WarmUpStrategy` class with default implementation, which could be replaced by a custom one. Then there would be no need to check `if (useCustomWarmUp) ...`. The API of the strategy class could be something like:\r\n\r\n```dart\r\nabstract class WarmUpStrategy {\r\n  bool shouldContinueWarmUp(Profile profile);\r\n}\r\n```\r\n\r\nFor as long as `shouldContinueWarmUp` returns `true` the warm-up continues. As soon as it returns `false` we start measuring.",
+        "createdAt" : "2020-06-08T16:16:32Z",
+        "updatedAt" : "2020-06-24T10:41:49Z",
+        "lastEditedBy" : "ac2c92fd-803c-4666-96b1-db1044c762c5",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "004f997a-6d75-48ae-9c02-06046183de1b",
+        "parentId" : "0e0a5b36-c652-4bb9-b2e8-2689f9f84a5e",
+        "authorId" : "b6f5d261-bce5-4ac7-8548-424662f5f751",
+        "body" : "There are some tricky issues we have to consider.\r\n\r\n1. What API should we use to reconcile these two very different strategies?\r\n    * In the **default** implementation, everything **except** the last 100 data points of each `Timeseries` is warm-up, so we are only able to determine the warm-up data points **after** we have all the data points recorded.\r\n    * In the **new** implementation, the `Profile` marks data points as warm-up along the way.\r\n2. Different `Timeseries` within a `Profile` may have different lengths.\r\n3. Similarly, we are unable to skip warm-up **measured** frames (for \"total UI frame\") in the default implementation. Since we don't know how many data points we would have in the end, we cannot know where these \"last 100 data points\" begin, and therefore we cannot know when the warm-up ends.\r\n\r\nI did a quick experiment. It turns out that all **existing** benchmarks record exactly 300 data points for each `Timeseries`, so the first 200 data points of each `Timeseries` are warm-up.\r\nI suggest switching the **default** logic to using the **first 200** data points as warm-up. This should not change existing behavior, and it's easier to know which data points are warm-up as we go.\r\n\r\nIn this new setting, the default `shouldContinueWarmUp` would be\r\n```dart\r\nbool shouldContinueWarmUp (Profile profile) =>\r\n    profile.scoreData.isEmpty || !profile.scoreData.values.every((String timeseries) => timeseries.count >= _kWarmUpSampleCount);\r\n```\r\nand the new `shouldContinueWarmUp` would be\r\n```dart\r\nbool shouldContinueWarmUp (Profile profile) => profile.isWarmingUp;\r\n```\r\n",
+        "createdAt" : "2020-06-08T17:57:02Z",
+        "updatedAt" : "2020-06-24T10:41:49Z",
+        "lastEditedBy" : "b6f5d261-bce5-4ac7-8548-424662f5f751",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8a6a1c24-6068-4465-8608-fafa7ec51a7e",
+        "parentId" : "0e0a5b36-c652-4bb9-b2e8-2689f9f84a5e",
+        "authorId" : "b6f5d261-bce5-4ac7-8548-424662f5f751",
+        "body" : "Let's keep this as-is for now. We can introduce this in a later PR.",
+        "createdAt" : "2020-06-08T19:15:09Z",
+        "updatedAt" : "2020-06-24T10:41:49Z",
+        "lastEditedBy" : "b6f5d261-bce5-4ac7-8548-424662f5f751",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5cb191f25c6c0f8a7f7b1c47a5cdb14047639b8a",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +354,358 @@\n  /// Whether to delimit warm-up frames in a custom way.\n  final bool useCustomWarmUp;\n\n  Stopwatch _drawFrameStopwatch;"
   }
 ]
