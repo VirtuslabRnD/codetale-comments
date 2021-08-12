@@ -86,5 +86,104 @@
     "commit" : "be5a86abde45a85189881e8ebe6995964d91302b",
     "line" : 7,
     "diffHunk" : "@@ -1,1 +34,38 @@        return new NetworkSend(destination, serialize(header.toStruct(), toStruct(apiVersion)));\n    }\n\n    /**\n     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead."
+  },
+  {
+    "id" : "33b2749c-2141-4826-8e08-6823a91c46e9",
+    "prId" : 8417,
+    "prUrl" : "https://github.com/apache/kafka/pull/8417#pullrequestreview-397931035",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6fe17960-3f14-4d52-bd2b-1c056dfc0d12",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "it seems this implementation can be replaced by ```#errorCounts(Stream<Errors>)```",
+        "createdAt" : "2020-04-10T17:22:32Z",
+        "updatedAt" : "2020-04-22T13:52:42Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d95830a5-6c54-44f4-ad20-fdd9fea45238",
+        "parentId" : "6fe17960-3f14-4d52-bd2b-1c056dfc0d12",
+        "authorId" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "body" : "@chia7712 you're right, but the only two remaining callers of this method are for RPCs which haven't been converted to the message generator. There's little benefit to changing them when there are already PRs for converting those RPCs, and I'm planning to remove this method entirely when those PRs have been merged. I guess I could mark this method as `@Deprecated`.\r\n\r\nRelatedly there's only a single caller of the `apiErrorCounts(Map<?, ApiError> errors)` method which is also for an not-yet-converted RPC with a PR. If this gets merged first I'll be able to remove `apiErrorCounts(Map<?, ApiError> errors)` in that PR. ",
+        "createdAt" : "2020-04-22T07:51:55Z",
+        "updatedAt" : "2020-04-22T13:52:42Z",
+        "lastEditedBy" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc52740ff70d790bdc2927a6000ef45b682e119f",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +64,68 @@    }\n\n    protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {\n        Map<Errors, Integer> errorCounts = new HashMap<>();\n        for (Errors error : errors)"
+  },
+  {
+    "id" : "ef36ab67-5dd5-4532-bcd6-3b83e92c764c",
+    "prId" : 8417,
+    "prUrl" : "https://github.com/apache/kafka/pull/8417#pullrequestreview-397474066",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dbf43ce3-b40b-4431-8cce-b6eb489b7333",
+        "parentId" : null,
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "@tombentley Have we done any testing to verify that this way of doing things is no slower than the old way?",
+        "createdAt" : "2020-04-20T13:31:01Z",
+        "updatedAt" : "2020-04-22T13:52:42Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9766a11-ead9-4be7-9f53-dc5b3c399980",
+        "parentId" : "dbf43ce3-b40b-4431-8cce-b6eb489b7333",
+        "authorId" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "body" : "@ijuma I wrote a small microbenchmark (committed and reverted if you want to take a look) to compare performance. I picked `TxnOffsetCommitResponse` (more or less at random, but since it has two levels of nesting for topics and partitions it has a double loop) with an unrepresentitively large number of topics and partitions. \r\n\r\nUsing the old code (`errorCounts(errors())`), I got this test run:\r\n\r\n```\r\n{NONE=200000000}\r\nrun 0, times=20000 took 50172790515ns, 398.62243647820753ops/s\r\n{NONE=200000000}\r\nrun 1, times=20000 took 49210843555ns, 406.4144923191004ops/s\r\n{NONE=200000000}\r\nrun 2, times=20000 took 49366208092ns, 405.1354311582437ops/s\r\n{NONE=200000000}\r\nrun 3, times=20000 took 48628565963ns, 411.2808922890589ops/s\r\n{NONE=200000000}\r\nrun 4, times=20000 took 48727847017ns, 410.4429237971969ops/s\r\n```\r\n\r\nI aborted early because it was pretty slow. You can see the JIT is improving the performance a little over time.\r\n\r\nUsing the streaming approach I got this test run:\r\n\r\n```\r\n{NONE=200000000}\r\nrun 0, times=20000 took 6984797524ns, 2863.36145482805ops/s\r\n{NONE=200000000}\r\nrun 1, times=20000 took 6566254988ns, 3045.8762318171493ops/s\r\n{NONE=200000000}\r\nrun 2, times=20000 took 6553362923ns, 3051.868214074797ops/s\r\n{NONE=200000000}\r\nrun 3, times=20000 took 6259904961ns, 3194.936684279159ops/s\r\n{NONE=200000000}\r\nrun 4, times=20000 took 6675450385ns, 2996.052527772626ops/s\r\n{NONE=200000000}\r\nrun 5, times=20000 took 6949088789ns, 2878.075184714696ops/s\r\n{NONE=200000000}\r\nrun 6, times=20000 took 6045899635ns, 3308.02712704972ops/s\r\n{NONE=200000000}\r\nrun 7, times=20000 took 5845348664ns, 3421.5238730197325ops/s\r\n{NONE=200000000}\r\nrun 8, times=20000 took 6370088159ns, 3139.6739732311135ops/s\r\n{NONE=200000000}\r\nrun 9, times=20000 took 6799792822ns, 2941.2660831800854ops/s\r\n{NONE=200000000}\r\nrun 10, times=20000 took 6641092713ns, 3011.5525959831602ops/s\r\n{NONE=200000000}\r\nrun 11, times=20000 took 6621610314ns, 3020.4133211696576ops/s\r\n{NONE=200000000}\r\nrun 12, times=20000 took 6339235087ns, 3154.9547738045576ops/s\r\n{NONE=200000000}\r\nrun 13, times=20000 took 6461046814ns, 3095.473624593366ops/s\r\n{NONE=200000000}\r\nrun 14, times=20000 took 6585386195ns, 3037.027656052296ops/s\r\n{NONE=200000000}\r\nrun 15, times=20000 took 6565973868ns, 3046.00664000084ops/s\r\n{NONE=200000000}\r\nrun 16, times=20000 took 6585253169ns, 3037.0890058031114ops/s\r\n{NONE=200000000}\r\nrun 17, times=20000 took 6618664562ns, 3021.7576087518905ops/s\r\n{NONE=200000000}\r\nrun 18, times=20000 took 6592603829ns, 3033.7026945290754ops/s\r\n{NONE=200000000}\r\nrun 19, times=20000 took 6567525693ns, 3045.2869063484604ops/s\r\n```\r\n\r\nThis is about 7½ times faster.\r\n\r\nOut of interest I also rewote the `TxnOffsetCommitResponse.errorCounts()` to use a `forEach()`:\r\n\r\n```\r\n{NONE=200000000}\r\nrun 0, times=20000 took 6038137472ns, 3312.279671131012ops/s\r\n{NONE=200000000}\r\nrun 1, times=20000 took 5642135982ns, 3544.7568197231726ops/s\r\n{NONE=200000000}\r\nrun 2, times=20000 took 5551109425ns, 3602.883400195268ops/s\r\n{NONE=200000000}\r\nrun 3, times=20000 took 5511950192ns, 3628.4798126492215ops/s\r\n{NONE=200000000}\r\nrun 4, times=20000 took 5180664883ns, 3860.5083423999577ops/s\r\n{NONE=200000000}\r\nrun 5, times=20000 took 4571569172ns, 4374.865444997799ops/s\r\n{NONE=200000000}\r\nrun 6, times=20000 took 5472660241ns, 3654.529811692726ops/s\r\n{NONE=200000000}\r\nrun 7, times=20000 took 5499370051ns, 3636.780179279483ops/s\r\n{NONE=200000000}\r\nrun 8, times=20000 took 5523721146ns, 3620.7475850736946ops/s\r\n{NONE=200000000}\r\nrun 9, times=20000 took 4691001711ns, 4263.481710761627ops/s\r\n{NONE=200000000}\r\nrun 10, times=20000 took 5495174831ns, 3639.5566319698773ops/s\r\n{NONE=200000000}\r\nrun 11, times=20000 took 5676661773ns, 3523.1974001210237ops/s\r\n{NONE=200000000}\r\nrun 12, times=20000 took 5605106974ns, 3568.174540249194ops/s\r\n{NONE=200000000}\r\nrun 13, times=20000 took 5577604479ns, 3585.768778568137ops/s\r\n{NONE=200000000}\r\nrun 14, times=20000 took 5544332242ns, 3607.287429222572ops/s\r\n{NONE=200000000}\r\nrun 15, times=20000 took 5502312660ns, 3634.835247621134ops/s\r\n{NONE=200000000}\r\nrun 16, times=20000 took 5528323376ns, 3617.7333776865516ops/s\r\n{NONE=200000000}\r\nrun 17, times=20000 took 5528944581ns, 3617.3269069704934ops/s\r\n{NONE=200000000}\r\nrun 18, times=20000 took 5496460628ns, 3638.705223888306ops/s\r\n{NONE=200000000}\r\nrun 19, times=20000 took 5511532751ns, 3628.754632070588ops/s\r\n```\r\n\r\nThere was some variability between different runs of this benchmark, the above is one of the better ones, the less good ones had performace similar to the Stream case.\r\n\r\nConclusions: \r\n\r\n1. `errorCounts(Stream)` is an improvement over `errorCounts(Collection)`.\r\n2. If we're really interested in getting the best performance then we should probably drop `errorCounts(Stream)` and use `forEach` everywhere. The drawback is it's a little more verbose than the `errorCounts(Stream)` approach.\r\n\r\nThoughts?",
+        "createdAt" : "2020-04-21T15:30:12Z",
+        "updatedAt" : "2020-04-22T13:52:42Z",
+        "lastEditedBy" : "491bcd91-bc8d-4f54-b5fd-d6c7be5e8693",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4f8fd9c4-050a-4ec1-9c3b-070973bc655d",
+        "parentId" : "dbf43ce3-b40b-4431-8cce-b6eb489b7333",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "Thanks! I think the way you have it now is both fast and concise, not worth changing it to use `forEach` given how this is normally used.",
+        "createdAt" : "2020-04-21T16:32:16Z",
+        "updatedAt" : "2020-04-22T13:52:42Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc52740ff70d790bdc2927a6000ef45b682e119f",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +61,65 @@\n    protected Map<Errors, Integer> errorCounts(Stream<Errors> errors) {\n        return errors.collect(Collectors.groupingBy(e -> e, Collectors.summingInt(e -> 1)));\n    }\n"
+  },
+  {
+    "id" : "de9f9a47-ea05-41fe-b4ed-4c25e6b14130",
+    "prId" : 8417,
+    "prUrl" : "https://github.com/apache/kafka/pull/8417#pullrequestreview-396455611",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a03a4774-c91e-4ff4-965e-b99fb02ca12a",
+        "parentId" : null,
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "We can probably update `updateErrorsCounts` to use `getOrDefault` (I can't comment on the relevant line directly).",
+        "createdAt" : "2020-04-20T13:32:43Z",
+        "updatedAt" : "2020-04-22T13:52:42Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc52740ff70d790bdc2927a6000ef45b682e119f",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +66,70 @@    protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {\n        Map<Errors, Integer> errorCounts = new HashMap<>();\n        for (Errors error : errors)\n            updateErrorCounts(errorCounts, error);\n        return errorCounts;"
   }
 ]

@@ -1274,5 +1274,236 @@
     "commit" : "c01468233fc24b2deb017a7bdf80dc2c644d92fc",
     "line" : 15,
     "diffHunk" : "@@ -1,1 +479,483 @@\n        if (processingMode == EXACTLY_ONCE_BETA) {\n            activeTaskCreator.reInitializeThreadProducer();\n        }\n    }"
+  },
+  {
+    "id" : "a7a91316-98eb-434b-9488-27b942560ba4",
+    "prId" : 8433,
+    "prUrl" : "https://github.com/apache/kafka/pull/8433#pullrequestreview-388597167",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "05313768-53f6-41c6-999c-d831cbf9f98a",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "It seems like this would have initially appeared unnecessary because we already removed it on L230 when we first put it into the dirtyTasks map. But what appears to have happened is that we actually got an exception during commit, and added some more tasks in L252-L253, which were not removed from the task map.\r\n\r\nWhat is the overall algorithm here? Offhand, it seems like we should only remove the task after we know it is closed, which means we should delete the `iterator.remove();` on L230 and keep the line you've added here, along with adding a similar line between L264-265 (after closeClean). I'm also wondering if we should really do closeDirty on L271, or just add it to dirtyTasks. If we keep it there, then we also need to remove it from the task map at that location.",
+        "createdAt" : "2020-04-06T20:30:39Z",
+        "updatedAt" : "2020-04-06T22:24:39Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0b97361-25dd-4622-98ed-cecead279d65",
+        "parentId" : "05313768-53f6-41c6-999c-d831cbf9f98a",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Thanks for the question @vvcephei , the overall algorithm is like we are adding more tasks into the dirty task list to cleanup on L252-253, as the whole pre-commit + commit section fails. I could see that doing a separate removal here is misleading, so I will try to move this logic up to the catch block where we actually augment the dirtyTasks map.",
+        "createdAt" : "2020-04-06T20:36:10Z",
+        "updatedAt" : "2020-04-06T22:24:39Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b5c7843c39c57f235009c1098e088f854ace13cf",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +277,281 @@            task.closeDirty();\n            cleanUpTaskProducer(task, taskCloseExceptions);\n            tasks.remove(task.id());\n        }\n"
+  },
+  {
+    "id" : "58b0df41-b4b7-4b1c-bc95-aeb6f45e72db",
+    "prId" : 8440,
+    "prUrl" : "https://github.com/apache/kafka/pull/8440#pullrequestreview-391001414",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f81f476a-38ca-41ec-9c27-94b5661cb705",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "This is an actually bug fix: `consumedOffsetsAndMetadataPerTask` could be empty, if only standby tasks (but no active tasks) are assigned to a thread.",
+        "createdAt" : "2020-04-07T20:55:26Z",
+        "updatedAt" : "2020-04-14T23:37:49Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95c626ed-fb67-4c85-8578-b14ae8bc4909",
+        "parentId" : "f81f476a-38ca-41ec-9c27-94b5661cb705",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Could you elaborate more on why committing an empty map will fail?",
+        "createdAt" : "2020-04-07T22:13:28Z",
+        "updatedAt" : "2020-04-14T23:37:49Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5b049ed8-ac1d-4970-a577-cbd337f45931",
+        "parentId" : "f81f476a-38ca-41ec-9c27-94b5661cb705",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "If we only have `StandbyTasks` assigned, the `RecordCollector` would not be initialized and thus the KafkaProducer would not initialize transactions and hence the offset commit would fail as we cannot begin a new transaction.",
+        "createdAt" : "2020-04-09T17:43:43Z",
+        "updatedAt" : "2020-04-14T23:37:49Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "15e0b98ef384c15022ee76e6ca88b325567e31cb",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +760,764 @@            if (!consumedOffsetsAndMetadataPerTask.isEmpty()) {\n                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);\n            }\n\n            for (final Task task : tasks) {"
+  },
+  {
+    "id" : "474079de-b1fa-4f32-8784-54d841830a4e",
+    "prId" : 8463,
+    "prUrl" : "https://github.com/apache/kafka/pull/8463#pullrequestreview-391887808",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c41081ae-774b-490c-809a-4ce94a11bc0c",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "This was the main bug, we try to batch commit active tasks above and deal with failure by adding to this `dirtyTasks` set. But we didn't actually do all of the required cleanup for a removed task in this loop here, specifically we did not ever call `cleanupTask` on tasks that were added to `dirtyTasks` from the `additionalTasksForCommitting` set on line 250",
+        "createdAt" : "2020-04-10T23:29:57Z",
+        "updatedAt" : "2020-04-10T23:32:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "427fc27f-1997-4973-803d-421d70e48f3a",
+        "parentId" : "c41081ae-774b-490c-809a-4ce94a11bc0c",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I think we also didn't always call `prepareCloseDirty` before calling `closeDirty`. That was not the source of this particular bug, but I tried to consolidate all the cleanup tasks a bit to make sure they end up being called at all times, in the correct order",
+        "createdAt" : "2020-04-10T23:31:24Z",
+        "updatedAt" : "2020-04-10T23:32:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f1d0444-8c66-4d81-934d-b2aced7d911b",
+        "parentId" : "c41081ae-774b-490c-809a-4ce94a11bc0c",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "LGTM.",
+        "createdAt" : "2020-04-12T19:26:05Z",
+        "updatedAt" : "2020-04-12T19:31:49Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5f8b15773b7d1eb96e8804a90e29cb27d390f6b3",
+    "line" : 67,
+    "diffHunk" : "@@ -1,1 +274,278 @@\n        for (final Task task : dirtyTasks) {\n            closeTaskDirty(task);\n            cleanUpTaskProducer(task, taskCloseExceptions);\n            tasks.remove(task.id());"
+  },
+  {
+    "id" : "219ae9db-dd35-4e15-ab2b-f23a2f04c287",
+    "prId" : 8463,
+    "prUrl" : "https://github.com/apache/kafka/pull/8463#pullrequestreview-392470039",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "20d144db-df9a-4575-b45c-162b97af35c1",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Could we move `cleanUpTaskProducer` into `completeTaskCloseClean` and `closeTaskDirty` respectively?",
+        "createdAt" : "2020-04-12T19:27:50Z",
+        "updatedAt" : "2020-04-12T19:31:49Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2c78c814-19cc-4737-b80e-4c482dcf4f37",
+        "parentId" : "20d144db-df9a-4575-b45c-162b97af35c1",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I think yes, ultimately we can (and should), but the task producer cleanup is handled differently throughout this class and this would be a larger refactoring. I know there's some `TaskManager` cleanup planned or in progress already so  I wanted to hold off on anything more than the trivial refactoring done here",
+        "createdAt" : "2020-04-13T21:41:20Z",
+        "updatedAt" : "2020-04-13T21:41:20Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cf366e24-7784-4532-b50b-6b0e92069101",
+        "parentId" : "20d144db-df9a-4575-b45c-162b97af35c1",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Cool, sounds good.",
+        "createdAt" : "2020-04-13T22:00:36Z",
+        "updatedAt" : "2020-04-13T22:00:37Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5f8b15773b7d1eb96e8804a90e29cb27d390f6b3",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +261,265 @@            try {\n                completeTaskCloseClean(task, checkpoint);\n                cleanUpTaskProducer(task, taskCloseExceptions);\n                tasks.remove(task.id());\n            } catch (final RuntimeException e) {"
+  },
+  {
+    "id" : "157ceed5-ae96-4f85-b1f3-1c8d65ce24b7",
+    "prId" : 8463,
+    "prUrl" : "https://github.com/apache/kafka/pull/8463#pullrequestreview-392461113",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7cc95937-71a5-494e-a3d1-a0145f35ca67",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Should we also close producers for the lost tasks as well?",
+        "createdAt" : "2020-04-12T19:29:54Z",
+        "updatedAt" : "2020-04-12T19:31:49Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6aed7528-634e-4766-a3b0-11b0fd6eac31",
+        "parentId" : "7cc95937-71a5-494e-a3d1-a0145f35ca67",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "We do, right below this, but rather than delegate to `#cleanupTaskProducer`  we just call `activeTaskCreator.closeAndRemoveTaskProducerIfNeeded` directly (which is what `#cleanupTaskProducer` ultimately does). I think we should consolidate these calls eventually, but not necessarily in this hotfix",
+        "createdAt" : "2020-04-13T21:43:30Z",
+        "updatedAt" : "2020-04-13T21:43:30Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5f8b15773b7d1eb96e8804a90e29cb27d390f6b3",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +464,468 @@            // standby tasks while we rejoin.\n            if (task.isActive()) {\n                closeTaskDirty(task);\n                iterator.remove();\n                try {"
+  },
+  {
+    "id" : "83c73b4c-96af-4f80-bde4-1c433e5c0d6f",
+    "prId" : 8463,
+    "prUrl" : "https://github.com/apache/kafka/pull/8463#pullrequestreview-392461746",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ad5471b5-068c-4f95-87fd-a76b5a925f0c",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Ditto, should we close producers as well?",
+        "createdAt" : "2020-04-12T19:30:32Z",
+        "updatedAt" : "2020-04-12T19:31:49Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dbb8d6e7-0fdd-422a-89af-14bab1ae94bd",
+        "parentId" : "ad5471b5-068c-4f95-87fd-a76b5a925f0c",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Same here, we do close it eventually a few loops after this one",
+        "createdAt" : "2020-04-13T21:44:37Z",
+        "updatedAt" : "2020-04-13T21:44:37Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5f8b15773b7d1eb96e8804a90e29cb27d390f6b3",
+    "line" : 116,
+    "diffHunk" : "@@ -1,1 +631,635 @@                } catch (final TaskMigratedException e) {\n                    // just ignore the exception as it doesn't matter during shutdown\n                    closeTaskDirty(task);\n                } catch (final RuntimeException e) {\n                    firstException.compareAndSet(null, e);"
   }
 ]

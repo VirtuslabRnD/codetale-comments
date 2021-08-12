@@ -1,0 +1,321 @@
+[
+  {
+    "id" : "28c32c1d-9c53-4792-9336-7578d0dfb265",
+    "prId" : 8436,
+    "prUrl" : "https://github.com/apache/kafka/pull/8436#pullrequestreview-390444823",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0c964f08-27d1-4c07-8082-a4fbde60295c",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "The only way we can ever hit this (task had this standby but remainingStandbys is 0) is if the configured `num.standby.replicas` is dynamically changed. But I believe we do allow that...right?",
+        "createdAt" : "2020-04-09T01:39:07Z",
+        "updatedAt" : "2020-04-09T01:39:07Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8d34ffa-d52b-4239-9b4a-c5ab6f3f8a5d",
+        "parentId" : "0c964f08-27d1-4c07-8082-a4fbde60295c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Yes, we do.",
+        "createdAt" : "2020-04-09T02:02:17Z",
+        "updatedAt" : "2020-04-09T02:02:17Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1f0a36ba38e5a79e8bc9db62a82f6f229a9dde3a",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +113,117 @@                    } else {\n                        if (clientStates.get(destination).prevStandbyTasks().contains(task)\n                                && tasksToRemainingStandbys.get(task) > 0\n                        ) {\n                            decrementRemainingStandbys(task, tasksToRemainingStandbys);"
+  },
+  {
+    "id" : "f6db5b98-af66-4dda-8239-d05794d9e495",
+    "prId" : 8497,
+    "prUrl" : "https://github.com/apache/kafka/pull/8497#pullrequestreview-395798898",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e20fbe51-dabc-4bce-ad05-8adfd82b73f4",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "This seems suspicious... It doesn't look like we previously polled this client, but we did add all the clients while initializing the queue. Does this add the client twice in the queue?\r\n\r\nSince we know we want the queue to have a uniqueness property over its elements as well, and since the heap is already encapsulated, we could consider adding a simple hashset of elements alongside the internal heap, and remove before offering when we know the element is already present. Did that make sense?",
+        "createdAt" : "2020-04-17T19:47:59Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7f90bd5-66db-47d5-a2ce-b745e1c60b59",
+        "parentId" : "e20fbe51-dabc-4bce-ad05-8adfd82b73f4",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Good catch, I think we should remove adding the clients from the initialization and force that to be done through `offerAll` (or `addAll`). Enforcing uniqueness sounds like a good idea though",
+        "createdAt" : "2020-04-17T22:03:18Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2a6dc0b002bf6e6f46d9a910d0358cbcf81dd1f7",
+    "line" : 125,
+    "diffHunk" : "@@ -1,1 +80,84 @@                }\n            }\n            clientsByTaskLoad.offer(client);\n        }\n"
+  },
+  {
+    "id" : "b919d5eb-7a04-4560-92ba-665a180e4576",
+    "prId" : 8497,
+    "prUrl" : "https://github.com/apache/kafka/pull/8497#pullrequestreview-396950637",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "This also doesn't have any test coverage. It took me a while to figure out why this should be a illegal.\r\n\r\nIf I followed the code paths to this point correctly, it seems like the balanced assignor declared it wants task X to be on client A, and A is not caught up on X, so we don't immediately assign A to X. Instead, we try to find the least loaded valid client to host it for now. However, there was no valid client. At a glance, this means that there's no client that's caught up on the task, but the trick is that `taskIsCaughtUpOnClient` considers _all_ clients valid if there are no caught-up ones. So, if we did get `null` here, it would either mean that A is the only caught-up client on X (and we shouldn't be here, since it means A is caught up on X, contradicting the earlier statement), or that there are no clients in the queue (which also shouldn't happen).\r\n\r\nWe can possibly clarify it my making the name of `taskIsCaughtUpOnClient` more complete: `eitherClientIsCaughtUpOnTaskOrNoClientIs`. But I wouldn't hesitate to also write a nice letter to future us here as a comment.",
+        "createdAt" : "2020-04-18T20:33:04Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "abb74e6e-ede5-474a-ab8b-056b32a3efd2",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "> We can possibly clarify it my making the name of taskIsCaughtUpOnClient more complete: eitherClientIsCaughtUpOnTaskOrNoClientIs.\r\n\r\nAgree on that\r\n\r\n> But I wouldn't hesitate to also write a nice letter to future us here as a comment.\r\n\r\nWhat about writing the nice letter to future us in the exception message instead of a comment?\r\n",
+        "createdAt" : "2020-04-20T14:46:10Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2546da39-f27f-4e75-9de6-f2f561913f31",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Sure, that sounds even better. We just need to bear in mind the difference in audience. Exception messages need to be worded in a way that will make sense to users. Nothing wrong with that, though.",
+        "createdAt" : "2020-04-20T20:33:59Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33e39b2b-ec24-47e0-99ea-c2896a5bbca7",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I guess the way I thought about it was:\r\n1. the `clientsByTaskLoad` queue returns the (next least loaded) caught-up client for a given task \r\n2. the `taskMovements` set only contains tasks with caught-up clients\r\n3. therefore, every task in `taskMovements` has at least one client\r\n\r\nIf I'm following this discussion correctly, it seems like point 2. is the root cause of confusion. Is that a fair summary? I'll definitely rename `taskIsCaughtUpOnClient`, thanks for pointing out that was pretty misleading. Would it help to leave a comment on the actual `TaskMovement` class clarifying that a task to be moved necessarily has at least one caught-up client (because otherwise why would we try to move it), and/or rename `taskMovements` (suggestions welcome) ?",
+        "createdAt" : "2020-04-21T01:13:34Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0706bb95-07bd-4c11-8acd-6fc4cf96d756",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I'm having trouble thinking of a way to make the exception message more clear without just starting to name variable names and describe the literal code, which doesn't seem appropriate for an exception message. Does anyone have any suggestions? Maybe something like `scheduled a task to be moved and assigned to a caught-up client, but no caught up clients were found`? That just seems like a more verbose way to say the same thing 😕 ",
+        "createdAt" : "2020-04-21T01:19:14Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc250dad-ca11-4d65-96b8-df343d853a0a",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Actually, I think I was saying something different. There is not a guarantee that any client is caught up, which is why the name `taskIsCaughtUpOnClient` is misleading. If that name is accurate, then it looked like the IllegalStateException would actually get thrown all the time, whenever there is no caught-up client.\r\nSo the subtlety is that we _do_ get back a client when there is no caught-up client. In that case, the predicate falls back to giving us all the clients. Hence the name I recommended. I do think this is all fairly esoteric from the user's perspective, which may be why I thought first of leaving a comment.\r\nI also can't think of what to say in the exception. What I said before references internal variables, which is not appropriate. But there also doesn't really seem to be a way to say \"this is why this happened\" because the whole point of ISE is that we have no idea why it would happen.\r\nHow about you just take as feedback that this is one of the subtlest things I've seen in a while, and make some attempt to make it less mind-blowing (maybe just renaming the method is good enough).\r\n\r\nWorst-case scenario, if we come back in a year and again get confused, we'll have another chance to clarify the code. This feedback is just about trying to prevent that future, but we can only do our best.",
+        "createdAt" : "2020-04-21T01:53:50Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6153ab6f-7771-4662-8c6b-346bccbaf55c",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "But we only put a task in the `taskMovements` set if we know it has a caught-up client (that isn't its current client). The inverse is also true; if a task has no caught-up clients, it won't be in `taskMovements`. So any task we get while looping through `taskMovements` necessarily has at least one caught-up client, right?\r\nI agree here that `taskIsCaughtUpOnClient` was misleading, and have renamed it (just haven't pushed the latest changes yet). ",
+        "createdAt" : "2020-04-21T02:01:46Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3421533e-bf6b-4947-9c45-eae8d3bfc4bd",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Let's say we rename it to `taskIsCaughtUpOnClientOrNoCaughtUpClientsExist` Would you still feel like this is a subtle issue worth leaving a comment for? Or was that the sole source of confusion? ",
+        "createdAt" : "2020-04-21T02:03:24Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7697c67c-0991-4872-af82-571733607611",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I think that would be good enough. Thanks!\r\n\r\nGoing back to your prior comment,\r\n\r\n> But we only put a task in the taskMovements set if we know it has a caught-up client (that isn't its current client). The inverse is also true; if a task has no caught-up clients, it won't be in taskMovements. So any task we get while looping through taskMovements necessarily has at least one caught-up client, right?\r\n\r\nI feel like I'm just missing something here. It looks to me like the only precondition for adding a task to `taskMovements` is that it is _not_ caught up on the destination. Why does that imply that we know it _is_ caught up on another?",
+        "createdAt" : "2020-04-21T02:18:11Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e7107dd-1687-4974-98d8-f40f180c4ba4",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "```\r\nif (taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients)) {\r\n    state.assignActive(task);\r\n} else {\r\n    final TaskMovement taskMovement = new TaskMovement(task, client);\r\n    taskMovements.add(taskMovement);\r\n}\r\n```\r\nwith the renaming, this block now looks like this. If no caught up clients exist, we just assign it to the ClientState right away; otherwise, if and only if `taskIsCaughtUpOnClientOrNoCaughtUpClientsExist` returns false, do we add to `taskMovements`.\r\n\r\nSo by (I think it's called deMorgan's Law?):\r\n!(caughtUpOnClient | noCaughtUpClientsExist) \r\n== !caughtUpOnClient & !noCaughtUpClientsExist \r\n== notCaughtUpOnClient & caughtUpClientsExist\r\n    ∴ caught-up clients exist\r\n\r\nI also feel like I might be missing your point, but I hope we can get somewhere when the method is more appropriately named 🙂 ",
+        "createdAt" : "2020-04-21T02:25:27Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d3489c6a-412b-4d49-b87a-56957f75a4a5",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Haha, ok, now I get it. See? I knew renaming the method was a good idea. I think we can definitely chalk this one up as a win for me ;)\r\n\r\nNice work busting out the `∴` character.",
+        "createdAt" : "2020-04-21T02:38:58Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dbf89942-288f-49dd-865e-5600f8d0e76e",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yeah I felt pretty fancy with the `∴`. \r\n\r\nHope that didn't come off as too condescending, it's just been a while since I got to practice my logical proofs and I couldn't resist 😄 ",
+        "createdAt" : "2020-04-21T02:42:08Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35ab999f-5988-4b7f-98f1-44d7af37506c",
+        "parentId" : "ec7b632f-58dc-43a7-9c06-1bbfe2a35b12",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Hah! No, not offended at all. I think the old phrase is \"Flawless Victory.\"",
+        "createdAt" : "2020-04-21T02:47:47Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2a6dc0b002bf6e6f46d9a910d0358cbcf81dd1f7",
+    "line" : 136,
+    "diffHunk" : "@@ -1,1 +87,91 @@            final UUID sourceClient = clientsByTaskLoad.poll(movement.task);\n            if (sourceClient == null) {\n                throw new IllegalStateException(\"Tried to move task to caught-up client but none exist\");\n            }\n"
+  },
+  {
+    "id" : "4ed5d0fa-0fc5-480c-b1fb-0fadf89698bd",
+    "prId" : 8497,
+    "prUrl" : "https://github.com/apache/kafka/pull/8497#pullrequestreview-397596681",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "be67631a-2a0c-4eee-907c-07d8639083e8",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "It feels like there's a missing condition here.\r\n1. if the task was previously on the destination AND we can consider it one of the configured standbys\r\n2. we can assign the task to the destination as a warm-up\r\n\r\nWhat about:\r\n3. We have an available standby, and the task was not previously assigned to the client, but it also wasn't previously assigned to any client, so we can just choose to assign the standby to the destination client and call it a standby",
+        "createdAt" : "2020-04-18T20:43:22Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "729a06db-0b13-4324-b620-39202c45b03e",
+        "parentId" : "be67631a-2a0c-4eee-907c-07d8639083e8",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Hm. I'm not sure this was what you meant, but I think we have to interpret \"`wasn't previously assigned to any client\"` as meaning `\"any client other than the source client\"`. By definition someone had to have had this task previously for it to be involved in a movement: of course this could be due to leftover/old state and not the actual assigned task, but we currently don't and can't distinguish these.\r\n\r\nGiven that, I think I buy this. But should the condition also be generalized to \"the task had fewer than num.standby previous clients\" (after accounting for the above)?\r\n\r\nJust to lay out the general reasoning for my  future self: we basically only want to count something as a warmup replica when counting it against the total standbys for this rebalance(s) would mean temporarily revoking a standby task from some client for the duration of the rebalance(s). In other words, outside of the tasks & clients involved in a movement, we want the assignment during the intermediate rebalances to resemble the final assignment as much as possible.\r\n\r\nSo if we had num.standbys = 5 and 4 previous clients I think we would still want to consider this a standby. Of course, nothing discussed here will really matter unless (until) we make the standby assignment more sticky and/or lag-based",
+        "createdAt" : "2020-04-21T00:19:56Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f5a063c-e688-4e94-9739-633284aa8aba",
+        "parentId" : "be67631a-2a0c-4eee-907c-07d8639083e8",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Hmm, it doesn't _seem_ like there's such a guarantee. But I'm always suspicious I just mised the point.\r\n\r\nWhat if we had lost the node holding the standby? Or we lost the node holding the active, and decided to promote the standby to active? Or if we were running with no standbys and the setting were adjusted to allow standbys? Or something similar... It seems like in these situations, there is no prior owner of the standby, and (because the cluster changed) we might want to move the active to a new node, and there wouldn't be a valid candidate to host the standby, so we might as well let the destination _be_ the standby without using up a \"warmup\" task.",
+        "createdAt" : "2020-04-21T02:09:28Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8b7cad4-1845-472f-bc3d-ee18be9bd64c",
+        "parentId" : "be67631a-2a0c-4eee-907c-07d8639083e8",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I suspect this may also be related to the issue we just resolved, ie we know all tasks here must have caught-up clients. But just to clarify what I meant in the first paragraph, this client may be caught-up due to old leftover state rather than a previous task. Unfortunately(?) we just encode the offset sums for everything, so we can't distinguish these cases. \r\n\r\nI think we're actually in agreement here, but I'd propose a slight relaxation of the constraint: if N is the number of clients who previously had this task as a standby, let we count it as a standby if N < num.standby.replicas. This includes the cases you described, but also extends to ones where we have multiple standbys and lost a single node. WDYT?",
+        "createdAt" : "2020-04-21T02:47:05Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c4d6b44e-ba76-4800-a9f9-95003cd1edf3",
+        "parentId" : "be67631a-2a0c-4eee-907c-07d8639083e8",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Yeah, something like that sounds right to me. I think what we have here is \"good enough\" for now, though, and we can merge this PR while continuing to refine the standby accounting later.",
+        "createdAt" : "2020-04-21T19:09:39Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2a6dc0b002bf6e6f46d9a910d0358cbcf81dd1f7",
+    "line" : 174,
+    "diffHunk" : "@@ -1,1 +99,103 @@                clientsByTaskLoad.offer(movement.destination);\n                warmupReplicasAssigned = true;\n            }\n        }\n        return warmupReplicasAssigned;"
+  },
+  {
+    "id" : "bb744bc4-df30-4d9f-8390-7f2bae49e127",
+    "prId" : 8497,
+    "prUrl" : "https://github.com/apache/kafka/pull/8497#pullrequestreview-397598908",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b13d0c8d-03ba-44d4-9bf0-87350d87593d",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "This question from my previous review went unnoticed (or you did simply not care ;-)).\r\n\r\n>  Q: Why do we even care at all whether the task was running on the client? What if we just assign a real stand-by task if we have a spare one? \r\n",
+        "createdAt" : "2020-04-21T10:53:14Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "912baef9-8934-480f-be24-472833063d24",
+        "parentId" : "b13d0c8d-03ba-44d4-9bf0-87350d87593d",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I think I answered this already. We're trying not to decrease the overall availability the standbys are providing, which could happen if we drop a caught-up standby in order to warm up an empty node. We can certainly do better than what we do now, which is not very efficient in terms of task movement, but I think it's good enough for this PR.",
+        "createdAt" : "2020-04-21T19:12:52Z",
+        "updatedAt" : "2020-04-21T19:20:52Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "2a6dc0b002bf6e6f46d9a910d0358cbcf81dd1f7",
+    "line" : 189,
+    "diffHunk" : "@@ -1,1 +108,112 @@                                                     final AtomicInteger remainingWarmupReplicas,\n                                                     final Map<TaskId, Integer> tasksToRemainingStandbys) {\n        if (destinationClientState.previousAssignedTasks().contains(task) && tasksToRemainingStandbys.get(task) > 0) {\n            tasksToRemainingStandbys.compute(task, (t, numStandbys) -> numStandbys - 1);\n            return true;"
+  }
+]
