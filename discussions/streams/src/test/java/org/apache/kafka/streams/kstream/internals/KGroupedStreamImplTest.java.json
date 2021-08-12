@@ -141,5 +141,60 @@
     "commit" : "43873294c59da42142246aa9c261e0f903f0f3d4",
     "line" : 17,
     "diffHunk" : "@@ -1,1 +156,160 @@    }\n\n    private void doAggregateSessionWindows(final MockProcessorSupplier<Windowed<String>, Integer> supplier) {\n        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {\n            driver.pipeInput(recordFactory.create(TOPIC, \"1\", \"1\", 10));"
+  },
+  {
+    "id" : "621ff6b8-44d9-4ee7-affe-ae0c96c932c5",
+    "prId" : 9239,
+    "prUrl" : "https://github.com/apache/kafka/pull/9239#pullrequestreview-486447426",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d91fc723-6661-43bb-952e-c341730ce885",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Why this change?",
+        "createdAt" : "2020-09-09T00:20:49Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "985082ad-e644-4b9c-98e0-e6ecb477eaf8",
+        "parentId" : "d91fc723-6661-43bb-952e-c341730ce885",
+        "authorId" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "body" : "Because we're outputting all the intermediate data, the order of the internal windows aren't the same when you use the reverse iterator versus the in-order iterator. This is mainly an issue for large tests, but when there are a lot of windows to update as a new record comes in, the reverse iterator looks at them from largest start time to smallest start time, and the in-order iterator looks at them from smallest start time to largest start time. I suppose we could alter the algorithm to output results differently, but getting a different order didn't seem too harmful for users. WDYT?",
+        "createdAt" : "2020-09-09T13:45:51Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f205d03e-a378-4632-8dc8-972853a14280",
+        "parentId" : "d91fc723-6661-43bb-952e-c341730ce885",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "FWIW, I agree. The result of this aggregation is a KTable, i.e., a changelog stream. The semantics of the changelog stream only state that each record represents the latest state for that record's key. Just like the caches are free to drop arbitrary intermediate updates and KIP-557 is free to drop arbitrary idempotent updates, a processor that forwards updates for multiple different keys should be free to do it in any order.\r\n\r\nIn fact, I might go so far as to suggest that a proper behavioral test would load all the results into a map so that the test isn't sensitive to meaningless changes like this. But I won't go quite that far because it seems good to to have the opportunity to ask questions like @ableegoldman's. Just to be sure nothing unexpected is happening when we change things later.\r\n\r\nI also think it's better for performance not to try and buffer the window results and emit them in \"forward\" order, since it might be an arbitrarily large number of updates for us to keep in memory.",
+        "createdAt" : "2020-09-11T02:36:52Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "83c6f067-4362-4085-ad7e-c9f113df1ef4",
+        "parentId" : "d91fc723-6661-43bb-952e-c341730ce885",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Sorry, I realize I never replied to your reply. I definitely agree, no need to force a particular inter-key ordering. The only ordering that would change is the updates to windows of different start times, which was arbitrary to begin with. The ordering that does matter -- intra-key ordering, ie updates with the same key and window start time -- isn't affected. Final results still come last, which is the important thing",
+        "createdAt" : "2020-09-11T03:22:47Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "12a2c7aeed1bbe9f7d2ba51206f85f22c3587c7a",
+    "line" : 60,
+    "diffHunk" : "@@ -1,1 +243,247 @@        }\n\n        final Comparator<KeyValueTimestamp<Windowed<String>, Long>> comparator =\n            Comparator.comparing((KeyValueTimestamp<Windowed<String>, Long> o) -> o.key().key())\n                .thenComparing((KeyValueTimestamp<Windowed<String>, Long> o) -> o.key().window().start());"
   }
 ]

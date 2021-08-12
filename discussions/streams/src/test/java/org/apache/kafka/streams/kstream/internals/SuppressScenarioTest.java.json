@@ -350,5 +350,82 @@
     "commit" : "daf890e855d0949687a6d4e35c7ed15b473c1a71",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +519,523 @@\n    @Test\n    public void shouldWorkBeforeGroupBy() {\n        final StreamsBuilder builder = new StreamsBuilder();\n"
+  },
+  {
+    "id" : "3b3918c4-1993-4277-914c-953ec844d937",
+    "prId" : 9239,
+    "prUrl" : "https://github.com/apache/kafka/pull/9239#pullrequestreview-486975332",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "20c14580-1f82-49e0-9445-e80b4c0b515c",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Is this change just sorting the output by window start time? Why do that vs. verifying that the output is in a specific order? In general the output order may not matter much but it does seem important to verify for suppress (I think 🤷‍♀️ )",
+        "createdAt" : "2020-09-09T00:30:43Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c57f39c5-f32d-436c-8817-e94d1f20f50b",
+        "parentId" : "20c14580-1f82-49e0-9445-e80b4c0b515c",
+        "authorId" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "body" : "Yeah it is just sorting the window by start time. With the reverse iterator looking at windows in a different order, the intermediate windows aren't updated in the same order as they are with in-order iterator. I don't think it should matter for suppress because the main list of output in this test is actually the raw output, it looks like the suppressed output didn't change after the ordering",
+        "createdAt" : "2020-09-09T13:41:44Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70973e8e-adce-4c6e-ba98-a52e565e1024",
+        "parentId" : "20c14580-1f82-49e0-9445-e80b4c0b515c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "It might matter for emit-on-full suppress buffers (if they actually get full), but even then, I think it's equally correct either way, so I don't think we need to be concerned.",
+        "createdAt" : "2020-09-11T02:51:20Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9676091d-40ff-4c12-9e30-396e8ee9c58b",
+        "parentId" : "20c14580-1f82-49e0-9445-e80b4c0b515c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Ah, I belatedly realized what I think was @ableegoldman's concern. Suppress cares about the timestamps of the records, not the window start times. Since the timestamp of the windowed aggregation results are determined by the input record, not the window start times, all window agg updates that get forwarded happen \"at the same time\", right?\r\n\r\nIf that's true, then it doesn't matter the order we forward them in.",
+        "createdAt" : "2020-09-11T02:54:21Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb1a9885-08e7-4fb4-8ff0-0c1891164507",
+        "parentId" : "20c14580-1f82-49e0-9445-e80b4c0b515c",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Actually, I think the timestamp of the forwarded results is now the window's \"event time\", ie the maximum timestamp of a record in the window. But in retrospect I don't see any correctness issues here: for one thing, as I mentioned in the other comment, this only affects the relative ordering of updates with different windowed keys. And there's no ordering guarantees between keys. It also shouldn't even have any impact on advancing stream-time and potentially dropping some windows due to grace",
+        "createdAt" : "2020-09-11T03:33:38Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "81e4fcac-6446-4952-90c2-0354f6a82fe9",
+        "parentId" : "20c14580-1f82-49e0-9445-e80b4c0b515c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Yeah, this sounds right. Either the current record's timestamp is less than the event time for some of the windows, in which case it doesn't advance the partition's stream time, or it is more advanced than the (prior) event time for all the windows, in which case it does advance the stream time, but all the updated windows' event times are equal to the current record's timestamp, which is also equal to the new stream time, which should also be ok for suppression.",
+        "createdAt" : "2020-09-11T17:02:39Z",
+        "updatedAt" : "2020-09-11T18:08:57Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "12a2c7aeed1bbe9f7d2ba51206f85f22c3587c7a",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +495,499 @@            // final record to advance stream time and flush windows\n            inputTopic.pipeInput(\"k1\", \"v1\", 90L);\n            final Comparator<TestRecord<String, Long>> comparator =\n                Comparator.comparing((TestRecord<String, Long> o) -> o.getKey())\n                    .thenComparing((TestRecord<String, Long> o) -> o.timestamp());"
   }
 ]
