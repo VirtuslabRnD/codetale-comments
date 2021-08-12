@@ -306,5 +306,104 @@
     "commit" : "a450c43edf7bb2cb5c110cc60136676c73903ca7",
     "line" : 176,
     "diffHunk" : "@@ -1,1 +214,218 @@\n        //Case with other stream store supplier\n        runJoin(streamJoined.withOtherStoreSupplier(otherStoreSupplier), joinWindows);\n\n"
+  },
+  {
+    "id" : "a8266fd7-2b0e-48b3-8361-440f0bb89cf9",
+    "prId" : 8504,
+    "prUrl" : "https://github.com/apache/kafka/pull/8504#pullrequestreview-410450128",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "22b1ff67-6874-4e12-b5d9-0a8fa1b3cd23",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "This is the default. Why setting is explicitly?",
+        "createdAt" : "2020-05-12T21:53:39Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0861510c468819b94ae6013fe9d655ccac9b6f18",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +85,89 @@        final StreamsBuilder builder = new StreamsBuilder();\n        final Properties props = new Properties();\n        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.NO_OPTIMIZATION);\n        final KStream<String, String> stream1 = builder.stream(\"topic\", Consumed.with(Serdes.String(), Serdes.String()));\n        final KStream<String, String> stream2 = builder.stream(\"topic2\", Consumed.with(Serdes.String(), Serdes.String()));"
+  },
+  {
+    "id" : "a65f977d-ffd4-4000-b272-65fc4bb2919a",
+    "prId" : 8504,
+    "prUrl" : "https://github.com/apache/kafka/pull/8504#pullrequestreview-416364585",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d5b28211-1aab-44aa-9988-60fffc4717df",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Sorry for being undecided... Reading the code now, I am wondering if this behavior may become problematic with regard to topology upgrade. Assume, the first join is removed. Technically, the new topology is compatible, but we would now generate a new repartition topic name, and thus it's not compatible. This could be fixed by inserting a `repartition()` in the new code enforcing the old name -- however, this makes me wonder if we might want to throw a \"naming conflict\" (ie, cannot pick a name) exception based on the original topology for this case when both operators are named, and tell people to insert `repartition()` right away? For this case, if they later remove a join it's clear what is happening to them.\r\n\r\nIe, we should still not create two repartition topics what would be \"bad\" (user could still enforce if by calling `repartition()` twice), but just throw with an informative error message? -- Curious what @vvcephei thinks?",
+        "createdAt" : "2020-05-12T22:04:30Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a128399-5b94-44b1-8195-0b204aefbb15",
+        "parentId" : "d5b28211-1aab-44aa-9988-60fffc4717df",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : ">This could be fixed by inserting a repartition() i the new code enforcing the old name -- however, this make me wonder if we might want to throw a \"naming conflict\" (ie, cannot pick a name) exception based on the original topology for this case when both operators are named, and tell people to insert repartition() right away? For this case, if they later remove a join it's clear what is happening to them.\r\n\r\nI see your point, but I think that is a bad user experience and IMHO leaks too much detail about an operation we want to handle automatically.\r\n\r\nI'm leaning towards the simpler case of what we had before.  With generated names re-use the reputation node, but if the user creates a new join with explicit names, just go ahead and create two repartition topics.\r\n\r\nWDYT?",
+        "createdAt" : "2020-05-20T22:26:26Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a6b4669-a386-4c4b-9c5f-82c47bd45d17",
+        "parentId" : "d5b28211-1aab-44aa-9988-60fffc4717df",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I guess both are acceptable solutions (ie, creating two repartition topics or throwing an exception). Your proposal is more user friendly but results in a more expensive deployment. The question might be, what do we try to optimize for?\r\n\r\n\\cc @vvcephei @guozhangwang ",
+        "createdAt" : "2020-05-21T00:11:32Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a97ea6e0-d88c-44e7-a95f-d903ae33437e",
+        "parentId" : "d5b28211-1aab-44aa-9988-60fffc4717df",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks for the discussion, all.\r\n\r\nComing back to this proposal, and considering the points you've raised, it seems like we should re-use the generated repartition node when the name is generated, and create two repartition nodes when they are named.\r\n\r\nThe purpose of re-using the repartition node in this PR isn't exactly to optimize anything, just to avoid throwing the exception that happens when we currently try to create the exact same repartition node twice. We could instead _always_ create two nodes, but this is needlessly wasteful. Reusing the same-named node makes perfect sense.\r\n\r\nWhen the operations are named, on the other hand, there is no problem right now, since we are creating differently named nodes. Since there's no problem, we shouldn't \"solve\" it ;)\r\n\r\nIt's true that this isn't the most optimal physical plan, but for anyone who cares enough to look into it, they can just add the repartition node first, as you suggested @mjsax; we don't need to throw an exception to force them to fine-tune their program.\r\n\r\nThe other option is that they can enable topology optimization, which will also collapse the named repartition nodes in a well-defined way.\r\n\r\nCompatibility is a concern, and it seems like it's satisfied if we follow this path:\r\n1. You currently cannot reuse the same stream in two anonymous joins, so we can share the node without breaking any program\r\n2. You currently _can_ reuse the same stream in two _named_ joins, and we will create two (named) repartition topics. We have no choice but to maintain this, or we will break compatibility.\r\n3. Inserting a repartition node is well defined to break compatibility, so people will know they have to reset.\r\n4. Adding Optimization is well defined to break compatibility, so people will know they have to reset.\r\n\r\nHave I missed some consideration?\r\nThanks,\r\n-John",
+        "createdAt" : "2020-05-21T16:22:47Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb9d36bf-b7a4-45ae-ab8d-e1dca6503766",
+        "parentId" : "d5b28211-1aab-44aa-9988-60fffc4717df",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Thanks @vvcephei -- that is convincing.",
+        "createdAt" : "2020-05-21T17:47:46Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53218186-a5bb-4fe9-bb91-578fdfc6f1e9",
+        "parentId" : "d5b28211-1aab-44aa-9988-60fffc4717df",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Thanks for the discussion @vvcephei and @mjsax. I'll revert this PR to its original state which conforms to @vvcephei's comments above. ",
+        "createdAt" : "2020-05-21T17:53:30Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0861510c468819b94ae6013fe9d655ccac9b6f18",
+    "line" : 45,
+    "diffHunk" : "@@ -1,1 +109,113 @@        final Topology topology =  builder.build(props);\n        System.out.println(topology.describe().toString());\n        assertEquals(expectedTopologyWithUserNamedRepartitionTopics, topology.describe().toString());\n    }\n"
   }
 ]

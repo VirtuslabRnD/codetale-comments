@@ -1395,5 +1395,71 @@
     "commit" : "604a1821cede104e3db1e0d3f7ef7aa95fab00b1",
     "line" : 68,
     "diffHunk" : "@@ -1,1 +624,628 @@                builder,\n                TO_KTABLE_NAME);\n\n        return doToTable(named, materializedInternal);\n    }"
+  },
+  {
+    "id" : "16ea137a-52b6-40db-a7e2-b7fd8bdfe42a",
+    "prId" : 8504,
+    "prUrl" : "https://github.com/apache/kafka/pull/8504#pullrequestreview-404488975",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "eb009f3a-fce8-4896-9a7e-7f3cbfef04c4",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "This is the fix.  We'll generate the `repartitionNode` if it's the first time through or if the user has provided a name for the repartition topic.  Otherwise, we cache the `repartitionNode` for use in subsequent joins on the same `KStream` object.",
+        "createdAt" : "2020-04-17T03:26:57Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "831f658b-50fd-4862-95c1-4aa3a6023a6f",
+        "parentId" : "eb009f3a-fce8-4896-9a7e-7f3cbfef04c4",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Hmmm... I am wondering if just bumping the index would be sufficient and the optimizer would merge the node automatically?\r\n\r\nI am also not sure about the code structure: so far, the DSL layer does not know much about optimizations (even if we \"leak\" a little bit into it, as we built up the `StreamsGraphNode` graph... We would push some optimization decisions into the DSL layer thus spreading out \"optimization code\"? On the other hand, just inserting one `OptimizableRepartitionNode` is much more efficient than inserting multiple and let the optimizer remove them later?\r\n\r\nI am also wondering, if we could do the same for other repartition topics? \r\n\r\nLast question: this method is also use for stream-table joins and thus, if one joins a stream with two tables, would this change be backward incompatible? Or would two stream-table joins fail with the same `InvalidTopologyException`?",
+        "createdAt" : "2020-04-22T22:39:55Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d1a04c90-184a-4b6b-bd99-cb229201fa39",
+        "parentId" : "eb009f3a-fce8-4896-9a7e-7f3cbfef04c4",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : ">Hmmm... I am wondering if just bumping the index would be sufficient and the optimizer would merge the node automatically?\r\n\r\nI hadn't thought of that, but it should work.  I initially had concerns for topology compatibility,  but I don't think that is the case since users can't create re-use a `KStream` node in joins that needs repartitioning.\r\n\r\n>I am also not sure about the code structure: so far, the DSL layer does not know much about optimizations (even if we \"leak\" a little bit into it, as we built up the StreamsGraphNode graph... We would push some optimization decisions into the DSL layer thus spreading out \"optimization code\"? On the other hand, just inserting one OptimizableRepartitionNode is much more efficient than inserting multiple and let the optimizer remove them later?\r\n\r\nYeah, I agree the current approach is leaking too much optimization into the current code.  I think it will be better to just go ahead and create the topology \"as is\" and let the optimizer do its job.\r\n\r\n>I am also wondering, if we could do the same for other repartition topics?\r\n\r\nWe probably should have a consistent approach.  How about I make the changes in this PR for the Join repartition topics (incrementing the index of the repartition node name) and do a follow-on PR to address the other repartition topics?\r\n\r\n>Last question: this method is also use for stream-table joins and thus, if one joins a stream with two tables, would this change be backward incompatible? Or would two stream-table joins fail with the same InvalidTopologyException?\r\n\r\nI believe two stream-table joins without this fix will fail with the same exception, but I'll add some tests to confirm.\r\n",
+        "createdAt" : "2020-04-23T14:47:12Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22877ee0-7cb1-44f2-9a65-0aec8a44c9d3",
+        "parentId" : "eb009f3a-fce8-4896-9a7e-7f3cbfef04c4",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Since you made the mistake of asking my opinion, here it is :) :\r\n\r\n> bumping the index\r\n\r\nIt's true that users can't currently reuse the KStream, so there's no compatibility issue there, but we can't bump the index for the _first_ repartition topic, or we would break every topology that uses generated repartition topic names already. So, either way, we have to cache something to tell us to do something different on the \"first reuse\" (i.e., the second use of the KStream).\r\n\r\nSince we have to do that anyway, maybe it's fine to just cache the repartition node itself instead of a flag that says \"bump the index next time\". \r\n\r\n> leaking optimizations into the DSL\r\n\r\nI'm on the fence about whether this is an \"optimization\" or \"reasonable behavior\". It sort of feels like the latter, and the only reason we needed to introduce the \"repartition-collapsing\" optimization is that we failed to introduce reasonable behavior from the beginning. Also, my read is that the DSL builder and the optimizer are not cleanly separated right now anyway, and if we ever want to build more optimizations, we'll most likely need to make another pass on both anyway. We're also starting to think about topology evolution (cc @cadonna ), which makes this a less scary prospect, as we can then implement a mechanism to _compatibly_ introduce new optimizations. In other words, I'm not taking a hard stance, but leaning in the direction of doing the more efficient thing than the more pure thing, since we're not currently super pure anyway.\r\n\r\n> Other repartition topics\r\n\r\nI think we'd better leave it alone for now, implement topology evolution, then migrate to a completely pure and consistent approach.",
+        "createdAt" : "2020-04-24T17:09:33Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6c1afeb9-4d39-43ef-9306-58a986c95c1a",
+        "parentId" : "eb009f3a-fce8-4896-9a7e-7f3cbfef04c4",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "> We probably should have a consistent approach. How about I make the changes in this PR for the Join repartition topics (incrementing the index of the repartition node name) and do a follow-on PR to address the other repartition topics?\r\n\r\n@bbejeck Works for me.\r\n\r\n> I'm on the fence about whether this is an \"optimization\" or \"reasonable behavior\".\r\n\r\n@bbejeck @vvcephei That was my reasoning from my other comments about \"don't make the same mistake again\", too (cf. https://github.com/apache/kafka/pull/8504#issuecomment-618073161). Atm, we just need to keep the old behavior for backward compatibility reasons and only give \"reasonable\" behavior via opt-in to the optimization. IMHO, optimization should be the default behavior anyway (not the other way round; we just have it that way due to compatibility constraints) and you should even be able to turn it off (if possible)",
+        "createdAt" : "2020-05-02T01:37:11Z",
+        "updatedAt" : "2020-05-22T02:43:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0861510c468819b94ae6013fe9d655ccac9b6f18",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +995,999 @@            optimizableRepartitionNodeBuilder);\n\n        if (repartitionNode == null || !name.equals(repartitionName)) {\n            repartitionNode = optimizableRepartitionNodeBuilder.build();\n            builder.addGraphNode(streamsGraphNode, repartitionNode);"
   }
 ]

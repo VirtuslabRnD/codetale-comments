@@ -42,5 +42,71 @@
     "commit" : "f473f60b99f3b3b2f549b5ae48b2be01fc5cf461",
     "line" : 308,
     "diffHunk" : "@@ -1,1 +306,310 @@        assertThrows(IllegalStateException.class, () -> getMovements(stateConstrainedAssignment, balancedAssignment, maxWarmupReplicas));\n    }\n\n    @Test\n    public void shouldDecidePreviousAssignmentIsInvalidIfThereAreUnassignedActiveTasks() {"
+  },
+  {
+    "id" : "dbe6d74e-2e8f-4747-afb4-7acef085cef6",
+    "prId" : 8541,
+    "prUrl" : "https://github.com/apache/kafka/pull/8541#pullrequestreview-399543456",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "40eff4ea-a636-459f-989e-c64fe796d90c",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I made a bunch of changes to this test, because it was pretty brittle with respect to changes in the HighAvailabilityTaskAssignor. For context, this is the second time I've touched the assignment code since we introduced the HATA, and it's the second time I've had to deal with irrelevant test failures in this class.\r\n\r\nFirst, I replaced the ClientState mocks with \"real\" ClientStates, constructed to represent the desired scenario for each test. Mocks are really more appropriate for isolating a component from _external_ components (like mocking a remote service). Mocking data types leads to verifying that a specific set of queries happens against the data type, which is likely to break any time the logic under test changes in any way. Another problem with data-type mocks is that they can violate the invariants of the data type itself. For example, you can mock a list that both `isEmpty` and contains items. In our case, we threw NPEs in the assignor that could never happen in production when the mocked assigned/standby tasks didn't agree with the assigned tasks or the stateful assigned tasks weren't mocked to agree with the lags. Now, we just construct a ClientState for each client, representing the desired scenario and make assertions on the resulting assignment.\r\n\r\nSecond, the tests as written rely heavily on shared mutable fields inserted into shared mutable collections to build the assignor. This can be a good way to minimize the text inside the test method, which lets readers focus on the proper logic of the test itself. However, it makes it harder to understand the full context of a test, and it also raises the possibility of tests polluting each others' environments. Since in this particular case, localizing all the setup code is about as compact as factoring it out, I went ahead and minimized the shared fields, and eliminated the mutability, the tests are self-contained.\r\n",
+        "createdAt" : "2020-04-24T00:18:44Z",
+        "updatedAt" : "2020-04-28T03:20:48Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d58f62dc73dc3f4832cb89b5be6a8c8ce2f32e60",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +59,63 @@import static org.hamcrest.Matchers.not;\n\npublic class HighAvailabilityTaskAssignorTest {\n    private final AssignmentConfigs configWithoutStandbys = new AssignmentConfigs(\n        /*acceptableRecoveryLag*/ 100L,"
+  },
+  {
+    "id" : "fe59934e-bad9-4abd-9052-7a088df05389",
+    "prId" : 8541,
+    "prUrl" : "https://github.com/apache/kafka/pull/8541#pullrequestreview-399543456",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6b656ec5-5d3c-4529-9fed-8620a4b6c633",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "These first tests are really the only ones to change. They're still asserting the same basic fact, but `previousAssignmentIsValid` is now an internal method, so we instead make assertions about the black-box semantics of the assignor, instead of a specific \"visible for testing\" method.",
+        "createdAt" : "2020-04-24T00:24:04Z",
+        "updatedAt" : "2020-04-28T03:20:48Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d58f62dc73dc3f4832cb89b5be6a8c8ce2f32e60",
+    "line" : 99,
+    "diffHunk" : "@@ -1,1 +78,82 @@\n    @Test\n    public void shouldComputeNewAssignmentIfThereAreUnassignedActiveTasks() {\n        final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);\n        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), 1);"
+  },
+  {
+    "id" : "f2842551-da97-456f-bd04-aaa32205ef6d",
+    "prId" : 8588,
+    "prUrl" : "https://github.com/apache/kafka/pull/8588#pullrequestreview-408512587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6f69c431-a246-41d9-b6c3-2d30f6f029f3",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "And here they are! I adjusted the assertions to generally be less sensitive to the specific assignment, since my changes to the balance function had some trivial effects on the assignment, IIRC.",
+        "createdAt" : "2020-05-08T22:59:18Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9cf8316444c205ea04f6fa0874619451f5b94d92",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +79,83 @@\n    @Test\n    public void shouldAssignActiveStatefulTasksEvenlyOverClientsWhereNumberOfClientsIntegralDivisorOfNumberOfTasks() {\n        final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);\n        final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));"
   }
 ]

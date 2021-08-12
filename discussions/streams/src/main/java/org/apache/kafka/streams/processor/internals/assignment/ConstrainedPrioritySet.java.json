@@ -1,0 +1,189 @@
+[
+  {
+    "id" : "b3c43eb4-6bc3-4156-b6c4-c553b39681d8",
+    "prId" : 8588,
+    "prUrl" : "https://github.com/apache/kafka/pull/8588#pullrequestreview-408512587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "48e5f055-9750-432a-8362-cd20d240032d",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I generalized this data structure a little, and the name didn't really make sense anymore, so I went for a more \"abstract\" name that hopefully wraps up what the thing is like.",
+        "createdAt" : "2020-05-08T21:17:43Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9cf8316444c205ea04f6fa0874619451f5b94d92",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +31,35 @@ * Wraps a priority queue of clients and returns the next valid candidate(s) based on the current task assignment\n */\nclass ConstrainedPrioritySet {\n\n    private final PriorityQueue<UUID> clientsByTaskLoad;"
+  },
+  {
+    "id" : "0f8553df-b452-4ae3-a236-84316f90cb76",
+    "prId" : 8588,
+    "prUrl" : "https://github.com/apache/kafka/pull/8588#pullrequestreview-408512587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "35d8e845-8b14-4704-8989-2036e286a8cc",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I moved the \"weight\" computation to the caller (was the taskLoad stuff below), so we can use this data structure for more stuff. As a consequence, we don't need the clientStates map in here anymore.",
+        "createdAt" : "2020-05-08T21:21:28Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9cf8316444c205ea04f6fa0874619451f5b94d92",
+    "line" : 47,
+    "diffHunk" : "@@ -1,1 +38,42 @@\n    ConstrainedPrioritySet(final BiFunction<UUID, TaskId, Boolean> constraint,\n                           final Function<UUID, Double> weight) {\n        this.constraint = constraint;\n        clientsByTaskLoad = new PriorityQueue<>(Comparator.comparing(weight).thenComparing(clientId -> clientId));"
+  },
+  {
+    "id" : "6fcab259-815c-48d5-9345-c1ff6005fdea",
+    "prId" : 8588,
+    "prUrl" : "https://github.com/apache/kafka/pull/8588#pullrequestreview-408512587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6eb7138a-1ee2-41a0-97e9-5117f07ee4c9",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I discovered by the way that you can compose Comparators!",
+        "createdAt" : "2020-05-08T21:23:32Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9cf8316444c205ea04f6fa0874619451f5b94d92",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +40,44 @@                           final Function<UUID, Double> weight) {\n        this.constraint = constraint;\n        clientsByTaskLoad = new PriorityQueue<>(Comparator.comparing(weight).thenComparing(clientId -> clientId));\n    }\n"
+  },
+  {
+    "id" : "484dea8f-821b-4b5d-91ed-22dca6ac190e",
+    "prId" : 8588,
+    "prUrl" : "https://github.com/apache/kafka/pull/8588#pullrequestreview-411417590",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6b985a37-067c-49e9-9adf-50ee3e7c36b2",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I added a \"last mile\" constraint so that we can use the same priority queue when computing task movements, but first try to find a caught-up _standby_ to move to and then fall back to _any_ caught-up client. I thought about capturing this with the weight function itself, but it depends on which task you're interested in, so this worked better.\r\n\r\nI also dropped the \"poll N clients\" method. Now, if we need 4 clients, we'll poll 4 times. This actually results in better balancing characteristics when assigning standbys because the relative weights of the clients changes while you're assigning standbys to them, so it's better to poll/assign/offer one at a time.",
+        "createdAt" : "2020-05-08T21:28:06Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "87345b9b-1ec1-474d-a39f-dbd8065418d5",
+        "parentId" : "6b985a37-067c-49e9-9adf-50ee3e7c36b2",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I'm not sure I see how the returned clients could ever be different using \"poll N clients\" vs \"poll N times\". Only the clients which are getting a new task assigned will have their weight changed while in the middle of an N poll, and once we assign this task to that client it no longer meets the criteria so we don't care about it anyway right?\r\n\r\nThe reason for the \"poll N clients\" method was to save on some of the poll-and-reoffer of clients that don't meet the criteria, but I don't think that's really worth worrying over. I'm fine with whatever code is easiest to read -- just want to understand why this affects the balance?",
+        "createdAt" : "2020-05-13T21:03:54Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a948fc2d-549f-44cb-9506-19caa9be339d",
+        "parentId" : "6b985a37-067c-49e9-9adf-50ee3e7c36b2",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I was operating more on intuition here. To be honest, I had a suspicion you would call this out, so I probably should have just saved time and taken the time to prove it.\r\n\r\nForgetting about the constraint for a minute, I think that what I had in mind for balance is something like, suppose you have two clients \"C1\" and \"C2\"... C1 has one task and C2 has two. You poll and get C1 and add a task. Now, they both have two.\r\n\r\nIf you add it back and poll again, you might prefer to get C1 back again. Maybe because the \"weight\" function takes into account more than just the task load, or maybe just because of the total order we impose based on clientId, in which `C1 < C2`. But if you just poll two clients to begin with, then C1 doesn't get a chance to be included for the second poll, you just automatically get C1 and C2.\r\n\r\nIn retrospect, this might be moot in practice, because the only time we actually polled for multiple clients was when assigning standbys, and specifically when we were assigning multiple replicas of the same task, in which case, we know that we _cannot_ consider C1 again for the second poll.\r\n\r\nFrom a computer-sciencey perspective, it doesn't seem like the data structure should be able to make this assumption, though, since it can't know that polling a client also invalidates it for a subsequent poll with the same last-mile predicate.\r\n\r\nSo, even in retrospect, I'm tempted to leave it this way (big surprise there), although I'd acknowledge that the outcome is actually not different in the way that we would use the method.",
+        "createdAt" : "2020-05-14T01:48:19Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "579c8ee6-8d26-4676-8d8e-2ea74e4698c3",
+        "parentId" : "6b985a37-067c-49e9-9adf-50ee3e7c36b2",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "> we know that we cannot consider C1 again for the second poll\r\n\r\nYep, that's what I was getting at above. I'm totally on board with reducing the number of assumptions, especially as this class becomes more generally used. I was just intrigued by what you said initially and thought \"This actually results in better balancing characteristics when assigning standbys\" meant that you had actually seen a difference in the tests.\r\n\r\nThanks for continuing to improve this class!",
+        "createdAt" : "2020-05-14T02:08:24Z",
+        "updatedAt" : "2020-05-14T02:08:24Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9cf8316444c205ea04f6fa0874619451f5b94d92",
+    "line" : 65,
+    "diffHunk" : "@@ -1,1 +46,50 @@     * @return the next least loaded client that satisfies the given criteria, or null if none do\n     */\n    UUID poll(final TaskId task, final Function<UUID, Boolean> extraConstraint) {\n        final Set<UUID> invalidPolledClients = new HashSet<>();\n        while (!clientsByTaskLoad.isEmpty()) {"
+  },
+  {
+    "id" : "d66f0bd0-8691-4986-832f-211c152946e2",
+    "prId" : 8588,
+    "prUrl" : "https://github.com/apache/kafka/pull/8588#pullrequestreview-408512587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ab9fbd42-0485-4f82-9b93-dd4a35d29d7f",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Just a little mild refactoring here.",
+        "createdAt" : "2020-05-08T21:29:07Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9cf8316444c205ea04f6fa0874619451f5b94d92",
+    "line" : 91,
+    "diffHunk" : "@@ -1,1 +57,61 @@                // remember this client and try again later\n                invalidPolledClients.add(candidateClient);\n            }\n        }\n        // we tried all the clients, and none met the constraint (or there are no clients)"
+  },
+  {
+    "id" : "acf08a74-a525-4996-8b6e-86344ca2d7d3",
+    "prId" : 8588,
+    "prUrl" : "https://github.com/apache/kafka/pull/8588#pullrequestreview-408512587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7bd881dd-c1f3-4c82-a7a2-41c651e3233e",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Kept this as a convenience method when you don't care to specify a last-mile constraint.",
+        "createdAt" : "2020-05-08T21:30:04Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9cf8316444c205ea04f6fa0874619451f5b94d92",
+    "line" : 103,
+    "diffHunk" : "@@ -1,1 +68,72 @@     */\n    UUID poll(final TaskId task) {\n        return poll(task, client -> true);\n    }\n"
+  },
+  {
+    "id" : "ef0718fe-6736-4177-9ff3-9b833c7addff",
+    "prId" : 8588,
+    "prUrl" : "https://github.com/apache/kafka/pull/8588#pullrequestreview-408512587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3ed24294-43a3-4c76-8574-9309ee9db857",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "This was a lurking bug. We should never call this method if there's nothing in the queue, but we actually were in some cases before. This should have been an exception, since you're not supposed to pass `null` to `Set#remove`, but it turns out that we were using a HashSet, which just happens to actually accept a `null` to `remove` (and just ignore it).\r\n\r\nAnyway, `Queue#remove` should be used if you expect the queue to contain an element (it guarantees no null return but throws a NoSuchElementException if it's empty).",
+        "createdAt" : "2020-05-08T21:32:40Z",
+        "updatedAt" : "2020-05-14T01:51:44Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9cf8316444c205ea04f6fa0874619451f5b94d92",
+    "line" : 114,
+    "diffHunk" : "@@ -1,1 +89,93 @@        final UUID client = clientsByTaskLoad.remove();\n        uniqueClients.remove(client);\n        return client;\n    }\n}"
+  }
+]

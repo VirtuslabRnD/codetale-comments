@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "96bcb3d6-7685-41b4-916f-de67c354a4a7",
+    "prId" : 8569,
+    "prUrl" : "https://github.com/apache/kafka/pull/8569#pullrequestreview-408704376",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8584c5f5-d3af-48f1-866e-e3e8021d4e76",
+        "parentId" : null,
+        "authorId" : "df7083f8-c754-4fa4-a5fa-6305a8ceaf77",
+        "body" : "Nit: do you think the lock should be hold while reading `/proc`, or restricted to the update of `lastUpdateMs`, `cachedReadBytes` and `cachedWriteBytes`?",
+        "createdAt" : "2020-04-28T07:29:53Z",
+        "updatedAt" : "2020-05-10T05:07:17Z",
+        "lastEditedBy" : "df7083f8-c754-4fa4-a5fa-6305a8ceaf77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bcfad1a6-a30f-45eb-931a-c73977f80263",
+        "parentId" : "8584c5f5-d3af-48f1-866e-e3e8021d4e76",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Unless we choose to read this file in a background thread, there isn't a reason to avoid using a lock here.",
+        "createdAt" : "2020-04-28T22:27:13Z",
+        "updatedAt" : "2020-05-10T05:07:17Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a4b30d38-d087-4e2d-8514-f4a6af679a90",
+        "parentId" : "8584c5f5-d3af-48f1-866e-e3e8021d4e76",
+        "authorId" : "df7083f8-c754-4fa4-a5fa-6305a8ceaf77",
+        "body" : "What I meant is not avoid the usage of a lock but restrict its scope to put it outside of the invocation of `Files#readline`.\r\n\r\nThe motivation for this is in case of I/O stall, that invocation may block for a long time (until the kernel times the operation out), with consequences for other pretendant to acquire the lock.\r\n\r\nThat said the invocation is on the `readBytes`/`writeBytes` metrics path, so *in fine* it doesn't matter.",
+        "createdAt" : "2020-04-29T07:08:09Z",
+        "updatedAt" : "2020-05-10T05:07:17Z",
+        "lastEditedBy" : "df7083f8-c754-4fa4-a5fa-6305a8ceaf77",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6f7d4a72-413a-4e01-b24e-0367def9807c",
+        "parentId" : "8584c5f5-d3af-48f1-866e-e3e8021d4e76",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Assuming there's no background refresh thread, the only thread that is reading from `/proc` is the thread calling `readBytes`.  So you still have to wait for that read, whether or not you use a lock here.",
+        "createdAt" : "2020-05-10T04:57:19Z",
+        "updatedAt" : "2020-05-10T05:07:17Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba30ed47-80bb-4caf-964c-ac2b04c65723",
+        "parentId" : "8584c5f5-d3af-48f1-866e-e3e8021d4e76",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Also there is not going to be an I/O stall reading from `/proc` since `/proc` is not a real disk.  I would still prefer to do fewer system calls rather than more, but I don't think that's worth adding a background thread for.",
+        "createdAt" : "2020-05-10T04:58:17Z",
+        "updatedAt" : "2020-05-10T05:07:17Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8ff17cc0ab0961ff8eda2d75fb53faef7cfa4396",
+    "line" : 67,
+    "diffHunk" : "@@ -1,1 +65,69 @@   * cancelled_write_bytes: 0\n   */\n  def updateValues(now: Long): Boolean = this.synchronized {\n    try {\n      cachedReadBytes = -1"
+  },
+  {
+    "id" : "e6ff1429-7911-4555-ab37-7ea0b2b11b80",
+    "prId" : 8569,
+    "prUrl" : "https://github.com/apache/kafka/pull/8569#pullrequestreview-408704708",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "835c2583-de9a-4830-be4c-60ad163d8dcd",
+        "parentId" : null,
+        "authorId" : "d31db46e-de6d-4fea-8dc5-6f7b17b636be",
+        "body" : "Should we have add small jitter to `lastUpdateMs` as both metrics should trigger around the same time, ie\r\n```\r\nif (curMs > lastUpdateMs + 100) {\r\n```",
+        "createdAt" : "2020-05-07T13:57:57Z",
+        "updatedAt" : "2020-05-10T05:07:17Z",
+        "lastEditedBy" : "d31db46e-de6d-4fea-8dc5-6f7b17b636be",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a52833b1-32f9-42e9-8cd9-86a900369916",
+        "parentId" : "835c2583-de9a-4830-be4c-60ad163d8dcd",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "This code is just there to prevent reading from proc more than once a millisecond.  I expect in practice we will read fewer times since we only read when the metrics values are fetched.",
+        "createdAt" : "2020-05-10T05:06:32Z",
+        "updatedAt" : "2020-05-10T05:07:17Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8ff17cc0ab0961ff8eda2d75fb53faef7cfa4396",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +37,41 @@  def readBytes(): Long = this.synchronized {\n    val curMs = time.milliseconds()\n    if (curMs != lastUpdateMs) {\n      updateValues(curMs)\n    }"
+  },
+  {
+    "id" : "205fdc40-c70c-4b56-b7cf-f5ba6991d1b4",
+    "prId" : 8569,
+    "prUrl" : "https://github.com/apache/kafka/pull/8569#pullrequestreview-413827537",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b14f91b5-b9bb-4be6-9d52-e8a094669f00",
+        "parentId" : null,
+        "authorId" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "body" : "minor nit: could move the time check to the updateValues method since that's where lastUpdateMs is set? ",
+        "createdAt" : "2020-05-14T21:33:45Z",
+        "updatedAt" : "2020-05-14T21:35:17Z",
+        "lastEditedBy" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4aee2c73-4af6-4825-be91-b795cd9561ec",
+        "parentId" : "b14f91b5-b9bb-4be6-9d52-e8a094669f00",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "Interesting idea, but that would complicate the `usable` function, right?  Probably better to leave it where it is.",
+        "createdAt" : "2020-05-18T18:12:57Z",
+        "updatedAt" : "2020-05-18T18:12:58Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8ff17cc0ab0961ff8eda2d75fb53faef7cfa4396",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +36,40 @@\n  def readBytes(): Long = this.synchronized {\n    val curMs = time.milliseconds()\n    if (curMs != lastUpdateMs) {\n      updateValues(curMs)"
+  }
+]
