@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "1736e513-1e6b-4f47-a2f2-b9df2c0ff594",
+    "prId" : 10113,
+    "prUrl" : "https://github.com/apache/kafka/pull/10113#pullrequestreview-592724230",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "02f9131f-2076-4476-a5ca-7bf0c57fa358",
+        "parentId" : null,
+        "authorId" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "body" : "Are these two arguments mutually exclusive? If so, maybe we can use `Either` instead of two options. ",
+        "createdAt" : "2021-02-12T01:04:24Z",
+        "updatedAt" : "2021-02-18T03:32:54Z",
+        "lastEditedBy" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "29160200-26ac-4ab3-ab45-646049926f4d",
+        "parentId" : "02f9131f-2076-4476-a5ca-7bf0c57fa358",
+        "authorId" : "e0554c25-f6f3-4e49-a325-bcc5d4dc5fb2",
+        "body" : "Yeah, actually a lot more checking could be done here since it's also `adminManager` that is optional.  We created `ZkSupport` and `RaftSupport` for `KafkaApis` and I thought that perhaps the same thing could be done here, but it felt like overkill.  These are not mutually exclusive, actually -- all three could be supplied when using ZooKeeper.",
+        "createdAt" : "2021-02-12T01:34:03Z",
+        "updatedAt" : "2021-02-18T03:32:54Z",
+        "lastEditedBy" : "e0554c25-f6f3-4e49-a325-bcc5d4dc5fb2",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5b108d03-b2c5-4b70-ad21-3899c738ed28",
+        "parentId" : "02f9131f-2076-4476-a5ca-7bf0c57fa358",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "I agree it would be nice to do something like that.  This is probably OK for now, though...",
+        "createdAt" : "2021-02-17T23:45:36Z",
+        "updatedAt" : "2021-02-18T03:32:54Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0755d439ecef512cb5d689d52d661fd55848e424",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +99,103 @@  if (controller.isEmpty && channelManager.isEmpty) {\n    throw new IllegalArgumentException(\"Must supply a channel manager if not supplying a controller\")\n  }\n\n  private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())"
+  },
+  {
+    "id" : "959a05f2-022d-42fd-b5f6-9146d577bff0",
+    "prId" : 10142,
+    "prUrl" : "https://github.com/apache/kafka/pull/10142#pullrequestreview-625560692",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2825ea32-699d-4c98-9acf-fc0479cdd282",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Let's add a comment that we rely on the Metadata request to be retried in the case that the latest version is not usable by the controller.",
+        "createdAt" : "2021-03-31T17:46:15Z",
+        "updatedAt" : "2021-04-05T18:57:38Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e9243cb580911efdb5f0b2266fe13f9ea5f151ec",
+    "line" : 101,
+    "diffHunk" : "@@ -1,1 +192,196 @@            // We will rely on the Metadata request to be retried in the case\n            // that the latest version is not usable by the controller.\n            ApiKeys.CREATE_TOPICS.latestVersion()\n          case Some(nodeApiVersions) =>\n            nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS)"
+  },
+  {
+    "id" : "caf6c33a-2564-47b0-845c-98380c01b8f9",
+    "prId" : 10142,
+    "prUrl" : "https://github.com/apache/kafka/pull/10142#pullrequestreview-628021558",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "85f68522-3eac-4e79-ba31-16a747757fd3",
+        "parentId" : null,
+        "authorId" : "12f98c82-b9ef-4668-aa6f-5a62bf3439bb",
+        "body" : "How about moving `serializeWithHeader` to `RequestContext`, like this:\r\nRequestContext.java\r\n```java\r\n    public ByteBuffer buildRequestEnvelopePayload(ApiKeys apiKeys, short apiVersion, AbstractRequest body) {\r\n        // Borrow client information such as client id and correlation id from the original request,\r\n        // in order to correlate the create request with the original metadata request.\r\n        RequestHeader requestHeader = new RequestHeader(apiKeys,\r\n            apiVersion,\r\n            clientId(),\r\n            correlationId());\r\n        return body.serializeWithHeader(requestHeader);\r\n    }\r\n```\r\nand we can call it like `context.buildRequestEnvelopePayload(ApiKeys.CREATE_TOPICS, requestVersion, createTopicsRequest.build(requestVersion))`.\r\n\r\nThis trivial change has 2 benefits:\r\n1. Keep the symmetry of `RequestContext` since it already has a `buildResponseEnvelopePayload` method\r\n2. `buildRequestEnvelopePayload` can be reused in the future if we want to forward other client requests to the controller\r\n\r\nPlease feel free to point my fault if I made any mistakes.",
+        "createdAt" : "2021-04-03T04:03:28Z",
+        "updatedAt" : "2021-04-05T18:57:38Z",
+        "lastEditedBy" : "12f98c82-b9ef-4668-aa6f-5a62bf3439bb",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c11ea82-76fb-42e7-9d0a-afbb58c538a0",
+        "parentId" : "85f68522-3eac-4e79-ba31-16a747757fd3",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Thanks for the suggestion, I feel this is a bit overkill as we don't have any specific use case to forward other client requests right now, and feel free to propose a refactoring PR after this one is merged to discuss whether the new approach is better.",
+        "createdAt" : "2021-04-05T00:06:36Z",
+        "updatedAt" : "2021-04-05T18:57:38Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4975ee18-e732-4cf2-9b1d-cb5c407ff9fe",
+        "parentId" : "85f68522-3eac-4e79-ba31-16a747757fd3",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "@dengziming It's not a bad idea. We could even simplify it a little since the api key and version can be obtained from the request. I tend to agree that this is kind of a niche usage though, so I'm not sure it calls for the generality. Perhaps you could submit a follow-up once this is merged and we can see what it looks like.",
+        "createdAt" : "2021-04-05T17:40:03Z",
+        "updatedAt" : "2021-04-05T18:57:38Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e9243cb580911efdb5f0b2266fe13f9ea5f151ec",
+    "line" : 113,
+    "diffHunk" : "@@ -1,1 +204,208 @@        context.correlationId)\n      ForwardingManager.buildEnvelopeRequest(context,\n        createTopicsRequest.build(requestVersion).serializeWithHeader(requestHeader))\n    }.getOrElse(createTopicsRequest)\n"
+  }
+]
