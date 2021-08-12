@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "20f0f892-f5bb-40df-8e5b-514bc611b5e3",
+    "prId" : 7296,
+    "prUrl" : "https://github.com/apache/kafka/pull/7296#pullrequestreview-298928394",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f3e6a619-843a-4e90-a4d6-991983f45fda",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm.. This is a little different from what we have in `DeleteConsumerGroupOffsetsResult`. I think it makes sense to check all the partition level errors. cc @dajac ",
+        "createdAt" : "2019-10-08T00:02:19Z",
+        "updatedAt" : "2019-10-19T14:50:21Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7ad8be06-1d2e-4498-8d51-756b97fffe97",
+        "parentId" : "f3e6a619-843a-4e90-a4d6-991983f45fda",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "That's a fair point but I am not sure what the best one is. The rational behind not looking at individual topic/partitions was that it allows to use `all()` to wait for the completion of the request and then check the individual results. In this case `all()` fails only if the whole group has failed.\r\n\r\nTo be more concrete, it allows to do the following:\r\n\r\n```java\r\nDeleteConsumerGroupOffsetsResult result = ...;\r\n\r\ntry {\r\n  // wait for the whole group, only raise when a group level or\r\n  // transport level exception affection the whole request occurs\r\n  result.all().get()\r\n\r\n  // inspect individual topic/partition\r\n  try {\r\n    result.partitionResult(...).get()\r\n  } catch (Exception e) {\r\n    // handle partition exception\r\n  }\r\n} catch (Exception e) {\r\n  // handle group level exception\r\n}\r\n```\r\n\r\nI think that this facilitates the error handling. What do you think?",
+        "createdAt" : "2019-10-08T07:43:52Z",
+        "updatedAt" : "2019-10-19T14:50:21Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3cd917b5-69e6-498f-bdd6-c1347547872f",
+        "parentId" : "f3e6a619-843a-4e90-a4d6-991983f45fda",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "That's an interesting point. I think the usual semantics of `all` is to only succeed if all individual operations have succeeded. It's sort of designed for lazy error handling I guess. If users care about the individual operations, they can check them individually. Otherwise they have a convenient way to check for any errors. Based on what I've seen, this tends to be the most frequent use. I think also part of the idea is to abstract away from the underlying requests. Some of the admin APIs result in multiple broker requests which makes exposing the full granularity of errors quite cumbersome.",
+        "createdAt" : "2019-10-08T16:23:55Z",
+        "updatedAt" : "2019-10-19T14:50:21Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e465910f-fee7-487c-b6f3-e296e6f0a5b9",
+        "parentId" : "f3e6a619-843a-4e90-a4d6-991983f45fda",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Just made a pass on all XXXResult classes and I think the API semantics are a bit inconsistency in general: originally I thought we only need the `all` function if the result contains futures in the form of `Map<..., KafkaFuture<...>>` which potentially requires one trip for each nested future, and the `all` function is used as a lazy way to check that all entries have completed successfully. But some (e.g. `RemoveMemberFromGroupResult` in form of `Map<MemberIdentity, KafkaFuture<Void>>`) actually only requires one request too, so all futures would actually be always completed at the same time. For those cases we do not need an `all` function either.\r\n\r\nBut it seems like for results that only contain a `KafkaFuture<Object>` we also have a dummy `all` function, and many of their `all` semantics are different too.\r\n\r\nHonestly I think not all `results` needs an `all` function, but it seems we are already a bit messy here..",
+        "createdAt" : "2019-10-08T16:57:31Z",
+        "updatedAt" : "2019-10-19T14:50:21Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac53e963-8f83-43f6-a041-f4c748bf9e74",
+        "parentId" : "f3e6a619-843a-4e90-a4d6-991983f45fda",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Yeah, unfortunately the admin APIs have such a big surface area it's hard to maintain consistency. I think the original intent is what I described though. ",
+        "createdAt" : "2019-10-08T17:31:41Z",
+        "updatedAt" : "2019-10-19T14:50:21Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "adb3377352be6336d1586a4a160eedbcd5a9a021",
+    "line" : 77,
+    "diffHunk" : "@@ -1,1 +75,79 @@     * Return a future which succeeds if all the alter offsets succeed.\n     */\n    public KafkaFuture<Void> all() {\n        return this.future.thenApply(new BaseFunction<Map<TopicPartition, Errors>, Void>() {\n            @Override"
+  }
+]

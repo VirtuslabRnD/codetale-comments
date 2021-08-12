@@ -680,5 +680,104 @@
     "commit" : "c9b47190841af24dc79beed51837946c119995d5",
     "line" : 76,
     "diffHunk" : "@@ -1,1 +590,594 @@     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.\n     */\n    public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {\n        Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();\n        Queue<PartitionRecords> pausedCompletedFetches = new ArrayDeque<>();"
+  },
+  {
+    "id" : "a71b2505-f503-40a6-8924-3e15e227b649",
+    "prId" : 7222,
+    "prUrl" : "https://github.com/apache/kafka/pull/7222#pullrequestreview-277491582",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d4d978c7-ebb8-49ae-bad6-8531b07867b5",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "The `fetchablePartitions` method used below is probably another nice opportunity to use something like `forEachAssignedPartition`.",
+        "createdAt" : "2019-08-19T18:09:34Z",
+        "updatedAt" : "2020-08-12T14:05:10Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce148385-e80e-4032-bcb1-2b1906e07023",
+        "parentId" : "d4d978c7-ebb8-49ae-bad6-8531b07867b5",
+        "authorId" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "body" : "I'm not sure it saves anything in this case. The main benefit of `forEachAssignedPartition` is avoiding making a copy of the assignment set. Since `fetchablePartitions` iterates across the internal set directly I don't think it would help",
+        "createdAt" : "2019-08-19T19:16:43Z",
+        "updatedAt" : "2020-08-12T14:05:10Z",
+        "lastEditedBy" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f933d66-b275-4832-99ba-56dc5e9f9652",
+        "parentId" : "d4d978c7-ebb8-49ae-bad6-8531b07867b5",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "We can avoid a copy in the case @hachikuji mentions as well, right? See below:\r\n\r\n```java\r\nsynchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {\r\n        return assignment.stream()\r\n                .filter(tpState -> isAvailable.test(tpState.topicPartition()) && tpState.value().isFetchable())\r\n                .map(PartitionStates.PartitionState::topicPartition)\r\n                .collect(Collectors.toList());\r\n    }\r\n```",
+        "createdAt" : "2019-08-20T05:23:46Z",
+        "updatedAt" : "2020-08-12T14:05:10Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f542ae84-cd65-45dc-8b1c-5965c651f63c",
+        "parentId" : "d4d978c7-ebb8-49ae-bad6-8531b07867b5",
+        "authorId" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "body" : "Ah ok, I see what he means. I'll look into this",
+        "createdAt" : "2019-08-20T15:39:36Z",
+        "updatedAt" : "2020-08-12T14:05:10Z",
+        "lastEditedBy" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d2511b37-5fa9-44cd-970b-4c174df4e410",
+        "parentId" : "d4d978c7-ebb8-49ae-bad6-8531b07867b5",
+        "authorId" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "body" : "I made a pass at this and it wasn't so simple. Deferring for now",
+        "createdAt" : "2019-08-20T23:26:08Z",
+        "updatedAt" : "2020-08-12T14:05:10Z",
+        "lastEditedBy" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6f3ed50b0c0557a3e31b0b6c2b13188ceab38fd8",
+    "line" : 75,
+    "diffHunk" : "@@ -1,1 +1142,1146 @@     * that have no existing requests in flight.\n     */\n    private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {\n        Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();\n"
+  },
+  {
+    "id" : "8708d67d-b14f-422b-b628-0a1249f8150c",
+    "prId" : 7222,
+    "prUrl" : "https://github.com/apache/kafka/pull/7222#pullrequestreview-278168144",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a24c939f-c222-444f-a138-17a995c12b90",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Mentioned offline, but there is actually a behavioral change here. Previously we didn't validate after an offset reset in any case, but now I think we might if the offset returned from the ListOffset request has an epoch. I think the simple thing to do is to use `Optional.empty()` above when defining `position`.",
+        "createdAt" : "2019-08-22T00:16:13Z",
+        "updatedAt" : "2020-08-12T14:05:10Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f95a87c5-5f61-4d93-8213-7b8d81bfa68c",
+        "parentId" : "a24c939f-c222-444f-a138-17a995c12b90",
+        "authorId" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "body" : "+1 for not introducing a behavior change here. Fixed. Let's see how the next build goes.",
+        "createdAt" : "2019-08-22T02:55:25Z",
+        "updatedAt" : "2020-08-12T14:05:10Z",
+        "lastEditedBy" : "083f2f03-ca7e-48a1-9781-482564dfdf53",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6f3ed50b0c0557a3e31b0b6c2b13188ceab38fd8",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +727,731 @@            metadata.currentLeader(partition));\n        offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));\n        subscriptions.maybeSeekUnvalidated(partition, position, requestedResetStrategy);\n    }\n"
   }
 ]

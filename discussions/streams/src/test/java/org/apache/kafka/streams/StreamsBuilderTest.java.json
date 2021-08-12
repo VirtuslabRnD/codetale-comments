@@ -537,5 +537,137 @@
     "commit" : "d45d2ec564dbec53b656492863b65a5dba6a5641",
     "line" : 25,
     "diffHunk" : "@@ -1,1 +468,472 @@        builder.build();\n        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();\n        assertSpecifiedNameForOperation(topology, \"KSTREAM-SOURCE-0000000000\", expected, \"KSTREAM-SINK-0000000002\");\n    }\n"
+  },
+  {
+    "id" : "2e2a3622-7ce2-448f-8049-0d621fb5b791",
+    "prId" : 7285,
+    "prUrl" : "https://github.com/apache/kafka/pull/7285#pullrequestreview-294541771",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "df656c59-7a9b-4bd1-a0b1-63941493832f",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Can you elaborate on backward compatibility? Why do we need to update the test? Does this change indicate an incompatibility?",
+        "createdAt" : "2019-09-26T17:05:13Z",
+        "updatedAt" : "2019-09-28T16:01:43Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f24a1f72-d6a8-472f-afe7-b0ad3c58d585",
+        "parentId" : "df656c59-7a9b-4bd1-a0b1-63941493832f",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "This change to the test gets to the point of KIP-479.  Previously by naming the Join operator via `Joined` we were naming the processor, repartition topic, **_and_** the state store (hence changelog topic).  \r\n\r\nBut that is a breaking change for users using `Joined` going from  2.3 to 2.4.  By breaking the naming of the statestore from `Joined` the statestore here would revert to the generated name, breaking the test.  So instead of changing the expected topology, IMHO it's better to use `StreamJoined` to explicitly name the statestore here.  CF my previous comments https://github.com/apache/kafka/pull/7285#discussion_r320792207",
+        "createdAt" : "2019-09-27T15:00:13Z",
+        "updatedAt" : "2019-09-28T16:01:43Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1403c1cf-52df-432c-b81c-7e862a1e0157",
+        "parentId" : "df656c59-7a9b-4bd1-a0b1-63941493832f",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "So the change is just to use the new API. If we would leave `Joined.as()` the test would still pass.\r\n\r\nShould we have this test for old and new API to test compatibility? Or this this covered elsewhere?",
+        "createdAt" : "2019-09-27T19:44:16Z",
+        "updatedAt" : "2019-09-28T16:01:43Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2ef1f70-d5ac-49a9-b66a-ab67de3968c8",
+        "parentId" : "df656c59-7a9b-4bd1-a0b1-63941493832f",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "If we kept `Joined.as()` the test will fail as it would not name the state store so the generated topology would be different from the expected topology.\r\nBut this is not a breaking change as only `trunk` has the behavior of Joined.as() naming the state stores.\r\n\r\nI can add a separate test using joined with a different topology showing that the store name is generated now.\r\nWDYT?",
+        "createdAt" : "2019-09-27T19:51:16Z",
+        "updatedAt" : "2019-09-28T16:01:43Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b08c2a8-6cfb-41a0-8fe4-3673036b2904",
+        "parentId" : "df656c59-7a9b-4bd1-a0b1-63941493832f",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Ack. Thanks for the details.",
+        "createdAt" : "2019-09-27T20:14:27Z",
+        "updatedAt" : "2019-09-28T16:01:43Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a450c43edf7bb2cb5c110cc60136676c73903ca7",
+    "line" : 148,
+    "diffHunk" : "@@ -1,1 +601,605 @@        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);\n\n        streamOne.leftJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME).withName(STREAM_OPERATION_NAME));\n        builder.build();\n"
+  },
+  {
+    "id" : "d80981de-38cf-4f5c-8b52-7cefc521726d",
+    "prId" : 7285,
+    "prUrl" : "https://github.com/apache/kafka/pull/7285#pullrequestreview-294643170",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3a47ab68-69cd-4eb0-ab18-0358e5005c62",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Test demonstrating using `Joined` no longer names stores.",
+        "createdAt" : "2019-09-28T16:03:37Z",
+        "updatedAt" : "2019-09-28T16:08:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a450c43edf7bb2cb5c110cc60136676c73903ca7",
+    "line" : 167,
+    "diffHunk" : "@@ -1,1 +620,624 @@    @Test\n    @Deprecated\n    public void shouldUseGeneratedStoreNamesForLeftJoinOperationBetweenKStreamAndKStream() {\n        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);\n        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);"
+  },
+  {
+    "id" : "eb91d548-b224-44af-ab6f-36272584883f",
+    "prId" : 7285,
+    "prUrl" : "https://github.com/apache/kafka/pull/7285#pullrequestreview-294643170",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "390138be-cbe9-4e37-8392-364e3e2d46ec",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Test demonstrating using `Joined` no longer names stores.",
+        "createdAt" : "2019-09-28T16:03:47Z",
+        "updatedAt" : "2019-09-28T16:08:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a450c43edf7bb2cb5c110cc60136676c73903ca7",
+    "line" : 215,
+    "diffHunk" : "@@ -1,1 +667,671 @@    @Test\n    @Deprecated\n    public void shouldUseGeneratedNameForJoinOperationBetweenKStreamAndKStream() {\n        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);\n        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);"
+  },
+  {
+    "id" : "08a6ea59-1771-4ead-a764-12c9e80021e6",
+    "prId" : 7285,
+    "prUrl" : "https://github.com/apache/kafka/pull/7285#pullrequestreview-294643170",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3e565b02-f071-47b7-b7a0-348330efbf21",
+        "parentId" : null,
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Test demonstrating using `Joined` no longer names stores.",
+        "createdAt" : "2019-09-28T16:06:12Z",
+        "updatedAt" : "2019-09-28T16:08:03Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a450c43edf7bb2cb5c110cc60136676c73903ca7",
+    "line" : 261,
+    "diffHunk" : "@@ -1,1 +713,717 @@    @Test\n    @Deprecated\n    public void shouldUseGeneratedStoreNamesForOuterJoinOperationBetweenKStreamAndKStream() {\n        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);\n        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);"
   }
 ]

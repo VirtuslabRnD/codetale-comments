@@ -229,5 +229,49 @@
     "commit" : "d3d2900439cab3b6134ba74dab5d231c1380edb6",
     "line" : 53,
     "diffHunk" : "@@ -1,1 +451,455 @@    * @return true if a sync callback actually performs.\n    */\n  def maybeInvokeSyncCallback(member: MemberMetadata,\n                              syncGroupResult: SyncGroupResult): Boolean = {\n    if (member.isAwaitingSync) {"
+  },
+  {
+    "id" : "c55fcf9a-cd6c-412a-b47e-184f81c9579d",
+    "prId" : 7276,
+    "prUrl" : "https://github.com/apache/kafka/pull/7276#pullrequestreview-288145330",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6e9c4f4c-bede-42ba-a7ec-4a85343ea051",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "So this means that offset deletion does not take into account the subscriptions of an active rebalance. That's probably fine I guess since it is simpler and we are not modifying the commit state for any partitions which are actively being fetched.\r\n\r\nA couple questions for completeness:\r\n\r\n1. For the sake of argument, suppose we loosened the validation so that we allow explicit deletions (but not expirations) without respect to the group or subscription state. The behavior of the consumer would be a little unpredictable. It might just write over the deletion. It might also force an offset reset if an OffsetFetch followed the deletion. Because the behavior is undefined, we do not allow it, which seems fair. However, the downside is that it makes the API a little harder to use, so just wanted to check whether you think it is a worthwhile restriction.\r\n\r\n2. If we know the subscription, then it wouldn't be much trouble to delete the offsets of all partitions that are not currently subscribed to. This could be supported in the API by using a null in the OffsetDelete request. I think it could be useful, but I'm inclined to leave it for future work. What do you think?",
+        "createdAt" : "2019-09-11T18:40:21Z",
+        "updatedAt" : "2019-09-13T19:33:00Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa853e89-1d20-4786-bf0f-d8730e787ea0",
+        "parentId" : "6e9c4f4c-bede-42ba-a7ec-4a85343ea051",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Yes and No. I have distinguished two cases when I designed this:\r\n\r\n1) When the group is empty and the initial rebalance takes place, subscriptions will be ignored until the rebalance is completed and a new generation is initialised. I thought it would be inappropriate to compute the set of subscribed topics before having the full view of the consumer group. \r\n\r\n2) When the group is not empty and a rebalance takes place, the current set of subscribed topics will remain until all rebalance is completed and a new generation is initialised. I think this is a good think to be conservative here until the group has a full view of all the members.\r\n\r\nAnother aspect is that the protocol is actually selected at this point as well. I think it is better to stay consistent and parse the consumer protocol once the protocol of the group has been selected. It is not a hard requirement though as we could parse any versions but it feels more consistent in my opinion.\r\n\r\nTo answer your questions:\r\n\r\n1) I think allowing explicit deletions without respect to the group or subscription state would be really risky as the behaviour of the consumer would be unpredictable as you pointed out. I would say that it does not make much sense anyway to delete offsets of a topic while a running consumer group consumes this topic. It is good to have the restriction in place in my opinion.\r\n\r\n2) Yeah. It would be possible to delete the offsets of all partitions *of the topics* that are not currently subscribed to. I wonder it it really useful though as they will be eventually cleaned up now. I don't see the benefit of having the possibility to basically force the immediate clean up. I would leave it for future work and re-iterate based on the feedback we get from the users.\r\n",
+        "createdAt" : "2019-09-12T07:55:38Z",
+        "updatedAt" : "2019-09-13T19:33:00Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dd28a11b-abfa-4c32-b055-b0456a663511",
+        "parentId" : "6e9c4f4c-bede-42ba-a7ec-4a85343ea051",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Thanks for the response. Makes sense and I agree.",
+        "createdAt" : "2019-09-13T17:16:53Z",
+        "updatedAt" : "2019-09-13T19:33:00Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d96c9908a2b95e75aa853ea79d04532c229d007a",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +211,215 @@\n  // When protocolType == `consumer`, a set of subscribed topics is maintained. The set is\n  // computed when a new generation is created or when the group is restored from the log.\n  private var subscribedTopics: Option[Set[String]] = None\n"
   }
 ]
