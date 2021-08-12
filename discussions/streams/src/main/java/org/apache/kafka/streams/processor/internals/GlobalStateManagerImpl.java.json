@@ -559,5 +559,225 @@
     "commit" : "9e258ebfbaa270e178fe8a39f107a36e0738008b",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +375,379 @@    @Override\n    public void close() {\n        if (globalStateStores.isEmpty() && globalStores.isEmpty()) {\n            return;\n        }"
+  },
+  {
+    "id" : "8324937e-b86b-44ad-b71d-1c5185975187",
+    "prId" : 10646,
+    "prUrl" : "https://github.com/apache/kafka/pull/10646#pullrequestreview-662910094",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "efcf5ae1-2d72-4430-b17d-c4c9d94230a7",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "Not really related to this line. Could you verify that the state store is closed in the unit test that tests line 148? The name of the test is `shouldThrowStreamsExceptionForOldTopicPartitions()`.",
+        "createdAt" : "2021-05-11T08:41:26Z",
+        "updatedAt" : "2021-05-11T08:50:44Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "604d9ff8-bb7a-40d3-bcfc-607ae779a309",
+        "parentId" : "efcf5ae1-2d72-4430-b17d-c4c9d94230a7",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Actually I just observed that in this case, the mock context does not actually use the `stateManager` at all, but created its own `StateManagerStub`, and hence would not call `stateManager.registerStore`, therefore the stores set would always be empty.. I think this is okay since in unit test we are only checking each single function's behavior (in this case, `initialize`) anyways.\r\n\r\nAlso as I browse through the code (see other comment below), in this unit test when the exception is thrown the store would not be closed yet, and in practice we would rely on the `thread.shutdown` itself to shutdown the global state manager, and hence close all state stores.",
+        "createdAt" : "2021-05-17T02:11:33Z",
+        "updatedAt" : "2021-05-17T03:31:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "abc28ab3-fa4b-4d8c-bf29-c75469ee81ab",
+        "parentId" : "efcf5ae1-2d72-4430-b17d-c4c9d94230a7",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "If I put \r\n```\r\n        assertThat(store1.isOpen(), is(false));\r\n        assertThat(store2.isOpen(), is(false));\r\n        assertThat(store3.isOpen(), is(false));\r\n        assertThat(store4.isOpen(), is(false));\r\n```\r\non line 202 in `shouldThrowStreamsExceptionForOldTopicPartitions()` the test fails. Hence, we leak a state store.",
+        "createdAt" : "2021-05-17T13:30:09Z",
+        "updatedAt" : "2021-05-17T13:30:55Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4cf7ceb6-9d7d-409e-9498-281e157f1717",
+        "parentId" : "efcf5ae1-2d72-4430-b17d-c4c9d94230a7",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Yes, but the reason is that, in the unit test we do not really follow the trace of `stateMgr.initialize() -> store.init() -> context.registerStore() -> stateMgr.registerStore()`. That's because the `context` is a mock, which does not use the `stateMgr` at all, and hence the `stores` set is always empty.\r\n\r\nIf we do want to test this call trace, then we need to make the mock context to get the actual stateMgr.",
+        "createdAt" : "2021-05-17T20:36:11Z",
+        "updatedAt" : "2021-05-17T20:36:11Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "27750b7f-651d-4f43-8a4f-033cf8023ba4",
+        "parentId" : "efcf5ae1-2d72-4430-b17d-c4c9d94230a7",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "Now, I see what you mean. However, I am not sure it is a good idea to rely on the code in `GlobalStreamThread` that catches the fatal exception to clean up state stores (and all the rest). If we know, we throw a fatal exception, then we should clean up immediately before we throw. That makes the `GlobalStateManagerImpl` less error-prone, because it does not need to rely on a different class for its clean up , IMO. ",
+        "createdAt" : "2021-05-19T08:29:26Z",
+        "updatedAt" : "2021-05-19T08:29:26Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85d28192174125f7c8c641eeb22d4015711473a7",
+    "line" : 67,
+    "diffHunk" : "@@ -1,1 +130,134 @@\n        final Set<String> changelogTopics = new HashSet<>();\n        for (final StateStore stateStore : topology.globalStateStores()) {\n            final String sourceTopic = storeToChangelogTopic.get(stateStore.name());\n            changelogTopics.add(sourceTopic);"
+  },
+  {
+    "id" : "ac50fdbc-696f-493e-b00c-50bce6c358cc",
+    "prId" : 10646,
+    "prUrl" : "https://github.com/apache/kafka/pull/10646#pullrequestreview-661407385",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7676f5d0-e129-4cc1-b0be-a7e1f6d47678",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "There are a a `IllegalStateException` and a couple of `IllegalArgumentException`s on the path from opening the state store within `stateStore.init()` to line 182 in `this.registerStore()`. We do not close the state stores before we throw. I do not think this is relevant for production code, but we could leak state stores in unit tests if we do not explicitly close the state stores in the unit tests.  ",
+        "createdAt" : "2021-05-11T08:48:23Z",
+        "updatedAt" : "2021-05-11T08:50:44Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0023b608-17fb-490b-87d8-2cd6b879a71a",
+        "parentId" : "7676f5d0-e129-4cc1-b0be-a7e1f6d47678",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "On a second thought, it might also be relevant for production code since we now can restart the stream thread after a fatal error. This is not yet possible for a global stream thread, but it might be possible in future.",
+        "createdAt" : "2021-05-14T08:29:37Z",
+        "updatedAt" : "2021-05-14T08:29:37Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5b7e3e62-9af2-42dc-bc97-be789436b4c6",
+        "parentId" : "7676f5d0-e129-4cc1-b0be-a7e1f6d47678",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Hmm, for production, do we ever restart a thread even for illegal-state or illegal-argument?\r\n\r\nAnyways, I think your concern is still valid, that at least for testing code, there's a risk. Since `store.init()` call is implemented at the state store impl customization, we cannot really enforce closing there. And today, for both global state and local state manager, we would throw the exception from `initialize state stores` all the way up to the `thread.run` and to user's exceptional handler. Though we call `thread.shutdown` eventually we would close all tasks anyways, but in the case you raised, the state store would not be in `stateManager.stores` set yet and hence would be leaked.\r\n\r\nWhat we can do is, e.g. in both local and global state manager, moving the `globalStores.put` / `stores.put` call at the beginning, before making any checks, so that when we throw and eventually `thread.shutdown`, the stores would already be in the set and would be closed.",
+        "createdAt" : "2021-05-17T02:57:41Z",
+        "updatedAt" : "2021-05-17T03:31:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7f1d4acc-bf32-4486-84a9-3f4051099ca8",
+        "parentId" : "7676f5d0-e129-4cc1-b0be-a7e1f6d47678",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "> Hmm, for production, do we ever restart a thread even for illegal-state or illegal-argument?\r\n\r\nIf the user decides to restart a stream thread in its exception handler it is possible.",
+        "createdAt" : "2021-05-17T13:14:11Z",
+        "updatedAt" : "2021-05-17T13:30:55Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "43409e76-f048-4d6f-b331-dc5fae6bbc9c",
+        "parentId" : "7676f5d0-e129-4cc1-b0be-a7e1f6d47678",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yeah, our attitude towards IllegalStateException has been pretty cavalier thus far, and it's one of the main things I'm concerned about with the REPLACE thread functionality. We should definitely be on the lookout for possible IllegalStateException occurrences in the codebase and try to triage them so things aren't just completely screwed up if Streams is allowed to continue after hitting one",
+        "createdAt" : "2021-05-17T20:40:55Z",
+        "updatedAt" : "2021-05-17T20:40:55Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85d28192174125f7c8c641eeb22d4015711473a7",
+    "line" : 70,
+    "diffHunk" : "@@ -1,1 +133,137 @@            final String sourceTopic = storeToChangelogTopic.get(stateStore.name());\n            changelogTopics.add(sourceTopic);\n            stateStore.init((StateStoreContext) globalProcessorContext, stateStore);\n        }\n"
+  },
+  {
+    "id" : "117d5e3e-0c6d-451c-a0ef-e64a6bbc16ff",
+    "prId" : 10646,
+    "prUrl" : "https://github.com/apache/kafka/pull/10646#pullrequestreview-662560454",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d389ea39-5328-422f-9e67-81d44e62dfab",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I add the store after the store names check, since if there's already a state store created, then we would not be able to book-keep both of them anyways.",
+        "createdAt" : "2021-05-17T03:30:51Z",
+        "updatedAt" : "2021-05-17T03:31:12Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6af6c43d-2ff0-4328-8238-dc7782a17567",
+        "parentId" : "d389ea39-5328-422f-9e67-81d44e62dfab",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "I agree that we would not be able to book-keep both, but the state store in `store` that we just opened is still open in line 172. So we need to close the state store in `store` before throwing the exception otherwise we will leak it. The same applies to line 176.",
+        "createdAt" : "2021-05-17T13:09:16Z",
+        "updatedAt" : "2021-05-17T13:30:55Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bb560b09-2d51-4766-a082-12632ab873e9",
+        "parentId" : "d389ea39-5328-422f-9e67-81d44e62dfab",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Okay, I think I got what we were discussing now. Originally I'm thinking that since these conditions should never happen --- because in the topology when we `add state stores` we already check if the store names have existed or not, and hence we should never add two stores with the same name --- if it ever happens we would always treat it as fatal and crash stop immediately.\r\n\r\nOn the higher level, I think we should NOT allow users to handle illegal-s/a themselves and hence ever possibly to treat them not as fatal, but obviously today we do not enforce that.\r\n\r\nSo I think we can have two options here: 1) in the lower level hierarchy like state manager here, try to stop the stores when hitting an illegal-s/a; 2) on the higher level hierarchy as in stream thread, we enforce \"stop app\" on illegal-s/a. I'm a bit leaning towards 2) here but would love to hear other opinions.",
+        "createdAt" : "2021-05-17T20:46:43Z",
+        "updatedAt" : "2021-05-17T20:46:44Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e93dc3c-f140-48ea-ac42-7d5178bd4447",
+        "parentId" : "d389ea39-5328-422f-9e67-81d44e62dfab",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "cc @ableegoldman @wcarlson5 @rodesai too.",
+        "createdAt" : "2021-05-17T20:47:17Z",
+        "updatedAt" : "2021-05-17T20:47:17Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "328f027d-b19c-483a-b6a4-c309f2515d0c",
+        "parentId" : "d389ea39-5328-422f-9e67-81d44e62dfab",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "+1 on disallowing the app to continue after an illegal exception. We need to reserve _some_ kind of exception for actual critical, fatal system errors that a user can't just ignore to spin up a new thread. And that has essentially been the meaning of these illegal exceptions in Streams thus far. As I mentioned in another thread, I've been very concerned about this in the new handler since we haven't been strict in properly cleaning up after an illegal exception",
+        "createdAt" : "2021-05-17T21:02:08Z",
+        "updatedAt" : "2021-05-17T21:02:08Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "671ce466-c719-460e-a889-58c79c67d81d",
+        "parentId" : "d389ea39-5328-422f-9e67-81d44e62dfab",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "+1 on stopping the app after a deterministic illegal * exception. I am not sure if all illegal * exception we throw are deterministic, though. I guess most of them are. For now, we could just shutdown the app for all illegal * exception and then consider to use a different exception if we discover that a illegal * exception is transient.",
+        "createdAt" : "2021-05-18T07:19:16Z",
+        "updatedAt" : "2021-05-18T07:19:16Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9f3ef58b-25d4-4da3-9bfe-b9e64191cc48",
+        "parentId" : "d389ea39-5328-422f-9e67-81d44e62dfab",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I definitely think we need to triage and maybe clean up the existing Illegal-type exceptions today. Some may not be deterministic, but we still just drop everything and shut down without any further attempts at cleaning up. In those cases it's probably down to the specific situation whether it's appropriate to continue doing so and disallow recovery from this, or just fix the handling so it does clean all resources",
+        "createdAt" : "2021-05-18T20:48:02Z",
+        "updatedAt" : "2021-05-18T20:48:03Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "85d28192174125f7c8c641eeb22d4015711473a7",
+    "line" : 89,
+    "diffHunk" : "@@ -1,1 +181,185 @@        }\n\n        // register the store first, so that if later an exception is thrown then eventually while we call `close`\n        // on the state manager this state store would be closed as well\n        globalStores.put(store.name(), Optional.of(store));"
   }
 ]
