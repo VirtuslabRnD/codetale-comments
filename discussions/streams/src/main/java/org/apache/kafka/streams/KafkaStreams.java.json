@@ -867,5 +867,225 @@
     "commit" : "07769af5eeca7e9cc35580637706882528c77cc7",
     "line" : 20,
     "diffHunk" : "@@ -1,1 +792,796 @@    }\n\n    private static void maybeWarnAboutCodeInRocksDBConfigSetter(final Logger log,\n                                                                final StreamsConfig config) {\n        if (config.getClass(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG) != null) {"
+  },
+  {
+    "id" : "ac0cd778-e574-413e-8b71-539b44c556a1",
+    "prId" : 7961,
+    "prUrl" : "https://github.com/apache/kafka/pull/7961#pullrequestreview-344136818",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a091ddfd-d786-41cd-8079-d71b32dd90f5",
+        "parentId" : null,
+        "authorId" : "478a572c-b267-486a-b845-4847ccf71f62",
+        "body" : "@vvcephei @brary I actually have a concern with this overestimation.. Let's take a typical streams deployment with num_standby_replicas =1 ... During the time period, where the lag is fetched when a standby changelog partition is assigned but has not yet processed any events, we will report a really high value that may not lead to IQs being failed (since the store is deemed laggy).. Given a caller that periodically fetches the positions every few seconds would have a non-zero past value already, wonder if it makes sense to not report this partition instead.. i.e we only report lags on store partitions which have begun consumption..  At least for ksqlDB, I am thinking servers can track easily when lag was reported for a given store partition, given server and decide on using that value based on how recently it was updated..  But the values we receive won't be 'jumpy'. End of the day, I am also theorizing how this will behave.. So this is more about which way we want to bias. \r\n\r\n\r\nAcross the cluster, this time period will not in sync with each other and can happen differently. So not sure if this will in-fact provide correct relative order.. ",
+        "createdAt" : "2020-01-15T01:40:18Z",
+        "updatedAt" : "2020-01-16T18:51:38Z",
+        "lastEditedBy" : "478a572c-b267-486a-b845-4847ccf71f62",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9cdb0f54-4372-41c3-a6a8-31d03ef4ee6a",
+        "parentId" : "a091ddfd-d786-41cd-8079-d71b32dd90f5",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks for bringing this up. I'm not totally sure I follow, though...\r\n\r\nLet's say the partition in question has an end offset of 100 and a true \"earliest\" offset of 90 (due to compaction). If an instance has this partition assigned but has not yet recorded any position, we'd report its lag as 100. Another instance that has started processing but only processed one record would be reported with a lag of 9. This doesn't accurately represent the amount-of-work difference between the two instances (which is actually only one record, though the difference in lags is 91), but it _does_ correctly state that the second instance is ahead of the first in freshness.\r\n\r\nI also seems reasonable to not report a lag at all for not-yet-started stores, but then you have to handle the special case in client-side code. I.e., the metadata API would tell you that this instance owns a store, but then there's no lag reported, so maybe there was a rebalance and we lost the store, or maybe we do own the store, but haven't started processing yet... It still seems simpler to me to say \"woah, that lag is really big, like it's lagging by 100% of the topic, maybe I won't query this store\" if I don't want to query really stale data, versus handling the special case to reach the same conclusion.\r\n\r\nRealistically, even if we are still restoring, but the store is still behind by a year (for example), you _still_ wouldn't want to return the results, but rather would have _some_ heuristic of how stale is ok and how stale is too much, which would be able to handle this math just as easily either way.\r\n\r\nOne other thought is that offset values can still be jumpy, due to compaction. So there's nothing to say that there are any records at all between offset 5 and offset 9999. Maybe this is contributing to my feeling that it's ok to just gloss over this case.",
+        "createdAt" : "2020-01-16T03:44:46Z",
+        "updatedAt" : "2020-01-16T18:51:38Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2c783e81-5cdd-4ef6-8df6-494838a17d44",
+        "parentId" : "a091ddfd-d786-41cd-8079-d71b32dd90f5",
+        "authorId" : "478a572c-b267-486a-b845-4847ccf71f62",
+        "body" : ">but it does correctly state that the second instance is ahead of the first in freshness.\r\n\r\nFair. Your argument is if you have not begun work, then you would be behind another instance that has begun work.. \r\n\r\n>reasonable to not report a lag at all for not-yet-started stores, but then you have to handle the special case in client-side code.\r\n\r\nthe client code is going to have to use some mechanism to \"fence\" really bad lag.. i.e full restorations.. My concern was that if we hit this race condition, you would suddenly see a jump to \"oh this replica needs to fully restore\" and then back to the actual lag..\r\n\r\n>One other thought is that offset values can still be jumpy, due to compaction.\r\n\r\nI did think about this a bit.. I think what we have here would work fairly well in the common case, where the active and standby are apart by lag within the `uncompacted` portion of the changelog topic.. \r\n\r\n> So there's nothing to say that there are any records at all between offset 5 and offset 9999.\r\nOnce beyond that, since we just rely on the latest lag value, this is okay.. if there are no records, the restoration will be faster than expected.. but as a relative metric, it's still good.. \r\n\r\nIn all, I am okay sticking with this behavior for now.. We can revisit based on real world experience.. and really build a solid solid implementation in the next month or so.. ",
+        "createdAt" : "2020-01-16T18:50:31Z",
+        "updatedAt" : "2020-01-16T18:51:38Z",
+        "lastEditedBy" : "478a572c-b267-486a-b845-4847ccf71f62",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "026b9dd5f36a78839a5e628cd51d2e98f91313e9",
+    "line" : 90,
+    "diffHunk" : "@@ -1,1 +1272,1276 @@        log.debug(\"Current end offsets :{}\", allEndOffsets);\n        for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {\n            // Avoiding an extra admin API lookup by computing lags for not-yet-started restorations\n            // from zero instead of the real \"earliest offset\" for the changelog.\n            // This will yield the correct relative order of lagginess for the tasks in the cluster,"
+  },
+  {
+    "id" : "c9dcf1b1-8759-479e-a4bd-9aa1d56393ce",
+    "prId" : 7961,
+    "prUrl" : "https://github.com/apache/kafka/pull/7961#pullrequestreview-343995216",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "95802c90-abdf-4acb-b92b-80bed9f9ee9d",
+        "parentId" : null,
+        "authorId" : "478a572c-b267-486a-b845-4847ccf71f62",
+        "body" : "is there a notion of `experimental` APIs in streams? (like some other apache projects like Spark have) I think we can mark this experimental if so, setting the expectations with the user for the next release. ",
+        "createdAt" : "2020-01-15T15:56:04Z",
+        "updatedAt" : "2020-01-16T18:51:38Z",
+        "lastEditedBy" : "478a572c-b267-486a-b845-4847ccf71f62",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e7507d4b-64be-4820-a737-18466d0af29e",
+        "parentId" : "95802c90-abdf-4acb-b92b-80bed9f9ee9d",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "There's not. There's \"interface: evolving\", but I think it's only for... interfaces. We already say in the javadoc that the returned values are estimates, so I think we've created enough wiggle room in the correctness of the returned lags. As to whether the method signature itself might change in the future, we'll just have to go the normal route of deprecating and replacing if we want to change it.",
+        "createdAt" : "2020-01-15T22:26:18Z",
+        "updatedAt" : "2020-01-16T18:51:38Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fc91ffaa-7ea8-4b9e-82eb-cbc32679e479",
+        "parentId" : "95802c90-abdf-4acb-b92b-80bed9f9ee9d",
+        "authorId" : "478a572c-b267-486a-b845-4847ccf71f62",
+        "body" : "Okay.. lets stick to what we have. ",
+        "createdAt" : "2020-01-16T15:25:04Z",
+        "updatedAt" : "2020-01-16T18:51:38Z",
+        "lastEditedBy" : "478a572c-b267-486a-b845-4847ccf71f62",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "026b9dd5f36a78839a5e628cd51d2e98f91313e9",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +1228,1232 @@     * @return map of store names to another map of partition to {@link LagInfo}s\n     */\n    public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {\n        final long latestSentinel = -2L;\n        final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();"
+  },
+  {
+    "id" : "370599a0-cfa9-43db-bac3-3bff06d9f7cf",
+    "prId" : 7984,
+    "prUrl" : "https://github.com/apache/kafka/pull/7984#pullrequestreview-350590717",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d25acf1c-9ca1-4f9a-b4a8-8b294be83767",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "We should add a `@deprecated` annotation to the JavaDocs:\r\n```\r\n@depreated since 2.5 release; use {@link #store(StoreQueryParams)} instead\r\n``` ",
+        "createdAt" : "2020-01-29T22:59:57Z",
+        "updatedAt" : "2020-01-30T05:36:55Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5b6e23e5-a3c0-464c-92df-4f7c0869e8e9",
+        "parentId" : "d25acf1c-9ca1-4f9a-b4a8-8b294be83767",
+        "authorId" : "3501d636-ea66-482b-a2ca-f215a3669632",
+        "body" : "Done.",
+        "createdAt" : "2020-01-30T05:38:15Z",
+        "updatedAt" : "2020-01-30T05:38:15Z",
+        "lastEditedBy" : "3501d636-ea66-482b-a2ca-f215a3669632",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "87c5b9c6789e6f77819eecee0400c64d4220356f",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +1164,1168 @@    /**\n     * @deprecated since 2.5 release; use {@link #store(StoreQueryParams)}  instead\n     */\n    @Deprecated\n    public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {"
+  },
+  {
+    "id" : "90495dc3-fa5e-446d-bc56-386cd5a730f0",
+    "prId" : 7984,
+    "prUrl" : "https://github.com/apache/kafka/pull/7984#pullrequestreview-350589051",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dc99487d-cc71-4153-a917-758cbe093349",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "We should not explain how `StoreQueryParams` works -- this should to into `StoreQueryParams` JavaDocs -- we should just keep the first sentence of the paragraph.",
+        "createdAt" : "2020-01-29T23:02:20Z",
+        "updatedAt" : "2020-01-30T05:36:55Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8432817-732f-45d1-a79c-f0cc082d7a64",
+        "parentId" : "dc99487d-cc71-4153-a917-758cbe093349",
+        "authorId" : "3501d636-ea66-482b-a2ca-f215a3669632",
+        "body" : "Done.",
+        "createdAt" : "2020-01-30T05:30:58Z",
+        "updatedAt" : "2020-01-30T05:36:55Z",
+        "lastEditedBy" : "3501d636-ea66-482b-a2ca-f215a3669632",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "87c5b9c6789e6f77819eecee0400c64d4220356f",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +1174,1178 @@     * StoreQueryParams need required parameters to be set, which are {@code storeName} and if\n     * type is accepted by the provided {@link QueryableStoreType#accepts(StateStore) queryableStoreType}.\n     * The returned object can be used to query the {@link StateStore} instances.\n     *\n     * @param storeQueryParams   to set the optional parameters to fetch type of stores user wants to fetch when a key is queried"
+  },
+  {
+    "id" : "f93bfab2-e11a-4e6b-bc0f-afb74ef7c137",
+    "prId" : 7984,
+    "prUrl" : "https://github.com/apache/kafka/pull/7984#pullrequestreview-351884501",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "32070e23-d035-43a1-963d-7f2d08b2136d",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Nit: I would remove this sentence. Should be part of the JavaDocs of `StoreQueryParams`.",
+        "createdAt" : "2020-01-30T07:12:36Z",
+        "updatedAt" : "2020-01-30T07:43:48Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10e1c4af-1891-45cd-af2c-b9619355b4af",
+        "parentId" : "32070e23-d035-43a1-963d-7f2d08b2136d",
+        "authorId" : "3501d636-ea66-482b-a2ca-f215a3669632",
+        "body" : "Done.",
+        "createdAt" : "2020-02-01T09:55:41Z",
+        "updatedAt" : "2020-02-01T09:55:42Z",
+        "lastEditedBy" : "3501d636-ea66-482b-a2ca-f215a3669632",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f6a770c3-b994-4e60-9c94-5b763ba16857",
+        "parentId" : "32070e23-d035-43a1-963d-7f2d08b2136d",
+        "authorId" : "3501d636-ea66-482b-a2ca-f215a3669632",
+        "body" : "Done.",
+        "createdAt" : "2020-02-01T13:31:02Z",
+        "updatedAt" : "2020-02-01T13:31:02Z",
+        "lastEditedBy" : "3501d636-ea66-482b-a2ca-f215a3669632",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "87c5b9c6789e6f77819eecee0400c64d4220356f",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +1173,1177 @@     * Get a facade wrapping the local {@link StateStore} instances with the provided {@link StoreQueryParams}.\n     * StoreQueryParams need required parameters to be set, which are {@code storeName} and if\n     * type is accepted by the provided {@link QueryableStoreType#accepts(StateStore) queryableStoreType}.\n     * The returned object can be used to query the {@link StateStore} instances.\n     *"
+  },
+  {
+    "id" : "c7d6600f-5220-4348-b0ab-1f7e1646e40d",
+    "prId" : 7984,
+    "prUrl" : "https://github.com/apache/kafka/pull/7984#pullrequestreview-350616789",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ddfc3af3-d14b-4c0f-b653-29c296148d75",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "nit: remove `optional` the object is used to set mandatory and optional parameters. Overall it reads a little bit complicated. Not sure atm how to improve it. Maybe @vinothchandar or @vvcephei have some ideas?",
+        "createdAt" : "2020-01-30T07:16:52Z",
+        "updatedAt" : "2020-01-30T07:43:48Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "87c5b9c6789e6f77819eecee0400c64d4220356f",
+    "line" : 51,
+    "diffHunk" : "@@ -1,1 +1176,1180 @@     * The returned object can be used to query the {@link StateStore} instances.\n     *\n     * @param storeQueryParams   to set the optional parameters to fetch type of stores user wants to fetch when a key is queried\n     * @return A facade wrapping the local {@link StateStore} instances\n     * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and"
   }
 ]

@@ -647,5 +647,159 @@
     "commit" : "741306599487c10a3d5f753920f1f1c2e0e0ec73",
     "line" : 7,
     "diffHunk" : "@@ -1,1 +349,353 @@        updateCheckpointFileCache(checkpointableOffsetsFromProcessing);\n\n        log.debug(\"Writing checkpoint: {}\", checkpointFileCache);\n        try {\n            checkpointFile.write(checkpointFileCache);"
+  },
+  {
+    "id" : "566527f8-9089-4927-aca5-53233ab1948b",
+    "prId" : 7997,
+    "prUrl" : "https://github.com/apache/kafka/pull/7997#pullrequestreview-353327753",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0855a3b1-193e-43b3-aaf4-73a155115248",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "unresolved TODO here. it's unclear to me why we would only consider this task corrupted in EOS mode. It seems like the lack of a checkpoint _file_ just means that we loaded a cached task in an undefined state, and we should discard it and restore. If we have the file, but some of a changelog is missing from it, then maybe it just never got written, before shutdown, or more likely, the topology has changed and the task is corrupted, whether or not we are in EOS.",
+        "createdAt" : "2020-02-04T21:32:26Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0edbcd27-5069-4bc2-8c09-c75256a7b268",
+        "parentId" : "0855a3b1-193e-43b3-aaf4-73a155115248",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Today we write the checkpoint file before we commit the offsets, so under non-EOS we can just restore from scratch without wiping the local store image since restoring is just overwriting the local store and we can just restore to the end of the changelog (this may result in duplicates but is fine under non-EOS); but with non-EOS we have to first wipe out before restoring from scratch.",
+        "createdAt" : "2020-02-04T21:51:49Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "196e7c0210b659ec81335d5624ae0cf5127fdf21",
+    "line" : 253,
+    "diffHunk" : "@@ -1,1 +207,211 @@                            store.stateStore.name(), store.offset, store.changelogPartition);\n                    } else {\n                        // TODO K9113: for EOS when there's no checkpointed offset, we should treat it as TaskCorrupted\n\n                        log.info(\"State store {} did not find checkpoint offset, hence would \" +"
+  },
+  {
+    "id" : "be975924-db34-4584-a635-871ef987f5fb",
+    "prId" : 7997,
+    "prUrl" : "https://github.com/apache/kafka/pull/7997#pullrequestreview-353328951",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4aac5bea-d92e-42e1-a41a-a53ca78bc10a",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "seems like this also indicates the task is corrupted",
+        "createdAt" : "2020-02-04T21:32:44Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d8d640dc-ef3a-4449-ba01-5824e4480cc1",
+        "parentId" : "4aac5bea-d92e-42e1-a41a-a53ca78bc10a",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Arguably yes, I'm just following the old logic intentionally here -- I think originally we want to be more compatible with topology changes (if some topology optimizations decides that some stores are not needed) but on second thought I think this is not safe either. We can consider making this change in another PR to make it stricter.",
+        "createdAt" : "2020-02-04T21:53:50Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "196e7c0210b659ec81335d5624ae0cf5127fdf21",
+    "line" : 263,
+    "diffHunk" : "@@ -1,1 +217,221 @@\n            if (!loadedCheckpoints.isEmpty()) {\n                log.warn(\"Some loaded checkpoint offsets cannot find their corresponding state stores: {}\", loadedCheckpoints);\n            }\n"
+  },
+  {
+    "id" : "65229ae2-c1ed-49ce-b2d6-8d50403460e4",
+    "prId" : 7997,
+    "prUrl" : "https://github.com/apache/kafka/pull/7997#pullrequestreview-353330547",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5cae7aa2-ca5a-4431-bc00-9f069f86e631",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "in retrospect, I like the idea of doing this regardless of EOS. Why should we deliberately produce wrong results in ALO mode? We can certainly optimize to be able to use semi-trustworthy data, but let's treat that separately from EOS vs ALO",
+        "createdAt" : "2020-02-04T21:33:09Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b5b9aab6-4c3c-44a4-ab8f-413572284d3e",
+        "parentId" : "5cae7aa2-ca5a-4431-bc00-9f069f86e631",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "The idea is that for ALO if we failed to write the first checkpoint after restarting we can still fallback to the original checkpoint even though the store may have been updated and hence there would be duplicates. But since the window gap (just one commit interval) is so small I think it does not worth making the code more complicated with EO v.s. ALO.",
+        "createdAt" : "2020-02-04T21:56:35Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "196e7c0210b659ec81335d5624ae0cf5127fdf21",
+    "line" : 266,
+    "diffHunk" : "@@ -1,1 +220,224 @@            }\n\n            checkpointFile.delete();\n        } catch (final IOException | RuntimeException e) {\n            // both IOException or runtime exception like number parsing can throw"
+  },
+  {
+    "id" : "5c97f608-cfe2-4155-a6bb-50ba547bdd1b",
+    "prId" : 7997,
+    "prUrl" : "https://github.com/apache/kafka/pull/7997#pullrequestreview-353316379",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "74d020d6-b9d5-495a-b9fb-fd76ad89f0e3",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "these kinds of comments paradoxically lead to unmaintainability. Either a method is part of the public contract or not. If it is, then this comment would become out of date, if not, then the changelog reader shouldn't be using it. The recommendation is simply to delete the comment (and similar ones). This even applies to \"for testing\" comments. I have found several methods in use in this code base that were commented \"visible for testing\". Even for tests, either move both the class and the test into an isolated package and use package-private, refactor the test, or remove the comment. Also, if the changelog reader really needs four \"holes\" poked into this class, then we should reconsider the relationship between the state manager and the changelog reader.",
+        "createdAt" : "2020-02-04T21:34:55Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "196e7c0210b659ec81335d5624ae0cf5127fdf21",
+    "line" : 406,
+    "diffHunk" : "@@ -1,1 +303,307 @@    }\n\n    // used by the changelog reader only\n    boolean changelogAsSource(final TopicPartition partition) {\n        return sourcePartitions.contains(partition);"
+  },
+  {
+    "id" : "8092790a-2f03-4b70-8166-bfd8e703c2c2",
+    "prId" : 7997,
+    "prUrl" : "https://github.com/apache/kafka/pull/7997#pullrequestreview-353331803",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a9619fa9-5b89-4112-92f3-6a7b05eee8a4",
+        "parentId" : null,
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "maybe it doesn't matter, but this method makes the only usage an n^2 algorithm. If we instead inverted the `stores` collection and used it for lookups in `register`, it would be o(n)",
+        "createdAt" : "2020-02-04T21:37:40Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef8656fa-4d6f-464c-975c-dfca5eb06f6f",
+        "parentId" : "a9619fa9-5b89-4112-92f3-6a7b05eee8a4",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I've thought about it: inverting the `stores` collection makes other calls that depends on the store name more complicated, while keeping two collections indexed by storeName / changelog partition is not much worthy since within a task there are usually no more than 10 stores so this n^2 algorithm should not be a big deal.",
+        "createdAt" : "2020-02-04T21:58:52Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "196e7c0210b659ec81335d5624ae0cf5127fdf21",
+    "line" : 722,
+    "diffHunk" : "@@ -1,1 +456,460 @@    }\n\n    private StateStoreMetadata findStore(final TopicPartition changelogPartition) {\n        final List<StateStoreMetadata> found = stores.values().stream()\n            .filter(metadata -> changelogPartition.equals(metadata.changelogPartition))"
   }
 ]

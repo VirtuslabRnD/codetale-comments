@@ -1109,5 +1109,104 @@
     "commit" : "6bae4d94b47a17569f11cfe185d630bcc68d347e",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +583,587 @@        assignmentSnapshot = metadataSnapshot;\n\n        log.info(\"Finished assignment for group at generation {}: {}\", generation().generationId, assignments);\n\n        Map<String, ByteBuffer> groupAssignment = new HashMap<>();"
+  },
+  {
+    "id" : "f18aea14-cb31-4298-b3f8-24e2b418c91c",
+    "prId" : 7906,
+    "prUrl" : "https://github.com/apache/kafka/pull/7906#pullrequestreview-340180070",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "24d9a389-15cd-48a2-9602-464e0bec7874",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Since this callback is not synchronized and nor does the getter `groupMetadata()`, we should declare this cached object volatile.",
+        "createdAt" : "2020-01-08T04:49:23Z",
+        "updatedAt" : "2020-01-09T00:02:21Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4c39baa4-57e9-4552-ab13-0c81af17a901",
+        "parentId" : "24d9a389-15cd-48a2-9602-464e0bec7874",
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "For normal consumer user, this callback should be executed on the same thread of the caller right? Why do we need to make it volatile?",
+        "createdAt" : "2020-01-08T21:47:07Z",
+        "updatedAt" : "2020-01-09T00:02:21Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "09164404-f705-4dd3-92ab-7e9e5abb374f",
+        "parentId" : "24d9a389-15cd-48a2-9602-464e0bec7874",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Well I was thinking two threads could be two threads, one calling `consumer.groupMetadata` and one calling `consumer.poll` which is creating a new object, but on a second thought this race condition maybe fine anyways since we cannot guarantee time-ordering if it happens.",
+        "createdAt" : "2020-01-08T22:14:44Z",
+        "updatedAt" : "2020-01-09T00:02:21Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "928c95e56ed2e1a6b19e79de8ed69ab6217b9368",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +393,397 @@\n        // give the assignor a chance to update internal state based on the received assignment\n        groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId);\n        assignor.onAssignment(assignment, groupMetadata);\n"
+  },
+  {
+    "id" : "e6330c6f-e0b5-40f5-8143-ea4781bfed6d",
+    "prId" : 7997,
+    "prUrl" : "https://github.com/apache/kafka/pull/7997#pullrequestreview-353395684",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a179334b-de2c-460b-9c54-08a3bd1cdf23",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@ableegoldman @mjsax This is another bug I found while trouble-shooting the system test failures (dates before the cleanup): when we got a task-migrated exception, and then enforce a rebalance, we call `unsubscribe` which would trigger `onLeavePrepare`, here if it was from task-migrated then it is likely that we are already undergoing a rebalance and in that case we should lose the tasks instead of revoke them since otherwise, we would still try to `commit` which would fail with a RebalanceInProgress exception.",
+        "createdAt" : "2020-02-04T23:53:21Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fad9154e-9a10-4dac-b2bc-5e2da90ab7f7",
+        "parentId" : "a179334b-de2c-460b-9c54-08a3bd1cdf23",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Good catch. Also it's pretty unfortunate that we can only trigger a rebalance from outside the client by unsubscribing and closing/suspending the entire assignment...this limits the usefulness of KIP-429 during version probing upgrades.\r\n\r\nIt also has some implications for the \"rebalances are cheap\" assumption of KIP-441. Would be better phrased as \"rebalances are cheap, except for the member who triggers them\". ",
+        "createdAt" : "2020-02-05T00:11:15Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7aa722b6-964d-4450-94c5-7b8e2c33654a",
+        "parentId" : "a179334b-de2c-460b-9c54-08a3bd1cdf23",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Yeah ... maybe we should consider adding a new API to consumer to `rejoin` the group, in a cheaper way.",
+        "createdAt" : "2020-02-05T00:14:00Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c37f5174-92c8-41a2-8e6e-8f14caed2f8c",
+        "parentId" : "a179334b-de2c-460b-9c54-08a3bd1cdf23",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I agree :) -- would be happy to write up a small KIP for it and kick off discussion",
+        "createdAt" : "2020-02-05T00:23:05Z",
+        "updatedAt" : "2020-02-05T05:05:33Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "196e7c0210b659ec81335d5624ae0cf5127fdf21",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +710,714 @@        if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {\n            final Exception e;\n            if (generation() == Generation.NO_GENERATION || rebalanceInProgress()) {\n                e = invokePartitionsLost(droppedPartitions);\n            } else {"
   }
 ]
