@@ -471,5 +471,126 @@
     "commit" : "e2ca04a7452c3aa18a4995e8a8c8a65d3a5354ed",
     "line" : 11,
     "diffHunk" : "@@ -1,1 +223,227 @@                        + \" either does not exist or is not connected to this processor.\");\n                }\n                forward((ProcessorNode<K, V, ?, ?>) child, key, value);\n            }\n        } finally {"
+  },
+  {
+    "id" : "ea60f54e-e0a4-46af-9464-5c2083608eb9",
+    "prId" : 9361,
+    "prUrl" : "https://github.com/apache/kafka/pull/9361#pullrequestreview-501314687",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7ae51a32-c3a8-4a1a-9fdf-c4d4f8ad9166",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I was hoping that with the new strong typing API, during forwarding we do not need to cast to `(ProcessorNode<K, V, ?, ?>)` and not need this suppression any more.. Could we add the typing into `currentNode` (e.g. validate that the currentNode.children is indeed in `K, V`) instead of force casting?",
+        "createdAt" : "2020-10-01T23:48:41Z",
+        "updatedAt" : "2020-10-02T15:50:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ad82c39b-440d-47b1-88ab-dce651c38dc0",
+        "parentId" : "7ae51a32-c3a8-4a1a-9fdf-c4d4f8ad9166",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I'll have to think about this, but offhand, it doesn't seem like that would work.\r\n\r\nIn general, the type safety we're providing is on the user side of the PAPI (of course, the DSL internals is a user of the PAPI). On the internals side of the PAPI implementation, we generally can't get any more safety. For example, the ProcessorContextImpl is instantiated for the whole Task, which would handle a number of different record types and ProcessorNode types, so the internal implementation of the ProcessorContextImpl would have to be agnostic wrt the actual types of the nodes.\r\n\r\nI think that by the time I'm done with the full implementation of this KIP, you'll see most of the unchecked suppressions and casts gone from the DSL implementation, but there will still be some in classes like this one.",
+        "createdAt" : "2020-10-02T03:35:17Z",
+        "updatedAt" : "2020-10-02T15:50:27Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "00fcaba6-b8f2-466d-b8fc-6baedad49137",
+        "parentId" : "7ae51a32-c3a8-4a1a-9fdf-c4d4f8ad9166",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "What I'm wondering is that, within a processor node of `<KIn, VIn, KOut, VOut>`, if a `context.forward()` is called with `Record<KOut2, VOut2>`, would we only throw a casting exception at runtime, or we could capture this at compiler time. From this suppression it seems we still cannot achieve the former.. do you think this can be improved alongside with this KIP too?",
+        "createdAt" : "2020-10-02T03:52:20Z",
+        "updatedAt" : "2020-10-02T15:50:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3bfd36a-ad22-4f43-9f16-be8839fd4491",
+        "parentId" : "7ae51a32-c3a8-4a1a-9fdf-c4d4f8ad9166",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I see.\r\n\r\nSo, _within_ the `Processor<KIn, Vin, KOut, VOut>`, the `ProcessorContext` is bounded to `<KOut, VOut>`, and therefore `forward` will only accept a `Record<KOut, VOut>`. The compiler will check the source code of the processor and enforce this at compile time. It sounds like this is one part of what you are thinking about.\r\n\r\nBut inside the `ProcessorContextImpl`, we're _outside_ of the `Processor`, and in the \"plumbing\" of Streams. In this context, we cannot have compile-time type safety, since we can't bound all of KafkaStreams to accept only one kind of record and processor.\r\n\r\nHowever, what we can check at compile time is that we only attach _compatible_ children to parents. This isn't a way to do this in `Topology` right now, and I didn't want to expand this KIP to that extent. My plan for getting the full benefit of this KIP in the DSL internals is to actually add an internal utility method for registering pairs of processors, like this:\r\n```java\r\n    void addGraphNode(final StreamsGraphNode<KIn, VIn, KIntermediate, VIntermediate> parent,\r\n                      final StreamsGraphNode<KIntermediate, VIntermediate, KOut, VOut> child);\r\n```\r\nThen, in addition to a compile-time guarantee that a processor can only forward its declared output type, we also get a guarantee that the builder can only attach compatible parent-child pairs. Assuming you don't do any casting in \"user space\",\r\nwe don't need any further compiler checking to render cast exceptions impossible. The \"plumbing code\" like in this `ProcessorContextImpl` is akin to the JVM runtime after type erasure... the \"compiler\" has already done its job on the \"source code\" (the user-facing side of the PAPI), so we don't need the types anymore at \"run time\".",
+        "createdAt" : "2020-10-02T16:06:35Z",
+        "updatedAt" : "2020-10-02T16:06:35Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b7be8b8c-e665-48e6-b932-9f421b616253",
+        "parentId" : "7ae51a32-c3a8-4a1a-9fdf-c4d4f8ad9166",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I think it would have been nice to get some kind of public-facing API into `Topology` like what I quoted above, but at this point, I think we can just cut scope on KIP-478 and implement it for 2.7 as-is. Then, we can follow up with a new KIP to add some kind of `Topology#attachChildToParent` API in a later KIP).\r\n\r\nAside from cutting scope, I wanted to do it as an internal API while migrating the DSL internals so I could be sure the \"attach\" method is really the best approach.",
+        "createdAt" : "2020-10-02T16:09:36Z",
+        "updatedAt" : "2020-10-02T16:09:37Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa5011ee-c731-4187-be41-1d7426dc6879",
+        "parentId" : "7ae51a32-c3a8-4a1a-9fdf-c4d4f8ad9166",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Thanks for your thoughts, and I agree it is too stretch for KIP-478 to extend to that. Let's just keep it as is now.",
+        "createdAt" : "2020-10-02T17:21:54Z",
+        "updatedAt" : "2020-10-02T17:21:55Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a8de75f6f16cf8bdcccbcb1bc1fc0a11dd40c1d1",
+    "line" : 133,
+    "diffHunk" : "@@ -1,1 +220,224 @@    }\n\n    @SuppressWarnings(\"unchecked\")\n    @Override\n    public <K, V> void forward(final Record<K, V> record, final String childName) {"
+  },
+  {
+    "id" : "e21577ff-a910-48ca-86b6-0d0437745f2f",
+    "prId" : 9361,
+    "prUrl" : "https://github.com/apache/kafka/pull/9361#pullrequestreview-500843018",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ec443f9d-5250-4fd2-94e3-df55b150bfc2",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Why we'd need to add this suppression?",
+        "createdAt" : "2020-10-01T23:49:02Z",
+        "updatedAt" : "2020-10-02T15:50:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ecfebba-e0dd-4347-9938-728aebae42f8",
+        "parentId" : "ec443f9d-5250-4fd2-94e3-df55b150bfc2",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "It's because we're returning a subtype of StateStore now, but the stores are still internally not typed, so someone still has to cast it.\r\n\r\nFor example, here's what the old API was like:\r\n```java\r\nKeyValueStore<String, Integer> store = (KeyValueStore<String, Integer>) context.getStateStore(\"asdf\");\r\n```\r\nThe cast is in the user's code.\r\n\r\nNow, it will be like this:\r\n```java\r\nKeyValueStore<String, Integer> store = context.getStateStore(\"asdf\");\r\n```\r\nThe return type is resolved by the type system, and the cast moves into our code.\r\n\r\nJust to clarify, there's no extra safety here, it's a cast either way. It's just more convenient for callers not to have to cast on their end.",
+        "createdAt" : "2020-10-02T03:27:32Z",
+        "updatedAt" : "2020-10-02T15:50:27Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "90df5cd1-1c61-430a-bf44-f41f6eff12a2",
+        "parentId" : "ec443f9d-5250-4fd2-94e3-df55b150bfc2",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Got it, thanks!",
+        "createdAt" : "2020-10-02T03:32:16Z",
+        "updatedAt" : "2020-10-02T15:50:27Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a8de75f6f16cf8bdcccbcb1bc1fc0a11dd40c1d1",
+    "line" : 42,
+    "diffHunk" : "@@ -1,1 +133,137 @@     * @throws UnsupportedOperationException if the current streamTask type is standby\n     */\n    @SuppressWarnings(\"unchecked\")\n    @Override\n    public <S extends StateStore> S  getStateStore(final String name) {"
   }
 ]

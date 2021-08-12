@@ -75,5 +75,71 @@
     "commit" : "045131130aec48970581bcbb7353cdb01afffe74",
     "line" : 15,
     "diffHunk" : "@@ -1,1 +317,321 @@                            log.warn(\"Timeout while reading log to end for topic '{}'. Retrying automatically. \" +\n                                \"This may occur when brokers are unavailable or unreachable. Reason: {}\", topic, e.getMessage());\n                            continue;\n                        } catch (WakeupException e) {\n                            // Either received another get() call and need to retry reading to end of log or stop() was"
+  },
+  {
+    "id" : "81d6d2b2-25d3-4cfa-89e8-b1c4c966c52d",
+    "prId" : 9347,
+    "prUrl" : "https://github.com/apache/kafka/pull/9347#pullrequestreview-499067964",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "be9f4627-e6c3-4384-a11b-b7a27814e0d9",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "Why not using ```partitionsFor(String topic, Duration timeout) ``` (https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java#L1944) to replace while loop?",
+        "createdAt" : "2020-09-29T17:12:07Z",
+        "updatedAt" : "2020-10-05T05:57:57Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "92959993-20ab-4b0d-bde6-d73c616ae14e",
+        "parentId" : "be9f4627-e6c3-4384-a11b-b7a27814e0d9",
+        "authorId" : "e61d770a-e328-41b4-b8c3-6a769370680c",
+        "body" : "I think the semantics needed here is different. The timeout in `partitionsFor` is the max amount of time the api can block waiting for response before it fails with `TimeoutException`. However, the api can return within timeout with empty results as newly created topics data has not been propagated yet. We then have to retry again until `partitionsFor` returns the partition data (upto a max time).",
+        "createdAt" : "2020-09-29T19:21:12Z",
+        "updatedAt" : "2020-10-05T05:57:57Z",
+        "lastEditedBy" : "e61d770a-e328-41b4-b8c3-6a769370680c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b263e6d6-0738-47e0-84eb-36ad74804f24",
+        "parentId" : "be9f4627-e6c3-4384-a11b-b7a27814e0d9",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "It seems to me the behavior of ```timeout``` is not consistent in consumer methods. The ```timeout``` used by other methods (for example:  ```position```, ```offsetsForTimes```, ```beginningOffsets``` and ```endOffsets```) is to await the result of specify partitions. It means consumer will send a request again if the timer is not expired and the specify partition has no metadata (i.e topics data has not been propagated yet). Maybe ```partitionsFor``` should be fixed for consistent behavior.",
+        "createdAt" : "2020-09-29T20:16:06Z",
+        "updatedAt" : "2020-10-05T05:57:57Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e07c8f67-07d8-4117-9480-43855cb6daa1",
+        "parentId" : "be9f4627-e6c3-4384-a11b-b7a27814e0d9",
+        "authorId" : "e61d770a-e328-41b4-b8c3-6a769370680c",
+        "body" : "Not sure about this, no result for \"partitionInfos\" is a valid result. There is no point in automatic retrying. While for other apis that retry automatically, they do it if they get an invalid result back. If `null` was a valid result for them, they shouldn't retry either. ",
+        "createdAt" : "2020-09-29T20:40:50Z",
+        "updatedAt" : "2020-10-05T05:57:57Z",
+        "lastEditedBy" : "e61d770a-e328-41b4-b8c3-6a769370680c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e0b87842-c8c5-425a-993c-a3d03193f097",
+        "parentId" : "be9f4627-e6c3-4384-a11b-b7a27814e0d9",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "@soondenana Thanks for responses. This patch LGTM. What I want to discuss is unrelated to this patch.\r\n\r\n> they do it if they get an invalid result back. If null was a valid result for them, they shouldn't retry either.\r\n\r\nIf the topic is not exist (or not been propagated yet), ```partitionFor``` can return null. By contrast, ```beginningOffsets``` (and other methods) throws ```TimeoutException```. In order to make consistent behavior, ```beginningOffsets``` (and other methods) should let the topic (or partition) be absent in the returned ```Map```. WDYT?",
+        "createdAt" : "2020-09-30T03:57:16Z",
+        "updatedAt" : "2020-10-05T05:57:57Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4054146c69b14a92c53066830f8f732bf446bac4",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +141,145 @@            time.sleep(sleepMs);\n            sleepMs = Math.min(2 * sleepMs, MAX_SLEEP_MS);\n            partitionInfos = consumer.partitionsFor(topic);\n        }\n        if (partitionInfos == null)"
   }
 ]
