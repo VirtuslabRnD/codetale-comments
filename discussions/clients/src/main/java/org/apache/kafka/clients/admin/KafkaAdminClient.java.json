@@ -383,5 +383,115 @@
     "commit" : "47c37faba10b9efd117803ad709047ebd7aa3e55",
     "line" : 25,
     "diffHunk" : "@@ -1,1 +2347,2351 @@                @Override\n                void handleResponse(AbstractResponse abstractResponse) {\n                    final FindCoordinatorResponse fcResponse = (FindCoordinatorResponse) abstractResponse;\n                    Errors error = fcResponse.error();\n                    if (error == Errors.COORDINATOR_NOT_AVAILABLE) {"
+  },
+  {
+    "id" : "828b6c7c-08ba-4746-b979-a26f3055083a",
+    "prId" : 5050,
+    "prUrl" : "https://github.com/apache/kafka/pull/5050#pullrequestreview-123435697",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ccbc105f-6b05-4dfd-b92c-cfcc2e4cea27",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "This is a good find. What happens if the metadata request itself is queued up to be sent to a node which is no longer online? Will it be stuck in `callsToSend` until it times out? I am wondering if we should check `NetworkClient.connectionFailed` after every poll() for all requests in `callsToSend` and reenqueue them as we are doing here. This is what we do in `ConsumerNetworkClient`.",
+        "createdAt" : "2018-05-24T22:46:51Z",
+        "updatedAt" : "2018-05-25T16:24:02Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c58dfbc7-f344-4302-8fe9-fe8931447da1",
+        "parentId" : "ccbc105f-6b05-4dfd-b92c-cfcc2e4cea27",
+        "authorId" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "body" : "@hachikuji Thanks for the review. I think metadata requests are handled differently because they use `LeastLoadedNodeProvider` which assigns a node only if a ready node is available. If no ready node is available, then the call stays in `pendingRequests` and gets moved to `callsToSend` only when a node becomes ready after a subsequent poll. If a ready node is available, then it gets moved to `callsToSend` and is removed from `callsToSend` in the same iteration when the request is queued for send. If disconnection is processed in a subsequent poll, then the call is failed and retried using the retry path. We would never expect to see a metadata request in `callsToSend` at this point. Does that make sense?",
+        "createdAt" : "2018-05-25T10:40:54Z",
+        "updatedAt" : "2018-05-25T16:24:02Z",
+        "lastEditedBy" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "94d6bb1c-3b99-4ba3-ac6c-aad0b05c6110",
+        "parentId" : "ccbc105f-6b05-4dfd-b92c-cfcc2e4cea27",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Hmm, I'm not sure about that. The metadata request uses `MetadataUpdateNodeIdProvider`, which just calls `leastLoadedNode` directly. But the node chosen may not have an established connection, or am I missing something?",
+        "createdAt" : "2018-05-25T14:57:09Z",
+        "updatedAt" : "2018-05-25T16:24:02Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cbac399b-f20d-48c3-a991-3fffa749c124",
+        "parentId" : "ccbc105f-6b05-4dfd-b92c-cfcc2e4cea27",
+        "authorId" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "body" : "@hachikuji Sorry, that was my mistake. I thought that `leastNodedNode` returned ready nodes, but that is not the case. Have updated the code.",
+        "createdAt" : "2018-05-25T16:25:09Z",
+        "updatedAt" : "2018-05-25T16:25:10Z",
+        "lastEditedBy" : "b4936a15-698a-496e-85a1-b1e229b4986b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f55693a81276f03392c3e59f94761f625e909328",
+    "line" : 44,
+    "diffHunk" : "@@ -1,1 +1164,1168 @@                    MetadataResponse response = (MetadataResponse) abstractResponse;\n                    long now = time.milliseconds();\n                    metadataManager.update(response.cluster(), now);\n                    reassignUnsentCalls(now, false);\n                }"
+  },
+  {
+    "id" : "83a05e59-5e16-4623-8de8-1ae54e17c14e",
+    "prId" : 5050,
+    "prUrl" : "https://github.com/apache/kafka/pull/5050#pullrequestreview-123455281",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3911970f-78e2-49dd-bc29-ec560fcab7a6",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Now that we can use java 8 lambdas, I wonder if we can do this with a Predicate?",
+        "createdAt" : "2018-05-25T17:32:57Z",
+        "updatedAt" : "2018-05-25T17:32:57Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f55693a81276f03392c3e59f94761f625e909328",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +981,985 @@         *                         in the last poll\n         */\n        private void reassignUnsentCalls(long now, boolean disconnectedOnly) {\n            ArrayList<Call> pendingCallsToSend = new ArrayList<>();\n            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext(); ) {"
+  },
+  {
+    "id" : "9d6e1add-73e1-488c-abf7-f2ddf6d07dd6",
+    "prId" : 5055,
+    "prUrl" : "https://github.com/apache/kafka/pull/5055#pullrequestreview-122038197",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "71abb265-1e02-4129-8a93-7341c99b2ced",
+        "parentId" : null,
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "There's no need for this conditional, right?",
+        "createdAt" : "2018-05-21T23:01:01Z",
+        "updatedAt" : "2018-05-21T23:01:01Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c37cbbc2-d0fc-40ef-8132-ad0273c52486",
+        "parentId" : "71abb265-1e02-4129-8a93-7341c99b2ced",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "A bit unfortunate that this comment was ignored, it caused a checkstyle error with the new checkstyle:\r\n\r\nhttps://github.com/apache/kafka/pull/5058",
+        "createdAt" : "2018-05-22T06:53:09Z",
+        "updatedAt" : "2018-05-22T06:53:10Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d92748c47b3ea4894b7ac7994c6205ddb026d16c",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +578,582 @@            if ((throwable instanceof UnsupportedVersionException) &&\n                     handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {\n                if (log.isDebugEnabled()) {\n                    log.debug(\"{} attempting protocol downgrade and then retry.\", this);\n                }"
   }
 ]
