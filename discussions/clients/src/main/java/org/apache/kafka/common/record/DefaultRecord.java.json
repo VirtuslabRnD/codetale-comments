@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "495e0932-6335-4bb2-a166-49063d67baea",
+    "prId" : 6785,
+    "prUrl" : "https://github.com/apache/kafka/pull/6785#pullrequestreview-246824863",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9a401765-ee85-4de3-9ac0-f1152e56124b",
+        "parentId" : null,
+        "authorId" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "body" : "Why `logAppendTime` is non-primitive type?",
+        "createdAt" : "2019-06-04T18:04:13Z",
+        "updatedAt" : "2019-06-21T01:39:59Z",
+        "lastEditedBy" : "3dfe0270-df82-43af-827f-0681ce1c6ad9",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b10dfdd0-91fa-4613-a190-3bb9e7667d67",
+        "parentId" : "9a401765-ee85-4de3-9ac0-f1152e56124b",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "It's a nullable argument. When set at the batch level, it overrides the record-level timestamp.",
+        "createdAt" : "2019-06-06T21:27:52Z",
+        "updatedAt" : "2019-06-21T01:39:59Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b2877059086b62a6a36170174e0d2c924a1a6503",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +378,382 @@                                                         long baseTimestamp,\n                                                         int baseSequence,\n                                                         Long logAppendTime) throws IOException {\n        int sizeOfBodyInBytes = ByteUtils.readVarint(input);\n        int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;"
+  },
+  {
+    "id" : "f335e533-8846-42df-b106-7dea17f2f64a",
+    "prId" : 6785,
+    "prUrl" : "https://github.com/apache/kafka/pull/6785#pullrequestreview-248345178",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "810ccf4c-233a-40e0-b359-b3f242af177b",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I've been thinking about this function a little bit and the savings we are trying to achieve. From a high level, I think we are trying to minimize the number of reads and the number of allocations. I am considering whether we can pull the `skipBytes` approach up to this level. So first thing we do is allocate a buffer of size `min(sizeInBytes, FIXED_BUFFER_SIZE)`. Then we turn the parsing into a state machine. The logic would look something like this:\r\n\r\n```\r\nbuffer = allocate()\r\nneedMore = true\r\nstate = READ_METADATA\r\n\r\nwhile (true) {\r\n if (needMore)\r\n  input.read(buffer)\r\n\r\n switch (state) {\r\n  case READ_METADATA:\r\n    // read offset and timestamp\r\n    // transition to READ_KEY_SIZE\r\n  case READ_KEY_SIZE:\r\n    // read key size\r\n    // transition to SKIP_KEY_BYTES\r\n  case SKIP_KEY_BYTES:\r\n    // skip until key is consumed\r\n    // transition to READ_VALUE_SIZE\r\n  case READ_VALUE_SIZE:\r\n    // read value size\r\n    // transition to SKIP_VALUE_BYTES\r\n  case SKIP_VALUE_BYTES:\r\n    // skip bytes until value is consumed\r\n    // transition to READ_HEADERS\r\n  case READ_NUM_HEADERS:\r\n    // read num headers\r\n    // transition to READ_HEADER\r\n  case READ_HEADER:\r\n    // read one header\r\n    // return when all expected headers are consumed\r\n } \r\n}\r\n```\r\nThe basic idea is to always use the same buffer and never have any trivial reads. In fact, this would allow us to reuse the same buffer across multiple calls to `readPartially` which would improve GC even further.",
+        "createdAt" : "2019-06-11T17:59:24Z",
+        "updatedAt" : "2019-06-21T01:39:59Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b2877059086b62a6a36170174e0d2c924a1a6503",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +386,390 @@    }\n\n    private static PartialDefaultRecord readPartiallyFrom(DataInput input,\n                                                          byte[] skipArray,\n                                                          int sizeInBytes,"
+  },
+  {
+    "id" : "a5d0948a-0e35-451f-94d8-1ca528f2a6bb",
+    "prId" : 6785,
+    "prUrl" : "https://github.com/apache/kafka/pull/6785#pullrequestreview-252577048",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "13ea1d41-324a-46de-b988-cec3bf29b72d",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "I think we can simplify these functions. Something like this:\r\n```java\r\n    private static byte readByte(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {\r\n        if (buffer.remaining() < 1)\r\n            readMore(buffer, input, bytesRemaining);\r\n        return buffer.get();\r\n    }\r\n\r\n    private static long readVarLong(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {\r\n        if (buffer.remaining() < 10 && bytesRemaining.value > 0)\r\n            readMore(buffer, input, bytesRemaining);\r\n        return ByteUtils.readVarlong(buffer);\r\n    }\r\n\r\n    private static int readVarInt(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {\r\n        if (buffer.remaining() < 10 && bytesRemaining.value > 0)\r\n            readMore(buffer, input, bytesRemaining);\r\n        return ByteUtils.readVarint(buffer);\r\n    }\r\n```\r\nI think we shouldn't need more than one call to `readMore`.",
+        "createdAt" : "2019-06-20T22:15:47Z",
+        "updatedAt" : "2019-06-21T01:39:59Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38f6f53a-0159-424c-9250-105896857706",
+        "parentId" : "13ea1d41-324a-46de-b988-cec3bf29b72d",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Ah right.",
+        "createdAt" : "2019-06-20T22:59:15Z",
+        "updatedAt" : "2019-06-21T01:39:59Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b2877059086b62a6a36170174e0d2c924a1a6503",
+    "line" : 107,
+    "diffHunk" : "@@ -1,1 +444,448 @@    }\n\n    private static byte readByte(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {\n        if (buffer.remaining() < 1 && bytesRemaining.value > 0) {\n            readMore(buffer, input, bytesRemaining);"
+  },
+  {
+    "id" : "4defb3db-14a7-44cf-89c6-728d51018bbd",
+    "prId" : 6785,
+    "prUrl" : "https://github.com/apache/kafka/pull/6785#pullrequestreview-252608477",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e4f6bafd-dea0-491e-93c4-f1c1287d460f",
+        "parentId" : null,
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "Now that we have a benchmark, we could test `System.arrayCopy`. I suspect it doesn't make much difference either way since the number of bytes we have to copy with this logic would never be more than 10.",
+        "createdAt" : "2019-06-20T22:17:21Z",
+        "updatedAt" : "2019-06-21T01:39:59Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4990d9a0-dd7d-46b7-9bdf-01f604697709",
+        "parentId" : "e4f6bafd-dea0-491e-93c4-f1c1287d460f",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I've tried out `System.arrayCopy`, the perf difference are not significant (somehow they are worse than for loops). See the spreadsheet for the results.",
+        "createdAt" : "2019-06-21T01:40:44Z",
+        "updatedAt" : "2019-06-21T01:40:44Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b2877059086b62a6a36170174e0d2c924a1a6503",
+    "line" : 174,
+    "diffHunk" : "@@ -1,1 +511,515 @@            int stepsToLeftShift = buffer.position();\n            int bytesToLeftShift = buffer.remaining();\n            for (int i = 0; i < bytesToLeftShift; i++) {\n                array[i] = array[i + stepsToLeftShift];\n            }"
+  }
+]
