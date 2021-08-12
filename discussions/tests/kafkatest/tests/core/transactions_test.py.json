@@ -97,5 +97,49 @@
     "commit" : "6df6979ff5fe7197c4718a9becb72ed579c297b2",
     "line" : 9,
     "diffHunk" : "@@ -1,1 +52,56 @@        # broker obstructs TransactionMessageCopier from getting offset of partition which is used to calculate\n        # remaining messages after restarting.\n        self.transaction_timeout = 5000\n        self.consumer_group = \"transactions-test-consumer-group\"\n"
+  },
+  {
+    "id" : "76c6d047-4ecd-40e1-bec3-71f2281da7cd",
+    "prId" : 9026,
+    "prUrl" : "https://github.com/apache/kafka/pull/9026#pullrequestreview-449496208",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a827e439-37f8-4d69-afd9-6207eb6f41c1",
+        "parentId" : null,
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "How about using different ```transaction_timeout``` for different mode? For example, lower timeout for hard_bounce of client and higher timeout for broker. I try to avoid higher waiting time (```progress_timeout_sec```) when encountering other error.\r\n",
+        "createdAt" : "2020-07-15T08:04:24Z",
+        "updatedAt" : "2020-07-15T08:05:00Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "95de3e88-5815-4230-85e5-dbaf7a84d9a0",
+        "parentId" : "a827e439-37f8-4d69-afd9-6207eb6f41c1",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "What might be preferable is to provide a way to override the request timeout in `TransactionalMessageCopier` so that we can use lower values in all cases. Unfortunately we didn't give this class an easy way to override producer configurations, so we would need another argument. I decided to hold off on this, but I can reconsider it if you think it's worthwhile. This service (as well as `VerifiableConsumer` and `VerifiableProducer`) are a bit of a grey area as far as whether they are public APIs or not, but I have tended to take the position that they are not 🙂 .",
+        "createdAt" : "2020-07-16T00:01:28Z",
+        "updatedAt" : "2020-07-16T00:02:39Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6ff1e809-5c11-48d4-9967-dc812b8bb173",
+        "parentId" : "a827e439-37f8-4d69-afd9-6207eb6f41c1",
+        "authorId" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "body" : "> I decided to hold off on this, but I can reconsider it if you think it's worthwhile.\r\n\r\nit is fine to me as your approach is more simple :)\r\n\r\n> What might be preferable is to provide a way to override the request timeout in TransactionalMessageCopier so that we can use lower values in all cases.\r\n\r\nthe root cause I observed is different to https://issues.apache.org/jira/browse/KAFKA-9802. On my local, ```TransactionalMessageCopier``` fails due to ProducerFencedException which is caused by that broker increases the producer epoch when aborting transaction. \r\n```\r\n                    } catch (ProducerFencedException | OutOfOrderSequenceException e) {\r\n                        // We cannot recover from these errors, so just rethrow them and let the process fail\r\n                        throw e;\r\n                    } catch (KafkaException e) {\r\n                        producer.abortTransaction();\r\n                        resetToLastCommittedPositions(consumer);\r\n                    }\r\n```\r\n\r\nPerhaps we should make ```TransactionalMessageCopier``` recoverable from transaction timeout before [KIP-558](https://cwiki.apache.org/confluence/display/KAFKA/KIP-588%3A+Allow+producers+to+recover+gracefully+from+transaction+timeouts) is addressed.\r\n\r\nBTW, [group_mode_transactions_test.py]( https://github.com/apache/kafka/blob/trunk/tests/kafkatest/tests/core/group_mode_transactions_test.py#L256) has similar issue. Could you fix it also? Or we can apply your approach to fix ```group_mode_transactions_test.py``` in another PR.\r\n",
+        "createdAt" : "2020-07-16T04:19:52Z",
+        "updatedAt" : "2020-07-16T04:19:52Z",
+        "lastEditedBy" : "0f776378-bb23-4193-9bb0-1db5973f3781",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dea96a4ff9e742ee522cf5469a071a7f5870739f",
+    "line" : 17,
+    "diffHunk" : "@@ -1,1 +56,60 @@        # want the coordinator timing out the transaction.\n        self.transaction_timeout = 40000\n        self.progress_timeout_sec = 60\n        self.consumer_group = \"transactions-test-consumer-group\"\n"
   }
 ]

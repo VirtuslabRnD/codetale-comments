@@ -1,0 +1,112 @@
+[
+  {
+    "id" : "2b8e8dd9-49eb-4255-8f2b-299362ce332b",
+    "prId" : 9039,
+    "prUrl" : "https://github.com/apache/kafka/pull/9039#pullrequestreview-458453943",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c760119a-7bb8-4c2e-876d-82b5aca376a7",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "I was wondering what this method is actually used for so I checked out the callers of `KStreamWindowAggregate#windows`. There's a method called `extractGracePeriod` in `GraphGraceSearchUtil` where we might actually need to make a small addition to include the new sliding window processor.\r\n\r\nI think it's for Suppression, which needs to figure out the grace period of the upstream operator since grace period doesn't get passed in directly to `suppress`",
+        "createdAt" : "2020-07-29T23:58:03Z",
+        "updatedAt" : "2020-08-31T22:19:06Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "909f38c8-40dd-4d93-a0b2-9fb12e552bc4",
+        "parentId" : "c760119a-7bb8-4c2e-876d-82b5aca376a7",
+        "authorId" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "body" : "done!",
+        "createdAt" : "2020-07-30T14:26:20Z",
+        "updatedAt" : "2020-08-31T22:19:06Z",
+        "lastEditedBy" : "114424ac-2f76-47ba-b653-f85692b08607",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "de97db6cf39eb34eab0207f3cc45a5085317b2a4",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +67,71 @@    }\n\n    public SlidingWindows windows() {\n        return windows;\n    }"
+  },
+  {
+    "id" : "a9e1ea31-72c3-444a-b68e-7f9ad3179369",
+    "prId" : 9039,
+    "prUrl" : "https://github.com/apache/kafka/pull/9039#pullrequestreview-478995471",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "fcd45b85-01d4-4537-892f-0f4c4a4895ea",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Just a note to other reviewers: we're planning to revisit the issue of \"early\" records later and are just dropping them for now to make the general algorithm easier to review and understand. It needs some special handling for the edge case of records that arrive earlier than the full sliding window due to the inability to store windows with negative start times",
+        "createdAt" : "2020-08-05T01:36:28Z",
+        "updatedAt" : "2020-08-31T22:19:06Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "05cf7484-2cee-4f1b-a571-795ed85bab8b",
+        "parentId" : "fcd45b85-01d4-4537-892f-0f4c4a4895ea",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "https://github.com/apache/kafka/pull/9157",
+        "createdAt" : "2020-08-10T22:18:45Z",
+        "updatedAt" : "2020-08-31T22:19:06Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c7e75905-52db-45b8-a796-4bb701e08689",
+        "parentId" : "fcd45b85-01d4-4537-892f-0f4c4a4895ea",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Is this condition supposed to be checking whether records are \"early\" with respect to now? It looks like it should be:\r\n```suggestion\r\n            if (timestamp < (observedStreamTime - windows.timeDifferenceMs())) {\r\n```",
+        "createdAt" : "2020-08-27T18:53:31Z",
+        "updatedAt" : "2020-08-31T22:19:06Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "13e1b109-f680-407f-8700-9937643c0d72",
+        "parentId" : "fcd45b85-01d4-4537-892f-0f4c4a4895ea",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "No, the condition is correct. In this context \"early\" just means \"within timeDifferenceMs of the zero timestamp\". We need some special handling to cover this full range of all record timestamps due to the inability to store negative timestamps. This algorithm works correctly for all records outside of this regardless of \"now\"",
+        "createdAt" : "2020-08-27T21:50:34Z",
+        "updatedAt" : "2020-08-31T22:19:06Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "697cd50a-202c-4dc6-8dcd-89d00b7dd4f9",
+        "parentId" : "fcd45b85-01d4-4537-892f-0f4c4a4895ea",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "To be honest, it might not be so bad to just leave things as is and drop early records, since any sensible timestamps are unlikely to be that close to the epoch. But I do believe users may want to use lower timestamps in their unit testing (`1598565116374` is not a very human readable number) and would be surprised to see these records just dropped. ",
+        "createdAt" : "2020-08-27T21:53:00Z",
+        "updatedAt" : "2020-08-31T22:19:06Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b3c923d8-38db-4ea8-b38e-f72cf0a711f8",
+        "parentId" : "fcd45b85-01d4-4537-892f-0f4c4a4895ea",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks for the confirmation! I agree with your thinking.",
+        "createdAt" : "2020-08-31T22:16:28Z",
+        "updatedAt" : "2020-08-31T22:19:06Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "de97db6cf39eb34eab0207f3cc45a5085317b2a4",
+    "line" : 122,
+    "diffHunk" : "@@ -1,1 +120,124 @@            final long timestamp = context().timestamp();\n            //don't process records that don't fall within a full sliding window\n            if (timestamp < windows.timeDifferenceMs()) {\n                log.warn(\n                    \"Skipping record due to early arrival. value=[{}] topic=[{}] partition=[{}] offset=[{}]\","
+  }
+]

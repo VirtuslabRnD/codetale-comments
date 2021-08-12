@@ -427,5 +427,159 @@
     "commit" : "e6c10d88f9c6fa9d89cc500112255898e2f24845",
     "line" : 4,
     "diffHunk" : "@@ -1,1 +56,60 @@    private final long retryBackOffMs;\n\n    @SuppressWarnings(\"deprecation\") // TODO: remove in follow up PR when `RETRIES` is removed\n    public InternalTopicManager(final Admin adminClient, final StreamsConfig streamsConfig) {\n        this.adminClient = adminClient;"
+  },
+  {
+    "id" : "6148d54a-e86d-4c30-a4f4-d59d2e369e4d",
+    "prId" : 9060,
+    "prUrl" : "https://github.com/apache/kafka/pull/9060#pullrequestreview-454887135",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "448e11c2-4ca5-4004-a35a-79a75af3933c",
+        "parentId" : null,
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "If we want to guarantee that the `deadlineMs` is respected, I think that we must set the timeout of the AdminClient's call accordingly: `CreateTopicsOptions.timeoutMs`. With the default, I think that the call could be longer than half of `MAX_POLL_INTERVAL_MS_CONFIG`.",
+        "createdAt" : "2020-07-23T07:20:38Z",
+        "updatedAt" : "2020-08-05T21:30:01Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b4a18892-241d-4df1-a12f-5dde3fd4515e",
+        "parentId" : "448e11c2-4ca5-4004-a35a-79a75af3933c",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Good question. Default `max.poll.interval.ms` is 5 minutes (ie, the deadline is set to 2.5 minutes by default) while default `api.default.timeout.ms` is 1 minutes? Thus we might be ok?",
+        "createdAt" : "2020-07-23T16:30:30Z",
+        "updatedAt" : "2020-08-05T21:30:01Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "858dd605-37a9-49c1-b177-c537b2e57a0f",
+        "parentId" : "448e11c2-4ca5-4004-a35a-79a75af3933c",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "That's right. I misread the default value of `max.poll.interval.ms`, too many zeros for my eyes ;). The default works fine then. Do we want to protect ourselves if the user changes the default? Or shall we just call out that `api.default.timeout.ms` should be lower than `max.poll.interval.ms` somewhere?",
+        "createdAt" : "2020-07-23T16:38:57Z",
+        "updatedAt" : "2020-08-05T21:30:01Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bd93f5c4-76bd-4536-8e6b-5146504cb42d",
+        "parentId" : "448e11c2-4ca5-4004-a35a-79a75af3933c",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I am happy to add a check in `StreamsConfig` and either throw or log a WARN depending how strict we want to be.",
+        "createdAt" : "2020-07-24T00:06:49Z",
+        "updatedAt" : "2020-08-05T21:30:01Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e1a86e7d-c2a3-498e-a1d3-397c81534d94",
+        "parentId" : "448e11c2-4ca5-4004-a35a-79a75af3933c",
+        "authorId" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "body" : "Thinking a bit more about this, with the default, you may end up not honouring the deadline. `createTopics` can take up to 1m so if you invoke one when less than 1m is reaming before the deadline, you may not honour the deadline. It may not be that important though.\r\n\r\nIf we want to strictly enforce it, we could calculate the maximum timeout for each call, something like deadline - now, and set it with `CreateTopicsOptions.timeoutMs`.",
+        "createdAt" : "2020-07-24T13:30:53Z",
+        "updatedAt" : "2020-08-05T21:30:01Z",
+        "lastEditedBy" : "59ca7821-b29c-4f24-a9d5-cbd394145686",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "05b0faa5a146de6ec33784db87cf24c8ea1b6232",
+    "line" : 81,
+    "diffHunk" : "@@ -1,1 +106,110 @@\n        long currentWallClockMs = time.milliseconds();\n        final long deadlineMs = currentWallClockMs + retryTimeoutMs;\n\n        Set<String> topicsNotReady = new HashSet<>(topics.keySet());"
+  },
+  {
+    "id" : "52e3a5ed-221b-4af3-b99a-fb1b433818cf",
+    "prId" : 9060,
+    "prUrl" : "https://github.com/apache/kafka/pull/9060#pullrequestreview-499704472",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a046b6c7-fa8b-4c4a-89f3-d2963cf100ce",
+        "parentId" : null,
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Hey @mjsax , am I reading this PR correctly? Do we now only allow a single member to retry topic creation/validation for up to half of the poll interval, after which we shut down the entire application? That sounds like the opposite of resiliency...what if the brokers are temporarily unavailable? Before this we would just let the single thread die, and the internal topic creation/validation would be retried on the subsequent rebalance. That wasn't ideal, but given the upcoming work to allow reviving/recreating a death thread, that seems to be preferable to permanently ending the application? \r\n\r\nSorry if I'm misreading this, was just going over all the PRs in the last month or so to produce a diff+summary of the important ones, and want to make sure I actually understand all the changes we've made",
+        "createdAt" : "2020-09-16T16:47:24Z",
+        "updatedAt" : "2020-09-16T16:47:24Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d1f7d043-8e1f-4e28-a9b5-58265c972f7f",
+        "parentId" : "a046b6c7-fa8b-4c4a-89f3-d2963cf100ce",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Apologies if this was touched on in the KIP, it's been a while and the discussion thread was quite long so I may have missed something there",
+        "createdAt" : "2020-09-16T16:48:16Z",
+        "updatedAt" : "2020-09-16T16:48:16Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6d68c50c-bda0-4b68-a1e3-76e6eee29a58",
+        "parentId" : "a046b6c7-fa8b-4c4a-89f3-d2963cf100ce",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Note that the previous default was \"zero retries\" and thus the new default is more resilient with a 5 minute default max.poll.interval. -- But yes, we shutdown the whole app for this case now as proposed by @guozhangwang (IIRC).",
+        "createdAt" : "2020-09-16T18:34:18Z",
+        "updatedAt" : "2020-09-16T18:34:18Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4e49cf84-ef06-4943-80cd-4adfe2e165e0",
+        "parentId" : "a046b6c7-fa8b-4c4a-89f3-d2963cf100ce",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Today since we do not have ways to partially create tasks we'd have to create all topics to make sure all tasks are \"complete\" within each rebalance, if we cannot successfully create the topics within the poll.interval (i.e. we'd need to complete that rebalance with the poll.interval, and I guess halving it is to be more conservative), then killing that thread is not very useful anyways since we cannot proceed with the initializable tasks anyways.\r\n\r\nThat being said, with the upcoming work I'd agree that just shutdown the thread and allow users to optionally retry rebalance with new threads would be preferrable.",
+        "createdAt" : "2020-09-20T03:08:14Z",
+        "updatedAt" : "2020-09-20T03:08:14Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb9c2fcb-6908-49a7-a997-2042d3b02e56",
+        "parentId" : "a046b6c7-fa8b-4c4a-89f3-d2963cf100ce",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "cc @cadonna @wcarlson5 to bring to your attention.",
+        "createdAt" : "2020-09-20T03:08:47Z",
+        "updatedAt" : "2020-09-20T03:08:47Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7530f6e7-4740-47c6-93e1-1dedb02374f3",
+        "parentId" : "a046b6c7-fa8b-4c4a-89f3-d2963cf100ce",
+        "authorId" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "body" : "Yeah I think we should remove the shutdown error code in case of TimeoutException during internal topic validation before 2.7. I'll create a ticket so we don't lose track -- I think even just letting it kill the one thread is better than killing all of them",
+        "createdAt" : "2020-09-30T18:25:03Z",
+        "updatedAt" : "2020-09-30T18:25:04Z",
+        "lastEditedBy" : "d97f50bf-60f9-45b3-81a0-a24a5f42f740",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d9efade3-af2d-48de-8d16-40905571c505",
+        "parentId" : "a046b6c7-fa8b-4c4a-89f3-d2963cf100ce",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "SGTM.",
+        "createdAt" : "2020-09-30T18:30:15Z",
+        "updatedAt" : "2020-09-30T18:30:16Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "05b0faa5a146de6ec33784db87cf24c8ea1b6232",
+    "line" : 65,
+    "diffHunk" : "@@ -1,1 +77,81 @@        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);\n        consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);\n        retryTimeoutMs = new QuietConsumerConfig(consumerConfig).getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG) / 2L;\n\n        log.debug(\"Configs:\" + Utils.NL +"
   }
 ]

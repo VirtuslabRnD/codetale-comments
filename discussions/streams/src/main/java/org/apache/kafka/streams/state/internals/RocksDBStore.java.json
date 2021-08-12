@@ -691,5 +691,82 @@
     "commit" : "37cc5ef592cbfc4b5e20c59c9d36420fc41b5ae0",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +191,195 @@        // Setup metrics before the database is opened, otherwise the metrics are not updated\n        // with the measurements from Rocks DB\n        maybeSetUpMetricsRecorder(configs);\n\n        openRocksDB(dbOptions, columnFamilyOptions);"
+  },
+  {
+    "id" : "081531dd-ee34-45dc-bcba-bc69d0f69fbb",
+    "prId" : 9098,
+    "prUrl" : "https://github.com/apache/kafka/pull/9098#pullrequestreview-466124024",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "27af56e7-49d9-4b2b-b459-9e43a32d0cd5",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Could this ever be null actually? I think even in unit tests the DBOptions would contain stats?",
+        "createdAt" : "2020-08-11T18:18:56Z",
+        "updatedAt" : "2020-08-12T15:30:08Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e555241f-7855-443e-94fa-638ee3208443",
+        "parentId" : "27af56e7-49d9-4b2b-b459-9e43a32d0cd5",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "The statistics are `null` when it is not set in the options. If it were not `null` unit test `RocksDBTest#shouldAddValueProvidersWithStatisticsToInjectedMetricsRecorderWhenRecordingLevelDebug()` would fail. I also verified with a debug run. ",
+        "createdAt" : "2020-08-11T18:53:39Z",
+        "updatedAt" : "2020-08-12T15:30:08Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f09d0774-1b58-4583-941e-2a200bb67fa8",
+        "parentId" : "27af56e7-49d9-4b2b-b459-9e43a32d0cd5",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I was thinking that, if we know `maybeSetUpStatistics` is only called once in lifetime of the store then here we could check that `userSpecifiedOptions.statistics() == null` and otherwise throw illegal-state exception. And then in `addValueProvidersToMetricsRecorder` we check that ``userSpecifiedOptions.statistics() != null` and otherwise throw illegal-state exception. This is to make the call-trace assumptions more specific.",
+        "createdAt" : "2020-08-11T22:05:34Z",
+        "updatedAt" : "2020-08-12T15:30:08Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c70c439d-4304-4f3a-8b6a-7708ec529524",
+        "parentId" : "27af56e7-49d9-4b2b-b459-9e43a32d0cd5",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "I see what you are aiming at. However, why should we throw an `IllegalStateException` when `userSpecifiedOptions.statistics() != null`? The user could provide a statistics object through the config setter and use it to read the statistics externally to our metric framework. Such a pattern was supported before and was not changed in this PR or the PR that introduced the statistics-based RocksDB metrics.\r\nAnyways, it is good that you mentioned this, because I checked again the code in the metrics recorder and a `null` check was missing. Plus I included some checks to ensure that either all statistics of a metrics recorder are`null` or all statistics of a metrics recorder are NOT `null`. ",
+        "createdAt" : "2020-08-12T08:32:29Z",
+        "updatedAt" : "2020-08-12T15:30:08Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f6f5dc93-8d42-4dd6-a54b-88934cf73621",
+        "parentId" : "27af56e7-49d9-4b2b-b459-9e43a32d0cd5",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Hmm, that means if a user calls `setStatistics` externally then streams itself would not provide the built-in metrics, is that right? I was not aware of this, and if it is by-design then that's fine.",
+        "createdAt" : "2020-08-12T16:29:58Z",
+        "updatedAt" : "2020-08-12T16:29:59Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a9746e21-1d9e-4806-b466-fddb005bd8b4",
+        "parentId" : "27af56e7-49d9-4b2b-b459-9e43a32d0cd5",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "Actually, Streams would provide the built-in metrics, but not update them. I also thought about not providing them at all, but that is a bit tricky and I did not want spent too much time on such a rare case. I will open a Jira and defer this to later.",
+        "createdAt" : "2020-08-12T17:25:59Z",
+        "updatedAt" : "2020-08-12T17:26:00Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fb15c3a5bf91f9a46d6914739b617ca2291f52da",
+    "line" : 47,
+    "diffHunk" : "@@ -1,1 +194,198 @@\n    private void maybeSetUpStatistics(final Map<String, Object> configs) {\n        if (userSpecifiedOptions.statistics() != null) {\n            userSpecifiedStatistics = true;\n        }"
   }
 ]
