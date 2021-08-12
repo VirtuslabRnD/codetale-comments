@@ -42,5 +42,93 @@
     "commit" : "17f270c82b53e5edbf89e45279665b6b97997439",
     "line" : 45,
     "diffHunk" : "@@ -1,1 +167,171 @@                final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);\n                store.put(sessionKey, agg);\n                tupleForwarder.maybeForward(sessionKey, agg, null);\n            }\n        }"
+  },
+  {
+    "id" : "3461f8e5-1e78-4ec8-8be0-daf5c3ef68c6",
+    "prId" : 7615,
+    "prUrl" : "https://github.com/apache/kafka/pull/7615#pullrequestreview-317057700",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4a66bd58-6a05-4e83-b53c-d4d7fe3f2609",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "With built-in metrics version `latest` both `lateRecordDropSensor` and `droppedRecordsSensor` point to the same sensor. With built-in metrics version `0.100-2.4` they point to two different sensors. This is because the sensors that record dropped records are consolidated to one single sensor in `latest`.",
+        "createdAt" : "2019-10-30T10:49:29Z",
+        "updatedAt" : "2019-11-15T12:01:14Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4edfd750-5f2a-4c80-af1b-51781c988a27",
+        "parentId" : "4a66bd58-6a05-4e83-b53c-d4d7fe3f2609",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "From what I can see using metrics version of `latest` the `lateRecordDropSensor` and `droppedRecordsSensor` both delegate to`droppedRecordsSensor`, as you have pointed out.  \r\n\r\nBut my question is how does this work to have two sensors with the same `thread-id` and `task-id`?  I'm wondering if this could be problematic in that it's somewhat confusing and would it be better to do something like \r\n```java\r\n lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(...);\r\nif (metrics == LATEST) {\r\n   droppedRecordsSensor = lateRecordDropSensor;\r\n} else {\r\n  droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(...);\r\n}\r\n```\r\nOf course I could be missing something here.",
+        "createdAt" : "2019-11-01T16:39:28Z",
+        "updatedAt" : "2019-11-15T12:01:14Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "14262d6c-e022-4957-aa45-1eddbfa1779b",
+        "parentId" : "4a66bd58-6a05-4e83-b53c-d4d7fe3f2609",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "In the above approach I think we would create a dummy sensor and not use it if `metrics == 0.100-.24`.",
+        "createdAt" : "2019-11-01T23:35:26Z",
+        "updatedAt" : "2019-11-15T12:01:14Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ca5de045-b59e-494b-a9c0-c7137dd2a356",
+        "parentId" : "4a66bd58-6a05-4e83-b53c-d4d7fe3f2609",
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "The PR code has the same effect as the code @bbejeck proposes. If I call twice `droppedRecordsSensorOrSkippedRecordsSensor()` with `latest`, I get twice the same sensor. That is, `lateRecordDropSensor` and `droppedRecordSensor` point to the same task-level sensor `dropped-records`.\r\n\r\nIn the case of `0.100-2.4`, `lateRecordDropSensor` would point to processor node sensor `late-records-drop` and `droppedRecordsSensor` would point to thread-level sensor `skipped-records`.",
+        "createdAt" : "2019-11-04T15:17:23Z",
+        "updatedAt" : "2019-11-15T12:01:14Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "92727fa5-859a-4f5f-81eb-ff84743c419f",
+        "parentId" : "4a66bd58-6a05-4e83-b53c-d4d7fe3f2609",
+        "authorId" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "body" : "Sound good @cadonna.  Thanks for the clarification.",
+        "createdAt" : "2019-11-14T15:48:01Z",
+        "updatedAt" : "2019-11-15T12:01:14Z",
+        "lastEditedBy" : "4c968502-bb3d-46ee-8719-0c0bdbc6242f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1bbee5afd4d93346c5bac0afe2c5962365ad431e",
+    "line" : 29,
+    "diffHunk" : "@@ -1,1 +102,106 @@                metrics\n            );\n            droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), metrics);\n            store = (SessionStore<K, Agg>) context.getStateStore(storeName);\n            tupleForwarder = new SessionTupleForwarder<>(store, context, new SessionCacheFlushListener<>(context), sendOldValues);"
+  },
+  {
+    "id" : "e3629034-3327-493c-9bb8-ed9bbf64f7ab",
+    "prId" : 7615,
+    "prUrl" : "https://github.com/apache/kafka/pull/7615#pullrequestreview-309108665",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e4d360f0-408e-457b-baee-67c8069d2980",
+        "parentId" : null,
+        "authorId" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "body" : "dropped records should be logged on warn level according to KIP-444.",
+        "createdAt" : "2019-10-30T10:50:24Z",
+        "updatedAt" : "2019-11-15T12:01:14Z",
+        "lastEditedBy" : "b7cbfdaf-f3e2-4130-8254-501ace9562ac",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1bbee5afd4d93346c5bac0afe2c5962365ad431e",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +145,149 @@\n            if (mergedWindow.end() < closeTime) {\n                LOG.warn(\n                    \"Skipping record for expired window. \" +\n                        \"key=[{}] \" +"
   }
 ]

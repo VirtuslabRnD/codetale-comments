@@ -86,5 +86,93 @@
     "commit" : "deac2b2a853a92b7342edc5a9387bc5216eef18c",
     "line" : 50,
     "diffHunk" : "@@ -1,1 +840,844 @@    // To do this we need to rely on the exception string. Since it is safer to throw a retriable exception\n    // when we are not sure, we will treat only the first exception string as a handshake exception.\n    private void maybeProcessHandshakeFailure(SSLException sslException, boolean flush, IOException ioException) throws IOException {\n        if (sslException instanceof SSLHandshakeException || sslException instanceof SSLProtocolException ||\n                sslException instanceof SSLPeerUnverifiedException || sslException instanceof SSLKeyException ||"
+  },
+  {
+    "id" : "2029dfb6-4c30-4411-af66-ce6ae0fa7756",
+    "prId" : 7604,
+    "prUrl" : "https://github.com/apache/kafka/pull/7604#pullrequestreview-308046753",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a44d83b0-99be-4a6c-ae00-713cc9ae4dfd",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Did we save a heap to heap copy? I thought we only saved the reallocation of new buffers.",
+        "createdAt" : "2019-10-28T16:49:30Z",
+        "updatedAt" : "2019-11-05T01:07:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce393820-164a-4f48-a630-c5c5f0f111da",
+        "parentId" : "a44d83b0-99be-4a6c-ae00-713cc9ae4dfd",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "I discussed with @junrao offline. We save a copy because by passing a direct buffer to `FileChannel.read` we avoid a copy in the standard library code from direct to heap buffer.",
+        "createdAt" : "2019-10-28T18:06:35Z",
+        "updatedAt" : "2019-11-05T01:07:14Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c92cdb91bdc866b2d248c5eb1aa84cc744a362da",
+    "line" : 151,
+    "diffHunk" : "@@ -1,1 +920,924 @@            // and the socket send buffer is 100k by default, so 32k is a good number given the mentioned trade-offs.\n            int transferSize = 32768;\n            // Allocate a direct buffer to avoid one heap to heap buffer copy. SSLEngine copies the source\n            // buffer (fileChannelBuffer) to the destination buffer (netWriteBuffer) and then encrypts in-place.\n            // FileChannel.read() to a heap buffer requires a copy from a direct buffer to a heap buffer, which is not"
+  },
+  {
+    "id" : "a6cba376-01f7-49cf-9284-6a84badf243d",
+    "prId" : 7604,
+    "prUrl" : "https://github.com/apache/kafka/pull/7604#pullrequestreview-308053801",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8ccf1031-142e-4b3b-b3f2-9918c4f5a696",
+        "parentId" : null,
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "If you allocate this as a direct buffer here, you need to force it to be deallocated in `SslTransportLayer#close`.  Otherwise these off-heap buffers will build up over time and starve the system of memory.  The garbage collector doesn't \"see\" direct buffers and in at least a few versions of Java, they never get cleaned up until a full GC.",
+        "createdAt" : "2019-10-28T17:23:31Z",
+        "updatedAt" : "2019-11-05T01:07:14Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "175cafc4-40bf-48e0-9cbf-95f4c8bf51a8",
+        "parentId" : "8ccf1031-142e-4b3b-b3f2-9918c4f5a696",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "Good point.",
+        "createdAt" : "2019-10-28T18:18:02Z",
+        "updatedAt" : "2019-11-05T01:07:14Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c92cdb91bdc866b2d248c5eb1aa84cc744a362da",
+    "line" : 155,
+    "diffHunk" : "@@ -1,1 +924,928 @@            // FileChannel.read() to a heap buffer requires a copy from a direct buffer to a heap buffer, which is not\n            // useful here.\n            fileChannelBuffer = ByteBuffer.allocateDirect(transferSize);\n            // The loop below drains any remaining bytes from the buffer before reading from disk, so we ensure there\n            // are no remaining bytes in the empty buffer"
+  },
+  {
+    "id" : "64b29682-884d-42a6-b1ad-cafab10f6a52",
+    "prId" : 7604,
+    "prUrl" : "https://github.com/apache/kafka/pull/7604#pullrequestreview-308183792",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d020a2ac-031f-4cd4-936f-e14ed4508d20",
+        "parentId" : null,
+        "authorId" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "body" : "Also, while you are at it, it might be useful to change the comment for the return value to \"The number of bytes read from src\". Otherwise, it's bit confusing since the method is write().",
+        "createdAt" : "2019-10-28T22:24:00Z",
+        "updatedAt" : "2019-11-05T01:07:14Z",
+        "lastEditedBy" : "442b5138-0781-4001-8ac5-0593f2136d1c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c92cdb91bdc866b2d248c5eb1aa84cc744a362da",
+    "line" : 78,
+    "diffHunk" : "@@ -1,1 +649,653 @@            throw closingException();\n        if (state != State.READY)\n            return 0;\n\n        int written = 0;"
   }
 ]

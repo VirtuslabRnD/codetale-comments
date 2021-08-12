@@ -152,5 +152,137 @@
     "commit" : "27f76b7b68256a0b935ed2ffb490616718608782",
     "line" : 63,
     "diffHunk" : "@@ -1,1 +358,362 @@    consumer.assign(List(tp, tp2).asJava)\n    sendRecords(producer, numRecords, tp2)\n    var topic2RecordConsumed = false\n    def verifyNoRecords(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {\n      assertEquals(\"Consumed records with unexpected partitions: \" + records, Collections.singleton(tp2), records.partitions())"
+  },
+  {
+    "id" : "52966a9a-23c8-436d-b401-9830cb3ca4b8",
+    "prId" : 7613,
+    "prUrl" : "https://github.com/apache/kafka/pull/7613#pullrequestreview-313726030",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "This is a fix for the test flakiness itself: when the metadata has an error, it would not be requested update immediately but still wait on its metadata age to expire; so if we are unlucky and still get this error when assigned with tp1/tp2, we are doomed to fail since the metadata would not be refreshed within the 10 sec timeout.",
+        "createdAt" : "2019-10-30T04:26:17Z",
+        "updatedAt" : "2019-11-05T03:14:32Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fae5a158-dc78-44fe-b866-016fe7b3584c",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "The metadata refresh policy seems a bit broken if it can go 5 minutes between updating the metadata due to an error :(",
+        "createdAt" : "2019-10-30T15:49:12Z",
+        "updatedAt" : "2019-11-05T03:14:32Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3e6d6066-0101-40af-bdb4-f7cab207a296",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "It should not wait for expiration in that case, right?",
+        "createdAt" : "2019-10-30T15:55:42Z",
+        "updatedAt" : "2019-11-05T03:14:32Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b6ad3889-ee8d-4770-8dab-5335a284b46e",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "From my observation, it would still if there's a fatal error like `AuthorizationException`, in this test we actually are relying on manual `assign` which would always request a metadata update, but if that update still get the `AuthorizationException` on some of the topic metadata it would wait for another refresh period.",
+        "createdAt" : "2019-10-30T17:14:18Z",
+        "updatedAt" : "2019-11-05T03:14:32Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d98223e3-d7ad-45a2-8cbd-03cbec810801",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "body" : "AuthorizationException should not happen during the test, though, right?  We choose to treat AuthorizationException differently than transitory errors specifically because we believe authorization failures should be permanent (in most cases....)",
+        "createdAt" : "2019-10-31T21:16:54Z",
+        "updatedAt" : "2019-11-05T03:14:32Z",
+        "lastEditedBy" : "514c0afb-8649-4fd9-a6ea-ee9e1b695274",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6017c873-5dd6-43ea-9d6b-d3eef6f9718b",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I actually see it being thrown from the metadata, in `metadata.maybeThrowAnyException()` inside `poll`. The problem is that, within this test, if this race condition happens:\r\n\r\n1. We update ACL for `topic`.\r\n2. We change `consumer.assign`, which would automatically trigger a metadata request.\r\n3. The metadata still have the AuthorizationException even after 1) since it is not propagated yet.\r\n\r\nThen after it is thrown the metadata would no longer be updated until 5 min later, whereas we only wait for 10 secs.",
+        "createdAt" : "2019-11-02T17:30:30Z",
+        "updatedAt" : "2019-11-05T03:14:32Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "38e0026b-17a4-4d84-a9b3-c30e70f65b44",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "Could we wait for the metadata propagation before calling assign?",
+        "createdAt" : "2019-11-02T18:27:26Z",
+        "updatedAt" : "2019-11-05T03:14:32Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "819d85e0-691e-434d-b9c1-173699ea709c",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "body" : "For authorization errors, it seems reasonable not to retry too eagerly. We do have logic to retry immediately if the error is invalid metadata (e.g. NOT_LEADER).",
+        "createdAt" : "2019-11-04T21:48:57Z",
+        "updatedAt" : "2019-11-05T03:14:32Z",
+        "lastEditedBy" : "5c21df64-97d8-46ab-9722-a7e9ba1d7c49",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bdb48177-61ff-47ab-b944-4005e491b2fa",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@ijuma actually my previous statement is not correct, what we actually did is:\r\n\r\n1. Change `consumer.assign`, and then check that produce to other authorized topic is okay but fetching will throw.\r\n2. Then update the ACL for `topic`.\r\n\r\nSo there are two scenarios when 1) throw: it can either throw from the update-position call where the metadata is not updated, or it can throw from the already-requested metadata that still have the `TopicAuthorizationException`. In the latter case since the metadata is already updated it would not be updated again until the metadata.age elapsed.",
+        "createdAt" : "2019-11-04T22:29:13Z",
+        "updatedAt" : "2019-11-05T03:14:32Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b9f84ef3-5b6b-4ceb-becf-6059f735966d",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "body" : "I see. OK, maybe what you've done is easiest then. 1.5 seconds seems a bit slow still, should it be even lower?",
+        "createdAt" : "2019-11-07T14:36:35Z",
+        "updatedAt" : "2019-11-07T14:36:35Z",
+        "lastEditedBy" : "d8c7cf80-a55a-474c-a4f4-f60a9efda52c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b79c27f6-bc5a-443e-87a5-fb5fe42a797e",
+        "parentId" : "bb707ac8-e78e-4527-b892-21dc00e44027",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I guess I can make that even lower, the previous value is just to resolve the flakiness.",
+        "createdAt" : "2019-11-08T00:40:21Z",
+        "updatedAt" : "2019-11-08T00:40:21Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "6162e14bec895c0b7abafec33394ee11cb25a75d",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +182,186 @@  this.serverConfig.setProperty(KafkaConfig.ConnectionsMaxReauthMsProp, \"1500\")\n  this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, \"group\")\n  this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, \"1500\")\n\n  /**"
   }
 ]
