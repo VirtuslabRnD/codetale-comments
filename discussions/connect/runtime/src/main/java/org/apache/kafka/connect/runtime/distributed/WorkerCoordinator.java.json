@@ -262,5 +262,38 @@
     "commit" : "eb1853d8040f29948c1b9e54f95c0c2400d5b66e",
     "line" : 311,
     "diffHunk" : "@@ -1,1 +274,278 @@     */\n    public void configSnapshot(ClusterConfigState update) {\n        configSnapshot = update;\n    }\n"
+  },
+  {
+    "id" : "186160a5-e858-44e9-8cde-28780a38f173",
+    "prId" : 7771,
+    "prUrl" : "https://github.com/apache/kafka/pull/7771#pullrequestreview-327051077",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d94f7e52-74e8-4f25-8476-c7a5217a9a52",
+        "parentId" : null,
+        "authorId" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "body" : "Thanks for improving the atomicity of clearing out the snapshot. However, IIUC the way this class is access by multiple threads means that the various places where `assignmentSnapshot` is read, the read may not be consistent and might result in a NPE. This line is the only place where `assignmentSnapshot` can be assigned to null after being not null, but that means other places where `assignmentSnapshot` is read could potentially produce a NPE. For example, `onJoinComplete(...)` (lines 197-199) does the following:\r\n```\r\n            if (assignmentSnapshot != null) {\r\n                assignmentSnapshot.connectors().removeAll(newAssignment.revokedConnectors());\r\n                assignmentSnapshot.tasks().removeAll(newAssignment.revokedTasks());\r\n```\r\nbut if the broker coordinator is lost after the first line but before the second or third lines, the latter would produce a NPE. I think there are a few such places, and it'd be good to make the `assignmentSnapshot` member volatile (to ensure proper read semantics for multiple threads) and to use local variables to ensure consistent reads of the snapshot.",
+        "createdAt" : "2019-12-04T17:18:30Z",
+        "updatedAt" : "2019-12-04T18:07:06Z",
+        "lastEditedBy" : "145db0de-7396-4643-9a2c-9977e1c6219b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c4ede66f-e2d7-405b-b57f-128ecf57412c",
+        "parentId" : "d94f7e52-74e8-4f25-8476-c7a5217a9a52",
+        "authorId" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "body" : "Valid points. To be on the safe side I've made `assignmentSnapshot` volatile, and wherever it's used I'm using a local copy of the reference instead (`final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot`)\r\n\r\nTesting with faults while this PR builds. ",
+        "createdAt" : "2019-12-04T18:14:16Z",
+        "updatedAt" : "2019-12-04T18:14:16Z",
+        "lastEditedBy" : "e77724e7-3db9-47d6-b4d8-a865b1d06edc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a031894a59ce13839b6e5d54bf22152fc5640f88",
+    "line" : 41,
+    "diffHunk" : "@@ -1,1 +138,142 @@                                \"avoid running tasks while not being a member the group\", coordinatorDiscoveryTimeoutMs, localAssignmentSnapshot);\n                        listener.onRevoked(localAssignmentSnapshot.leader(), localAssignmentSnapshot.connectors(), localAssignmentSnapshot.tasks());\n                        assignmentSnapshot = null;\n                    }\n                }"
   }
 ]

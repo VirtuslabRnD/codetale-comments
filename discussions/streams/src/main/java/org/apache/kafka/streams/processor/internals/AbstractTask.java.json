@@ -141,5 +141,82 @@
     "commit" : "ae29187211fcfe6a0f4e358c88d387694e26dc38",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +74,78 @@\n        final String threadIdPrefix = String.format(\"stream-thread [%s] \", Thread.currentThread().getName());\n        this.logPrefix = threadIdPrefix + String.format(\"%s [%s] \", isStandby ? \"standby-task\" : \"task\", id);\n        this.logContext = new LogContext(logPrefix);\n        this.log = logContext.logger(getClass());"
+  },
+  {
+    "id" : "7ef5ceaf-6cf3-4109-863f-9b7b62af22bf",
+    "prId" : 7748,
+    "prUrl" : "https://github.com/apache/kafka/pull/7748#pullrequestreview-332367814",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1c4d8c9e-21b1-4fad-85f1-9e9b2e9d6a38",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Why do we catch it at this level? Seems we should move it into `ProcessorStateManger#flush()` ?\r\n\r\nAlso note, that `ProcessorStateManger#flush()` only throws the first exception what might not be what we want to detect this case correctly.",
+        "createdAt" : "2019-11-27T01:24:25Z",
+        "updatedAt" : "2019-12-03T04:02:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "520ccebf-6f65-4187-8d84-ea79a2ae4c89",
+        "parentId" : "1c4d8c9e-21b1-4fad-85f1-9e9b2e9d6a38",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Yeah, I wasn't sure... This way is a bit roundabout. On the other hand, right now, `TaskMigratedException` is only thrown by the tasks themselves or the threads that run them. It didn't seem within the responsibility of the `ProcessorStateManager` to reason about what specific exceptions imply about the state of the task.",
+        "createdAt" : "2019-11-28T05:57:20Z",
+        "updatedAt" : "2019-12-03T04:02:12Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b5079045-df3d-4374-9744-85bce2f8193e",
+        "parentId" : "1c4d8c9e-21b1-4fad-85f1-9e9b2e9d6a38",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Fair enough. It's not ideal that we get a `ProcessorStateException` and have to call `getCause()`, but well, it is what it is.",
+        "createdAt" : "2019-11-28T07:19:57Z",
+        "updatedAt" : "2019-12-03T04:02:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7ada22ca-a0e8-4dda-aef8-e98a22c2e4df",
+        "parentId" : "1c4d8c9e-21b1-4fad-85f1-9e9b2e9d6a38",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Reading the code here: we throw `TaskMigratedException` in both `StreamTask` as well as `StreamThread`. For the first case, the exception is thrown all the way to the caller of `TaskManager` and rethrown (hence in the level of `StreamThread`); the latter case is only a few exceptional situations where the tasks are closed due to underlying exceptions.\r\n\r\nI feel throwing the exception in the level of `StreamTask` is fine, but we did too many capture / rethrow in different layers on top of it, which could be cleaned up in a separate tech-debt PR.",
+        "createdAt" : "2019-12-03T21:45:43Z",
+        "updatedAt" : "2019-12-03T23:29:13Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8eb9d713-2017-4974-b85a-154a749ec6bc",
+        "parentId" : "1c4d8c9e-21b1-4fad-85f1-9e9b2e9d6a38",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "I very much agree. It's quite difficult to trace which exceptions would exist in different parts of the stack, and it would be nice to clean it up in the future.",
+        "createdAt" : "2019-12-04T00:27:28Z",
+        "updatedAt" : "2019-12-04T00:27:28Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "67f73a38-85f6-43b6-9b7f-b55106193b68",
+        "parentId" : "1c4d8c9e-21b1-4fad-85f1-9e9b2e9d6a38",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "@vvcephei while working on the cleanup PR I realized that when we call `store.flush` internally we should not blindly wrap all thrown exceptions from stores, but only those not `StreamsException` -- i.e. if the error is not from the store itself (like an IOException) but from the streams library, then just throw it out directly.\r\n\r\nWill do this small refactoring in my PR.",
+        "createdAt" : "2019-12-16T06:59:19Z",
+        "updatedAt" : "2019-12-16T06:59:19Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "96a2d969df7fe000bbda04c9aab3b0d50eaa655c",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +176,180 @@        try {\n            stateMgr.flush();\n        } catch (final ProcessorStateException e) {\n            if (e.getCause() instanceof RecoverableClientException) {\n                throw new TaskMigratedException(this, e);"
   }
 ]

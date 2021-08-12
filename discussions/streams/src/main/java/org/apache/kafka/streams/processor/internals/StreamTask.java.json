@@ -988,5 +988,137 @@
     "commit" : "6e32bf0cafcfb8d5e7765f081fe54450112465e1",
     "line" : 8,
     "diffHunk" : "@@ -1,1 +682,686 @@            super.flushState();\n\n            if (eosEnabled) {\n                maybeAbortTransactionAndCloseRecordCollector(isZombie);\n            }"
+  },
+  {
+    "id" : "685ffb7b-8eb9-4c15-adae-fee289ca6b10",
+    "prId" : 7748,
+    "prUrl" : "https://github.com/apache/kafka/pull/7748#pullrequestreview-326537264",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "79f72754-1c4e-4ae2-a906-a2da97d618af",
+        "parentId" : null,
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "I don't think that an `UnknownProducerIdException` implies that a task was migrated.",
+        "createdAt" : "2019-11-30T02:52:58Z",
+        "updatedAt" : "2019-12-03T04:02:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8d7f7e04-bc32-45a9-9591-732cea73a7ed",
+        "parentId" : "79f72754-1c4e-4ae2-a906-a2da97d618af",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Agreed, but `TaskMigratedException` is the mechanism to initiate a rebalance, which is currently the only way that we can re-initialize the producers.\r\n\r\nI think we can stand to re-evaluate how we're handling all these different producer and consumer exceptions (with and without eos). Right now, there are a _lot_ of catch blocks for specific exceptions sprinkled throughout the codebase, and we universally either crash the thread or initiate a rebalance to attempt recovery. It would certainly benefit from developing a holistic approach, but right now, I'm just trying to get Streams threads to quit dying within a few hours of running in EOS mode, and I'm trying to restrain myself from broad refactoring so we can hope to merge this in for 2.4.0.\r\n\r\n(About that last statement, I've been on holiday this week, so I haven't had time to document the comprehensive analysis in the ticket, but I do plan to make a case that it is a regression. When I ran 2.3 under similar conditions, we still had threads dying, but they were only dying from KIP-360-related-causes. In 2.4, Streams threads are dying from multiple new causes, related to the changes that we made in 2.4... Anyway, more details coming early next week, then we can discuss it)",
+        "createdAt" : "2019-11-30T03:15:56Z",
+        "updatedAt" : "2019-12-03T04:02:12Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "84e7ee4d-960f-4f3a-a054-43668b229308",
+        "parentId" : "79f72754-1c4e-4ae2-a906-a2da97d618af",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "Give the fix for the root cause of `UnknownProducerIdException` (via KIP-360), I am wondering if we should actually treat it as fatal? I also don't see why it would be regression if KS dies if this exception is thrown though? (I understand that we did introduce some regression bugs, but those seem unrelated to `UnknownProducerIdException`?)\r\n\r\nTo be fair, 2.4.0 does not contain a full implementation of KIP-360 and thus, this fix might be a workaround... But frankly, I am not very happy about it, even if I understand the desire to just stabilize it somehow without a refactoring that won't make it into 2.4.0 anyway.",
+        "createdAt" : "2019-11-30T05:18:08Z",
+        "updatedAt" : "2019-12-03T04:02:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f0048ce6-6579-45bc-bef3-7004689f2708",
+        "parentId" : "79f72754-1c4e-4ae2-a906-a2da97d618af",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Ok, then it seems worth hashing it out. Can you elaborate what is there to be unhappy about? I figured it would be reasonable to treat it as \"recoverable by creating a new Producer\" instead of \"fatal and you should immediately terminate the thread\".\r\n\r\nWhat I was thinking was that is seems like the broker is telling us it doesn't know who we are (anymore). Because of the context, we know that it _used_ to know who we were, so it must have forgotten somehow, and it doesn't really matter how because we can always shrug it off and re-create our producer to try again.\r\n\r\nIIUC, KIP-360 would reduce the occurrence of the exception by keeping your producer id cached even after its ttl has expired, but it by no means guarantees that it'll remember you regardless of how long you're silent.\r\n\r\nFrom that perspective it seems reasonable to catch this exception and conclude, \"Oops, it looks like we were silent too long and our Producer has effectively expired. We should make a new one and try again.\" This isn't the same thing as getting fenced, but the resolution is the same (make a new Producer and try again).\r\n\r\nThen again, this perspective may be based on a faulty understanding of the system. Is this approach unsafe, and we should actually terminate the application instead?",
+        "createdAt" : "2019-11-30T05:39:02Z",
+        "updatedAt" : "2019-12-03T04:02:12Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f742f5ba-424f-44db-9a1f-9ae174904bbe",
+        "parentId" : "79f72754-1c4e-4ae2-a906-a2da97d618af",
+        "authorId" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "body" : "For this type or error, before KIP-360, the producer should self-recover and never throw an exception. (Cf \"motivation\" section of the KIP). If this error occurs, something really bad happened for the transaction and we are in an unknown state -- not sure if rebalancing and retrying is the right approach for this case \\cc @guozhangwang @hachikuji @bob-barrett -- also, maybe it's just sufficient to close the task locally and recreate it -- I don't see a need to trigger a rebalance (in case it is ok to recorve from within KS).\r\n\r\n>  This isn't the same thing as getting fenced, but the resolution is the same (make a new Producer and try again).\r\n\r\nI disagree. If we got fenced, a new producer with the same transactional.id was created and we know that we don't own the task any longer. For a `UnknownProducerIdException` we still own the task.\r\n\r\n> Is this approach unsafe, and we should actually terminate the application instead?\r\n\r\nI don't thinks it's unsafe, but it's not the \"right\" fix IMHO, and this bug is also not a regression.",
+        "createdAt" : "2019-11-30T20:57:37Z",
+        "updatedAt" : "2019-12-03T04:02:12Z",
+        "lastEditedBy" : "9baadc38-cd41-4762-be0c-791258ced78c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c78b9c6a-1984-40d1-b00b-46c1aea66793",
+        "parentId" : "79f72754-1c4e-4ae2-a906-a2da97d618af",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks for the clarification, @mjsax .\r\n\r\nI agree that it would be better to just close the task and re-open it, but I don't feel comfortable introducing a whole new task lifecycle at this point for the 2.4.0 release. My rationale was that triggering a rebalance would put Kafka Streams through a well-known and well-tested code path that will result in the task getting closed and then opened again.\r\n\r\nI do think it makes sense to go ahead and handle this case along with the two regressions. In my testing, this exception was just as fatal for Streams as the other two. Specifically, unless I include all three fixes, my soak test saw StreamThreads start dying within a few hours.\r\n\r\nIt seems like maybe a good approach right now would be to take the simple and sub-optimal path of just rebalancing when we encounter this exception for the 2.4.0 release, and file a Jira to optimize it in the way you suggest.\r\n\r\nIt would be good, by the way, to find out the answer to your question of whether it's safe to continue or not. Note that the current behavior, both in 2.4 and 2.3, without this patch is that a thread will get this exception and then shut itself down. This leads to a rebalance (since a member has left the group), after which the task is assigned to another thread, which continues processing it. Thus, we are already responding to this condition by rebalancing. It's just that we permanently lose a thread in the process. With this patch, we still rebalance, but we get to keep the thread running. If it's really unsafe to continue processing, though, we should stop the entire Streams application and force the operator to diagnose the problem with the brokers and start the app back up in a safe state.",
+        "createdAt" : "2019-12-02T05:18:15Z",
+        "updatedAt" : "2019-12-03T04:02:12Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6bfeffc1-32e9-4f6e-9719-12601474ed70",
+        "parentId" : "79f72754-1c4e-4ae2-a906-a2da97d618af",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "I shared some thoughts on the comment above: before KIP-447, when we re-trigger the rebalance if the task is indeed migrated out the corresponding producer would be closed, otherwise that producer will be retained. But I think after KIP-447 we need to revisit this again.\r\n\r\nAt the moment I feel okay to treat `UnknownProducerId` equally as `ProducerFenced`.",
+        "createdAt" : "2019-12-03T22:10:12Z",
+        "updatedAt" : "2019-12-03T23:29:13Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "17f7e1b5-4135-48a2-80fd-eb9ecac6688f",
+        "parentId" : "79f72754-1c4e-4ae2-a906-a2da97d618af",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks. That will be a good opportunity to clean up what is honestly a pretty ham-handed approach here to gracefully deal with this condition without changing too much code.",
+        "createdAt" : "2019-12-04T00:28:38Z",
+        "updatedAt" : "2019-12-04T00:28:38Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "96a2d969df7fe000bbda04c9aab3b0d50eaa655c",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +340,344 @@                this.producer.beginTransaction();\n            } catch (final ProducerFencedException | UnknownProducerIdException e) {\n                throw new TaskMigratedException(this, e);\n            }\n            transactionInFlight = true;"
+  },
+  {
+    "id" : "9ae63bef-8e89-40f0-b99d-f8a5a72a42bb",
+    "prId" : 7748,
+    "prUrl" : "https://github.com/apache/kafka/pull/7748#pullrequestreview-326539096",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "32dc6cc3-f0f0-4ba1-8f12-4f6059da6a68",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "For here and `producer.beginTransaction` above: I think `beginTxn / sendOffsetsToTxn / commitTxn` would not throw UnknownProducerIdException but it does not harm to be more careful for 2.4 release -- so if you want to keep it as is I'm fine with it too.",
+        "createdAt" : "2019-12-03T22:47:17Z",
+        "updatedAt" : "2019-12-03T23:29:13Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4b48f025-3cb2-4df0-a695-2586640c67ce",
+        "parentId" : "32dc6cc3-f0f0-4ba1-8f12-4f6059da6a68",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Ok, I wasn't sure, so I just put it everywhere that we already check for `ProducerFencedException`, on the rationale that, if we can get fenced, then we must have a transactional id, and if we have an id, then it could be \"unknown\". Clearly, this is more intuitive than analytical, so I find your feedback plausible.",
+        "createdAt" : "2019-12-04T00:34:29Z",
+        "updatedAt" : "2019-12-04T00:34:29Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "96a2d969df7fe000bbda04c9aab3b0d50eaa655c",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +560,564 @@                consumer.commitSync(consumedOffsetsAndMetadata);\n            }\n        } catch (final CommitFailedException | ProducerFencedException | UnknownProducerIdException error) {\n            throw new TaskMigratedException(this, error);\n        }"
   }
 ]

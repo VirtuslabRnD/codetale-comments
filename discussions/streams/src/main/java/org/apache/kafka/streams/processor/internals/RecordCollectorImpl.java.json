@@ -328,5 +328,82 @@
     "commit" : "732f46ba8adfd429c31c11e2f82736b23f60ff3a",
     "line" : 32,
     "diffHunk" : "@@ -1,1 +140,144 @@            errorLogMessage += topicTimeoutHint;\n            errorMessage += topicTimeoutHint;\n        } else if (exception instanceof RetriableException) {\n            // There is no documented API for detecting retriable errors, so we rely on `RetriableException`\n            // even though it's an implementation detail (i.e. we do the best we can given what's available)"
+  },
+  {
+    "id" : "fc48ce21-4776-4614-9e04-4d9940cae8f9",
+    "prId" : 7748,
+    "prUrl" : "https://github.com/apache/kafka/pull/7748#pullrequestreview-326538399",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cebd8da7-33bd-45f5-a319-db50d93b484f",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "For `UnknownProducerIdException` we actually can still reuse the client and just need to send the next produce request (unlike `ProducerFencedException` we cannot reuse the client and hence have to create a new client). However when we translate them into `TaskMigrationException` on higher level it would be treated equally as re-triggering a rebalance.\r\n\r\nIt's just that in current EOS implementation (before KIP-447) have one producer per task, hence when the task is closed the corresponding producer is closed and discarded as well. In KIP-447 however we may still need to treat them differently: for `UnknownProducerIdException` we can just log and proceed, for `ProducerFencedException` we need to close the producer and re-create a new one.",
+        "createdAt" : "2019-12-03T22:01:28Z",
+        "updatedAt" : "2019-12-03T23:29:13Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e5144da5-0795-4131-a53e-e7e80995f84f",
+        "parentId" : "cebd8da7-33bd-45f5-a319-db50d93b484f",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "Thanks. One thing I'm not sure about, but felt at the time of putting this together was that, if we get an UnknownProducerIdException on one call, we'd probably just keep getting it on all subsequent calls. It seemed to me that the exception was originating from a condition where the broker \"forgot\" about our id, and if it has \"forgotten\" about us, I'm not sure why it would \"remember\" us later on.\r\n\r\nIf that's not true, then this approach certainly may result in more close+reopen operations than is necessary.",
+        "createdAt" : "2019-12-04T00:32:13Z",
+        "updatedAt" : "2019-12-04T00:32:13Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "96a2d969df7fe000bbda04c9aab3b0d50eaa655c",
+    "line" : 57,
+    "diffHunk" : "@@ -1,1 +269,273 @@        try {\n            producer.flush();\n        } catch (final ProducerFencedException | UnknownProducerIdException e) {\n            throw new RecoverableClientException(\"Caught a recoverable exception while flushing\", e);\n        }"
+  },
+  {
+    "id" : "9f8b0a75-81ed-488f-ab78-5eee8fe16f4a",
+    "prId" : 7748,
+    "prUrl" : "https://github.com/apache/kafka/pull/7748#pullrequestreview-326558462",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "21509735-626f-4908-b690-daaf2ccb479c",
+        "parentId" : null,
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "Minor for log4j succinctness: from looking at the production log files, I think keeping the whole stack trace of the original `exception` is not necessary since we know exactly it would be thrown from\r\n\r\n```\r\n\tat org.apache.kafka.streams.processor.internals.RecordCollectorImpl$1.onCompletion(RecordCollectorImpl.java:202)\r\n\tat org.apache.kafka.clients.producer.KafkaProducer$InterceptorCallback.onCompletion(KafkaProducer.java:1318)\r\n\tat org.apache.kafka.clients.producer.internals.ProducerBatch.completeFutureAndFireCallbacks(ProducerBatch.java:230)\r\n\tat org.apache.kafka.clients.producer.internals.ProducerBatch.done(ProducerBatch.java:196)\r\n\tat org.apache.kafka.clients.producer.internals.Sender.failBatch(Sender.java:730)\r\n\tat org.apache.kafka.clients.producer.internals.Sender.failBatch(Sender.java:716)\r\n\tat org.apache.kafka.clients.producer.internals.Sender.completeBatch(Sender.java:674)\r\n\tat org.apache.kafka.clients.producer.internals.Sender.handleProduceResponse(Sender.java:596)\r\n\tat org.apache.kafka.clients.producer.internals.Sender.access$100(Sender.java:74)\r\n\tat org.apache.kafka.clients.producer.internals.Sender$1.onComplete(Sender.java:798)\r\n\tat org.apache.kafka.clients.ClientResponse.onComplete(ClientResponse.java:109)\r\n\tat org.apache.kafka.clients.NetworkClient.completeResponses(NetworkClient.java:561)\r\n\tat org.apache.kafka.clients.NetworkClient.poll(NetworkClient.java:553)\r\n\tat org.apache.kafka.clients.producer.internals.Sender.runOnce(Sender.java:335)\r\n\tat org.apache.kafka.clients.producer.internals.Sender.run(Sender.java:244)\r\n```\r\n\r\nSo may be we can just log the original exception name; similarly in `recordSendError` we can just keep the original exception's name but not the stack trace since we know exactly it is from the same `Sender.failBatch` trace.",
+        "createdAt" : "2019-12-03T23:39:24Z",
+        "updatedAt" : "2019-12-03T23:39:48Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "36e9c723-e580-4dd5-a1d5-c79aaa9c472c",
+        "parentId" : "21509735-626f-4908-b690-daaf2ccb479c",
+        "authorId" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "body" : "In practice, the exceptions we're recording here are ApiExceptions, so they don't contain stack traces anyway.\r\n\r\nI actually added the exception to the \"cause\" on purpose, because it was a pain trying to understand the stack traces we were previously logging while I was digging in to this issue. Even if the log messages are more verbose, they're easy to follow. I.e., it's a nice chain of \"E1 caused by E2 caused by E3\", instead of \"E1-with-E3-in-the-message caused by E2\".\r\n\r\nI actually wanted to take it farther by removing the `exception.toString` from the message, but I didn't want to be _too_ bold in this patch, and cause even more controversy. ",
+        "createdAt" : "2019-12-04T00:39:34Z",
+        "updatedAt" : "2019-12-04T00:39:34Z",
+        "lastEditedBy" : "f84c555e-0e5d-4773-b994-4121b6b8dada",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "031f8e9f-e949-4ac3-8b74-cfff519ae8c8",
+        "parentId" : "21509735-626f-4908-b690-daaf2ccb479c",
+        "authorId" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "body" : "SG!",
+        "createdAt" : "2019-12-04T01:44:13Z",
+        "updatedAt" : "2019-12-04T01:44:13Z",
+        "lastEditedBy" : "eba565e8-e1d5-4749-9c9a-5d117de6c96c",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "96a2d969df7fe000bbda04c9aab3b0d50eaa655c",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +196,200 @@                                        exception.toString()\n                                    ),\n                                    exception\n                                );\n                            } else {"
   }
 ]
