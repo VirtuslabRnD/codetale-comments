@@ -328,5 +328,82 @@
     "commit" : "91c0af402e13aa63421aafa263a95d342be78266",
     "line" : 33,
     "diffHunk" : "@@ -1,1 +168,172 @@  /// If `listener` has been added multiple times, this removes the first\n  /// instance of the listener, along with the `onError` listener that was\n  /// registered with that first instance. This might not be the instance that\n  /// the `addListener` corresponding to this `removeListener` had added.\n  ///"
+  },
+  {
+    "id" : "46467bb3-4433-4992-ac5a-df3ede8c9f60",
+    "prId" : 30346,
+    "prUrl" : "https://github.com/flutter/flutter/pull/30346#pullrequestreview-221446394",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5dbfbc9f-5a2b-497c-aa38-54db90bdba17",
+        "parentId" : null,
+        "authorId" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "body" : "Would it make sense guarding the timer with this check too, so that you don't even register the timer if it's already been registered?\r\n\r\nCould you possibly achieve this same effect by just doing something like `_timer ??=`?",
+        "createdAt" : "2019-04-02T00:30:42Z",
+        "updatedAt" : "2019-04-02T18:15:50Z",
+        "lastEditedBy" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7907c160-218d-48da-b284-affb18790cdc",
+        "parentId" : "5dbfbc9f-5a2b-497c-aa38-54db90bdba17",
+        "authorId" : "d52883f5-8a4d-4c6e-bdb8-a6bb4b749a07",
+        "body" : "I don't see how guarding just against double timer registration fixes the described issue (e.g in the addListener,removeListener,addListener scenario).\r\n\r\nI'm not sure I see a scenario where we will have double timer registration with the current guard given that `removeListener` cancels the timer after removing all listeners.\r\n\r\nCan you describe the scenario you're thinking about in which there will be double timer registration?",
+        "createdAt" : "2019-04-02T01:23:00Z",
+        "updatedAt" : "2019-04-02T18:15:50Z",
+        "lastEditedBy" : "d52883f5-8a4d-4c6e-bdb8-a6bb4b749a07",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "650f3e1c-97ef-408a-9d58-f0384e3d4f61",
+        "parentId" : "5dbfbc9f-5a2b-497c-aa38-54db90bdba17",
+        "authorId" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "body" : "I may be misreading something here, but it looks like this timer can get created multiple times without getting cancelled, which could be leading to multiple registration.",
+        "createdAt" : "2019-04-02T03:15:11Z",
+        "updatedAt" : "2019-04-02T18:15:50Z",
+        "lastEditedBy" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce7d84ea-0b1b-4313-9fae-7ebdef253a61",
+        "parentId" : "5dbfbc9f-5a2b-497c-aa38-54db90bdba17",
+        "authorId" : "d52883f5-8a4d-4c6e-bdb8-a6bb4b749a07",
+        "body" : "I'm probably missing what you see, can you please describe the sequence of events that leads to multiple timer registration?",
+        "createdAt" : "2019-04-02T03:39:42Z",
+        "updatedAt" : "2019-04-02T18:15:50Z",
+        "lastEditedBy" : "d52883f5-8a4d-4c6e-bdb8-a6bb4b749a07",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ac0a212-2325-4f1e-a954-b20e06e9676f",
+        "parentId" : "5dbfbc9f-5a2b-497c-aa38-54db90bdba17",
+        "authorId" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "body" : "It looks like the constructor of this class calls `_handleAppFrame` when the codec is ready (https://github.com/flutter/flutter/blob/44c127024d1cddcbf0e63652cbf36ba22d6384f1/packages/flutter/lib/src/painting/image_stream.dart#L515), and when the first listener is added it's also called (https://github.com/flutter/flutter/blob/44c127024d1cddcbf0e63652cbf36ba22d6384f1/packages/flutter/lib/src/painting/image_stream.dart#L616).  It seems entirely possible that the `Image` widget ends up making a new image stream which ends up creating a timer and then adding a listener which creates a second timer before the first has finished.\r\n\r\n",
+        "createdAt" : "2019-04-02T03:55:19Z",
+        "updatedAt" : "2019-04-02T18:15:50Z",
+        "lastEditedBy" : "db47316c-0a85-441a-8891-3b84e8bfe474",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "47944937-f826-47a4-b84c-220ba1325645",
+        "parentId" : "5dbfbc9f-5a2b-497c-aa38-54db90bdba17",
+        "authorId" : "d52883f5-8a4d-4c6e-bdb8-a6bb4b749a07",
+        "body" : "Good catch!\r\nThe scenario you describe can actually result in the first frame being skipped(as `_nextFrame` can be set to the second codec frame before the next flutter frame is executed).\r\n\r\nFixed it by only starting to decode after both the codec is ready and a frame listener is added.\r\nIn practice I'd imagine that this was very unlikely to happen as the first frame listener was likely to be added synchronously right after creating the stream completer at which point `_codec` is still null (as the async call had no chance to complete) thus the second `_decodeNextFrameAndSchedule` will not be invoked (it's guarded by a check that `_codec` is not null).\r\n\r\nAnyway with this fixed I don't see a scenario where the timer is registered multiple times simultaneously.",
+        "createdAt" : "2019-04-02T04:37:09Z",
+        "updatedAt" : "2019-04-02T18:15:50Z",
+        "lastEditedBy" : "d52883f5-8a4d-4c6e-bdb8-a6bb4b749a07",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bec0589795ab752d85231983fb25baea0b3ae7dd",
+    "line" : 40,
+    "diffHunk" : "@@ -1,1 +561,565 @@    }\n    final Duration delay = _frameDuration - (timestamp - _shownTimestamp);\n    _timer = Timer(delay * timeDilation, () {\n      _scheduleAppFrame();\n    });"
   }
 ]
