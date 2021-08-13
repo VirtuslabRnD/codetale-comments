@@ -1296,5 +1296,115 @@
     "commit" : "2814838355a8a58e381f400d284f7e2cef17f55a",
     "line" : 68,
     "diffHunk" : "@@ -1,1 +1147,1151 @@        }\n        if (data == NULL) {\n            return raise_memory_error(fa->nd, fa->dimensions, descr);\n        }\n        fa->flags |= NPY_ARRAY_OWNDATA;"
+  },
+  {
+    "id" : "d722f36d-0705-44c3-bc94-98c7e7087e2d",
+    "prId" : 14586,
+    "prUrl" : "https://github.com/numpy/numpy/pull/14586#pullrequestreview-297798404",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "07753e48-3e9d-4484-b30c-3b01247d36c2",
+        "parentId" : null,
+        "authorId" : "48d7d71b-9655-46b2-9a18-7c1fba7837d0",
+        "body" : "This I think breaks reading sub-array dtypes:\r\n```\r\n# After this PR\r\n>>> import numpy as np\r\n>>> with open('/dev/zero', 'rb') as f:\r\n...     a = np.fromfile(f, dtype='(8,8)u8', count=1)\r\n... \r\n>>> (a == 0).all()\r\nFalse\r\n```\r\nThe reason I guess is that creating an array with sub-array dtype moves the array dimensions from the dtype to the array itself, so the number of bytes to read becomes incorrect.",
+        "createdAt" : "2019-10-05T14:45:15Z",
+        "updatedAt" : "2019-10-05T14:48:52Z",
+        "lastEditedBy" : "48d7d71b-9655-46b2-9a18-7c1fba7837d0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4b987b53-97ef-41f6-917f-3d9be6238bc8",
+        "parentId" : "07753e48-3e9d-4484-b30c-3b01247d36c2",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Oh should have thought of that. Yeah, if I do it like that, I also have to update the `num` from the actual array...",
+        "createdAt" : "2019-10-05T16:26:46Z",
+        "updatedAt" : "2019-10-05T16:26:47Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a78e465caee322b2b7e67e41cdc7a96b587130f4",
+    "line" : 24,
+    "diffHunk" : "@@ -1,1 +3613,3617 @@    }\n    /* In some cases NewFromDescr can replace the dtype, so fetch new one */\n    dtype = PyArray_DESCR(r);\n\n    NPY_BEGIN_ALLOW_THREADS;"
+  },
+  {
+    "id" : "a5eff4d3-d588-44a1-8756-5fd0310a9f4d",
+    "prId" : 14745,
+    "prUrl" : "https://github.com/numpy/numpy/pull/14745#pullrequestreview-308883717",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6f32cbaa-98e5-4daa-9e59-b4f0c67139c8",
+        "parentId" : null,
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Why don't you need to now change all the places `PyArray_LookupSpecial_OnInstance` and `PyArray_LookupSpecial_OnInstance` are called to check for errors?",
+        "createdAt" : "2019-10-21T18:19:22Z",
+        "updatedAt" : "2019-10-29T23:22:05Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "efa588ea-e775-4702-b275-46da86e7009c",
+        "parentId" : "6f32cbaa-98e5-4daa-9e59-b4f0c67139c8",
+        "authorId" : "e5afe0f2-9e12-4e7c-9645-4a1617473dcf",
+        "body" : "I don't know. This change was enough to make my tests pass, so I stopped with this. If you would like me to also change this for every other code path, I would need examples for triggering these paths to verify that my changes actually do something.",
+        "createdAt" : "2019-10-21T19:25:29Z",
+        "updatedAt" : "2019-10-29T23:22:05Z",
+        "lastEditedBy" : "e5afe0f2-9e12-4e7c-9645-4a1617473dcf",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "52fcefac-f3a3-4f2c-989e-6127e2ee913a",
+        "parentId" : "6f32cbaa-98e5-4daa-9e59-b4f0c67139c8",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Unfortunately we do now need to change every call site to either handle it or call `PyErr_Clear()`, else you risk a `SystemError` occurring.",
+        "createdAt" : "2019-10-29T21:20:14Z",
+        "updatedAt" : "2019-10-29T23:22:05Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e901b275-1821-45a1-af19-d0ddf2a18488",
+        "parentId" : "6f32cbaa-98e5-4daa-9e59-b4f0c67139c8",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "In the interest of speed, I suggest you:\r\n* Create a new tracking issue, \"propagate errors where appropriate from PyArray_LookupSpecial\"\r\n* Find every occurence of `PyArray_LookupSpecial` and `PyArray_LookupSpecial_OnInstance`, and in the `if (ret == NULL)` branch, add `PyErr_Clear();  // TODO[gh-XYZ]: propagate this?\r\n\r\nThis will be consistent with the behavior on master, with the benefit of marking all the places that someone else can come back to.",
+        "createdAt" : "2019-10-29T21:22:40Z",
+        "updatedAt" : "2019-10-29T23:22:05Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "77800591-ec88-4e38-8e63-f88476d3fdb7",
+        "parentId" : "6f32cbaa-98e5-4daa-9e59-b4f0c67139c8",
+        "authorId" : "e5afe0f2-9e12-4e7c-9645-4a1617473dcf",
+        "body" : "done, see #14801.\r\n\r\nCould you look over the changes in `binop_override.h` and `arrayfunction_override.c`? I'm not sure about those, especially the change from `if (attr)` to `if (attr != NULL)`.",
+        "createdAt" : "2019-10-29T22:25:26Z",
+        "updatedAt" : "2019-10-29T23:22:05Z",
+        "lastEditedBy" : "e5afe0f2-9e12-4e7c-9645-4a1617473dcf",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "298dd77e-ed70-4efe-89d1-d2821252a51f",
+        "parentId" : "6f32cbaa-98e5-4daa-9e59-b4f0c67139c8",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Those changes are fine, thanks for checking. I think we could make the comments a little less cryptic, see my new comment thread below, marking this one as resolved.",
+        "createdAt" : "2019-10-29T22:58:49Z",
+        "updatedAt" : "2019-10-29T23:22:05Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1559be204d374017b2b9f1f25b719ac67737183a",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +2363,2367 @@        } else {\n            return Py_NotImplemented;\n        }\n    }\n    if (!NpyCapsule_Check(attr)) {"
   }
 ]
