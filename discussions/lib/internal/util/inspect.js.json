@@ -1,0 +1,46 @@
+[
+  {
+    "id" : "35269879-0131-477c-b6eb-41e05fc6e72a",
+    "prId" : 36466,
+    "prUrl" : "https://github.com/nodejs/node/pull/36466#pullrequestreview-549683688",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f727196b-118c-4a7f-b007-498b47cc67f0",
+        "parentId" : null,
+        "authorId" : "e56038a1-969b-45e4-9251-03873e734a44",
+        "body" : "This should probably use:\r\n```suggestion\r\n      const fallback = TypedArrayPrototypeGetSymbolToStringTag(value);\r\n      if (constructor === null) {\r\n```\r\n\r\nSo that `fallback` is always non‑empty.",
+        "createdAt" : "2020-12-10T16:27:40Z",
+        "updatedAt" : "2020-12-14T13:42:52Z",
+        "lastEditedBy" : "e56038a1-969b-45e4-9251-03873e734a44",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d44237d5-5e4f-48e8-9206-ce74523d395e",
+        "parentId" : "f727196b-118c-4a7f-b007-498b47cc67f0",
+        "authorId" : "84392f84-0848-409d-9e1e-0627d211cf90",
+        "body" : "I think the idea originally was to avoid the overhead of a function call where possible. Judging from our test coverage stats, constructor being `null` is the unusual case (616 times hitting the `if` but only 33 times evaluating to true).\r\n\r\nThe performance difference seems likely to be unmeasurable and the code simplification may very well be worth it. But I'd prefer that be handled in a separate pull request. I'd prefer that this pull request preserve the code shape and merely replace/eliminate the existing function.\r\n\r\nThis is reminding me to run benchmarks for this change.",
+        "createdAt" : "2020-12-10T22:59:13Z",
+        "updatedAt" : "2020-12-14T13:42:52Z",
+        "lastEditedBy" : "84392f84-0848-409d-9e1e-0627d211cf90",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3590414c-934c-4e1c-bd1b-a7c37452a773",
+        "parentId" : "f727196b-118c-4a7f-b007-498b47cc67f0",
+        "authorId" : "e56038a1-969b-45e4-9251-03873e734a44",
+        "body" : "Well, `TypedArrayPrototypeGetSymbolToStringTag` is already invoked by `isTypedArray`: <https://github.com/nodejs/node/blob/72b07e4fcf8843ec0c7a82ba2ec3250429671ef5/lib/internal/util/types.js#L8-L10>\r\n\r\n---\r\n\r\nIt should be possible to reduce this to always perform only one `TypedArrayPrototypeGetSymbolToStringTag` call, even in the `constructor === null` case, but that is probably overkill:\r\n\r\n<details>\r\n\r\n```diff\r\n   if (value[SymbolIterator] || constructor === null) {\r\n     noIterator = false;\r\n+    let typedArrayName;\r\n     if (ArrayIsArray(value)) {\r\n```\r\n```diff\r\n-    } else if (isTypedArray(name)) {\r\n+    } else if ((typedArrayName = TypedArrayPrototypeGetSymbolToStringTag(value)) !== undefined) {\r\n       keys = getOwnNonIndexProperties(value, filter);\r\n       let bound = value;\r\n-      let fallback = '';\r\n       if (constructor === null) {\r\n-        fallback = TypedArrayPrototypeGetSymbolToStringTag(value);\r\n         // Reconstruct the array information.\r\n-        bound = new primordials[primordials](value);\r\n+        bound = new primordials[typedArrayName](value);\r\n       }\r\n       const size = TypedArrayPrototypeGetLength(value);\r\n-      const prefix = getPrefix(constructor, tag, fallback, `(${size})`);\r\n+      const prefix = getPrefix(constructor, tag, typedArrayName, `(${size})`);\r\n```\r\n</details>",
+        "createdAt" : "2020-12-10T23:07:22Z",
+        "updatedAt" : "2020-12-14T13:42:52Z",
+        "lastEditedBy" : "e56038a1-969b-45e4-9251-03873e734a44",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "f43d1ca3b0edf4181aaa4943e859a5875c5855a8",
+    "line" : 85,
+    "diffHunk" : "@@ -1,1 +840,844 @@      let fallback = '';\n      if (constructor === null) {\n        fallback = TypedArrayPrototypeGetSymbolToStringTag(value);\n        // Reconstruct the array information.\n        bound = new primordials[fallback](value);"
+  }
+]
