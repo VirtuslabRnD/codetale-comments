@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "5040c192-a923-432f-b2ac-5fd01c0f54fd",
+    "prId" : 10949,
+    "prUrl" : "https://github.com/numpy/numpy/pull/10949#pullrequestreview-115104027",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Is `NpyIter_Copy` exposed to python?",
+        "createdAt" : "2018-04-25T05:35:58Z",
+        "updatedAt" : "2018-04-25T05:35:59Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "11578480-984b-46a7-b0b0-316de9c66491",
+        "parentId" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "yes, as [`it.copy()`](http://www.numpy.org/devdocs/reference/generated/numpy.nditer.copy.html#numpy.nditer.copy).  Should I expand the documentation of `it.copy` to mention writeback considerations?",
+        "createdAt" : "2018-04-25T05:45:56Z",
+        "updatedAt" : "2018-04-25T05:45:56Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b89a214f-03d4-47e7-bf42-8d10e935f181",
+        "parentId" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Won'y `np.nditer.__del__` complain if you only call `close` on the original and not the copy?",
+        "createdAt" : "2018-04-25T06:25:41Z",
+        "updatedAt" : "2018-04-25T06:25:42Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "413eeafd-0216-43f1-81b9-4efa723aba32",
+        "parentId" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "no, the complaint is on the operands, which are shared:\r\n```\r\ndef test_copy():\r\n    a = np.arange(6, dtype='f4')\r\n    au = a.byteswap().newbyteorder()\r\n    it1 = np.nditer(au, [], [['readwrite', 'updateifcopy']],\r\n                        casting='equiv', op_dtypes=[np.dtype('f4')])\r\n    it2 = it1.copy()\r\n    x = it1.operands[0]\r\n    assert x is it2.operands[0]\r\n    assert x.flags.writebackifcopy is True\r\n    it1.close()\r\n    assert x.flags.writebackifcopy is False\r\n```\r\n\r\ncommenting the last two lines *does* emit a warning",
+        "createdAt" : "2018-04-25T06:40:16Z",
+        "updatedAt" : "2018-04-25T06:40:16Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73d4b3f8-0fd5-4d5a-ad95-6778f7043d80",
+        "parentId" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "So requiring a context manager wouldn't have worked here anyway?",
+        "createdAt" : "2018-04-25T07:23:48Z",
+        "updatedAt" : "2018-04-25T07:23:48Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "105e2a28-955a-4fef-ada7-4abc88ccff06",
+        "parentId" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Not sure what you mean. The context manager resolves operands on exit:\r\n```\r\ndef test_copy():\r\n    a = np.arange(6, dtype='f4')\r\n    au = a.byteswap().newbyteorder()\r\n    it1 = np.nditer(au, [], [['readwrite', 'updateifcopy']],\r\n                        casting='equiv', op_dtypes=[np.dtype('f4')])\r\n    with it1:\r\n        it2 = it1.copy()\r\n        x = it1.operands[0]\r\n        assert x is it2.operands[0]\r\n        assert x.flags.writebackifcopy is True\r\n    assert x.flags.writebackifcopy is False\r\n    # no warning on it2 deallocate, the operand is resolved via it1\r\n```\r\nNote that nesting the context managers, `it1` is still open even though `it2` is closed\r\n```\r\ndef test_copy():\r\n    a = np.arange(6, dtype='f4')\r\n    au = a.byteswap().newbyteorder()\r\n    it1 = np.nditer(au, [], [['readwrite', 'updateifcopy']],\r\n                        casting='equiv', op_dtypes=[np.dtype('f4')])\r\n    with it1:\r\n        with it1.copy() as it2:\r\n            x = it1.operands[0]\r\n            assert x is it2.operands[0]\r\n            assert x.flags.writebackifcopy is True\r\n        assert x.flags.writebackifcopy is False\r\n        y = it1.operands[0] # can still access it1's operand, it is not closed\r\n        assert y is x\r\n```",
+        "createdAt" : "2018-04-25T07:58:15Z",
+        "updatedAt" : "2018-04-25T07:58:15Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fbda35c4-6e65-40dd-83d4-779a4ef4eb8c",
+        "parentId" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Why do we allow access to `it1.operands` and forbid access to `it2.operands` on that line, when they point to the same object? Either they're both invalid, or neither of them are invalid.\r\n\r\nIe, hasn't the writeback already happened, in which case `it.operands` is now temporary garbage that won't ever make it back to `au`?\r\n\r\nIt seems like preventing access to `it.operands` after `it.close()` is called has failed to actually protect against access to a post-writeback array (and so there's no point in imposing the restriction at all)",
+        "createdAt" : "2018-04-25T08:06:09Z",
+        "updatedAt" : "2018-04-25T08:09:30Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8bfb7753-9739-4376-af83-02135ee26c6a",
+        "parentId" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Disallowing new access to operands is a best-effort attempt, and is not fool-proof. `x` also no longer points to `au` after writeback resolution. Issue #10956 proposed a change to deal with that. This PR was meant to document the way it works now, with the warts.",
+        "createdAt" : "2018-04-25T08:21:27Z",
+        "updatedAt" : "2018-04-25T08:21:27Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "36e9edaa-9f08-4c74-ba8b-ce73be3dfb17",
+        "parentId" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Yep, this PR looks good to me as a doc improvement, but I'm worried that writebackifcopy might have been the wrong design after all. In my opinion, you should have to call close on _both_ iterators for writebacks to be resolved, which would require a reference count.",
+        "createdAt" : "2018-04-25T09:06:12Z",
+        "updatedAt" : "2018-04-25T09:06:12Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a00ef7ea-fc74-449b-b5a3-d898106ca739",
+        "parentId" : "08de647d-a79b-407c-b968-f96e4b3e518e",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "note added to issue #10958",
+        "createdAt" : "2018-04-25T09:45:28Z",
+        "updatedAt" : "2018-04-25T09:45:29Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "246ad1dd3006ed4230a5c457838450f96df755e7",
+    "line" : 19,
+    "diffHunk" : "@@ -1,1 +768,772 @@    Resolves any needed writeback resolution. Should be called before\n    :c:func::`NpyIter_Deallocate`. After this call it is not safe to use the operands.\n    When using :c:func:`NpyIter_Copy`, only one call to :c:func:`NpyIter_Close`\n    is sufficient to resolve any writebacks, since the copies share buffers.\n"
+  }
+]
