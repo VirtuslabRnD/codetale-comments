@@ -427,5 +427,170 @@
     "commit" : "58c28d4fd1c54b455d19372f0c838fed5fc71fe4",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +981,985 @@\n    # finally is it safe to view the packed fields as the unstructured type\n    return arr.view((out_dtype, (sum(counts),)))\n\ndef _unstructured_to_structured_dispatcher(arr, dtype=None, names=None,"
+  },
+  {
+    "id" : "bf30a3bf-b2d7-4051-8817-d7800b398971",
+    "prId" : 14310,
+    "prUrl" : "https://github.com/numpy/numpy/pull/14310#pullrequestreview-279127358",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "To elaborate - easy to fix as:\r\n```python\r\ndts = []\r\ncounts = []\r\noffsets = []\r\nnames = []\r\nfor i, (dt, count, offset) in enumerate(fields):\r\n   dts.append(dt)\r\n   counts.append(count)\r\n   offsets.append(offset)\r\n   names.append('f{}'.format(i))\r\n```",
+        "createdAt" : "2019-08-21T08:21:30Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "858e142e-cf29-4bf2-ac80-da9df6724dcf",
+        "parentId" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Or as\r\n```python\r\ndef unzip(seq, n_items):\r\n    # like zip(*seq), but with the length of the sequences specified so\r\n    # that it generalizes to `len(seq) == 0`\r\n    arrs = ([],) * n_items\r\n    for item in seq:\r\n        assert len(item) == n_items\r\n        for j in range(n_items):\r\n            arrs[j].append(item[j])\r\n    return arrs\r\n```\r\n",
+        "createdAt" : "2019-08-21T09:17:09Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "471c40f6-8e1f-4937-b9cf-d66c957f7d6a",
+        "parentId" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "authorId" : "a4f03a99-2e43-482b-a9bc-5a9e359abb03",
+        "body" : "I originally put\r\n```\r\n    if n_fields == 0:\r\n        if dtype is None:\r\n            raise ValueError('could not determine dtype: '\r\n                             'no fields or dtype specified')\r\n        dts, counts, offsets = [], [], []\r\n    else:\r\n        dts, counts, offsets = zip(*fields)\r\n````\r\nand this worked fine for `structured_to_unstructured`. Note that if there are no fields the dtype must be given.\r\n\r\nThe problem was that after supplying a dtype, the resulting array of shape \"(x, y, z, 0)\" for some integers x, y, z has a 0-size axis at the end, which trips up `unstructured_to_unstructured` if you try to reverse the operation, in particular the line `return arr.view(out_dtype)[..., 0]`. It does not make sense to remove the last axis if the dtype is not 0-sized too, and numpy makes it difficult in that case.\r\n\r\nEg, this fails on that line (after adding `if n_fields == 0` checks in `unstructured_to_structured`)\r\n```\r\nx = np.zeros(2, structured())\r\ny = rfn.structured_to_unstructured(x, dtype=int)\r\nz = rfn.unstructured_to_structured(y, dtype=x.dtype)\r\n```\r\nBecause all this was tricky and probably not what the user intended, I thought it might be best to simply disallow mucking with 0-size arrays.\r\n\r\n\r\nEdit: This whole comment might also be summarized as: If the structured array has no fields, what should the output dtype be? No choice really makes sense.",
+        "createdAt" : "2019-08-21T12:42:00Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "a4f03a99-2e43-482b-a9bc-5a9e359abb03",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d49e2722-861f-4518-a63f-52d882a6266e",
+        "parentId" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "authorId" : "a4f03a99-2e43-482b-a9bc-5a9e359abb03",
+        "body" : "Some further investigation show that this `view` behavior is part of what makes it difficult:\r\n```\r\n>>> a = np.zeros((2, 0),dtype={'names':[], 'formats':[], 'offsets':[], 'itemsize':8})\r\n>>> b = a.view(np.dtype([]))\r\n>>> b\r\narray([], shape=(2, 0),\r\n      dtype={'names':[], 'formats':[], 'offsets':[], 'itemsize':8})\r\n>>> b.dtype == np.dtype([])\r\nFalse\r\n```\r\nin other words for `view` seems to have no effect here?\r\n",
+        "createdAt" : "2019-08-21T13:13:05Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "a4f03a99-2e43-482b-a9bc-5a9e359abb03",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "05440f83-68bd-44d5-982c-c4b779fc8fea",
+        "parentId" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "> Edit: This whole comment might also be summarized as: If the structured array has no fields, what should the output dtype be? No choice really makes sense.\r\n\r\nThat's a really good justification - can you include it in the error message?",
+        "createdAt" : "2019-08-22T03:24:09Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "360b0097-10c1-4aa8-9bf9-c17f24471936",
+        "parentId" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : ">  this view behavior is part of what makes it difficult\r\n\r\nI'm not sure that's the example you want - the correct behavior of that should be to raise `ValueError`, and it doubt its failure to do that is a problem for you now.\r\n\r\nBut that is indeed a bug, and stems from the fact that there is not enough difference between:\r\n* `np.dtype(np.void)`, which might mean \"a byte buffer of unknown length\"\r\n* `np.dtype(\"V0\")`, which might mean \"a byte buffer of length 1\"\r\n* `np.dtype([])`, which might mean \"a structured type with no fields\"\r\n\r\nThat was one of the motivations for introducing `PyDescr_ISUNSIZED`, which currently fires on all 3 but should really only be true for the first one.",
+        "createdAt" : "2019-08-22T03:27:42Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb4669bb-57f6-4a7d-8510-27ed12f07b80",
+        "parentId" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "authorId" : "a4f03a99-2e43-482b-a9bc-5a9e359abb03",
+        "body" : "> the correct behavior of that should be to raise ValueError\r\n\r\nOK, that's fine. But that led me to think a little more about what is going on in `structured_to_unstructured` where I managed to convert a 0-field, itemsize-0 dtype array to a size-0 array. Consider:\r\n\r\n```python\r\n>>> a = np.zeros(2, dtype='V0') \r\n>>> a.reshape((2,0))  # numpy disallow creating size-0 axis.\r\nValueError: cannot reshape array of size 2 into shape (2,0)\r\n>>> a.view((int, 0))  # but I can bypass by viewing with subarray of size 0\r\narray([], shape=(2, 0), dtype=int64)\r\n```\r\n\r\nSo I was able to find a bypass numpy's normal restrictions for the size-0 dtype in `structured_to_unstructured`, but the behavior in my last comment prevented me from doing the reverse in `unstructured_to_unstructured`.\r\n\r\nIn any case, this is the mucky size-0 stuff that we can just forget about by simply disallowing fieldless structured types in this PR.",
+        "createdAt" : "2019-08-22T17:07:04Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "a4f03a99-2e43-482b-a9bc-5a9e359abb03",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "092ae435-8e17-429c-ac56-3e4910f3ecc4",
+        "parentId" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "> by simply disallowing fieldless structured types in this PR.\r\n\r\nI'm fine with that, but we should probably raise `NotImplementedError` as I mention above. I'll take a look at `.view` some other time, your example looks pretty damning\r\n",
+        "createdAt" : "2019-08-23T07:48:41Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "80d1003b-d2bd-4b0f-b8e1-f4cabefe6c21",
+        "parentId" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Probably worth capturing this view weirdness in a new issue.",
+        "createdAt" : "2019-08-23T15:53:04Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "646ca70d-8c3d-4fd0-bfe1-98ac6f14f5ad",
+        "parentId" : "7f0012f1-b458-4e1d-a9c4-b5b2e6155a8f",
+        "authorId" : "a4f03a99-2e43-482b-a9bc-5a9e359abb03",
+        "body" : "ok, Ill add one",
+        "createdAt" : "2019-08-23T17:25:42Z",
+        "updatedAt" : "2019-08-23T17:25:42Z",
+        "lastEditedBy" : "a4f03a99-2e43-482b-a9bc-5a9e359abb03",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "63ecfb884d23a3edcddee55b2bc64582cf8db757",
+    "line" : 53,
+    "diffHunk" : "@@ -1,1 +975,979 @@\n    dts, counts, offsets = zip(*fields)\n    names = ['f{}'.format(n) for n in range(n_fields)]\n\n    if dtype is None:"
+  },
+  {
+    "id" : "d9b77e9f-5f97-4e01-ad1a-e5b298438bd8",
+    "prId" : 14310,
+    "prUrl" : "https://github.com/numpy/numpy/pull/14310#pullrequestreview-279083032",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0bf9c8da-a7af-4c5b-851c-4a4bca27c601",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Could you add some tests for the error paths?",
+        "createdAt" : "2019-08-23T15:50:42Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "63ecfb884d23a3edcddee55b2bc64582cf8db757",
+    "line" : 61,
+    "diffHunk" : "@@ -1,1 +1067,1071 @@    if n_elem == 0:\n        # too many bugs elsewhere for this to work now\n        raise NotImplementedError(\"last axis with size 0 is not supported\")\n\n    if dtype is None:"
+  },
+  {
+    "id" : "11710e7c-ec14-4a06-bfa3-d64e96401b06",
+    "prId" : 14310,
+    "prUrl" : "https://github.com/numpy/numpy/pull/14310#pullrequestreview-279083347",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f2f21fb8-d7d6-4d44-a6c0-9da78804b7f0",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Thanks for this",
+        "createdAt" : "2019-08-23T15:51:18Z",
+        "updatedAt" : "2019-08-23T17:15:51Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "63ecfb884d23a3edcddee55b2bc64582cf8db757",
+    "line" : 72,
+    "diffHunk" : "@@ -1,1 +1082,1086 @@        if len(fields) == 0:\n            dts, counts, offsets = [], [], []\n        else:\n            dts, counts, offsets = zip(*fields)\n"
   }
 ]
