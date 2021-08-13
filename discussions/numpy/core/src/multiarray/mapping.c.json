@@ -746,5 +746,302 @@
     "commit" : "d0fa4cab40732f59a74c786ded5fcda6c76421fd",
     "line" : 16,
     "diffHunk" : "@@ -1,1 +626,630 @@                }\n                Py_DECREF(arr);\n                goto failed_building_indices;\n            }\n"
+  },
+  {
+    "id" : "759420a2-957f-496c-ae2f-729bbb58fe06",
+    "prId" : 15900,
+    "prUrl" : "https://github.com/numpy/numpy/pull/15900#pullrequestreview-387607073",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "7313dc15-e1d2-463d-969a-0a3a95335b1b",
+        "parentId" : null,
+        "authorId" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "body" : "I am curious to know why above lines are not tested. Is it because the array not being trivially iterable is not an important use case ? my understanding is non-trivial iterable (from looking at the macros) means both F_CONTIGUOUS and C_CONTIGUOUS flags are false and ndim > 1. I was looking for an example for this, but wasnt able to find it. would you be able to point me to it.",
+        "createdAt" : "2020-04-03T19:32:31Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "73094a10-690b-477a-9338-99d23028bd9f",
+        "parentId" : "7313dc15-e1d2-463d-969a-0a3a95335b1b",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Not sure I follow, did you try coverage of thes elines and they are never hit? Now that you are saying this, it is a bit surprising that these are necessary, and most likely they are effectively never necessary, because we should not have `NPY_RELAXED_STRIDES_SETTING=0` anymore (except in the tests currently). So that effectively, these lines should never be hit.\r\nTrivially iterable should be contiguous (F or C) *or* 1-D. And empty arrays are always contiguous with `NPY_RELAXED_STRIDES_SETTING=1`...\r\n\r\nMaybe we should actually remove this here with a comment and just get rid of the environment variable for good...",
+        "createdAt" : "2020-04-03T19:40:02Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "13de5358-0baf-4f43-b278-2faccca9ee58",
+        "parentId" : "7313dc15-e1d2-463d-969a-0a3a95335b1b",
+        "authorId" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "body" : "> Not sure I follow, did you try coverage of thes elines and they are never hit\r\n\r\nyes i tried it with gdb. these lines never hit for the test cases.\r\n\r\n> Trivially iterable should be contiguous (F or C) or 1-D.\r\n\r\nMaybe this is a stupid question, Can there be an array which is neither C nor F contiguous ?",
+        "createdAt" : "2020-04-03T19:58:03Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "723c382c-1d52-4b43-93b3-e358ec6f1dbb",
+        "parentId" : "7313dc15-e1d2-463d-969a-0a3a95335b1b",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Yes, any sliced array will be, 1D arrays will be both F and C contiugous (as well as arrays that can be \"squeezed\" into 1D or are empty, but both of those depend on `NPY_RELAXED_STRIDES_CHECKING`)",
+        "createdAt" : "2020-04-03T20:01:40Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "958eaac1-5a4a-4650-b4a8-2067761ece4f",
+        "parentId" : "7313dc15-e1d2-463d-969a-0a3a95335b1b",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Also: https://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html#internal-memory-layout-of-an-ndarray although it only semi-covers all of this probably. May be best to just try around a bit looking at `arr.flags`, `arr[::2].flags`, `arr.T.flags`, etc.",
+        "createdAt" : "2020-04-03T20:04:50Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c2804411-27fa-423d-9283-2b9c9260f0d5",
+        "parentId" : "7313dc15-e1d2-463d-969a-0a3a95335b1b",
+        "authorId" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "body" : "> Yes, any sliced array will be, 1D arrays will be both F and C contiugous (as well as arrays that can be \"squeezed\" into 1D or are empty, but both of those depend on NPY_RELAXED_STRIDES_CHECKING)\r\n\r\nif an array is both F and C contiguous it will be still called \"trivially iterable\" right? I tried with sliced arrays and 1d arrays both are F and C contiguous.\r\n\r\nI am wondering when the below will be false ?\r\n```\r\n    #define PyArray_TRIVIALLY_ITERABLE(arr) ( \\\r\n                        PyArray_NDIM(arr) <= 1 || \\\r\n                        PyArray_CHKFLAGS(arr, NPY_ARRAY_C_CONTIGUOUS) || \\\r\n                        PyArray_CHKFLAGS(arr, NPY_ARRAY_F_CONTIGUOUS) \\\r\n                        )\r\n```\r\n",
+        "createdAt" : "2020-04-03T20:26:04Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ac2106b-6150-4120-8adb-dc1178b83150",
+        "parentId" : "7313dc15-e1d2-463d-969a-0a3a95335b1b",
+        "authorId" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "body" : "Thanks for the links, I will try to look into it.",
+        "createdAt" : "2020-04-03T20:26:52Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f296890d-ae65-4cf4-a6bc-e3b9163db629",
+        "parentId" : "7313dc15-e1d2-463d-969a-0a3a95335b1b",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "You probably got it already, but: `np.ones(10)[::2].flags` is true, but `np.ones((10, 10))[::2, :].flags` is not. EDIT: For those randomly seeing this, those examples are for trivially iterable, so the flags are not that important (but tell you contiguity).",
+        "createdAt" : "2020-04-03T21:35:46Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33be766c-2a77-4d58-8896-48dc83ef2731",
+        "parentId" : "7313dc15-e1d2-463d-969a-0a3a95335b1b",
+        "authorId" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "body" : "Thanks @seberg !",
+        "createdAt" : "2020-04-03T22:05:41Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "381a2f5ab22bf1b84870ec4dfb1ee04327faf918",
+    "line" : 63,
+    "diffHunk" : "@@ -1,1 +2546,2550 @@            NpyIter_Deallocate(op_iter);\n            continue;\n        }\n\n        op_iternext = NpyIter_GetIterNext(op_iter, NULL);"
+  },
+  {
+    "id" : "d68a3a4e-c31b-43a9-9e52-d3954ddf7fdb",
+    "prId" : 15900,
+    "prUrl" : "https://github.com/numpy/numpy/pull/15900#pullrequestreview-387550674",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b058aaa6-547a-4766-a479-ce4ee1291a2d",
+        "parentId" : null,
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "```suggestion\r\n#if NPY_RELAXED_STRIDES_CHECKING\r\n        /* When relaxed strides checking is used the trivial path is taken */\r\n        if (NpyIter_GetIterSize(op_iter) == 0) {\r\n            NpyIter_Deallocate(op_iter);\r\n            continue;\r\n        }\r\n#endif\r\n```",
+        "createdAt" : "2020-04-03T19:42:29Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e289a1ac-be7a-46bd-8701-27ebd1ccae07",
+        "parentId" : "b058aaa6-547a-4766-a479-ce4ee1291a2d",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Lets just see if that works, plus than we do not forget to delete it when we actually remove that option.",
+        "createdAt" : "2020-04-03T19:51:47Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "512c9b0f-9917-4051-b9ec-75230a6672ff",
+        "parentId" : "b058aaa6-547a-4766-a479-ce4ee1291a2d",
+        "authorId" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "body" : "sounds good !",
+        "createdAt" : "2020-04-03T20:12:17Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "fe664d20-2239-4242-9bd1-2c7a4f010863",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "381a2f5ab22bf1b84870ec4dfb1ee04327faf918",
+    "line" : 63,
+    "diffHunk" : "@@ -1,1 +2546,2550 @@            NpyIter_Deallocate(op_iter);\n            continue;\n        }\n\n        op_iternext = NpyIter_GetIterNext(op_iter, NULL);"
+  },
+  {
+    "id" : "87d37949-c393-49c9-b9e0-744eea0adc02",
+    "prId" : 15900,
+    "prUrl" : "https://github.com/numpy/numpy/pull/15900#pullrequestreview-413785973",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3037a143-fd9b-4eb8-8aed-b1e754a68c23",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "```suggestion\r\n    if (mit->size == 0 && NpyIter_GetIterSize(mit->outer) == 0) {\r\n```",
+        "createdAt" : "2020-05-18T17:06:30Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fc90cbbf-a662-4e4a-ad33-852b4f446c34",
+        "parentId" : "3037a143-fd9b-4eb8-8aed-b1e754a68c23",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "This one is incorrect, if this was true, we could never reach here, since there would be an early error return.",
+        "createdAt" : "2020-05-18T17:10:49Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b90802a-b4f8-4e32-9e82-ae3b1d081f2d",
+        "parentId" : "3037a143-fd9b-4eb8-8aed-b1e754a68c23",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "sorry, early successful return.",
+        "createdAt" : "2020-05-18T17:11:01Z",
+        "updatedAt" : "2020-05-27T15:58:31Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "381a2f5ab22bf1b84870ec4dfb1ee04327faf918",
+    "line" : 83,
+    "diffHunk" : "@@ -1,1 +2582,2586 @@indexing_error:\n\n    if (mit->size == 0) {\n        PyObject *err_type = NULL, *err_value = NULL, *err_traceback = NULL;\n        PyErr_Fetch(&err_type, &err_value, &err_traceback);"
+  },
+  {
+    "id" : "5ce6fe59-531a-4eab-9743-17e69fabae64",
+    "prId" : 15900,
+    "prUrl" : "https://github.com/numpy/numpy/pull/15900#pullrequestreview-413887840",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "838152a5-cbf1-4c22-83c1-c560b2e5ce2a",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "So this condition means \"the size of the broadcast indices\"? I'd mistakenly read it as \"the size of the non-advanced-index view\". Any comment to help clarify that would be great.",
+        "createdAt" : "2020-05-18T19:42:08Z",
+        "updatedAt" : "2020-05-27T15:58:32Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "381a2f5ab22bf1b84870ec4dfb1ee04327faf918",
+    "line" : 23,
+    "diffHunk" : "@@ -1,1 +2483,2487 @@    intp_type = PyArray_DescrFromType(NPY_INTP);\n\n    if (NpyIter_GetIterSize(mit->outer) == 0) {\n        /*\n         * When the outer iteration is empty, the indices broadcast to an"
+  },
+  {
+    "id" : "269f01f8-ffca-40df-906a-ae8b49cf6e94",
+    "prId" : 15900,
+    "prUrl" : "https://github.com/numpy/numpy/pull/15900#pullrequestreview-419363159",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f2754fa7-132b-4429-9ab0-1aa7bad486df",
+        "parentId" : null,
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "> Use `warnings.simplefilter('error')` to raise the warning\r\n\r\nWhich warning does \"the warning\" refer to, this DeprecationWarning or some other?",
+        "createdAt" : "2020-05-27T14:36:41Z",
+        "updatedAt" : "2020-05-27T15:58:32Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2125621f-3cf4-467c-8647-bc72b64950c9",
+        "parentId" : "f2754fa7-132b-4429-9ab0-1aa7bad486df",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "expanded the \"the\" to \"this DeprecationWarning\" and squashed the commits.",
+        "createdAt" : "2020-05-27T15:28:59Z",
+        "updatedAt" : "2020-05-27T15:58:32Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85dfcbff-4a97-47bd-9576-b99187bbada2",
+        "parentId" : "f2754fa7-132b-4429-9ab0-1aa7bad486df",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "So now I am confused. This message **is** the `DeprecationWarning`. It seems redundant, or am I missing something?\r\n\r\nAlso, your rebase caught a change in a submodule ...",
+        "createdAt" : "2020-05-27T15:45:00Z",
+        "updatedAt" : "2020-05-27T15:58:32Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "635954c9-62f7-4de2-b9f4-ad8a570bff42",
+        "parentId" : "f2754fa7-132b-4429-9ab0-1aa7bad486df",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Ahh, maybe you meant \"to turn this warning into an error and get more details ...\"",
+        "createdAt" : "2020-05-27T15:45:59Z",
+        "updatedAt" : "2020-05-27T15:58:32Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8f150da2-dae8-4815-9125-afb563d0e708",
+        "parentId" : "f2754fa7-132b-4429-9ab0-1aa7bad486df",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "ah, dang, yes and thanks for noticing the submodule change, `commit -a` is dangerous right now :)",
+        "createdAt" : "2020-05-27T15:46:50Z",
+        "updatedAt" : "2020-05-27T15:58:32Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "633b7a69-6c35-48bf-9d9f-9a4846aeb046",
+        "parentId" : "f2754fa7-132b-4429-9ab0-1aa7bad486df",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Thanks, yes, adopted... I could just delete the whole thing as well.",
+        "createdAt" : "2020-05-27T15:50:11Z",
+        "updatedAt" : "2020-05-27T15:58:32Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "381a2f5ab22bf1b84870ec4dfb1ee04327faf918",
+    "line" : 97,
+    "diffHunk" : "@@ -1,1 +2596,2600 @@                \"the invalid index.)\") < 0) {\n            npy_PyErr_ChainExceptions(err_type, err_value, err_traceback);\n            return -1;\n        }\n        Py_DECREF(err_type);"
   }
 ]
