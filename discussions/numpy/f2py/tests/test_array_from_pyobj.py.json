@@ -31,5 +31,126 @@
     "commit" : "2ea0c7aa4446859d30f2e09c07fdfb5ed03cf35b",
     "line" : 21,
     "diffHunk" : "@@ -1,1 +159,163 @@        assert_equal(self.type_num, info.num)\n        self.dtype = info.type\n        self.elsize = info.bits / 8\n        self.dtypechar = info.char\n"
+  },
+  {
+    "id" : "ae039bdb-55c7-49ed-a9f1-43dec0e44a2e",
+    "prId" : 11894,
+    "prUrl" : "https://github.com/numpy/numpy/pull/11894#pullrequestreview-157658803",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "parentId" : null,
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "We do not encourage the use of fixtures, but I think in this case it might make sense, although I find I have to stare at both the old and the new implementations for quite a while to understand what they are doing. Maybe a high-level comment that explains what is going on here and how this generates multiple tests would help? Like (and I probably am going to mess this up)\r\n\r\nGenerate a set of TestSharedMemory classes, each with a different `type` and `array` attribute derved from `_type_names`. (and then how does `params=type_names` become `request.param`? Is the kwarg  `param` magic? What happened to the `s`?. Isn't `autouse` True by default, why is it needed here?)",
+        "createdAt" : "2018-09-06T08:32:38Z",
+        "updatedAt" : "2018-09-06T08:32:38Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4f69bc9e-5834-4f79-a66b-9b19346a50e8",
+        "parentId" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "authorId" : "5cca4c05-5ba8-4d36-b097-080312a417bd",
+        "body" : "A slightly different way to write this is:\r\n```python\r\n      @pytest.fixture(autouse=True, params=_type_names)\r\n      def setup_type(self, request):\r\n          self.type = Type(request.param)\r\n          self.array = lambda dims, intent, obj: \\\r\n              Array(Type(request.param), dims, intent, obj)\r\n```\r\nwhich is a bit closer to the way the `eval`'d version looked. The only difference is it gets called for each method instead of once per class. I can change it to this if it's clearer (+/- a comment.)\r\n\r\nConverting `params=_type_names` is how [fixtures are parametrized](https://docs.pytest.org/en/latest/fixture.html#fixture-parametrize). The `request` parameter is [described here](https://docs.pytest.org/en/latest/reference.html#request) (side note: I really hate that the pytest docs don't properly cross-reference the objects.) There's no `s` because it's called for each parameter. `autouse` is False by default (the default idiom is to explicitly name used fixtures as parameters), so it must be specified to get it applied to the whole class.",
+        "createdAt" : "2018-09-06T08:52:17Z",
+        "updatedAt" : "2018-09-06T08:52:17Z",
+        "lastEditedBy" : "5cca4c05-5ba8-4d36-b097-080312a417bd",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c11eb1a1-c6b5-45f6-b202-fb33dfde1a8e",
+        "parentId" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "I think the class setup is better, if there is more than one class-method it will be faster.\r\n\r\nMaybe this could be expanded upon in our [testing](https://github.com/numpy/numpy/blob/master/doc/TESTS.rst.txt#easier-setup-and-teardown-functions-methods) recommendations in a different PR, with an annotated example. \r\n\r\n@charris, any thoughts? Does replacing the `eval` justify a fixture?",
+        "createdAt" : "2018-09-06T09:14:42Z",
+        "updatedAt" : "2018-09-06T09:14:42Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b6107616-411b-45f2-80e9-8f42f50eab84",
+        "parentId" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "Given that we will probably be using pytest for many years, I don't think we should go out of our way to avoid fixtures if they are the cleanest option. I do like setup/teardown where appropriate because of clarity, but that may just be familiarity on my part. The f2py tests are pretty old, so if they can be made better with modern tools, that is a good thing. That said, I haven't looked at this PR yet :)",
+        "createdAt" : "2018-09-06T17:35:47Z",
+        "updatedAt" : "2018-09-06T17:35:47Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe9349a6-a4e2-4afa-9da9-0ec5eccb9f16",
+        "parentId" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "There are ways to replace `eval` here that don't need fixtures. Something like:\r\n```python\r\nfor t in _type_names:\r\n    name = 'TestGen_{}'.format(t)\t\r\n    globals()[name] = type(name, (_test_shared_memory,), dict(\r\n        type=Type(name)\r\n    ))\t\r\n```\r\n\r\n@QuLogic, what are the generated test names for your proposal? I'm not sure how parameterized autouse fixtures affect test names.",
+        "createdAt" : "2018-09-09T17:19:30Z",
+        "updatedAt" : "2018-09-09T17:20:47Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "964e671f-8ec4-4127-b3a7-c4594353b994",
+        "parentId" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "@QuLogic the fixture does not work for me, I get an [exception] (https://gist.github.com/mattip/d8d8c7b2bca3bfa8f8e44b18dfd42dd4) with pytest 3.63\r\n```\r\n../../../../../../cpython3_virt/lib/python3.6/site-packages/_pytest/python.py:758: in _checkargnotcontained\r\n    raise ValueError(\"duplicate %r\" % (arg,))\r\nE   ValueError: duplicate 'class_fixture'\r\n```",
+        "createdAt" : "2018-09-17T10:23:21Z",
+        "updatedAt" : "2018-09-17T10:23:21Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "39672fb5-2e51-45fe-85a9-2e7dfd857145",
+        "parentId" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "which is strange since CI tests pass.",
+        "createdAt" : "2018-09-17T10:23:54Z",
+        "updatedAt" : "2018-09-17T10:23:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a409bfa1-2737-4d67-81dd-318b02ef348b",
+        "parentId" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "@mattip  Try updating pytest.",
+        "createdAt" : "2018-09-19T15:56:14Z",
+        "updatedAt" : "2018-09-19T15:56:14Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5795e458-93e9-426a-8ee9-9bd62d7d935a",
+        "parentId" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "Works here. Might also need to clean out the build directory if you do a lot of testing.",
+        "createdAt" : "2018-09-19T17:36:50Z",
+        "updatedAt" : "2018-09-19T17:36:50Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b644b844-fd7d-4a99-94f3-c0a23e080584",
+        "parentId" : "cbf37b3d-40ad-4c15-8beb-b4f911e80aa3",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Now working. \r\n\r\n> what are the generated test names for your proposal\r\n\r\nThe test names all get `[<dtype>]` tacked to the end of the name, so they become (broken into two pieces)\r\n```\r\nnumpy/f2py/tests/test_array_from_pyobj.py::TestSharedMemory:: \\\r\ntest_f_in_from_23casttype[CLONGDOUBLE]\r\n```",
+        "createdAt" : "2018-09-21T12:00:14Z",
+        "updatedAt" : "2018-09-21T12:00:15Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cb7dca7c3c963ff14c4f58507d3672536c441921",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +315,319 @@        request.cls.array = lambda self, dims, intent, obj: \\\n            Array(Type(request.param), dims, intent, obj)\n\n    def test_in_from_2seq(self):\n        a = self.array([2], intent.in_, self.num2seq)"
   }
 ]
