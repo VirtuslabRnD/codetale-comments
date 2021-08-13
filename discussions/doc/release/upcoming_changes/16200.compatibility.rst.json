@@ -1,0 +1,123 @@
+[
+  {
+    "id" : "5697a34d-b5a8-4381-bdeb-78a94dce6bea",
+    "prId" : 16200,
+    "prUrl" : "https://github.com/numpy/numpy/pull/16200#pullrequestreview-445591256",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "parentId" : null,
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "How hard would it be to make any conversion of `nan` or `inf` to any int raise? I understand there might be benchmark concerns which could be checked with an appropriate benchmark.",
+        "createdAt" : "2020-06-29T13:55:26Z",
+        "updatedAt" : "2020-07-08T23:39:29Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "12ee6a6c-fc8c-4f88-9980-c61b6a743d60",
+        "parentId" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Well, the question is what we want, do we want NumPy scalars (which are almost like 0-D arrays) behave like arrays, or do we want them to behave specially.  If we do not want special casing, my code is probably nicer.\r\n\r\nThat would mean adding a range check to the actual float casting code, I did not check how much speed that costs, for large arrays probably none (memory speeds should be much slower)",
+        "createdAt" : "2020-06-29T20:39:30Z",
+        "updatedAt" : "2020-07-08T23:39:29Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa195d54-be90-4904-9e18-c6af59fc1a99",
+        "parentId" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "I was thinking that in all cases: arrays, 0-d arrays, and scalars we do not want to convert `nan` and `inf` to ints by default. If someone actually wants this (for arrays and 0-d arrays) they could do it via view -> copy.",
+        "createdAt" : "2020-06-30T08:34:47Z",
+        "updatedAt" : "2020-07-08T23:39:29Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "de71d7e1-222a-4d97-b970-b0cd5c2ff21d",
+        "parentId" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Well, I don't much like 0-D arrays being special. And Scalars and 0-D arrays are almost the same (because 0-D arrays tend to be converted to scalars). But yes, you could define element setting as being special...\r\n\r\nIn general, that does *not* work, of course for most of our dtypes it does:\r\n\r\n* Integer element assignment calls `__int__`.\r\n* Float element assignment calls `__float__`\r\n* Complex element assignment can use `__complex__`\r\n* String/Bytes array elements might be able to assume `__str__` is fine\r\n\r\nAnd that works mostly. It currently creates bugs, because `complex128` thinks it can reasonably use `__complex__`, which it must not for a `float128`.  It also means you that 0-D objects tend to behave special, because instead of aligning how the two work, we define them as two different operations.  And that *can* be confusing `str(array-like)` is well defined after all, we currently solve that by refuse to call `str(obj)` for any sequence).  Also within `float128`/`complex128` we (incompletely) hack around these by checking for `0-D` arrays.\r\n\r\nSo yes, I can make single element assignment special (in most cases, I have my doubt that real consistency can be achieved).  But, we can only do that for some of our own dtypes, where Python has well defined protocols.\r\nSo either, I need to flag these dtypes to behave differently (let them always just use `__float__`, `__int__`, etc., except for times and float128/complex128).  Or do some other dance, which feels like it makes dtype creation unnecessarily complicated. `DType.setitem` would have to call/signal back into NumPy in some cases.\r\n\r\nJust for the sake of it:\r\n```\r\narr = np.empty(2, dtype=np.int64)\r\narr[:] = [np.nan, np.nan]  # fails `np.array([np.nan, np.nan], dtype=np.int64)` uses item assignment after all\r\narr[:] = np.array([np.nan, np.nan])  # succeeds\r\narr[0] = np.array(np.nan)  # fails\r\narr[0, ...] = np.array(np.nan)  # succeeds\r\n```\r\nIs the current behaviour, I cannot say it illogical, but I wonder if it is the best solution to cement item assignment as being special and whether it is really easier on users.\r\n\r\nBut again, yes, I can put these behaviours back in place, they can just *not* generalize to arbitrary user-defined dtypes. And maybe we have to discuss it on wednesday or the mailing list...",
+        "createdAt" : "2020-06-30T14:33:58Z",
+        "updatedAt" : "2020-07-08T23:39:29Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fe3be773-333c-476d-a2b3-4ed9d289e8f6",
+        "parentId" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "In my opinion, all of the examples of assignment should fail. Any reasonable user-defined dtype that converts from float to int should also fail when the conversion makes no sense. Hopefully we will not get the blame if that happens.",
+        "createdAt" : "2020-06-30T14:50:55Z",
+        "updatedAt" : "2020-07-08T23:39:29Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a9b86b56-312a-497c-8668-90da0fd39cfa",
+        "parentId" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "I do not disagree, but in that case *casting* should probably fail in general (or at least warn) and most just the 0-D case, right?\r\nSo it is IMO not an argument for adding an extra path for `setitem`, except possibly performance reasons.  The question is whether we want to special case these 0-D item assignments, because the behaviour is *better* or just because it is somewhat *faster* than doing proper casting?",
+        "createdAt" : "2020-06-30T15:12:09Z",
+        "updatedAt" : "2020-07-08T23:39:29Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9b3911d7-8cd6-4679-9579-9395825740d5",
+        "parentId" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "From the sidelines: agreed that casting should fail in those cases (or, more generally, that setting should behave identically to casting the value to the dtype of the array being set).",
+        "createdAt" : "2020-06-30T15:20:58Z",
+        "updatedAt" : "2020-07-08T23:39:29Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "790d838b-72e4-4cea-8aa6-a37f07639065",
+        "parentId" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "So for me right now, this feels like adding a fast-path, since I don't like the difference between the two paths (casting vs. item assignment).  But of course we can argue, that if the long goal is to align casting with current item assignment behaviour, we can add those fast-paths right now.  (It must be a fast/additional paths, since Python protocols are not a generic solution.)\r\n\r\nI don't mind adding the fast path now, I feel it is one more thing to think about, but, it does not need to be exposed to user-defined dtypes right away.  They are unlikely to make use of this, except maybe a rational dtype using \"as integer ratio\".  (I am not 100% sure there cannot be reasons to diverge from the Python scalar protocols.)\r\n\r\nI am unsure item assignment+casting is actually worth fast-paths, but maybe that does not matter.  They currently lead to weird things (e.g. a DNA dtype, which is much like a string and a sequence could never be assigned to a NumPy string dtype!).  However, those issues are resolvable now in either case.",
+        "createdAt" : "2020-06-30T15:36:16Z",
+        "updatedAt" : "2020-07-08T23:39:29Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1f42892d-000f-42ee-b191-1f38f23cff6d",
+        "parentId" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Is there an open issue or PR to make any conversion from `inf` or `nan` to `int` raise an error or at least warn?",
+        "createdAt" : "2020-07-09T05:23:52Z",
+        "updatedAt" : "2020-07-09T05:23:52Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "191847f9-1ce2-46df-9ef4-643ab9864200",
+        "parentId" : "9dbfe051-55f3-424f-98fd-4619c5094f18",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "https://github.com/numpy/numpy/issues/16624",
+        "createdAt" : "2020-07-09T13:00:48Z",
+        "updatedAt" : "2020-07-09T13:00:49Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "22ee97190db0e2432e21d3d830e04776feb0f0a6",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +16,20 @@Note, this already happened for ``np.array(np.float64(np.nan), dtype=np.int64)``\nand that the behaviour is unchanged for ``np.nan`` itself which is a Python\nfloat.\nTo avoid backward compatibility issues, at this time assignment from\n``datetime64`` scalar to strings of too short length remains supported."
+  }
+]
