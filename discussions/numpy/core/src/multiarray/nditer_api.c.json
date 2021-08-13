@@ -1,0 +1,134 @@
+[
+  {
+    "id" : "fa4f5fa9-c69b-4e3d-9a45-8aabfb5f239a",
+    "prId" : 9998,
+    "prUrl" : "https://github.com/numpy/numpy/pull/9998#pullrequestreview-107914979",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "1f0942b6-4810-4f01-9e51-f80af831a769",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Could do with a comment explaining what each of these two loops are.\r\n\r\nIs this correct? The following happens right now:\r\n\r\n```\r\nPyArray_ResolveWritebackIfCopy(operands[0])\r\nPyArray_ResolveWritebackIfCopy(operands[1])\r\nPyArray_ResolveWritebackIfCopy(operands[2])  # FAIL\r\nPyArray_DiscardWritebackIfCopy(operands[2])  # should this be here?\r\nPyArray_DiscardWritebackIfCopy(operands[3])\r\nPyArray_DiscardWritebackIfCopy(operands[4])",
+        "createdAt" : "2018-03-26T16:19:04Z",
+        "updatedAt" : "2018-04-21T19:57:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0a56d9e9-e402-4df9-804e-297572a383ed",
+        "parentId" : "1f0942b6-4810-4f01-9e51-f80af831a769",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "good catch. It was harmless but redundant and wasteful. Fixed",
+        "createdAt" : "2018-03-27T06:33:28Z",
+        "updatedAt" : "2018-04-21T19:57:31Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "730696fb-fc83-41de-9699-93f1f6ed9111",
+        "parentId" : "1f0942b6-4810-4f01-9e51-f80af831a769",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "What state is the array left in if resolution fails? Perhaps it should be discarded after all?",
+        "createdAt" : "2018-03-27T06:35:09Z",
+        "updatedAt" : "2018-04-21T19:57:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7ac198d7-b5a0-4590-bf9e-ddd299626a1f",
+        "parentId" : "1f0942b6-4810-4f01-9e51-f80af831a769",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "In short - no. A longer explanation - the operation that can fail in ``PyArray_ResolveWritebackIfCopy`` is a call to ``PyArray_CopyAnyInto``, all the other tasks are run to completion (resetting flags and base, DECREFing)",
+        "createdAt" : "2018-03-27T07:01:28Z",
+        "updatedAt" : "2018-04-21T19:57:31Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b802ce94-ba36-41c6-8b29-151b6bcb23fa",
+        "parentId" : "1f0942b6-4810-4f01-9e51-f80af831a769",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Good to know, thanks. Is that / can that be documented?",
+        "createdAt" : "2018-03-29T03:17:42Z",
+        "updatedAt" : "2018-04-21T19:57:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa9a74165479142e2c1671f871fe7c860146cd52",
+    "line" : 36,
+    "diffHunk" : "@@ -1,1 +1423,1427 @@        }\n    }\n    for (; iop<nop; iop++) {\n        if (op_itflags[iop] & NPY_OP_ITFLAG_HAS_WRITEBACK) {\n            op_itflags[iop] &= ~NPY_OP_ITFLAG_HAS_WRITEBACK;"
+  },
+  {
+    "id" : "8010d866-7d3d-4181-92c4-0a7817a550a1",
+    "prId" : 9998,
+    "prUrl" : "https://github.com/numpy/numpy/pull/9998#pullrequestreview-107916169",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ddbcf2d4-c10d-4d8d-99e6-8d19f121400c",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "An interesting but probably bad way to write this:\r\n\r\n```C\r\n    for (iop=0; iop<nop; iop++) {\r\n        if (op_itflags[iop] & NPY_OP_ITFLAG_HAS_WRITEBACK) {\r\n            op_itflags[iop] &= ~NPY_OP_ITFLAG_HAS_WRITEBACK;\r\n            if (PyArray_ResolveWritebackIfCopy(operands[iop]) < 0) {\r\n                goto fail;\r\n            }\r\n        }\r\n    }\r\n    return 0;\r\n\r\n    for (; iop<nop; iop++) {\r\n        if (op_itflags[iop] & NPY_OP_ITFLAG_HAS_WRITEBACK) {\r\n            op_itflags[iop] &= ~NPY_OP_ITFLAG_HAS_WRITEBACK;\r\n            PyArray_DiscardWritebackIfCopy(operands[iop]);\r\n        }\r\n        fail:\r\n    }\r\n    return -1;\r\n```",
+        "createdAt" : "2018-03-29T03:28:25Z",
+        "updatedAt" : "2018-04-21T19:57:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa9a74165479142e2c1671f871fe7c860146cd52",
+    "line" : 35,
+    "diffHunk" : "@@ -1,1 +1422,1426 @@            }\n        }\n    }\n    for (; iop<nop; iop++) {\n        if (op_itflags[iop] & NPY_OP_ITFLAG_HAS_WRITEBACK) {"
+  },
+  {
+    "id" : "7390913a-7e0d-42f9-b8fb-90eee2215841",
+    "prId" : 9998,
+    "prUrl" : "https://github.com/numpy/numpy/pull/9998#pullrequestreview-114184022",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8aa37b36-590e-456e-b164-2f686deb15e7",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Is it safe to call this multiple times?",
+        "createdAt" : "2018-04-21T21:42:14Z",
+        "updatedAt" : "2018-04-21T21:42:14Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d6cf5d6a-eda1-4706-b379-d86dde721615",
+        "parentId" : "8aa37b36-590e-456e-b164-2f686deb15e7",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "yes",
+        "createdAt" : "2018-04-21T21:43:37Z",
+        "updatedAt" : "2018-04-21T21:43:37Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4308aaab-10d5-48ae-9250-56c9399fd469",
+        "parentId" : "8aa37b36-590e-456e-b164-2f686deb15e7",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "the first call will resolve all writebacks, so if there was a writeback scratch buffer now the iterator operand's `base` attribute will be `None` and the operand's `data` will be independent from the original writeable array `data`. Subsequent calls will no do anything",
+        "createdAt" : "2018-04-21T21:47:07Z",
+        "updatedAt" : "2018-04-21T21:47:07Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fa9a74165479142e2c1671f871fe7c860146cd52",
+    "line" : 10,
+    "diffHunk" : "@@ -1,1 +1397,1401 @@ */\nNPY_NO_EXPORT int\nNpyIter_Close(NpyIter *iter)\n{\n    int ret=0, iop, nop;"
+  }
+]
