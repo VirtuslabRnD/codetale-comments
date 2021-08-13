@@ -141,5 +141,126 @@
     "commit" : "230ee3aa201552a8a9fa13c4b319f68cbd504d85",
     "line" : 45,
     "diffHunk" : "@@ -1,1 +140,144 @@                            PyArray_Item_INCREF(tmp_src, PyArray_DESCR(self));\n                            PyArray_Item_XDECREF(dest, PyArray_DESCR(self));\n                            memmove(dest, tmp_src, itemsize);\n                            dest += itemsize;\n                            tmp_src += itemsize;"
+  },
+  {
+    "id" : "ff65f087-da7f-4395-b56d-691deab24d2f",
+    "prId" : 3107,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6df10b87-e068-40bf-baae-5a5f80b57099",
+        "parentId" : null,
+        "authorId" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "body" : "What's the reason for this change?\n",
+        "createdAt" : "2013-03-01T23:13:24Z",
+        "updatedAt" : "2013-08-17T16:30:32Z",
+        "lastEditedBy" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7cecb3e0-6dfc-4797-933a-4ee120faa35c",
+        "parentId" : "6df10b87-e068-40bf-baae-5a5f80b57099",
+        "authorId" : "b79858b9-0a74-4264-b47d-5aebe44f2140",
+        "body" : "Mostly for clarity. After these changes, elsize is only used to increment the pkey pointer. So I figured just to be consistent I should look up elsize from the key array (even though both arrays should be of the same type).\n",
+        "createdAt" : "2013-03-01T23:20:32Z",
+        "updatedAt" : "2013-08-17T16:30:32Z",
+        "lastEditedBy" : "b79858b9-0a74-4264-b47d-5aebe44f2140",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b5a20dd1-528d-4b98-a143-d0387afde1ad",
+        "parentId" : "6df10b87-e068-40bf-baae-5a5f80b57099",
+        "authorId" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "body" : "Oh, we still assume that the `key` array is contiguous? Is there a reason for that, then? :-)\n",
+        "createdAt" : "2013-03-01T23:26:08Z",
+        "updatedAt" : "2013-08-17T16:30:32Z",
+        "lastEditedBy" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "26eadd85-7ef1-4052-b324-a1d7154dc1a5",
+        "parentId" : "6df10b87-e068-40bf-baae-5a5f80b57099",
+        "authorId" : "b79858b9-0a74-4264-b47d-5aebe44f2140",
+        "body" : "Two reasons. First my naivete, because the key array could have any shape and any strides I didn't know if there was an easy way to handle that in this context.\n\nThe second is that it didn't seem to me that copying the key array was as big of a problem. searchsorted is linear in the size of the key array so making a temporary copy is a relatively small constant multiplier to the run time. Because searchsorted is log(N) in the size of the array being search, making a linear time copy of that array can dominate the run time for large arrays. \n",
+        "createdAt" : "2013-03-01T23:35:06Z",
+        "updatedAt" : "2013-08-17T16:30:32Z",
+        "lastEditedBy" : "b79858b9-0a74-4264-b47d-5aebe44f2140",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e661cae-5076-4c51-9dd7-adce65a6d737",
+        "parentId" : "6df10b87-e068-40bf-baae-5a5f80b57099",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "Can use `PyArray_ITEMSIZE` to get `elsize`.\n",
+        "createdAt" : "2013-03-02T00:50:22Z",
+        "updatedAt" : "2013-08-17T16:30:32Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a43252e-6a9b-4b73-b74e-9d0e31831d2a",
+        "parentId" : "6df10b87-e068-40bf-baae-5a5f80b57099",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "Heh, and I usually have big arrays of keys and small arrays to look them up in. But in general I agree that the lookup times will dominate the key retrieval time.\n",
+        "createdAt" : "2013-03-02T01:38:33Z",
+        "updatedAt" : "2013-08-17T16:30:32Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fb38b6e2-2621-42db-8ee5-58c4600ea7d2",
+        "parentId" : "6df10b87-e068-40bf-baae-5a5f80b57099",
+        "authorId" : "b79858b9-0a74-4264-b47d-5aebe44f2140",
+        "body" : "Is there a way to step through an array with arbitrary strides that I could\nuse here for the key array? We could at least stop copying read only\narrays, as @njsmith noted NPY_ARRAY_DEFAULT checks for weight only arrays.\nI could include that in this pull request.\nOn Mar 1, 2013 5:38 PM, \"Charles Harris\" notifications@github.com wrote:\n\n> In numpy/core/src/multiarray/item_selection.c:\n> \n> > @@ -1505,15 +1505,22 @@\n> >      char *parr = PyArray_DATA(arr);\n> >      char *pkey = PyArray_DATA(key);\n> >      npy_intp *pret = (npy_intp *)PyArray_DATA(ret);\n> > -    int elsize = PyArray_DESCR(arr)->elsize;\n> > -    int elsize = PyArray_DESCR(key)->elsize;\n> \n> Heh, and I usually have big arrays of keys and small arrays to look them\n> up in. But in general I agree that the lookup times will dominate the key\n> retrieval time.\n> \n> —\n> Reply to this email directly or view it on GitHubhttps://github.com/numpy/numpy/pull/3107/files#r3213822\n> .\n",
+        "createdAt" : "2013-03-02T02:10:37Z",
+        "updatedAt" : "2013-08-17T16:30:32Z",
+        "lastEditedBy" : "b79858b9-0a74-4264-b47d-5aebe44f2140",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1cee8bf2-89da-4b38-a57c-6152775c2242",
+        "parentId" : "6df10b87-e068-40bf-baae-5a5f80b57099",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "Using nditer would be the way to go for that, but it would add some overhead.\n",
+        "createdAt" : "2013-03-02T02:59:00Z",
+        "updatedAt" : "2013-08-17T16:30:32Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4674b9ee89a641f3b9da2296079a6ed2167e1d8c",
+    "line" : 18,
+    "diffHunk" : "@@ -1,1 +1883,1887 @@    char *pkey = PyArray_DATA(key);\n    npy_intp *pret = (npy_intp *)PyArray_DATA(ret);\n    int elsize = PyArray_DESCR(key)->elsize;\n    npy_intp arrstride = *PyArray_STRIDES(arr);\n    npy_intp i;"
+  },
+  {
+    "id" : "e263b6f5-4405-4ae4-aa31-75c0dc3d9d6d",
+    "prId" : 3107,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "af7eee27-0df3-4496-998c-1f504dbb53c5",
+        "parentId" : null,
+        "authorId" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "body" : "I assume this is the switching logic for cache performance, this needs  in source comment on why its done.\n",
+        "createdAt" : "2013-08-16T07:49:08Z",
+        "updatedAt" : "2013-08-17T16:30:32Z",
+        "lastEditedBy" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4674b9ee89a641f3b9da2296079a6ed2167e1d8c",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +2116,2120 @@     * haystack to a continuous array for improved cache utilization.\n     */\n    if (PyArray_SIZE(ap2) > PyArray_SIZE(op1)) {\n        ap1_flags |= NPY_ARRAY_CARRAY_RO;\n    }"
   }
 ]

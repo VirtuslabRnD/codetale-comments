@@ -20,5 +20,49 @@
     "commit" : "df2958e28d5542d1ae515f6ed0ba1fc0a1c728bd",
     "line" : 5,
     "diffHunk" : "@@ -1,1 +195,199 @@        # but not on all platforms os.system will return\n        # a correct status.\n        if _with_python and sys.stdout.fileno() == -1:\n            st = _exec_command_python(command,\n                                      exec_command_dir = exec_dir,"
+  },
+  {
+    "id" : "1f979435-3d18-4639-b3d0-7d180c369faf",
+    "prId" : 3128,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ffa8b32c-a5e3-4504-af96-19bc1b034d19",
+        "parentId" : null,
+        "authorId" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "body" : "I believe that the original intent of the code is that `_exec_command_python` be used exactly when we _don't_ have usable file descriptors, because `_exec_command` requires usable file descriptors. So the `== -1` check is a check for whether sys.stdout's fileno is _bad_. I don't know why `sys.stdout.fileno()` would return -1, but assuming that this can happen in some case, then it would indicate that the fileno is not usable, so probably the closest match to the original code would be to add\n\n```\nif r == -1:\n    return False\n```\n\ninside `_supports_fileno`, and then make this\n\n```\nif (_with_python and (not _supports_fileno(sys.stdout) or not _supports_fileno(sys.stderr)):\n    ...\n```\n\nOTOH we have just made it so that `_exec_command` actually _does_ work even if `sys.stdout`/`sys.stderr` don't have working file descriptors, so probably `_exec_command_python` should just never be used. Which is, I think, what happens now, because `sys.stdout.fileno()` never actually returns -1 in any of the environments where people actually use this.\n\nI'm not sure what the right trade-off is between fixing this code 'properly' (which would probably mean, burning it and just using `subprocess` instead), and making a minimal hack to keep things working while minimally disturbing whatever rickety code is built on top of this.\n\nI guess the best solution is probably:\n- Add a check for `r == -1` to `_supports_fileno` -- who knows, maybe someone needs it, and certainly -1 is not a valid file descriptor.\n- Dike out the call to `_exec_command_python` entirely; I guess just by deleting this branch of the `if`.\n",
+        "createdAt" : "2013-03-12T14:33:05Z",
+        "updatedAt" : "2013-03-24T16:44:15Z",
+        "lastEditedBy" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fdca80f5-9adc-46bb-a064-858ede012e10",
+        "parentId" : "ffa8b32c-a5e3-4504-af96-19bc1b034d19",
+        "authorId" : "8ffdfffb-d8d9-40f6-9de3-dd0dee381149",
+        "body" : "My vote goes to minimal hack - impact of changes is near impossible to test.\n",
+        "createdAt" : "2013-03-12T21:04:05Z",
+        "updatedAt" : "2013-03-24T16:44:15Z",
+        "lastEditedBy" : "8ffdfffb-d8d9-40f6-9de3-dd0dee381149",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2eacc80b-4aa7-4872-b79b-85d8e27421e8",
+        "parentId" : "ffa8b32c-a5e3-4504-af96-19bc1b034d19",
+        "authorId" : "041ba948-3afd-44ae-9741-f412d7673058",
+        "body" : "We should definitely only do minimal changes in 1.7.1. In 1.8, we can fix this the right way.\n\nRight, I see that my way of fixing it is confusing. I like your idea @njsmith. I'll try to implement it and see how it goes.\n",
+        "createdAt" : "2013-03-12T22:06:12Z",
+        "updatedAt" : "2013-03-24T16:44:15Z",
+        "lastEditedBy" : "041ba948-3afd-44ae-9741-f412d7673058",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5099683c351929e938985fd770b0a03cf7285ecb",
+    "line" : 26,
+    "diffHunk" : "@@ -1,1 +210,214 @@        # a correct status.\n        if (_with_python and _supports_fileno(sys.stdout) and\n                            sys.stdout.fileno() == -1):\n            st = _exec_command_python(command,\n                                      exec_command_dir = exec_dir,"
   }
 ]
