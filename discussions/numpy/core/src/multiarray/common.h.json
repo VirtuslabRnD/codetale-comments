@@ -361,5 +361,170 @@
     "commit" : "8d6ec65c925ebef5e0567708de1d16df39077c9d",
     "line" : 16,
     "diffHunk" : "@@ -1,1 +147,151 @@        /*\n         * Load the exception type, if we don't already have it. Unfortunately\n         * we don't have access to npy_cache_import here\n         */\n        static PyObject *AxisError_cls = NULL;"
+  },
+  {
+    "id" : "90a5fe0a-dab0-4b8a-a4ae-33d06b00c53f",
+    "prId" : 8843,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8843#pullrequestreview-29564208",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "14f2b379-c1e5-42ec-af7e-2fec4fcff1ae",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "This was the way I should have written this the first time...",
+        "createdAt" : "2017-03-28T20:23:01Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17466ad1839718c091c629bb647e881b7922a148",
+    "line" : 31,
+    "diffHunk" : "@@ -1,1 +165,169 @@        /* Invoke the AxisError constructor */\n        exc = PyObject_CallFunction(AxisError_cls, \"iiO\",\n                                    *axis, ndim, msg_prefix);\n        if (exc == NULL) {\n            return -1;"
+  },
+  {
+    "id" : "b8b39d7c-d2f5-4275-9c37-fe1fd98be176",
+    "prId" : 8843,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8843#pullrequestreview-29582130",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "parentId" : null,
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "I think you have to `Py_INCREF(Py_None)` before passing it on. Since you then would have to `Py_DECREF` it as well, I suggest passing in `NULL` here, and doing the translation to `Py_None` above.",
+        "createdAt" : "2017-03-28T20:37:55Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1ebf9ffa-6aee-4e8f-8043-873c3a07d87f",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "body" : "`Py_None` is garantueed to exist and as long as it doesn't escape to the user and it isn't decref'd everything should be fine. `PyObject_CallFunction` increments it's reference count for the exception so what the user gets is a new reference.\r\n\r\nUsing `NULL` seems cleaner though.",
+        "createdAt" : "2017-03-28T20:45:56Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "559f3665-ff04-4260-a530-4513dd03babb",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "I don't need to here, because `check_and_adjust_axis_msg` takes a borrowed reference. It doesn't actually need a refcount at all until it makes it to the python code, and `PyObject_CallFunction()` increments the refcount for me, AFAICT.\r\n\r\nIt took a lot of iteration to get this working, and attempts at doing what you describe only caused segfaults",
+        "createdAt" : "2017-03-28T20:46:23Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08a9ef9f-3c87-469d-933a-bfa2af9a5da5",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "> Using NULL seems cleaner though.\r\n\r\nWhy? We already need to handle `Py_None` being passed in from user code. Furthermore, when we get `Py_None` from usercode, it's a borrowed reference - so like here, it doesn't need an incref unless it escapes to python code.\r\n\r\nThe only thing that's unclear to me is whether I need to `INCREF` `msg_prefix` on the line immediately before `PyObject_CallFunction`. I think the answer is no, (it was no when I used Py_Buildvalue here previously), but that's not clear from the documentation",
+        "createdAt" : "2017-03-28T20:53:59Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "349bae04-cfa1-4331-8cac-32c6e55431ac",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "body" : "@eric-wieser How would it cause segfaults? You could just initialize it as `NULL` and when you call the \"exception\" you do `PyObject_CallFunction(AxisError_cls, \"iiO\", *axis, ndim, msg_prefix?msg_prefix:Py_None);`",
+        "createdAt" : "2017-03-28T20:55:30Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "112b492e-b3ed-401f-acbf-5eeab62c3d04",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Wait, why on earth is `msg_prefix?msg_prefix:Py_None` better than just passing `Py_None` in the first place? The refcounting is identical",
+        "createdAt" : "2017-03-28T20:58:50Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa5e76f4-91b2-4284-bccc-1ec5d21b5b59",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "body" : "That was meant as question to your\r\n\r\n> It took a lot of iteration to get this working, and attempts at doing what you describe only caused segfaults\r\n\r\nI just wondered how that could segfault.",
+        "createdAt" : "2017-03-28T21:06:03Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c3f5458d-1d9d-4bd8-9f9b-90e346a01db8",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Segfaults came from other attempts at refcounting. I wasn't aiming to be passing null originally. Sorry if that was unclear. You're correct, what you have would add support for passing null, and would work correctly assuming that this works correctly - but I see no purpose in adding that as a special case\r\n",
+        "createdAt" : "2017-03-28T21:07:40Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "30c499ac-0b61-4105-9c48-8c6d65bd9d36",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "body" : "Yeah, that's the reason why it's generally not a good idea to pass borrowed references around. But I didn't check the numpy source code, maybe it's common here. In that case please ignore my comments.",
+        "createdAt" : "2017-03-28T21:09:08Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eaeb2cb1-036e-4111-8f11-f55c04d386ea",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "I guess my argument would be that if I manually inlined the contents of `check_and_adjust_axis_msg` into `normalize_axis_index`, you would not expect me to add any additional `Py_INCREF`s\r\n\r\nI'm not sure what you mean there - can you elaborate on exactly why it is a bad idea? (and perhaps link me to some recommendations for working with python refcounting)\r\n\r\nCounter-point to it generally not being a good idea - every function in a `PyMethodDef` object is passed borrowed references - so python seems to favor it internally.",
+        "createdAt" : "2017-03-28T21:12:52Z",
+        "updatedAt" : "2017-03-28T21:23:31Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bb02d533-40a6-49bf-bb57-8b883cca6f4e",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "body" : "ok, this goes a bit off-topic. I [still think](https://github.com/numpy/numpy/pull/8843#discussion_r108532657) the code is correct wrt reference counting.",
+        "createdAt" : "2017-03-28T21:35:40Z",
+        "updatedAt" : "2017-03-28T21:35:40Z",
+        "lastEditedBy" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a1cfeb4e-7fa1-47dc-9035-9ad148988d79",
+        "parentId" : "b343ba20-54ea-4539-b01f-bf4614995e1c",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Some confusion added here by my first comment being written before yours appeared (and not directed at you), I think :).",
+        "createdAt" : "2017-03-28T21:39:34Z",
+        "updatedAt" : "2017-03-28T21:39:34Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17466ad1839718c091c629bb647e881b7922a148",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +183,187 @@check_and_adjust_axis(int *axis, int ndim)\n{\n    return check_and_adjust_axis_msg(axis, ndim, Py_None);\n}\n"
   }
 ]
