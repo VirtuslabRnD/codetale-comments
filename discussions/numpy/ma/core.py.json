@@ -1351,5 +1351,500 @@
     "commit" : "3435dd9881d84ba2b91faa478555a3c58e7921af",
     "line" : 153,
     "diffHunk" : "@@ -1,1 +3936,3940 @@\n        When either of the elements is masked, the result is masked as well,\n        but the underlying boolean data are still set, with self and other\n        considered equal if both are masked, and unequal otherwise.\n"
+  },
+  {
+    "id" : "075ac860-bc79-468b-9daf-5fee028c91a8",
+    "prId" : 8665,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8665#pullrequestreview-23249305",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0ab3749e-46d9-4e19-964b-98945d157c59",
+        "parentId" : null,
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "Why look up the method on the class rather than just `getattr(marr, method_name, None)`?",
+        "createdAt" : "2017-02-22T15:10:54Z",
+        "updatedAt" : "2017-02-22T15:10:54Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "68448422-48e5-424d-83c0-a60ae24c19f9",
+        "parentId" : "0ab3749e-46d9-4e19-964b-98945d157c59",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Seems tidier I guess (and closed to how dunder lookup works), and makes it work on masked record arrays.\r\n\r\nYou've actually made me notice a bug here, in that `reversed` should only apply to the method call. Either way, that bug was here all along, and can wait for another PR.",
+        "createdAt" : "2017-02-22T15:18:52Z",
+        "updatedAt" : "2017-02-22T15:24:25Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "593bb9c4-daac-4fee-9681-c102263686e3",
+        "parentId" : "0ab3749e-46d9-4e19-964b-98945d157c59",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "It does look really weird to me to look it up on the class! But of course if one looks up on `marr`, one cannot pass `marr` as first argument below. If I were to write this, I'd probably do:\r\n```\r\nmethod = getattr(marr, 'method_name', None)\r\nif method is not None:\r\n    return method(*args, **params)\r\nelse:\r\n    return getattr(np, method_name)(marr, *args, **params)\r\n```\r\nAnyway, no big deal either way.",
+        "createdAt" : "2017-02-22T15:40:08Z",
+        "updatedAt" : "2017-02-22T15:40:08Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0bc42fc2194c4a7cbc8fa77165e25365e3e46012",
+    "line" : 22,
+    "diffHunk" : "@@ -1,1 +6377,6381 @@        marr = asanyarray(a)\n        method_name = self.__name__\n        method = getattr(type(marr), method_name, None)\n        if method is None:\n            # use the corresponding np function"
+  },
+  {
+    "id" : "420df703-5b20-4a5f-8361-f9789c8247c5",
+    "prId" : 8665,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8665#pullrequestreview-23261681",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5247cffd-453a-44a3-b72e-791a04c9045a",
+        "parentId" : null,
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "One could change `MaskedArray.__new__`, though perhaps calling a class constructor and not getting back a new instance might also be surprising... Perhaps best might have been to have had a logical distinction between the `np.ma.MaskedArray` class and a `np.ma.masked_array`/`np.ma.array` function...\r\n\r\nOverall, this is probably the best solution.",
+        "createdAt" : "2017-02-22T15:18:32Z",
+        "updatedAt" : "2017-02-22T15:18:32Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "152e714a-f0b4-4629-8288-f21fb3350c04",
+        "parentId" : "5247cffd-453a-44a3-b72e-791a04c9045a",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "> One could change `MaskedArray.__new__`\r\n\r\nThis is the correct approach, and already how `ndarray.__new__` behaves. Now take a look at `MaskedArray.__new__`, and tell me how easy that changes looks. That's why I'm calling this a workaround!",
+        "createdAt" : "2017-02-22T15:24:12Z",
+        "updatedAt" : "2017-02-22T15:24:25Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f68ed7b3-feaa-4860-9cf3-4e3e0698d540",
+        "parentId" : "5247cffd-453a-44a3-b72e-791a04c9045a",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "I think one would add right after the [first line](https://github.com/numpy/numpy/blob/master/numpy/ma/core.py#L2766):\r\n```\r\nif _data is data and (type(_data) is cls or subok and isinstance(_data, cls)):\r\n    return _data\r\n```",
+        "createdAt" : "2017-02-22T15:48:18Z",
+        "updatedAt" : "2017-02-22T15:48:18Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6c50705b-77c1-4e6b-b689-b900b78ad072",
+        "parentId" : "5247cffd-453a-44a3-b72e-791a04c9045a",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "Just to be sure: I think for a bug fix you're current approach is preferable!",
+        "createdAt" : "2017-02-22T15:48:56Z",
+        "updatedAt" : "2017-02-22T15:48:57Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "836301bb-4209-4307-b21c-6c5cdb02eff5",
+        "parentId" : "5247cffd-453a-44a3-b72e-791a04c9045a",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "@mhkv: Not enough. I think you also need to check that all of the other arguments are their default value, or more difficultly, compatible values",
+        "createdAt" : "2017-02-22T15:50:12Z",
+        "updatedAt" : "2017-02-22T15:50:30Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b585809-f281-497d-8771-cae1de80aec5",
+        "parentId" : "5247cffd-453a-44a3-b72e-791a04c9045a",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "Yes, makes sense.",
+        "createdAt" : "2017-02-22T16:20:59Z",
+        "updatedAt" : "2017-02-22T16:20:59Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0bc42fc2194c4a7cbc8fa77165e25365e3e46012",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +7677,7681 @@\n    \"\"\"\n    # workaround for #8666, to preserve identity. Ideally the bottom line\n    # would handle this for us.\n    if isinstance(a, MaskedArray) and (dtype is None or dtype == a.dtype):"
+  },
+  {
+    "id" : "1779bfee-3d95-49b1-9efa-cbe25b360c99",
+    "prId" : 8665,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8665#pullrequestreview-23271187",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e3d8e70f-3f51-4cd8-b986-07e7eb7a2932",
+        "parentId" : null,
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "I think with your other change it is now safe (and shorter though a bit slower) to just do \r\n```\r\ncompressed = _frommethod('compressed')\r\n```",
+        "createdAt" : "2017-02-22T15:23:26Z",
+        "updatedAt" : "2017-02-22T15:23:26Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3862ce57-4e2f-43b5-a18b-56eec653dae3",
+        "parentId" : "e3d8e70f-3f51-4cd8-b986-07e7eb7a2932",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "I agree. Until just now, I thought that this was only for methods that exist in `np`, but it is not",
+        "createdAt" : "2017-02-22T15:25:11Z",
+        "updatedAt" : "2017-02-22T15:25:11Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "027b8658-e96a-477a-9225-b2293e733ddd",
+        "parentId" : "e3d8e70f-3f51-4cd8-b986-07e7eb7a2932",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "I'll add another commit for this that fixes a bunch of other methods as well, that were out of scope for the original PR\r\n",
+        "createdAt" : "2017-02-22T15:26:47Z",
+        "updatedAt" : "2017-02-22T15:26:47Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0023e1b3-20f4-4fc7-b1b3-7433670492d5",
+        "parentId" : "e3d8e70f-3f51-4cd8-b986-07e7eb7a2932",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "@mhvk: actually, can I bump that method cleanup to another PR?",
+        "createdAt" : "2017-02-22T15:31:36Z",
+        "updatedAt" : "2017-02-22T15:31:36Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "074b0f16-20f9-41af-a6c3-374ab0949be4",
+        "parentId" : "e3d8e70f-3f51-4cd8-b986-07e7eb7a2932",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "Yes, better in another PR. As is, this is a bug fix, but that would be maintenance.",
+        "createdAt" : "2017-02-22T15:41:43Z",
+        "updatedAt" : "2017-02-22T15:41:43Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e5c0ff01-042d-408e-a1d1-e7235950d5db",
+        "parentId" : "e3d8e70f-3f51-4cd8-b986-07e7eb7a2932",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Happy for me to leave this line in then, or do you want me to remove it?",
+        "createdAt" : "2017-02-22T16:00:24Z",
+        "updatedAt" : "2017-02-22T16:00:25Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa005439-9008-43d2-9df5-f30001bc6a4d",
+        "parentId" : "e3d8e70f-3f51-4cd8-b986-07e7eb7a2932",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "In another PR is slightly better, but really this is making work, so whatever you feel like!",
+        "createdAt" : "2017-02-22T16:22:15Z",
+        "updatedAt" : "2017-02-22T16:22:15Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "986366c6-ce81-4455-bdc1-eb515a0f3681",
+        "parentId" : "e3d8e70f-3f51-4cd8-b986-07e7eb7a2932",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "I'd rather this just be merged as is, to be honest",
+        "createdAt" : "2017-02-22T16:29:55Z",
+        "updatedAt" : "2017-02-22T16:29:55Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "24706123-eeeb-4377-abee-2a839e2eda62",
+        "parentId" : "e3d8e70f-3f51-4cd8-b986-07e7eb7a2932",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "No problem.",
+        "createdAt" : "2017-02-22T16:53:01Z",
+        "updatedAt" : "2017-02-22T16:53:01Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0bc42fc2194c4a7cbc8fa77165e25365e3e46012",
+    "line" : 38,
+    "diffHunk" : "@@ -1,1 +6531,6535 @@\n    \"\"\"\n    return asanyarray(x).compressed()\n\n"
+  },
+  {
+    "id" : "cfd06558-83d0-458b-a713-7cad902ac733",
+    "prId" : 8667,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8667#pullrequestreview-23372499",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3a90691b-dfba-43c9-bbf5-187bab21fbd8",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "`_make_descr` was a pretty bad name",
+        "createdAt" : "2017-02-23T00:35:49Z",
+        "updatedAt" : "2017-03-03T12:49:33Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1a70570c2110734ed6a371df2224a34aa20b9ec",
+    "line" : 6,
+    "diffHunk" : "@@ -1,1 +1287,1291 @@\n\ndef _replace_dtype_fields_recursive(dtype, primitive_dtype):\n    \"Private function allowing recursion in _replace_dtype_fields.\"\n    _recurse = _replace_dtype_fields_recursive"
+  },
+  {
+    "id" : "3b604104-f874-4df1-8315-b086ff451472",
+    "prId" : 8667,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8667#pullrequestreview-23372499",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "62352e2d-9eee-44c6-99be-406a4c99cc79",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Now do the dtype conversions just once, so we don't need to again",
+        "createdAt" : "2017-02-23T00:36:04Z",
+        "updatedAt" : "2017-03-03T12:49:33Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1a70570c2110734ed6a371df2224a34aa20b9ec",
+    "line" : 59,
+    "diffHunk" : "@@ -1,1 +1330,1334 @@    dtype = np.dtype(dtype)\n    primitive_dtype = np.dtype(primitive_dtype)\n    return _replace_dtype_fields_recursive(dtype, primitive_dtype)\n\n"
+  },
+  {
+    "id" : "8dfa1ca2-3591-41c0-a343-d0c31148db65",
+    "prId" : 8667,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8667#pullrequestreview-23372499",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "545d4718-17c1-47d6-9252-7079c4b90af2",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Possible scope for public visibility? I can see \"convert all fields to object/bool\" being marginally desirable elsewhere",
+        "createdAt" : "2017-02-23T00:36:50Z",
+        "updatedAt" : "2017-03-03T12:49:33Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1a70570c2110734ed6a371df2224a34aa20b9ec",
+    "line" : 48,
+    "diffHunk" : "@@ -1,1 +1319,1323 @@\n\ndef _replace_dtype_fields(dtype, primitive_dtype):\n    \"\"\"\n    Construct a dtype description list from a given dtype."
+  },
+  {
+    "id" : "85572f73-780f-405e-925d-2bc6cd22cb1a",
+    "prId" : 8667,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8667#pullrequestreview-23372499",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "b7449317-d865-4ad3-b209-057998c1168a",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Implementation details of `mask_make_descr` shouldn't be used elsewhere!",
+        "createdAt" : "2017-02-23T00:37:22Z",
+        "updatedAt" : "2017-03-03T12:49:33Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1a70570c2110734ed6a371df2224a34aa20b9ec",
+    "line" : 84,
+    "diffHunk" : "@@ -1,1 +3849,3853 @@                    res.view(ndarray)[mask] = f\n                else:\n                    rdtype = _replace_dtype_fields(self.dtype, \"O\")\n                    res = self._data.astype(rdtype)\n                    _recursive_printoption(res, m, f)"
+  },
+  {
+    "id" : "fcc51bf9-f9ba-4e96-bb09-2374f8aa12be",
+    "prId" : 8667,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8667#pullrequestreview-23372499",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a6921dd8-665c-4af5-bee3-9ee483ea40de",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Ideally I'd rename this to `make_mask_dtype` or `mask_dtype_for`, but that's for another PR.",
+        "createdAt" : "2017-02-23T00:38:09Z",
+        "updatedAt" : "2017-03-03T12:49:33Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1a70570c2110734ed6a371df2224a34aa20b9ec",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +1333,1337 @@\n\ndef make_mask_descr(ndtype):\n    \"\"\"\n    Construct a dtype description list from a given dtype."
+  },
+  {
+    "id" : "536a943c-2be9-4433-820e-3c14df7d7d10",
+    "prId" : 8667,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8667#pullrequestreview-24966365",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "310c052e-9671-45f3-928b-cf471b6114fb",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "This was already the behaviour before the PR - the docs were just wrong",
+        "createdAt" : "2017-03-03T12:51:12Z",
+        "updatedAt" : "2017-03-03T12:51:12Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b1a70570c2110734ed6a371df2224a34aa20b9ec",
+    "line" : 68,
+    "diffHunk" : "@@ -1,1 +1360,1364 @@    dtype([('foo', '|b1'), ('bar', '|b1')])\n    >>> ma.make_mask_descr(np.float32)\n    dtype('bool')\n\n    \"\"\""
+  },
+  {
+    "id" : "b2b7fa4e-2915-44c7-b037-69e36504377d",
+    "prId" : 8669,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8669#pullrequestreview-24138059",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c7025c8b-3fe3-4b48-83aa-8728c287ef54",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Wait, why level 2?",
+        "createdAt" : "2017-02-28T00:57:17Z",
+        "updatedAt" : "2017-02-28T00:57:22Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2ad6f8d2-aa39-4201-871b-9010b6aa04bc",
+        "parentId" : "c7025c8b-3fe3-4b48-83aa-8728c287ef54",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Nevermind, this is consistent with everything else",
+        "createdAt" : "2017-02-28T01:01:11Z",
+        "updatedAt" : "2017-02-28T01:01:11Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2c9b2c75-13f8-43a0-a17f-e1d9379ea55c",
+        "parentId" : "c7025c8b-3fe3-4b48-83aa-8728c287ef54",
+        "authorId" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "body" : "Yep, that was simply copied from another warning.",
+        "createdAt" : "2017-02-28T01:04:09Z",
+        "updatedAt" : "2017-02-28T01:04:09Z",
+        "lastEditedBy" : "4b0602db-f9ac-4b54-b200-2e79d0cfb7c3",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "586dac03-5019-45d0-8c13-d2205b04e4e9",
+        "parentId" : "c7025c8b-3fe3-4b48-83aa-8728c287ef54",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Python docs seemed to suggest that `stacklevel=2` is what you should use in a warning helper function. But yeah, this is better for consistency",
+        "createdAt" : "2017-02-28T01:12:01Z",
+        "updatedAt" : "2017-02-28T01:12:01Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d0bf15d1b99dd239530b25a0d939ee4475f85af5",
+    "line" : 13,
+    "diffHunk" : "@@ -1,1 +5645,5649 @@        warnings.warn(\"Warning: 'argpartition' will ignore the 'mask' \"\n                      \"of the {}.\".format(self.__class__.__name__),\n                      stacklevel=2)\n        return super(MaskedArray, self).argpartition(*args, **kwargs)\n"
+  },
+  {
+    "id" : "66301476-75d2-4bd8-98ec-dbfd294102c3",
+    "prId" : 8678,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8678#pullrequestreview-23506950",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f9ea8db7-90b6-40e4-b177-e898e8eaa167",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "There's a choice we need to make here. Right now (and before this patch), `np.ma.sort` sometimes returns an `ma.array`, and sometimes an `ndarray`.\r\n\r\nShould we change it to always promote to `ma.array`, for consistency with the other functions? (Which do this as of #8665 )",
+        "createdAt" : "2017-02-23T15:40:50Z",
+        "updatedAt" : "2017-03-07T17:35:22Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ee90efce354c8af73e17331d3977121d438bb294",
+    "line" : 196,
+    "diffHunk" : "@@ -1,1 +6528,6532 @@               endwith=endwith, fill_value=fill_value)\n    else:\n        a.sort(axis=axis, kind=kind, order=order)\n    return a\nsort.__doc__ = MaskedArray.sort.__doc__"
+  },
+  {
+    "id" : "74abb7ff-1610-477d-bba0-42445c5441d4",
+    "prId" : 8678,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8678#pullrequestreview-23509928",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "37525548-d51f-435a-9880-1d398f3149db",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "In theory we could do a little better here, by implementing the in-place sort in terms of the non-in place. Right now (and before this patch), the latter does a redundant copy. So either way, best left for another PR, I think",
+        "createdAt" : "2017-02-23T15:51:01Z",
+        "updatedAt" : "2017-03-07T17:35:22Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ee90efce354c8af73e17331d3977121d438bb294",
+    "line" : 131,
+    "diffHunk" : "@@ -1,1 +5460,5464 @@            idx[axis] = sidx\n\n        self[...] = self[idx]\n\n    def min(self, axis=None, out=None, fill_value=None, keepdims=np._NoValue):"
+  },
+  {
+    "id" : "b4b426ff-3db9-4217-b87a-a856857ff655",
+    "prId" : 8678,
+    "prUrl" : "https://github.com/numpy/numpy/pull/8678#pullrequestreview-23883223",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2f73cd0e-5c18-49ee-aadc-97f124894719",
+        "parentId" : null,
+        "authorId" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "body" : "I don't really like these shortcuts very much, the explicit meshgrid is easier to read imo\r\nthere isn't really an advantage to using `ix_` is there?",
+        "createdAt" : "2017-02-26T14:34:32Z",
+        "updatedAt" : "2017-03-07T17:35:22Z",
+        "lastEditedBy" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a747f5dc-647a-4068-98b8-edf73fd15b38",
+        "parentId" : "2f73cd0e-5c18-49ee-aadc-97f124894719",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Is this really a shortcut though? The two functions are independant, with neither calling the other. Meshgrid doesn't do what we need by default, but `ix_` does.\r\n\r\nFurthermore, `ix_` is used as an indexer in its examples, whereas meshgrid is used to evaluate functions. The former use is what we want here.",
+        "createdAt" : "2017-02-26T14:39:09Z",
+        "updatedAt" : "2017-03-07T17:35:22Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ee90efce354c8af73e17331d3977121d438bb294",
+    "line" : 114,
+    "diffHunk" : "@@ -1,1 +5457,5461 @@            idx = sidx\n        else:\n            idx = list(np.ix_(*[np.arange(x) for x in self.shape]))\n            idx[axis] = sidx\n"
   }
 ]
