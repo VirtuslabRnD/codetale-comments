@@ -229,5 +229,115 @@
     "commit" : "b6bbd74bc1158a59eaa0c2e20fe2f66c52f07fb6",
     "line" : 17,
     "diffHunk" : "@@ -1,1 +1023,1027 @@        assert_raises(ValueError, pad, np.ndarray(0), 4, mode='reflect')\n        assert_raises(ValueError, pad, np.zeros((0, 3)), ((1,), (0,)),\n                      mode='reflect')\n\n"
+  },
+  {
+    "id" : "af15e441-f4f6-47f2-8fb8-a5206dc0d8a4",
+    "prId" : 11358,
+    "prUrl" : "https://github.com/numpy/numpy/pull/11358#pullrequestreview-205475978",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "72b29598-b828-4d9c-a1c8-cbf36ce0fa97",
+        "parentId" : null,
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Hmmm, the difference seems to be due to the order of tests/parameterization. I am not sure that is an actual issue, and I am a bit confused as to why it should only show up here, since I would think the dictionary keys are always random order. My guess is that adding a `sorted(...)` would fix it, I am not sure that is nice though.\r\n\r\nEDIT: this is the shippable test failure.",
+        "createdAt" : "2019-02-19T16:35:57Z",
+        "updatedAt" : "2019-03-24T20:27:41Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b7d1c2d-018f-478a-8797-e3d072257bfb",
+        "parentId" : "72b29598-b828-4d9c-a1c8-cbf36ce0fa97",
+        "authorId" : "73d6f7d8-2c7d-4a48-8754-5ce4a97a850f",
+        "body" : "Please change the parametrization on the test(s) to have a sorted order, yes. The Shippable tests are running on more than 1 core & the parallel orchestration mechanism used by xdist doesn't like the lack of ordering.\r\n\r\nThere are a bunch of pytest-xdist issues floating around about this, and maybe someday pytest-xdist will be able to handle this, but not yet.",
+        "createdAt" : "2019-02-19T17:36:29Z",
+        "updatedAt" : "2019-03-24T20:27:41Z",
+        "lastEditedBy" : "73d6f7d8-2c7d-4a48-8754-5ce4a97a850f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7705de15-0987-4826-9950-2eb749af7d36",
+        "parentId" : "72b29598-b828-4d9c-a1c8-cbf36ce0fa97",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "@lagru, I realize that it only was an issue here, but to me it seems like this should also occur for the other uses of `_all_modes`, so maybe we should make `_all_modes` a `collection.OrderedDict`, or is that one fine @tylerjereddy? I am a bit surprised this doesn't occur elsewhere, but...",
+        "createdAt" : "2019-02-19T19:51:13Z",
+        "updatedAt" : "2019-03-24T20:27:41Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "df58748c-3ec0-4244-a616-eca1bf842ee4",
+        "parentId" : "72b29598-b828-4d9c-a1c8-cbf36ce0fa97",
+        "authorId" : "db3d18fd-e9e4-4707-af89-22e05f9c60bf",
+        "body" : "@seberg That's indeed strange. On the danger of saying something stupid or obvious: the shippable configuration seems to use Python 3.7 [which guarantees that dictionaries are ordered](https://mail.python.org/pipermail/python-dev/2017-December/151283.html) (and likely their key-views as well?). If that assumption is correct, not using an OrderedDict would only be an issue for a CI-setup that uses an older Python version (3.5, I think 3.6 was ordered as well but not yet official) together with pytest-xdist...",
+        "createdAt" : "2019-02-19T20:06:21Z",
+        "updatedAt" : "2019-03-24T20:27:41Z",
+        "lastEditedBy" : "db3d18fd-e9e4-4707-af89-22e05f9c60bf",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b1078839-ff98-4b98-9166-d4c46320f770",
+        "parentId" : "72b29598-b828-4d9c-a1c8-cbf36ce0fa97",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Ah, might be going back and forth with python versions whether or not it works, so maybe if 3.7 is fine and we are using 3.7 we are unlikely to go to an older version which might create issues.",
+        "createdAt" : "2019-02-19T20:39:14Z",
+        "updatedAt" : "2019-03-24T20:27:41Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "851fdf94-bef0-4b49-9abf-3583427cdb18",
+        "parentId" : "72b29598-b828-4d9c-a1c8-cbf36ce0fa97",
+        "authorId" : "73d6f7d8-2c7d-4a48-8754-5ce4a97a850f",
+        "body" : "`_all_modes.keys()` returns a `dict_keys` object (view) which allows set operations. Subtracting the set `{\"constant\", \"empty\"}` seems to produce a `set` object. My guess is that because `set` is not an ordered type, `pytest-xdist`detects the inconsistency for the parallell workflow.\r\n\r\nThe dictionary was probably already \"sorted\" according to insertion order since it was tested in Python 3.7, so it is really the sorting of the `set` object (and its conversion to a `list` which retains the sorting) that likely solves the issue here.\r\n\r\nThat's probably also why the other `_all_modes` uses are just fine -- those are just iterators that preserve the original dictionary insertion order.\r\n\r\nOf course, there have been arguments that I shouldn't have used `xdist` in the CI--if it becomes a big issue we can turn off parallel tests. I think this has been done for some platforms / CI infrastructures, but has mostly worked quite well on Shippable for some time now, so maybe this set parametrization thing is rare enough that we can live with converting to a sorted list in the those rare cases where we do that.",
+        "createdAt" : "2019-02-19T21:53:00Z",
+        "updatedAt" : "2019-03-24T20:27:41Z",
+        "lastEditedBy" : "73d6f7d8-2c7d-4a48-8754-5ce4a97a850f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "08176a0b-cf6f-477c-9bfe-c8bbbd314afe",
+        "parentId" : "72b29598-b828-4d9c-a1c8-cbf36ce0fa97",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Sounds like this is all good with the `sorted` in this one place then.",
+        "createdAt" : "2019-02-19T22:02:07Z",
+        "updatedAt" : "2019-03-24T20:27:41Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d0a94a398a751ab6e55a01a6e23f2649ea08f1f0",
+    "line" : 134,
+    "diffHunk" : "@@ -1,1 +835,839 @@        \"mode\", sorted(_all_modes.keys() - {\"constant\", \"empty\"})\n    )\n    def test_pad_empty_dimension(self, mode):\n        match = (\"can't extend empty axis 0 using modes other than 'constant' \"\n                 \"or 'empty'\")"
+  },
+  {
+    "id" : "f389252f-a636-439b-be27-33a20827f6f4",
+    "prId" : 11396,
+    "prUrl" : "https://github.com/numpy/numpy/pull/11396#pullrequestreview-133414136",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cb5c5ec0-d697-43a1-99b9-ac059a4bc96a",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Deeply weird style, but I can't fault you for copying what was already in this file",
+        "createdAt" : "2018-06-30T03:32:27Z",
+        "updatedAt" : "2018-06-30T03:32:27Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "626210fb67bb6cc92ca4d25d90bea5110ba3a026",
+    "line" : 14,
+    "diffHunk" : "@@ -1,1 +1020,1024 @@                 'reflect',\n                 'wrap',\n                 ]\n        for mode in modes:\n            assert_array_equal(pad(a, pad_amt, mode=mode), b)"
   }
 ]
