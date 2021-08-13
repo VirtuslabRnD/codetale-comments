@@ -42,5 +42,93 @@
     "commit" : "3c4f17b7d6d44b3076be9d50e305ed71836fa5d9",
     "line" : 15,
     "diffHunk" : "@@ -1,1 +234,238 @@        assert_equal(p.coeffs, [1, 2, 3])\n\n        p.coeffs[2] += 10\n        assert_equal(p.coeffs, [1, 2, 3])\n"
+  },
+  {
+    "id" : "1a72a002-76b2-4c31-af68-fc17438024a0",
+    "prId" : 11197,
+    "prUrl" : "https://github.com/numpy/numpy/pull/11197#pullrequestreview-125957487",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d79115bf-1160-4bfe-9866-adc84c48068f",
+        "parentId" : null,
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "Could we add a \"check 0D case\"? I ask since for that case we know exactly what the answer should be. (True also for higher-D, but less obvious): just pass in normally distributed data and check that `sigma_mean = sqrt(cov) = sigma/sqrt(n)`. E.g.,\r\n```\r\nnp.random.seed(123)\r\ny = np.random.normal(size=(4, 10000))\r\nmean, cov = np.polyfit(np.zeros(y.shape[0], y, deg=0, cov=True)\r\n# Should get sigma_mean = sigma/sqrt(N) = 1./sqrt(4) = 0.5.\r\nassert_allclosel(mean.std(),  0.5, atol=0.01)\r\nassert_allclose(np.sqrt(cov.mean()), 0.5, atol=0.01)\r\n``` \r\n(Obviously, the last test would fail on current master, which goes to show that the -2 is wrong at least for the simplest case.)",
+        "createdAt" : "2018-06-01T13:38:55Z",
+        "updatedAt" : "2018-11-21T20:24:06Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4594615c-0f75-4526-9778-d05b56c45e35",
+        "parentId" : "d79115bf-1160-4bfe-9866-adc84c48068f",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "Just realized the above is missing a test of the unscaled version:\r\n```\r\nmean, cov_noscaling = np.polyfit(np.zeros(y.shape[0], y, deg=0, cov=True, cov_scale=False)\r\n# without scaling, for 0D: <cov> = (N-dof)/N = 3/4.\r\nassert_allclose(cov.mean(), 0.75, atol=0.01)\r\n```",
+        "createdAt" : "2018-06-01T16:16:32Z",
+        "updatedAt" : "2018-11-21T20:24:06Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a6e9b64-48e1-49fe-aea9-ca92d202a7d3",
+        "parentId" : "d79115bf-1160-4bfe-9866-adc84c48068f",
+        "authorId" : "da4d68c1-72d7-44ae-ba55-b5960b3569cc",
+        "body" : "Sorry, but I'm not sure if I understand the tests correctly. My calculations go as follows:\r\n1) absolute_weights = False:\r\nvar(a) = var(y) / n_dof\r\n(biased) variance of drawing 4 Gaussian random numbers with width 1: var_4 = (n-1)/n*var = 3/4\r\ntherefore: var(a)= var_4 / (n-1) = var / n \r\nor: sigma(a) = sqrt(sigma/n) = 1/sqrt(4) = 1/2\r\n\r\n2) absolute_weights = True:\r\nar(a) = 1/S, with S=sum_{i=1}^n (1/var_i) \r\nwith var_1 = var_2 = ... var_n = var: S = n / var\r\nor: var(a) = var / n\r\nthen: sigma(a) = sqrt(var/ n)  \r\nwith var=1: sigma_1(a) = sqrt(1/4) = 1/2\r\nwith var=3/4: sigma_3/4(a) = sqrt(3/4/4) = sqrt(3)/4 = 0.43301270...\r\n\r\nFor the relative weights (1) we seem to agree while for the absolute weights (2), there is a difference:\r\n\r\n```python\r\nimport numpy as np\r\n\r\nnp.random.seed(123)\r\ny = np.random.normal(size=(4, 10000))\r\nx = np.zeros(y.shape[0])\r\n\r\nprint(\"*** relative weights ***\")\r\nmean, cov = np.polyfit(x, y, deg=0, cov=True, absolute_weights=False)\r\nprint(\"expected: 1/sqrt(4)=0.5\")\r\nprint(\"np.sqrt(cov.mean())={}\".format(np.sqrt(cov.mean())))\r\nprint(\"\")\r\nprint(\"\")\r\nprint(\"*** absolute weights***\")\r\nprint(\"a) var_i=1\")\r\nvar = np.ones(y.shape[0])\r\nmean, cov = np.polyfit(\r\n    x, y, deg=0, cov=True, w=1 / np.sqrt(var), absolute_weights=True)\r\nprint(\"expected: 1/sqrt(4)=0.5\")\r\nprint(\"np.sqrt(cov.mean())={}\".format(np.sqrt(cov.mean())))\r\nprint(\"\")\r\n\r\nprint(\"b) var_i=3/4\")\r\nvar = np.full(y.shape[0], 3 / 4)\r\nmean, cov = np.polyfit(\r\n    x, y, deg=0, cov=True, w=1 / np.sqrt(var), absolute_weights=True)\r\nprint(\"expected: sqrt(3)/4={}\".format(np.sqrt(3) / 4))\r\nprint(\"np.sqrt(cov.mean())={}\".format(np.sqrt(cov.mean())))\r\n```\r\ngives\r\n```\r\n*** relative weights ***\r\nexpected: 1/sqrt(4)=0.5\r\nnp.sqrt(cov.mean())=0.5008913441736218\r\n\r\n\r\n*** absolute weights***\r\na) var_i=1\r\nexpected: 1/sqrt(4)=0.5\r\nnp.sqrt(cov.mean())=0.5\r\n\r\nb) var_i=3/4\r\nexpected: sqrt(3)/4=0.4330127018922193\r\nnp.sqrt(cov.mean())=0.43301270189221924\r\n```\r\n",
+        "createdAt" : "2018-06-04T11:31:13Z",
+        "updatedAt" : "2018-11-21T20:24:06Z",
+        "lastEditedBy" : "da4d68c1-72d7-44ae-ba55-b5960b3569cc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1afd2cc7-13a0-4164-9e0d-46bfdd85cc6d",
+        "parentId" : "d79115bf-1160-4bfe-9866-adc84c48068f",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "Yes, I'm an idiot! For the unscaled case, of course, the `sqrt(cov.mean())` again should be 0.5, since the weights are 1 and by construction the reduced chi2 is 1 too.\r\n\r\nSo, I think the tests might be better as:\r\n```\r\nnp.random.seed(123)\r\ny = np.random.normal(size=(4, 10000))\r\nmean, cov = np.polyfit(np.zeros(y.shape[0], y, deg=0, cov=True)\r\n# Should get sigma_mean = sigma/sqrt(N) = 1./sqrt(4) = 0.5.\r\nassert_allclosel(mean.std(),  0.5, atol=0.01)\r\nassert_allclose(np.sqrt(cov.mean()), 0.5, atol=0.01)\r\n# Without scaling, since reduced chi2 is 1, the result should be the same.\r\nmean, cov = np.polyfit(np.zeros(y.shape[0], y, deg=0, cov=True, absolute_weights=True)\r\nassert_allclosel(mean.std(),  0.5, atol=0.01)\r\nassert_allclose(np.sqrt(cov.mean()), 0.5, atol=0.01)\r\n# If we estimate our errors wrong, no change with scaling:\r\nw = np.full(y.shape[0], 1./0.5**2)\r\nmean, cov = np.polyfit(np.zeros(y.shape[0], y, deg=0, cov=True)\r\nassert_allclosel(mean.std(),  0.5, atol=0.01)\r\nassert_allclose(np.sqrt(cov.mean()), 0.5, atol=0.01)\r\n# But if we do not scale, our estimate for the error in the mean will differ.\r\nmean, cov = np.polyfit(np.zeros(y.shape[0], y, deg=0, cov=True, absolute_weights=True)\r\nassert_allclosel(mean.std(),  0.5, atol=0.01)\r\nassert_allclose(np.sqrt(cov.mean()), 0.25, atol=0.01)\r\n```",
+        "createdAt" : "2018-06-04T13:13:22Z",
+        "updatedAt" : "2018-11-21T20:24:06Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ad2892ca-1edb-4ec1-b03e-3d27332d37e0",
+        "parentId" : "d79115bf-1160-4bfe-9866-adc84c48068f",
+        "authorId" : "da4d68c1-72d7-44ae-ba55-b5960b3569cc",
+        "body" : "I guess, the 3rd test should look like this?\r\n\r\n```Python\r\n# If we estimate our errors wrong, no change with scaling:\r\nw = np.full(y.shape[0], 1./0.5**2)\r\nmean, cov = np.polyfit(np.zeros(y.shape[0]), y, w, deg=0, cov=True)\r\nassert_allclosel(mean.std(),  0.5, atol=0.01)\r\nassert_allclose(np.sqrt(cov.mean()), 0.5, atol=0.01)\r\n```\r\n(the weights `w` were passed to np.polyfit)\r\n",
+        "createdAt" : "2018-06-05T07:02:26Z",
+        "updatedAt" : "2018-11-21T20:24:06Z",
+        "lastEditedBy" : "da4d68c1-72d7-44ae-ba55-b5960b3569cc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e6b6b2d2-3fb4-489d-9b74-e298b1483f4b",
+        "parentId" : "d79115bf-1160-4bfe-9866-adc84c48068f",
+        "authorId" : "da4d68c1-72d7-44ae-ba55-b5960b3569cc",
+        "body" : "In the 4th test, the `w` is also missing.",
+        "createdAt" : "2018-06-05T07:22:35Z",
+        "updatedAt" : "2018-11-21T20:24:06Z",
+        "lastEditedBy" : "da4d68c1-72d7-44ae-ba55-b5960b3569cc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9440e9f2-d5a0-470c-b610-82b6495b07cb",
+        "parentId" : "d79115bf-1160-4bfe-9866-adc84c48068f",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "@wummo - yes, that was the idea, sorry for writing tests on the fly, without actually checking them!",
+        "createdAt" : "2018-06-05T13:03:02Z",
+        "updatedAt" : "2018-11-21T20:24:06Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1837df75469d908c15434d97c15d9af4424ca897",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +128,132 @@                      [1], [1], deg=0, cov=True)\n\n        # check 1D case\n        m, cov = np.polyfit(x, y+err, 2, cov=True)\n        est = [3.8571, 0.2857, 1.619]"
   }
 ]
