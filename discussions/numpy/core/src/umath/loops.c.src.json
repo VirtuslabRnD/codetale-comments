@@ -955,5 +955,49 @@
     "commit" : "6cf6ece43589670a28b765fd03402cc08ada61f0",
     "line" : 54,
     "diffHunk" : "@@ -1,1 +822,826 @@    // For some reason, our macOS CI sets an \"invalid\" flag here, but only\n    // for some types.\n    npy_clear_floatstatus_barrier((char*)dimensions);\n#endif\n}"
+  },
+  {
+    "id" : "effa4639-f337-4a1f-a802-e726f8a17583",
+    "prId" : 13885,
+    "prUrl" : "https://github.com/numpy/numpy/pull/13885#pullrequestreview-300951849",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f0de5a7d-373a-4f65-ab34-e7a753a41076",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Is the compiler able to generate the avx code automatically if you use\r\n```\r\nif (IS_OUTPUT_BLOCKABLE_UNARY(sizeof(@type@), @REGISTER_SIZE@)) {\r\n    UNARY_LOOP { ... }\r\n}\r\nelse {\r\n    // as above\r\n    UNARY_LOOP { ... }\r\n}\r\n```\r\nWe use this trick in all sorts of places today to encourage it to generate optimized code.",
+        "createdAt" : "2019-10-10T17:25:42Z",
+        "updatedAt" : "2019-10-10T17:25:42Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6755c748-d24e-43dc-94b3-0dfa402568e8",
+        "parentId" : "f0de5a7d-373a-4f65-ab34-e7a753a41076",
+        "authorId" : "bcfc9a54-7a4c-4326-b6cb-aee294b5cf32",
+        "body" : "I tried several options with GCC-9.2 and found the following: \r\n\r\n- Any compiler generated vectorized loop for floating point seems to require extra compiler options like -ffast-math (see https://gcc.gnu.org/projects/tree-ssa/vectorization.html#using) . Here is the code for an example of the sqrt loop [with ](https://godbolt.org/z/Ctlf4S)and [without ](https://godbolt.org/z/ElB339) this option. There are several problems with this path: (1) -ffast-math obviously should not be used as a global compile option and (2) the code generated with this option ends up using a combination of `vrsqrt14ps `and `vmulps `instruction to compute square root which is neither accurate ~~nor fast~~ (`vrsqrt14ps  `is only accurate up to the 6th decimal place and I have no idea why even the latest GCC wont use a simple `vsqrtps ` instruction instead!)\r\n\r\n- The other problem is, no matter what option I try, I could not get GCC to vectorize the strided array case (see an example [here](https://godbolt.org/z/McQnDf)). Even if somehow we were able to properly vectorize the case where stride = 1, as far as I know, we cannot auto-vectorize for general strided arrays. ",
+        "createdAt" : "2019-10-10T21:53:51Z",
+        "updatedAt" : "2019-10-11T22:24:04Z",
+        "lastEditedBy" : "bcfc9a54-7a4c-4326-b6cb-aee294b5cf32",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a849ae1-a1c1-4e10-965d-41373ef37690",
+        "parentId" : "f0de5a7d-373a-4f65-ab34-e7a753a41076",
+        "authorId" : "bcfc9a54-7a4c-4326-b6cb-aee294b5cf32",
+        "body" : "I finally learnt why gcc wont use `vsqrtps`! `vrsqrt14ps `instruction is 1-3 cycles, where as `vsqrtps `is > 14 cycles. So its basically faster to compute `invsqrt `, multiple it with input and then correct it with one step of newton raphson than to compute an accurate sqrt directly. -ffast-math obviously chooses speed over accuracy. This logic works for single precision and not for double precision where it uses the `vsqrtpd` instruction (see code [here](https://godbolt.org/z/gzXPtv)) :) ",
+        "createdAt" : "2019-10-11T22:21:19Z",
+        "updatedAt" : "2019-10-11T22:22:01Z",
+        "lastEditedBy" : "bcfc9a54-7a4c-4326-b6cb-aee294b5cf32",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5323bbfc15f320ac5b9c4b3bece6394f5bf74ee2",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +1695,1699 @@            *(@type@ *)op1 = npy_sqrt@typesub@(in1);\n        }\n    }\n}\n"
   }
 ]
