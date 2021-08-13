@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "d304e149-4e97-4a72-a31d-3595f3b7f101",
+    "prId" : 286,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5a40dc0f-a186-4b0b-b9cf-8e5f0ab9ac4d",
+        "parentId" : null,
+        "authorId" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "body" : "\"from numeric import ...\" already invokes \"import numeric\", that's how Python imports work. Does this actually make a difference, and if so, why?\n",
+        "createdAt" : "2012-05-22T09:19:45Z",
+        "updatedAt" : "2012-05-22T09:19:45Z",
+        "lastEditedBy" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ae404e6d-9c06-4e15-89d1-a7b491e94ea4",
+        "parentId" : "5a40dc0f-a186-4b0b-b9cf-8e5f0ab9ac4d",
+        "authorId" : "85b881e8-d8a0-43d4-81d3-7e233dc5f1ae",
+        "body" : "There are some slightly unusual ways of importing that do not do this, usually by tools that are hooking into the import mechanism. Yaroslav found that ropemacs is one such tool. I have encountered it several times with nosetests depending on the directory where I start it.\n",
+        "createdAt" : "2012-05-22T10:37:04Z",
+        "updatedAt" : "2012-05-22T10:37:04Z",
+        "lastEditedBy" : "85b881e8-d8a0-43d4-81d3-7e233dc5f1ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c158043b-023a-438e-a7b2-d24f55c6edf3",
+        "parentId" : "5a40dc0f-a186-4b0b-b9cf-8e5f0ab9ac4d",
+        "authorId" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "body" : "Nonetheless, I can't believe that the answer is that we have to guard every \"from ... import ...\" just in case someone left out a basic language feature. There is tons and tons of code out there that depends on this working correctly. (Recently on the statsmodels list there was confusion abut whether circular imports were even possible, because they _never use_ the 'import ...' form.)\n\nI'm not opposed to working around other people's bugs when necessary, but there has to be more to the story here.\n",
+        "createdAt" : "2012-05-22T11:00:46Z",
+        "updatedAt" : "2012-05-22T11:00:46Z",
+        "lastEditedBy" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8648fbee-b299-4912-b73a-40185b1dd8cf",
+        "parentId" : "5a40dc0f-a186-4b0b-b9cf-8e5f0ab9ac4d",
+        "authorId" : "85b881e8-d8a0-43d4-81d3-7e233dc5f1ae",
+        "body" : "I think you are misunderstanding the semantics of `from mod import ...`. It does _not_ do `import mod`. In most cases, doing `from mod import ...` will not put `mod` into the namespace.\n\n```\n[scratch]$ cat foo.py\nfrom os import path\nprint os\n\n[scratch]$ python foo.py\nTraceback (most recent call last):\n  File \"foo.py\", line 2, in <module>\n    print os\nNameError: name 'os' is not defined\n```\n\nWhen `from mod import ...` is done inside of a package's `__init__.py` file and `mod` is a module inside that package, then `mod` gets inserted into the package's namespace as a _side effect_ of that module being imported. When modules inside of packages get imported (no matter where the import comes from), it gets inserted into the package's namespace, as long as no one is doing anything slightly weird. We wouldn't have to change any other instance of `from mod import ...` outside of `__init__.py` files. Certainly, no code outside of `__init__.py` files should be relying on `from mod import ...` to actually put `mod` in that namespace because it doesn't work that way.\n\nBut sometimes slightly weird things do happen. Code analysis tools will often want to import modules directly and thus miss some details like making sure that when executing the `__init__.py` code, it should be as a package and not just another module. Now it's fair to say that those tools should be fixed to be more robust, however, I think that it's also fair to explicitly import the names that we need instead of relying on a quirk of CPython's import implementation. I don't even know if it's documented well anywhere. It might not work exactly the same way on other implementations.\n",
+        "createdAt" : "2012-05-22T11:18:42Z",
+        "updatedAt" : "2012-05-22T11:18:42Z",
+        "lastEditedBy" : "85b881e8-d8a0-43d4-81d3-7e233dc5f1ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5636b82c-8606-42b2-8173-8059134f5cdb",
+        "parentId" : "5a40dc0f-a186-4b0b-b9cf-8e5f0ab9ac4d",
+        "authorId" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "body" : "On Tue, May 22, 2012 at 12:18 PM, Robert Kern\nreply@reply.github.com\nwrote:\n\n> I think you are misunderstanding the semantics of `from mod import ...`. It does _not_ do `import mod`. In most cases, doing `from mod import ...` will not put `mod` into the namespace.\n\nRight, I know that :-). But I was misreading the bug report -- I\nthought the claim was that \"from numeric import *\" was failing because\n\"numeric\" had not yet been imported. In fact, like you say,\nnumpy/core/**init**.py is assuming that 'numeric' will appear in its\nnamespace when numeric gets imported. Which is confusing. Certainly it\nconfused me :-).\n\n> it gets inserted into the package's namespace, as long as no one is doing anything slightly weird. We wouldn't have to change any other instance of `from mod import ...` outside of `__init__.py` files.\n\nYes, if that's the actual problem. See below.\n\n> But sometimes slightly weird things do happen. Code analysis tools will often want to import modules directly and thus miss some details like making sure that when executing the `__init__.py` code, it should be as a package and not just another module. Now it's fair to say that those tools should be fixed to be more robust, however, I think that it's also fair to explicitly import the names that we need instead of relying on a quirk of CPython's import implementation. I don't even know if it's documented well anywhere. It might not work exactly the same way on other implementations.\n\nThe semantics of Python namespaces are pretty well nailed down; we\nmight well want to add explicit imports to make it less confusing, but\nI wouldn't say that it's undocumented that the package and **init**\nshare a namespace.\n\nFurthermore, it doesn't look like there's any hooking of the import\nmechanism going on. AFAICT from the traceback, the sequence of events\nis:\n\n\"pymacs.py\" is a script that runs as a daemon for emacs to talk to.\nEmacs starts up pymacs.py.\n\nEmacs asks pymacs.py to do something like\neval(\"pyeval_load_helper('ropemacs', ...)\")\n\npyeval_load_helper calls **import**(\"ropemacs\"). Note that this is the\nstandard builtin **import** function, and AFAICT there are no import\nhooks registered.\n\nThen ropemacs imports difflib, and difflib does \"from collections\nimport namedtuple\". But, a sys.path screwup causes this to be hijacked\nby another \"collections.py\" module in the working dir (maybe\nmatplotlib.collections? who knows). This interloper module then\nimports numpy. So I suspect ropemacs has nothing to do with this -- it\nhasn't made it past line 4 of ropemacs.**init** before the error\noccurs. And even if numpy imported correctly, the code would still\ncrash, because this \"collections.py\" probably doesn't export\nnamedtuple.\n\nOTOH, I tried doing eval(\"**import**('numpy')\") in python 2.7, and it\nworked fine. So I don't know why it doesn't work when pymacs calls\n**import**.\n\nI don't have any objection to adding import calls to make numpy's code\nmore explicit, but this seems to be a bug in either the Python\ninterpreter or perhaps pymacs, and should probably be filed\nappropriately.\n",
+        "createdAt" : "2012-05-22T12:31:45Z",
+        "updatedAt" : "2012-05-22T12:31:45Z",
+        "lastEditedBy" : "762e53b3-7c6a-4fbb-8098-a2c522dd50a6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b7e76c15da2d20d194dc56355e0dbabfdaa45636",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +9,13 @@multiarray.set_typeDict(nt.sctypeDict)\nimport numeric\nfrom numeric import *\nimport fromnumeric\nfrom fromnumeric import *"
+  }
+]
