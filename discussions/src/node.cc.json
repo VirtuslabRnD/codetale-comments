@@ -570,5 +570,214 @@
     "commit" : "341006b144d18c15e1b026ea0aa5044c07436f87",
     "line" : 17,
     "diffHunk" : "@@ -1,1 +1392,1396 @@      ReportException(env, fatal_try_catch);\n      exit(7);\n    } else if (caught.ToLocalChecked()->IsFalse()) {\n      ReportException(env, error, message);\n"
+  },
+  {
+    "id" : "3f71cfaa-3cbd-48d5-ad57-b2ba02196100",
+    "prId" : 24365,
+    "prUrl" : "https://github.com/nodejs/node/pull/24365#pullrequestreview-174948297",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "73028a2b-e2fd-4d37-a199-078d9d892476",
+        "parentId" : null,
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "IMO whis should come with a CLI arg. opt-in or opt-out, IDK...",
+        "createdAt" : "2018-11-14T15:56:30Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9aa2ee03-f978-4de5-a725-8a4c3c5a38e8",
+        "parentId" : "73028a2b-e2fd-4d37-a199-078d9d892476",
+        "authorId" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "body" : "my understanding of warnings is that you can do\r\n```js\r\nprocess.on('warning', (warning) => {\r\n  if (warning.name === 'V8') { ... }\r\n});\r\n```",
+        "createdAt" : "2018-11-14T16:08:59Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "35b17161-2c58-4c00-a372-a8321ba16f82",
+        "parentId" : "73028a2b-e2fd-4d37-a199-078d9d892476",
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "Ack.",
+        "createdAt" : "2018-11-14T16:18:14Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1aa7301b4118a92a8f056d1bc02e6069886a913",
+    "line" : 20,
+    "diffHunk" : "@@ -1,1 +1158,1162 @@  Isolate* isolate = message->GetIsolate();\n  switch (message->ErrorLevel()) {\n    case Isolate::MessageErrorLevel::kMessageWarning: {\n      Environment* env = Environment::GetCurrent(isolate);\n      if (!env) {"
+  },
+  {
+    "id" : "5701fddd-4b41-49af-a529-5edfd9d24f96",
+    "prId" : 24365,
+    "prUrl" : "https://github.com/nodejs/node/pull/24365#pullrequestreview-174958986",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "6931b9b8-69b8-4424-85ee-1f82a094c363",
+        "parentId" : null,
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "From a design/readability perspective, since `ProcessEmitWarningGeneric` just sends this back to JS, I'd do something like:\r\n```cpp\r\nLocal<Value> args[3] = {\r\n  filename,\r\n  message->GetLineNumber(env->context()).FromMaybe(-1),\r\n  message->Get()\r\n};\r\nif (env.format_warning.As<Function>()->Call(env->context(),\r\n                                            process,\r\n                                            arraysize(args),\r\n                                            args).IsEmpty()) {\r\n  oops;\r\n}\r\n```\r\nand do the formatting in JS...\r\nThat way we can turn this comment into a template\r\n```js\r\nprocess.format_warning = function (filename, line, message) {\r\n  if (check_some_option) {\r\n    console.warn(`${filename}:${line} ${message});\r\n  }\r\n}\r\n```",
+        "createdAt" : "2018-11-14T15:59:43Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1c7337e0-b129-4269-9e37-6319bf2e0145",
+        "parentId" : "6931b9b8-69b8-4424-85ee-1f82a094c363",
+        "authorId" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "body" : "I don't see any compelling reason to special case this, it's just a warning.",
+        "createdAt" : "2018-11-14T16:03:59Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cbf198ae-1fda-4b14-964a-9dd15906b210",
+        "parentId" : "6931b9b8-69b8-4424-85ee-1f82a094c363",
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "The special case is it's structured, and we're clumsily flattening it in C++.\r\nWhat I don't love is that here the formatting is forced (unwrapping the `Value`s and hiding the declarative nature of the template in imperative code).\r\n\r\nBut yeah it's not a blocker.",
+        "createdAt" : "2018-11-14T16:25:29Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef09699f-47cf-42de-9b47-516190f41a2b",
+        "parentId" : "6931b9b8-69b8-4424-85ee-1f82a094c363",
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "Wait we have `ProcessEmitWarning(Environment* env, const char* fmt, ...)` so how about\r\n```cpp\r\nUSE(ProcessEmitWarning(env, \"%s:%d %s\",\r\n                       filename, \r\n                       message->GetLineNumber(env->context()).FromMaybe(-1),\r\n                       msg));\r\n```",
+        "createdAt" : "2018-11-14T16:35:11Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "992ecb35-301e-457d-9aa6-e7c027bfc0aa",
+        "parentId" : "6931b9b8-69b8-4424-85ee-1f82a094c363",
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "Oooofff, it has no `type` param.\r\nNM.",
+        "createdAt" : "2018-11-14T16:37:41Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1aa7301b4118a92a8f056d1bc02e6069886a913",
+    "line" : 27,
+    "diffHunk" : "@@ -1,1 +1165,1169 @@      Utf8Value filename(isolate,\n          message->GetScriptOrigin().ResourceName());\n      // (filename):(line) (message)\n      std::stringstream warning;\n      warning << *filename;"
+  },
+  {
+    "id" : "9008457a-681e-4e20-abb2-d0bc884e1f92",
+    "prId" : 24365,
+    "prUrl" : "https://github.com/nodejs/node/pull/24365#pullrequestreview-175104705",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d914d608-6639-4a6e-854f-50846428fa4a",
+        "parentId" : null,
+        "authorId" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "body" : "This isn't exactly wrong but we commonly use `snprintf()` on a stack-allocated buffer for this.",
+        "createdAt" : "2018-11-14T19:10:07Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "30b94a49-c335-40f0-90d3-e66d611a4880",
+        "parentId" : "d914d608-6639-4a6e-854f-50846428fa4a",
+        "authorId" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "body" : "i have no opinion one way or another but i would assume @refack does",
+        "createdAt" : "2018-11-14T20:08:48Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "01b6c197-2cab-4a53-94d8-6b61046332a8",
+        "parentId" : "d914d608-6639-4a6e-854f-50846428fa4a",
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "I like it that `snprintf()` takes a format string... (and yeah a stack buffer is nice too)\r\nBut it's up to you.",
+        "createdAt" : "2018-11-14T20:14:20Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d103e65b-e890-435b-9910-688e54b1eccd",
+        "parentId" : "d914d608-6639-4a6e-854f-50846428fa4a",
+        "authorId" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "body" : "how much should i allocate for the output buffer?",
+        "createdAt" : "2018-11-14T21:52:33Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e0bc153-ee5f-4ecd-b3ab-ec11c6669728",
+        "parentId" : "d914d608-6639-4a6e-854f-50846428fa4a",
+        "authorId" : "c8ef07ae-30f6-4919-9aa8-bf0160bbd4a0",
+        "body" : "I think the fact that the filename length is arbitrary makes that hard – 1024 bytes should be okay in practice, but you can also leave the code as it currently is",
+        "createdAt" : "2018-11-14T21:59:43Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "c8ef07ae-30f6-4919-9aa8-bf0160bbd4a0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0bf26edf-916e-4f58-b555-eaf05be21a2f",
+        "parentId" : "d914d608-6639-4a6e-854f-50846428fa4a",
+        "authorId" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "body" : "i think i'll just leave it.",
+        "createdAt" : "2018-11-14T22:13:06Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1aa7301b4118a92a8f056d1bc02e6069886a913",
+    "line" : 34,
+    "diffHunk" : "@@ -1,1 +1172,1176 @@      warning << \" \";\n      v8::String::Utf8Value msg(isolate, message->Get());\n      warning << *msg;\n      USE(ProcessEmitWarningGeneric(env, warning.str().c_str(), \"V8\"));\n      break;"
+  },
+  {
+    "id" : "3dc4cbd2-b76d-4ef3-918f-17b01ac9f498",
+    "prId" : 24365,
+    "prUrl" : "https://github.com/nodejs/node/pull/24365#pullrequestreview-175029241",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f5adb78e-f362-4f30-90cf-0fdfd7809fdb",
+        "parentId" : null,
+        "authorId" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "body" : "Can you add a `break` statement?",
+        "createdAt" : "2018-11-14T19:12:27Z",
+        "updatedAt" : "2018-11-16T15:18:01Z",
+        "lastEditedBy" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e1aa7301b4118a92a8f056d1bc02e6069886a913",
+    "line" : 39,
+    "diffHunk" : "@@ -1,1 +1177,1181 @@    }\n    case Isolate::MessageErrorLevel::kMessageError:\n      FatalException(isolate, error, message);\n      break;\n  }"
   }
 ]
