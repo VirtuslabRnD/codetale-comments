@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "21ded99d-6839-4f3f-a43a-597f9b295ac5",
+    "prId" : 26161,
+    "prUrl" : "https://github.com/nodejs/node/pull/26161#pullrequestreview-207106870",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dec93ef9-8193-49fc-ab54-524af43d5b23",
+        "parentId" : null,
+        "authorId" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "body" : "I am not sure what this is trying to achieve, is there a use case of this API?\r\n\r\nNormally the size of the pointer to the retainer should be accounted into the self size of the parent but self size of the retainer should not be accounted, so I can't tell when it's necessary to do a subtraction - maybe there is a misuse of the API?",
+        "createdAt" : "2019-02-22T00:18:46Z",
+        "updatedAt" : "2019-02-28T04:34:12Z",
+        "lastEditedBy" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "caf2e840-9e99-4aa1-be38-b51117773841",
+        "parentId" : "dec93ef9-8193-49fc-ab54-524af43d5b23",
+        "authorId" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "body" : "If this is trying to address the issues that came up from https://github.com/nodejs/node/pull/26099/ there are two ways to solve that:\r\n\r\n1. Do not use `SET_SELF_SIZE(Worker)`, which is merely a convenience macro that implements `Worker::SelfSize()` with `sizeof(Worker)` to calculate the self size of the worker - that's where we encounter the first tracking of the inline field. Instead, override `Worker::SelfSize()` to exclude the size of the non-pointer fields, and track them later in `Worker::MemoryInfo()`.\r\n2. Keep using `SET_SELF_SIZE(Worker)` for the initial calculation, but rename this method into something like `SplitNonPointerField()` (`SplitStackAllocatedField()`?), because this does not necessarily add more memory into the tracker - instead it's splitting off existing memory that have already been tracked, and potentially adding more (if the `retainer` overrides `MemoryInfo()` to add additional fields that are not accounted by a `sizeof()`)",
+        "createdAt" : "2019-02-22T00:31:48Z",
+        "updatedAt" : "2019-02-28T04:34:12Z",
+        "lastEditedBy" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41f7fa23-5d66-4d7d-a925-92ceb16fa787",
+        "parentId" : "dec93ef9-8193-49fc-ab54-524af43d5b23",
+        "authorId" : "d3bf7abd-5681-4b16-b1e7-beb89d57be65",
+        "body" : "@joyeecheung - thanks.\r\n\r\nProbably these many scenarios exists (with a component `cmp` and a container `cnt` with `cnt` a retainer):\r\n - `cmp` is a normal primitive field: self size of `cnt` covers size of `cmp`\r\n - `cmp` is a composite object (with or without primitive fields): self size of `cnt` covers size of `cmp`\r\n - `cmp` is a pointer to a composite object: self size of `cnt` covers size of `cmp` (size of a pointer)\r\n - `cmp` is a composite object (with pointer type fields): self size of `cnt` covers size of `cmp`, not the dynamic memory [ example: messageport in worker ]\r\n - `cmp` is a composite retainer object (with pointer types): [ current use case ]\r\n - `cmp` is a pointer to a retainer object (with pointer types): [ none at the moment? ]\r\n\r\nWe have `Worker` with 200 bytes excluding 2 inline `AsyncRequest` fields of 72 bytes each. So the question is: should we add those to the worker (because those belongs to worker) or add separately - as they are retainers themselves.\r\n\r\nIf I follow your approach 1, we need to perform that in all such scenarios? in which case arguably the parent retainer (Worker's referencing object if any) could do the same for worker, and potentially render the Retainer abstraction meaningless?\r\n\r\nsecond proposal looks fair to me, but would love to hear from @addaleax as well. Can `SplitStackAllocatedField` be somewhat misleading, as there is no memory that is stack-allocated here?",
+        "createdAt" : "2019-02-22T05:49:18Z",
+        "updatedAt" : "2019-02-28T04:34:12Z",
+        "lastEditedBy" : "d3bf7abd-5681-4b16-b1e7-beb89d57be65",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37dab242-64df-435e-8725-f5be620e90e7",
+        "parentId" : "dec93ef9-8193-49fc-ab54-524af43d5b23",
+        "authorId" : "c8ef07ae-30f6-4919-9aa8-bf0160bbd4a0",
+        "body" : "> because this does not necessarily add more memory into the tracker - instead it's splitting off existing memory that have already been tracked, and potentially adding more (if the `retainer` overrides `MemoryInfo()` to add additional fields that are not accounted by a `sizeof()`)\r\n\r\nI’m not sure, but I don’t really see this as a issue/as not “tracking” these fields? Then again, re-naming is not a big deal, so I’m okay with anything.",
+        "createdAt" : "2019-02-22T10:55:16Z",
+        "updatedAt" : "2019-02-28T04:34:12Z",
+        "lastEditedBy" : "c8ef07ae-30f6-4919-9aa8-bf0160bbd4a0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "139b7ad1-54e7-4dbb-ba3b-6d5de3ddf0a4",
+        "parentId" : "dec93ef9-8193-49fc-ab54-524af43d5b23",
+        "authorId" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "body" : "> should we add those to the worker (because those belongs to worker) or add separately - as they are retainers themselves.\r\n\r\nThat depends on whether we want to display AsyncRequest separately as a Node referenced by the Worker node, and any other fields referenced by those AsyncRequests recursively.\r\n\r\n> If I follow your approach 1, we need to perform that in all such scenarios? in which case arguably the parent retainer (Worker's referencing object if any) could do the same for worker, and potentially render the Retainer abstraction meaningless?\r\n\r\nThe abstraction helps adding nodes recursively instead of tracking everything from the root, allowing the MemoryRetainer implementations define how they want their fields to be tracked.\r\n\r\n> Can `SplitStackAllocatedField` be somewhat misleading, as there is no memory that is stack-allocated here?\r\n\r\nRight, the fields are not really stack allocated if the whole thing is not stack allocated.\r\n\r\n> I’m not sure, but I don’t really see this as a issue/as not “tracking” these fields?\r\n\r\nI am fine with the current naming if the comments are changed to reflect when this method should be used and what issue it is trying to address. `Use when a retainer is embedded in another.` and `Reduce the size of memory from the container so that retentions are accounted properly.` is too ambiguous IMO, the core of the issue this method is trying to solve arise from that the parent does not implement its `SelfSize()` correctly to exclude the memory that is supposed to be tracked as the self size of another node.",
+        "createdAt" : "2019-02-22T13:33:05Z",
+        "updatedAt" : "2019-02-28T04:34:12Z",
+        "lastEditedBy" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "68c52d71-d125-49bb-9772-fc9018c86e92",
+        "parentId" : "dec93ef9-8193-49fc-ab54-524af43d5b23",
+        "authorId" : "d3bf7abd-5681-4b16-b1e7-beb89d57be65",
+        "body" : "@joyeecheung - thanks, I will amend the comments, aligning with above conversation.",
+        "createdAt" : "2019-02-22T14:49:06Z",
+        "updatedAt" : "2019-02-28T04:34:12Z",
+        "lastEditedBy" : "d3bf7abd-5681-4b16-b1e7-beb89d57be65",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4a4d3ff-1555-4840-a644-efa94218f7b0",
+        "parentId" : "dec93ef9-8193-49fc-ab54-524af43d5b23",
+        "authorId" : "d3bf7abd-5681-4b16-b1e7-beb89d57be65",
+        "body" : "@joyeecheung - amended the comment, ptal!",
+        "createdAt" : "2019-02-23T11:35:12Z",
+        "updatedAt" : "2019-02-28T04:34:12Z",
+        "lastEditedBy" : "d3bf7abd-5681-4b16-b1e7-beb89d57be65",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "17b4949a84106d70749106985f6d606004acf25a",
+    "line" : 12,
+    "diffHunk" : "@@ -1,1 +206,210 @@  // Reduce the size of memory from the container so as to avoid\n  // duplication in accounting.\n  inline void TrackInlineField(const MemoryRetainer* retainer,\n                               const char* edge_name = nullptr);\n"
+  }
+]
