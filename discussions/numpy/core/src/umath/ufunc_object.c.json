@@ -2055,5 +2055,93 @@
     "commit" : "18476f5285bdd3f1405086e37240a9bd2640ff16",
     "line" : 9,
     "diffHunk" : "@@ -1,1 +325,329 @@set_matmul_flags(PyObject *d)\n{\n    PyObject *matmul = PyDict_GetItemString(d, \"matmul\");\n    if (matmul == NULL) {\n        return -1;"
+  },
+  {
+    "id" : "02a91897-4a14-4e39-b201-024d2d9165aa",
+    "prId" : 12624,
+    "prUrl" : "https://github.com/numpy/numpy/pull/12624#pullrequestreview-188415732",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5c00d25f-94ff-457d-9353-ca2f892c5800",
+        "parentId" : null,
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "Darn, that's quite dumb of me, having it in the failure path but not in the main one.",
+        "createdAt" : "2018-12-29T16:27:16Z",
+        "updatedAt" : "2019-01-02T19:17:23Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "4732c1be2da093711ab544f6e0a302b9d7ee4bcb",
+    "line" : 4,
+    "diffHunk" : "@@ -1,1 +3064,3068 @@    Py_XDECREF(full_args.in);\n    Py_XDECREF(full_args.out);\n    PyArray_free(remap_axis_memory);\n    PyArray_free(remap_axis);\n"
+  },
+  {
+    "id" : "b896cdec-2904-4266-ae75-e753cc4c78d8",
+    "prId" : 12644,
+    "prUrl" : "https://github.com/numpy/numpy/pull/12644#pullrequestreview-189074040",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "f3897aa6-52a6-41ab-9498-afc0817d01a3",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Possibly clearer to transpose the two loops here:\r\n```C++\r\nnpy_intp i = 0;\r\nwhile (i < count) {\r\n    /* Find where the mask changes */\r\n    char mask = *maskptr;\r\n    npy_intp i_next;\r\n    if (mask_stride == 0) {\r\n        /* optimization */\r\n        i_next = count;\r\n    }\r\n    else {\r\n        i_next = i;\r\n        while (mask == *maskptr && i_next < count) {\r\n            i_next++;\r\n            maskptr += mask_stride;\r\n        }\r\n    }\r\n    /* Copy the last contiguous region */\r\n    npy_intp n = i_next - i;\r\n    if (mask) {\r\n        innerloop(dataptrs_copy, &n,\r\n                  strides_copy, innerloopdata);\r\n    }\r\n    dataptrs_copy[0] += n * strides[0];\r\n    dataptrs_copy[1] += n * strides[1];\r\n    dataptrs_copy[2] = dataptrs_copy[0];\r\n    i = i_next;\r\n}\r\n```\r\n\r\nYou can also leave the stride == 0 optimization to the compiler:\r\n```C\r\nwhile (count > 0) {\r\n    /* Find where the mask changes */\r\n    char mask = *maskptr;\r\n    npy_intp n = find(maskptr, count, mask_stride, !mask);\r\n\r\n    /* Copy the last contiguous region */\r\n    if (mask) {\r\n        innerloop(dataptrs_copy, &n,\r\n                  strides_copy, innerloopdata);\r\n    }\r\n    dataptrs_copy[0] += n * strides[0];\r\n    dataptrs_copy[1] += n * strides[1];\r\n    maskptr          += n * mask_stride\r\n    dataptrs_copy[2] = dataptrs_copy[0];\r\n    count -= n;\r\n}\r\n\r\n/** Find the first index of `value` in `data`, or `n` if none exists */\r\nstatic inline npy_intp\r\nfind(npy_bool *data, npy_intp n, npy_intp stride, bool value) {\r\n    /* let the compiler optimize for zero stride */\r\n    if (stride == 0){\r\n        return find_inner(data, n, stride, value);\r\n    }\r\n    else {\r\n        return find_inner(data, n, stride, value);\r\n    }\r\n}\r\n\r\nstatic inline npy_intp\r\nfind_inner(npy_bool *data, npy_intp n, npy_intp stride, bool value) {\r\n    for (npy_intp i = 0; i < n; i++, data += stride) {\r\n        if (*data == value) {\r\n            return i;\r\n        }\r\n    }\r\n    return n;\r\n}\r\n```",
+        "createdAt" : "2019-01-03T14:23:45Z",
+        "updatedAt" : "2019-01-03T22:33:15Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ba5089bb-e96b-48d4-979d-2dc09289ca73",
+        "parentId" : "f3897aa6-52a6-41ab-9498-afc0817d01a3",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "I like the version that does not rely on the compiler to optimize and adopted an even simpler version of it. It makes the case where the mask is all-true quite a bit faster:\r\n```\r\na = np.arange(100000.)\r\nm = ~np.isnan(a)\r\n%timeit np.add.reduce(a, where=m)\r\n# 90 -> 70 us\r\n```\r\nAdding either `a[::100] = np.nan` or `a[::2] = np.nan`, the timings stay basically the same.",
+        "createdAt" : "2019-01-03T15:17:13Z",
+        "updatedAt" : "2019-01-03T22:33:15Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "646a4c2e-da34-4c84-ac46-f294c07568f5",
+        "parentId" : "f3897aa6-52a6-41ab-9498-afc0817d01a3",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "To be clear - changing from the version this comment was added on to the latest version gives that speed boost? Or the `stride=0` optimization gives that speed up in either case?",
+        "createdAt" : "2019-01-03T15:31:10Z",
+        "updatedAt" : "2019-01-03T22:33:15Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e4dbfae4-5e81-46d5-8660-a48f9cd94d64",
+        "parentId" : "f3897aa6-52a6-41ab-9498-afc0817d01a3",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "The change in version (i.e., the last commit) is what gave the speed boost - it has nothing to do with the `stride=0` optimization (the mask has a stride in my example, it is just set to all True). I'm actually rather confused why there is such a speed-up, it must be that the compiler can make the inner `where` loop substantially faster than the large loop with a complex but unlikely if clause.\r\n\r\np.s. For the record, the timings for the `stride=0` case do not change.",
+        "createdAt" : "2019-01-03T15:53:09Z",
+        "updatedAt" : "2019-01-03T22:33:15Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "401120c4-1da5-4f66-a2d9-89f1b60a7c69",
+        "parentId" : "f3897aa6-52a6-41ab-9498-afc0817d01a3",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "> I'm actually rather confused why there is such a speed-up\r\n\r\nSo was I, hence the request for clarification!",
+        "createdAt" : "2019-01-03T16:06:44Z",
+        "updatedAt" : "2019-01-03T22:33:15Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5afe650403bdb3aa1a3189c1b8c3233501208521",
+    "line" : 50,
+    "diffHunk" : "@@ -1,1 +3565,3569 @@                count -= n;\n                n = 1;\n            }\n        }\n    } while (iternext(iter));"
   }
 ]
