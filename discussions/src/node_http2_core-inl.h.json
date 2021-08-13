@@ -1,0 +1,57 @@
+[
+  {
+    "id" : "1ee47145-9ed2-4666-9bf0-ccee7764dd15",
+    "prId" : 16461,
+    "prUrl" : "https://github.com/nodejs/node/pull/16461#pullrequestreview-71698254",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "31e43284-1e0e-4162-952a-38a75a128743",
+        "parentId" : null,
+        "authorId" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "body" : "re: the todo....\r\n\r\njust keep in mind that nghttp2 *requires* that the data be provided synchronously here...",
+        "createdAt" : "2017-10-24T22:33:29Z",
+        "updatedAt" : "2017-10-30T21:13:11Z",
+        "lastEditedBy" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b8c71a2a-c565-4cb8-90d4-78b43ca9df8a",
+        "parentId" : "31e43284-1e0e-4162-952a-38a75a128743",
+        "authorId" : "c8ef07ae-30f6-4919-9aa8-bf0160bbd4a0",
+        "body" : "Hm – from the nghttp2 header:\r\n\r\n> If the application wants to postpone DATA frames (e.g.,\r\n> asynchronous I/O, or reading data blocks for long time), it is\r\n> achieved by returning :enum:`NGHTTP2_ERR_DEFERRED` without reading\r\n> any data in this invocation.  The library removes DATA frame from\r\n> the outgoing queue temporarily.  To move back deferred DATA frame\r\n> to outgoing queue, call `nghttp2_session_resume_data()`.\r\n\r\nIt even comes with instructions, so that sounds like it’s definitely supported?",
+        "createdAt" : "2017-10-24T22:37:18Z",
+        "updatedAt" : "2017-10-30T21:13:11Z",
+        "lastEditedBy" : "c8ef07ae-30f6-4919-9aa8-bf0160bbd4a0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8849d314-3d08-4734-bd1f-939fa1885f36",
+        "parentId" : "31e43284-1e0e-4162-952a-38a75a128743",
+        "authorId" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "body" : "yes and no. I was being a bit simplistic. `nghttp2_session_resume_data` triggers *this* callback to be invoked again to resume the data flow. Within this method, when the data is available, it must be copied in synchronously. So to achieve what you're looking for it would require a bit more mechanism... e.g. \r\n\r\n1. attempt read,\r\n   * no data? initiate uv_fs_read, return DEFER ... (wait for Step 2) ... keeping in mind that the buffer pointer nghttp2 hands us will be invalid when this function exits, so we'd need to allocate our own buffer for uv_fs_read.\r\n   * got data? copy into nghttp2 provided buffer ...\r\n      * all done? set EOF flag and return.\r\n      * not all done? repeat step 1\r\n2. uv_fs_read callback calls session_resume_data ... flow returns back to step 1\r\n\r\nThis can be further complicated using the NO_COPY flag, which causes another callback to be called telling our code to send our buffers without the need to memcpy, but there are some complications with that also.\r\n\r\nSo, yes, it's certainly *possible*, and *likely desirable*, just non-trivial.\r\n",
+        "createdAt" : "2017-10-24T22:47:20Z",
+        "updatedAt" : "2017-10-30T21:13:11Z",
+        "lastEditedBy" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "70270d05-ee23-40f9-84c5-d6b7be6742b9",
+        "parentId" : "31e43284-1e0e-4162-952a-38a75a128743",
+        "authorId" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "body" : "A bit more background... nghttp2 calls this method while it is attempting to serialize a DATA frame for transmission. Calls to this method are synchronous when ng's send or send_mem function is called. Essentially, nghttp2 goes through it's queue of pending frames and serializes each. When it comes to this method, it will synchronously call it over and over until it receives either a DEFER, an error, or an EOF response. If it receives a DEFER, it takes that stream temporarily out of it's send queue. Calling session_resume_data inserts it back into the queue, so that the next time send or mem_send is called, serialization of the DATA frame can be attempted again. \r\n",
+        "createdAt" : "2017-10-24T22:54:16Z",
+        "updatedAt" : "2017-10-30T21:13:11Z",
+        "lastEditedBy" : "d10ccdef-08de-4320-917e-16a9175dedcf",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c8a00fdf62ff2645fe4be515811429d08ba3d641",
+    "line" : 5,
+    "diffHunk" : "@@ -1,1 +194,198 @@\n  if (length > 0) {\n    // TODO(addaleax): Never use synchronous I/O on the main thread.\n    numchars = uv_fs_read(handle->event_loop(),\n                          &read_req,"
+  }
+]
