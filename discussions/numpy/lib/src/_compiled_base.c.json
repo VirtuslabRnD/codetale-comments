@@ -20,5 +20,104 @@
     "commit" : "67ba2871d104513e8c25aded9fb47a99108d8688",
     "line" : null,
     "diffHunk" : "@@ -1,1 +312,316 @@ */\nstatic void\narr_insert_loop(char *mptr, char *vptr, char *input_data, char *zero,\n                char *avals_data, int melsize, int delsize, int objarray,\n                int totmask, int numvals, int nd, npy_intp *instrides,"
+  },
+  {
+    "id" : "0f8b0d4c-dd0a-42de-b65f-c1b0b40ca49e",
+    "prId" : 4247,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5c831309-4e7b-406a-ae56-a795518b0d03",
+        "parentId" : null,
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "Looks OK. The amount of indexing can be decreased by a factor of two though. How about something like\n\n```\n    last = a[0];\n    for (i = 1; (i < lena) && (a[i] == last); i++);\n    if (i == lena) {\n        return 1;\n    }\n    next = a[i];\n    if (next > last) {\n        for (i = i + 1; i < lena; i++) {\n            last = next;\n            next = a[i];\n            if (next < last) {\n                return 0;\n            }\n        }\n        return 1;\n    }\n    else {\n        for (i = i + 1; i < lena; i++) {\n            last = next;\n            next = a[i];\n            if (next > last) {\n                return 0;\n            }\n        }\n        return -1;\n    }\n```\n",
+        "createdAt" : "2014-02-11T05:19:32Z",
+        "updatedAt" : "2014-02-12T00:38:45Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71b09668-1341-4bca-a8bd-2cdb6ed48db2",
+        "parentId" : "5c831309-4e7b-406a-ae56-a795518b0d03",
+        "authorId" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "body" : "while I'd say its a compiler issue this code optimizes worse than jaime's with gcc, though it probably makes no real difference in performance (just one extra pipelineable mov)\n",
+        "createdAt" : "2014-02-11T17:43:49Z",
+        "updatedAt" : "2014-02-12T00:38:45Z",
+        "lastEditedBy" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "85212e0a-29a2-4ac6-ba86-91ce671f9453",
+        "parentId" : "5c831309-4e7b-406a-ae56-a795518b0d03",
+        "authorId" : "34105ae0-9fd2-4403-be9b-7c550a729828",
+        "body" : "Excuse my ignorance, but what's the source of the \"extra pipelineable mov\"?\n",
+        "createdAt" : "2014-02-11T18:17:33Z",
+        "updatedAt" : "2014-02-12T00:38:45Z",
+        "lastEditedBy" : "34105ae0-9fd2-4403-be9b-7c550a729828",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5d36c180-b4a2-4800-b884-d87337ddd3d3",
+        "parentId" : "5c831309-4e7b-406a-ae56-a795518b0d03",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "I've been tempted to look at the generated code. The one with less indexing should have more register operations and fewer loads into the fpu registers, but much depends on how clever the compiler is in dealing with the indexing. What optimization level did you use?\n",
+        "createdAt" : "2014-02-11T18:23:31Z",
+        "updatedAt" : "2014-02-12T00:38:45Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "051c54c8-9d28-4361-8df7-dad8d23e19a6",
+        "parentId" : "5c831309-4e7b-406a-ae56-a795518b0d03",
+        "authorId" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "body" : "don't know, the code is semantically identical I think, maybe integer overflow flags or some details concerning sequence points could cause the difference.\nWhat counts is readability in which respect I'm fine with both approaches.\n",
+        "createdAt" : "2014-02-11T18:25:15Z",
+        "updatedAt" : "2014-02-12T00:38:45Z",
+        "lastEditedBy" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "32e2db65-de5e-4616-bf60-d19e39906aa1",
+        "parentId" : "5c831309-4e7b-406a-ae56-a795518b0d03",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "For instance, here is the third loop with `-O3`\n\n```\n.L15:\n    addq    $8, %rdx\n    movsd   -8(%rdx), %xmm0\n    ucomisd %xmm1, %xmm0\n    ja  .L24\n    movapd  %xmm0, %xmm1\n.L14:\n    cmpq    %rax, %rdx\n    jne .L15\n```\n\nCompare to\n\n```\n.L55:\n    xorl    %eax, %eax\n.L41:\n    rep ret\n    .p2align 4,,10\n    .p2align 3\n.L60:\n    cmpl    %edx, %esi\n    jle .L54\n    addl    $1, %edx\n    movslq  %edx, %rax\n    leaq    (%rdi,%rax,8), %rax\n    ucomisd (%rax), %xmm1\n    jbe .L48\n    jmp .L55\n    .p2align 4,,10\n    .p2align 3\n.L47:\n    movsd   (%rax), %xmm0\n    addq    $8, %rax\n    addl    $1, %edx\n    ucomisd (%rax), %xmm0\n    ja  .L55\n```\n\nThis with gcc version 4.8.2 20131212 (Red Hat 4.8.2-7) (GCC) .\n\n@jaimefrio Don't worry, we're just playing here, although there is much to learn be reading way too much generated assembly ;)\n",
+        "createdAt" : "2014-02-11T18:52:59Z",
+        "updatedAt" : "2014-02-12T00:38:45Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eae6d8e8-d144-4095-afd6-592cefa0432d",
+        "parentId" : "5c831309-4e7b-406a-ae56-a795518b0d03",
+        "authorId" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "body" : "I got this using minimal loop:\n\n```\n  70:   f2 0f 10 07             movsd  (%rdi),%xmm0\n  74:   48 83 c7 08             add    $0x8,%rdi\n  78:   66 0f 2e 07             ucomisd (%rdi),%xmm0\n  7c:   77 12                   ja     90 <g+0x40>\n  7e:   48 39 c7                cmp    %rax,%rdi\n  81:   75 ed                   jne    70 <g+0x20>\n```\n\nvs yours:\n\n```\n  20:   48 83 c7 08             add    $0x8,%rdi\n  24:   f2 0f 10 47 f8          movsd  -0x8(%rdi),%xmm0\n  29:   66 0f 2e c1             ucomisd %xmm1,%xmm0\n  2d:   77 11                   ja     40 <f+0x40>\n  2f:   66 0f 28 c8             movapd %xmm0,%xmm1\n  33:   48 39 c7                cmp    %rax,%rdi\n  36:   75 e8                   jne    20 <f+0x20>\n```\n\nthough the longer code is probably faster as avoids a memory to register move for a register register move the latter has lower latency even if its in the L1 cache. So you win :)\n",
+        "createdAt" : "2014-02-11T19:01:33Z",
+        "updatedAt" : "2014-02-12T00:38:45Z",
+        "lastEditedBy" : "0e0ae9fd-53e5-41a6-8774-29bcec6001df",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0189c85f-8cf8-47ae-b3ee-a802b475ebac",
+        "parentId" : "5c831309-4e7b-406a-ae56-a795518b0d03",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "The compare register to memory `ucomisd (%rdi),%xmm0` in the first example is also probably slower than the register to register  `ucomisd %xmm1,%xmm0` in the second.\n",
+        "createdAt" : "2014-02-11T19:10:17Z",
+        "updatedAt" : "2014-02-12T00:38:45Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c8975ff262292d760b533bb433de50b686b15f9e",
+    "line" : null,
+    "diffHunk" : "@@ -1,1 +104,108 @@        return -1;\n    }\n}\n\n/* find the index of the maximum element of an integer array */"
   }
 ]
