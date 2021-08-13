@@ -1296,5 +1296,71 @@
     "commit" : "a30eceddee3bea889528d6961ff8282b6c166e5f",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +440,444 @@    # _formatArray with subclasses which return 0d arrays in place of scalars\n    data = asarray(a)\n    if a.shape == ():\n        a = data\n"
+  },
+  {
+    "id" : "979417ec-cdd6-4626-b0e9-8d8dc4e25826",
+    "prId" : 12115,
+    "prUrl" : "https://github.com/numpy/numpy/pull/12115#pullrequestreview-162920369",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c1ad9db5-7753-4bc6-8f53-dc1c9b7e2c3e",
+        "parentId" : null,
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Could the dispatcher be written\r\n```\r\ndef default1_dispatcher(*args, **kwargs):\r\n    return args[:1]\r\n```\r\nThen maybe a few of those could be put into overrides, imported, and reused. Of course there may be cases for a different dispatcher in special cases.",
+        "createdAt" : "2018-10-08T23:49:42Z",
+        "updatedAt" : "2018-10-08T23:49:43Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b92b315e-b8db-4d27-96d1-dea19ef3dacf",
+        "parentId" : "c1ad9db5-7753-4bc6-8f53-dc1c9b7e2c3e",
+        "authorId" : "576cec6e-8071-43f8-bce9-351a2589f050",
+        "body" : "This is a good idea, but even though most numpy functions have a meaningless first argument name, technically you can still use them as a keyword argument, e.g., `numpy.sum(a=array)`, in which `args` would be empty. So we need to have an exactly matching function signature, including the same argument names.",
+        "createdAt" : "2018-10-09T00:00:18Z",
+        "updatedAt" : "2018-10-09T00:00:38Z",
+        "lastEditedBy" : "576cec6e-8071-43f8-bce9-351a2589f050",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2fffa01f-ca55-497b-901b-512a0dbbcfd3",
+        "parentId" : "c1ad9db5-7753-4bc6-8f53-dc1c9b7e2c3e",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "At least for python 3.3+, we could use `inspect.signature` and set the `dispatcher.__signature__` as in this [stack overflow answer](https://stackoverflow.com/questions/1409295/set-function-signature-in-python), or is that too magical?\r\n\r\nEdit: formatting",
+        "createdAt" : "2018-10-09T12:41:19Z",
+        "updatedAt" : "2018-10-09T12:41:47Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "94e43509-b426-41a3-a4af-4884a5d1284f",
+        "parentId" : "c1ad9db5-7753-4bc6-8f53-dc1c9b7e2c3e",
+        "authorId" : "576cec6e-8071-43f8-bce9-351a2589f050",
+        "body" : "I wonder if signature rewriting would let us restore the original traceback when the wrong arguments are supplied. With the current version of NumPy:\r\n```\r\nIn [2]: np.argmax(x=[1, 2, 3])\r\n---------------------------------------------------------------------------\r\nTypeError                                 Traceback (most recent call last)\r\n<ipython-input-2-d25c18244167> in <module>()\r\n----> 1 np.argmax(x=[1, 2, 3])\r\n\r\nTypeError: argmax() got an unexpected keyword argument 'x'\r\n```\r\nbut after this PR:\r\n```\r\nIn [2]: np.argmax(x=[1, 2, 3])\r\n---------------------------------------------------------------------------\r\nTypeError                                 Traceback (most recent call last)\r\n<ipython-input-2-d25c18244167> in <module>()\r\n----> 1 np.argmax(x=[1, 2, 3])\r\n\r\n~/dev/numpy/numpy/core/overrides.py in public_api(*args, **kwargs)\r\n    147         @functools.wraps(implementation)\r\n    148         def public_api(*args, **kwargs):\r\n--> 149             relevant_args = dispatcher(*args, **kwargs)\r\n    150             return array_function_implementation_or_override(\r\n    151                 implementation, public_api, relevant_args, args, kwargs)\r\n\r\nTypeError: _argmax_dispatcher() got an unexpected keyword argument 'x'\r\n```",
+        "createdAt" : "2018-10-09T13:56:40Z",
+        "updatedAt" : "2018-10-09T13:56:40Z",
+        "lastEditedBy" : "576cec6e-8071-43f8-bce9-351a2589f050",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "774e27f5-7301-4735-b355-05854cd017fc",
+        "parentId" : "c1ad9db5-7753-4bc6-8f53-dc1c9b7e2c3e",
+        "authorId" : "576cec6e-8071-43f8-bce9-351a2589f050",
+        "body" : "Replacing `public_api.__signature__` doesn't effect the error message, but it looks like this is something that the [decorator library](https://pypi.org/project/decorator/) would fix. So maybe that's worth doing after all...",
+        "createdAt" : "2018-10-09T14:27:54Z",
+        "updatedAt" : "2018-10-09T14:27:54Z",
+        "lastEditedBy" : "576cec6e-8071-43f8-bce9-351a2589f050",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "607842ab59b0479c485eb6fa30778f47dccc224a",
+    "line" : 21,
+    "diffHunk" : "@@ -1,1 +507,511 @@\n\n@array_function_dispatch(_array2string_dispatcher)\ndef array2string(a, max_line_width=None, precision=None,\n                 suppress_small=None, separator=' ', prefix=\"\","
   }
 ]
