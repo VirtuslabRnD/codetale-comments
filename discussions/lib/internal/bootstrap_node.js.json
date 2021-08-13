@@ -31,5 +31,71 @@
     "commit" : "75606c4f6901ce4086addb0e54b1e88d108eaf8b",
     "line" : 20,
     "diffHunk" : "@@ -1,1 +451,455 @@    module.paths = Module._nodeModulePaths(cwd);\n    const body = wrapForBreakOnFirstLine(process._eval);\n    const script = `global.__filename = ${JSON.stringify(name)};\\n` +\n                   'global.exports = exports;\\n' +\n                   'global.module = module;\\n' +"
+  },
+  {
+    "id" : "249f63b0-ee83-4cde-b678-776d362d97c6",
+    "prId" : 14914,
+    "prUrl" : "https://github.com/nodejs/node/pull/14914#pullrequestreview-57718259",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5b56fb45-3a39-481b-9369-2f2e4dd40db6",
+        "parentId" : null,
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "Few questions:\r\n1. why is this better? feels less abstract/more \"internal implementation exposed\"\r\n2. who actually pops the ids?\r\n3. cache `emitAfter`?\r\n```js\r\n  const emitAfter = NativeModule.require('async_hooks').emitAfter;\r\n  do {\r\n    emitAfter(async_uid_fields[kCurrentAsyncId]);\r\n  }...\r\n```\r\n",
+        "createdAt" : "2017-08-18T11:45:09Z",
+        "updatedAt" : "2017-08-30T06:39:47Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a36b278a-fb8e-4eb0-bbe4-32ae7b70e4d0",
+        "parentId" : "5b56fb45-3a39-481b-9369-2f2e4dd40db6",
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : "4. Are we sure `asyncIdStackSize() > 0` at the first iteration?",
+        "createdAt" : "2017-08-18T11:50:49Z",
+        "updatedAt" : "2017-08-30T06:39:47Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0990c2a8-f583-49c0-a214-994d1e86b45c",
+        "parentId" : "5b56fb45-3a39-481b-9369-2f2e4dd40db6",
+        "authorId" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "body" : "> 1. why is this better? feels less abstract/more \"internal implementation exposed\"\r\n\r\nbecause it fixes the bug :) and it's actually the other way around. previously I was overriding implementation details in `emitAfter()`.\r\n\r\n> 2. who actually pops the ids?\r\n\r\n`emitAfter()` pops the id. that's why it was skipping every other id in the stack.\r\n\r\n> 3. cache `emitAfter`?\r\n\r\nI'm doing it for the same reason as the `require('timers')` call below. Because if the script fails early in the startup process then the module might not have been loaded yet. And `require()` already caches the script into  an object, doesn't it?",
+        "createdAt" : "2017-08-18T11:53:07Z",
+        "updatedAt" : "2017-08-30T06:39:47Z",
+        "lastEditedBy" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37536008-e3fc-497f-9e9a-a5dd8d28c8b9",
+        "parentId" : "5b56fb45-3a39-481b-9369-2f2e4dd40db6",
+        "authorId" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "body" : ">>who actually pops the ids?\r\n>\r\n>emitAfter() pops the id. that's why it was skipping every other id in the stack.\r\n\r\nOhh `emitAfter` is `emitAfterScript` not `emitAfterNative`\r\n\r\n>> cache emitAfter?\r\n>\r\n>I'm doing it for the same reason as the require('timers') call below. Because if the script fails early in the startup process then the module might not have been loaded yet. And require() already caches the script into an object, doesn't it?\r\n\r\nAck, but if you do it just before the loop it (1) looks cleaner [to me] (2) still lazy enough.",
+        "createdAt" : "2017-08-18T12:01:12Z",
+        "updatedAt" : "2017-08-30T06:39:47Z",
+        "lastEditedBy" : "23dd1f9f-2ce6-4461-ad78-bdc0fc563445",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56d88d2a-08e1-43b1-ac63-0691b7e58ec0",
+        "parentId" : "5b56fb45-3a39-481b-9369-2f2e4dd40db6",
+        "authorId" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "body" : "> Ack, but if you do it just before the loop it (1) looks cleaner [to me] (2) still lazy enough.\r\n\r\ndo you mean creating `let async_hooks = null;` in `setupProcessFatal()` then doing something like?:\r\n```js\r\nif (async_hooks === null)\r\n  async_hooks = NativeModule.require('async_hooks');\r\n```\r\nOr just `const async_hooks = NativeModule.require('async_hooks');` before the loop every time?",
+        "createdAt" : "2017-08-22T09:31:57Z",
+        "updatedAt" : "2017-08-30T06:39:47Z",
+        "lastEditedBy" : "ec4d48db-e488-47ba-b17d-0da1c3b9df08",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "244ada3c71588f02c10c0fcc526863660d460c96",
+    "line" : 15,
+    "diffHunk" : "@@ -1,1 +421,425 @@            NativeModule.require('async_hooks').emitAfter(\n              async_uid_fields[kCurrentAsyncId]);\n          } while (asyncIdStackSize() > 0);\n        // Or completely empty the id stack.\n        } else {"
   }
 ]
