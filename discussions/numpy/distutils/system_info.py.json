@@ -42,5 +42,60 @@
     "commit" : "eec5e489778764bb80bcb900ae88e8abc7db1ff3",
     "line" : 6,
     "diffHunk" : "@@ -1,1 +224,228 @@        p = sp.Popen([\"gcc\", \"-print-multiarch\"], stdout=sp.PIPE,\n                stderr=tmp)\n    except (OSError, DistutilsError):\n        # OSError if gcc is not installed, or SandboxViolation (DistutilsError\n        # subclass) if an old setuptools bug is triggered (see gh-3160)."
+  },
+  {
+    "id" : "2c56ac28-8d7b-4433-b21a-563c7c6f3e25",
+    "prId" : 5597,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "a26d65cd-fc0d-4774-9257-e19a2a0115bb",
+        "parentId" : null,
+        "authorId" : "8ffdfffb-d8d9-40f6-9de3-dd0dee381149",
+        "body" : "The above looks correct, but it took me a couple of minutes to understand the comment and the use of `del`. How about replacing the whole if clause with:\n\n```\n# From `check_libs` we get keys \"libraries\" and \"library_dirs\",\n# while we need only key \"runtime_library_dirs\" with those paths\ndict_append(info, runtime_library_dirs=i['library_dirs'])\n```\n",
+        "createdAt" : "2015-02-25T08:52:56Z",
+        "updatedAt" : "2015-02-27T07:14:30Z",
+        "lastEditedBy" : "8ffdfffb-d8d9-40f6-9de3-dd0dee381149",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a104ccd5-8f9b-42c1-bd7c-39703e616c34",
+        "parentId" : "a26d65cd-fc0d-4774-9257-e19a2a0115bb",
+        "authorId" : "dc16bbfe-41d1-4206-8e4e-13e63320eda1",
+        "body" : "It was more to be consistent in that if later revisions of check_libs\nreturns more than the two keys (libraries and library_dirs). In that\n_future_ case would any additional keys also get passed. Hence the obscure\ndelete, pop sequence.\nIt may be overkill?\n\n2015-02-25 9:53 GMT+01:00 Ralf Gommers notifications@github.com:\n\n> In numpy/distutils/system_info.py\n> https://github.com/numpy/numpy/pull/5597#discussion_r25325312:\n> \n> > @@ -498,17 +505,46 @@ def calc_libraries_info(self):\n> >                  dict_append(info, **i)\n> >              else:\n> >                  log.info('Library %s was not found. Ignoring' % (lib))\n> > -            i = self.check_libs(r_dirs, [lib])\n> > -            if i is not None:\n> > -                # Swap library keywords found to runtime_library_dirs\n> > -                # the libraries are insisting on the user having defined\n> > -                # them using the library_dirs, and not necessarily by\n> > -                # runtime_library_dirs\n> > -                del i['libraries']\n> > -                i['runtime_library_dirs'] = i.pop('library_dirs')\n> > -                dict_append(info, **i)\n> \n> The above looks correct, but it took me a couple of minutes to understand\n> the comment and the use of del. How about replacing the whole if clause\n> with:\n> \n> # From `check_libs` we get keys \"libraries\" and \"library_dirs\",\n> \n> # while we need only key \"runtime_library_dirs\" with those paths\n> \n> dict_append(info, runtime_library_dirs=i['library_dirs'])\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/numpy/numpy/pull/5597/files#r25325312.\n\n## \n\nKind regards Nick\n",
+        "createdAt" : "2015-02-25T08:57:18Z",
+        "updatedAt" : "2015-02-27T07:14:30Z",
+        "lastEditedBy" : "dc16bbfe-41d1-4206-8e4e-13e63320eda1",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9e755735-a16f-4179-9aca-950dc22010ac",
+        "parentId" : "a26d65cd-fc0d-4774-9257-e19a2a0115bb",
+        "authorId" : "8ffdfffb-d8d9-40f6-9de3-dd0dee381149",
+        "body" : "Then all those extra keys would already be updated by this code above right?\n\n```\n        i = self.check_libs(dirs, [lib])\n        if i is not None:\n            dict_append(info, **i)\n```\n",
+        "createdAt" : "2015-02-25T09:00:43Z",
+        "updatedAt" : "2015-02-27T07:14:30Z",
+        "lastEditedBy" : "8ffdfffb-d8d9-40f6-9de3-dd0dee381149",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac89d3f9-3bbb-4508-a035-465782e8a9f6",
+        "parentId" : "a26d65cd-fc0d-4774-9257-e19a2a0115bb",
+        "authorId" : "dc16bbfe-41d1-4206-8e4e-13e63320eda1",
+        "body" : "Yes, but that would also add the libraries key, which should be provided by the library key and library_dirs, not intrinsically by runtime_library_dirs. I did this so that library_dirs has precedence for actual libraries, and runtime_library_dirs only works for those directories listed.\nSo it is a \"hack\" to not re-create a check_libs routine only for the runtime libs.\nThe way I did it it will only allow runtime_library_dirs to be added iff the libraries also exists in those paths (this is what check_libs does).\n\nIf your above code would be used, all libraries would be added twice to the list. Also we need to transfer library_dirs to runtime_library_dirs, hence the pop to the other key.\n\n###### site1.cfg\n\n```\n[lapack]\nlibraries = lapack\nlibrary_dirs = /opt/lapack\n```\n\nLinking command: `... -L/opt/lapack -llapack`.  \nHere `LD_LIBRARY_PATH` is needed if shared lapack is shared.\n\n###### site2.cfg\n\n```\n[lapack]\nlibraries = lapack\nlibrary_dirs = /opt/lapack\nruntime_library_dirs = /opt/lapack\n```\n\nLinking command: `... -L/opt/lapack -Wl,-rpath=/opt/lapack -llapack`.  \nHere the runtime library directory will be set, `LD_LIBRARY_PATH` not needed any more.\n\n###### site3.cfg\n\n```\n[lapack]\nlibraries = lapack\nruntime_library_dirs = /opt/lapack\n```\n\nLinking command: `... -Wl,-rpath=/opt/lapack -llapack`.  \n",
+        "createdAt" : "2015-02-25T10:32:14Z",
+        "updatedAt" : "2015-02-27T07:14:30Z",
+        "lastEditedBy" : "dc16bbfe-41d1-4206-8e4e-13e63320eda1",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "525f0cd85fa270ee0fb843a8cfdd21dfe98238cd",
+    "line" : 61,
+    "diffHunk" : "@@ -1,1 +519,523 @@                del i['libraries']\n                i['runtime_library_dirs'] = i.pop('library_dirs')\n                dict_append(info, **i)\n            else:\n                log.info('Runtime library %s was not found. Ignoring' % (lib))"
   }
 ]
