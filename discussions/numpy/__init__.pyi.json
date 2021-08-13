@@ -1296,5 +1296,71 @@
     "commit" : "b0c37b8ef3f9536608ad78ee94bcb5d8c87d2242",
     "line" : 7,
     "diffHunk" : "@@ -1,1 +3163,3167 @@    def numerator(self: _ScalarType) -> _ScalarType: ...\n    @property\n    def denominator(self) -> L[1]: ...\n    @overload\n    def __round__(self, ndigits: None = ...) -> int: ..."
+  },
+  {
+    "id" : "45e00829-cc3a-40f2-8f91-9c4fdae1477e",
+    "prId" : 19468,
+    "prUrl" : "https://github.com/numpy/numpy/pull/19468#pullrequestreview-705427998",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "0b750eb6-b683-45bc-9b12-f02213a20ecb",
+        "parentId" : null,
+        "authorId" : "ebbd559e-4e98-4695-a417-e4a6bc303d63",
+        "body" : "To verify: are there any situations where `ctypes.c_void_p` and `ctypes.c_size_t` don't map to `np.uintp`?",
+        "createdAt" : "2021-07-13T13:26:12Z",
+        "updatedAt" : "2021-07-13T13:26:12Z",
+        "lastEditedBy" : "ebbd559e-4e98-4695-a417-e4a6bc303d63",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "941df7ef-f64c-4cd8-a448-097bb590b68e",
+        "parentId" : "0b750eb6-b683-45bc-9b12-f02213a20ecb",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Yes there are, platforms where `uint_ptr_t != size_t`.\r\n\r\nNumpy is probably already broken on those platforms though.",
+        "createdAt" : "2021-07-13T13:32:07Z",
+        "updatedAt" : "2021-07-13T13:32:07Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "83f095b8-5636-41c0-8b78-314a37d0cdde",
+        "parentId" : "0b750eb6-b683-45bc-9b12-f02213a20ecb",
+        "authorId" : "ebbd559e-4e98-4695-a417-e4a6bc303d63",
+        "body" : "> Numpy is probably already broken on those platforms though.\r\n\r\nBased on this I feel it would be adequate to add a comment for these cases and call it a day (https://github.com/numpy/numpy/pull/19468/commits/e7cd1e78ce728e3b745cea5a34c7fdea0f5c378e).",
+        "createdAt" : "2021-07-13T13:40:19Z",
+        "updatedAt" : "2021-07-13T13:40:19Z",
+        "lastEditedBy" : "ebbd559e-4e98-4695-a417-e4a6bc303d63",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "aa0f94a4-ae72-48b4-a094-9bbff5feb0f0",
+        "parentId" : "0b750eb6-b683-45bc-9b12-f02213a20ecb",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Just to check... Is this actually necessary? `ct.c_size_t` is just a type alias for one of the other C types, unlike `ctypes.c_void_p` which is actually a different type.\r\n\r\nIs `uintp` considered a distinct type by mypy, or is it also treated as an alias of another type? Because if they're both aliases, you can just leave out `ct.c_size_t` and it should do the right thing automatically.",
+        "createdAt" : "2021-07-13T16:04:55Z",
+        "updatedAt" : "2021-07-13T16:05:23Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "170a77e1-9e11-48d5-bd76-34b36dc439e9",
+        "parentId" : "0b750eb6-b683-45bc-9b12-f02213a20ecb",
+        "authorId" : "ebbd559e-4e98-4695-a417-e4a6bc303d63",
+        "body" : "> Just to check... Is this actually necessary?\r\n\r\nUnfortunately it is, as the various `ctypes`aliases are all annotated as distinct types in its [stub file](https://github.com/python/typeshed/blob/0cd4ee39a2fbe17001b1a98929158ffc0b11f664/stdlib/ctypes/__init__.pyi#L227-L250).\r\nMypy does have a [builtin plugin](https://github.com/python/mypy/blob/master/mypy/plugins/ctypes.py) for dealing with `ctypes.Array`, but there doesn't seem to be anything\r\nfor dealing with type aliases (or the lack thereof).\r\n\r\n> Is `uintp` considered a distinct type by mypy,  or is it also treated as an alias of another type?\r\n\r\nNo, on numpy's side all `np.unsignedinteger` subclasses are considered interchangeable (as long as \r\nthey're of the size). So on a 64-bit platform `np.uint64` and `np.uintp` are equivalent as far as mypy \r\nis concerned. \r\n\r\nSo with this in mind, I'd say that the `np.generic` subclasses are currently a bit easier to use with typing \r\nthan `ctypes._SimpleCData`.\r\n\r\nhttps://github.com/numpy/numpy/blob/89c80ba606f4346f8df2a31cfcc0e967045a68ed/numpy/__init__.pyi#L3287-L3298\r\n",
+        "createdAt" : "2021-07-13T16:49:46Z",
+        "updatedAt" : "2021-07-13T16:49:46Z",
+        "lastEditedBy" : "ebbd559e-4e98-4695-a417-e4a6bc303d63",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e7cd1e78ce728e3b745cea5a34c7fdea0f5c378e",
+    "line" : 49,
+    "diffHunk" : "@@ -1,1 +950,954 @@    # an assumption that does not hold in rare cases (same for `ssize_t`)\n    @overload\n    def __new__(cls, dtype: _UIntPCodes | Type[ct.c_void_p] | Type[ct.c_size_t], align: bool = ..., copy: bool = ...) -> dtype[uintp]: ...\n    @overload\n    def __new__(cls, dtype: _UIntCodes | Type[ct.c_ulong], align: bool = ..., copy: bool = ...) -> dtype[uint]: ..."
   }
 ]
