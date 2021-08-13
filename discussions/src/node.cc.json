@@ -779,5 +779,104 @@
     "commit" : "e1aa7301b4118a92a8f056d1bc02e6069886a913",
     "line" : 39,
     "diffHunk" : "@@ -1,1 +1177,1181 @@    }\n    case Isolate::MessageErrorLevel::kMessageError:\n      FatalException(isolate, error, message);\n      break;\n  }"
+  },
+  {
+    "id" : "557d00c1-52c5-4223-b344-1e71faed327b",
+    "prId" : 27246,
+    "prUrl" : "https://github.com/nodejs/node/pull/27246#pullrequestreview-226999637",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "ae9bc98c-16a4-4a74-b3cd-ad3920904b60",
+        "parentId" : null,
+        "authorId" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "body" : "Is the current signature of `RegisterSignalHandler` adequate? It only takes `sa_handler`, but not  `sa_sigaction`. If we allow the user overrides this, they probably need the `sa_sigaction` variant as well, considering that's what V8 accepts.",
+        "createdAt" : "2019-04-16T06:20:52Z",
+        "updatedAt" : "2019-05-16T17:33:45Z",
+        "lastEditedBy" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70c7686df50870ac48e85855fbc0d0854d02cd68",
+    "line" : 88,
+    "diffHunk" : "@@ -1,1 +544,548 @@  // and pass the signal context to V8.\n  {\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_sigaction = TrapWebAssemblyOrContinue;"
+  },
+  {
+    "id" : "b9273171-a94c-44f0-8bfe-aaabf2726f48",
+    "prId" : 27246,
+    "prUrl" : "https://github.com/nodejs/node/pull/27246#pullrequestreview-227062518",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "99e62ffd-23d6-44c8-b09c-37d213fd2b76",
+        "parentId" : null,
+        "authorId" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "body" : "Is the idea to expose `RegisterSignalHandler()` as a public API? Joyee already pointed out the signature of the signal handler.\r\n\r\nI think another issue is that users should be able to expect that chaining handlers Just Works. Not just for one specific signal and not just one level deep.\r\n\r\nAside: you should use atomic ops for loads and stores because otherwise the compiler is technically allowed to reorder the store with the sigaction() call.",
+        "createdAt" : "2019-04-16T09:00:44Z",
+        "updatedAt" : "2019-05-16T17:33:45Z",
+        "lastEditedBy" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70c7686df50870ac48e85855fbc0d0854d02cd68",
+    "line" : 69,
+    "diffHunk" : "@@ -1,1 +476,480 @@    previous_sigsegv_action.store(handler);\n    return;\n  }\n#endif  // NODE_USE_V8_WASM_TRAP_HANDLER\n  struct sigaction sa;"
+  },
+  {
+    "id" : "a2a21c5f-7973-4106-b821-4ec6c4f7f9f7",
+    "prId" : 27246,
+    "prUrl" : "https://github.com/nodejs/node/pull/27246#pullrequestreview-232176213",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "40c69c63-6e6f-4429-91a7-64b6b12bb5fb",
+        "parentId" : null,
+        "authorId" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "body" : "Sorry, I should have mentioned in my previous review that just any `std::atomic<T>` might not be sufficient because it's allowed to use mutexes internally and that's not safe inside a signal handler (can deadlock).\r\n\r\nIOW, `std::atomic<T>::is_lock_free()` _must_ be `true` and you don't get that guarantee with compound types like `struct sigaction`.\r\n\r\nHowever, if you store just the function pointer, it should be okay (but please still `CHECK(prev_sigsegv_action.is_lock_free())` :-))",
+        "createdAt" : "2019-04-30T07:33:48Z",
+        "updatedAt" : "2019-05-16T17:33:45Z",
+        "lastEditedBy" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "44d10b36-2988-4d44-ada7-3a302cc4e564",
+        "parentId" : "40c69c63-6e6f-4429-91a7-64b6b12bb5fb",
+        "authorId" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "body" : "signal handlers horrify me :(",
+        "createdAt" : "2019-04-30T13:41:46Z",
+        "updatedAt" : "2019-05-16T17:33:45Z",
+        "lastEditedBy" : "af965d24-c34b-4c03-8ff1-5a5da6036269",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70c7686df50870ac48e85855fbc0d0854d02cd68",
+    "line" : 46,
+    "diffHunk" : "@@ -1,1 +454,458 @@void TrapWebAssemblyOrContinue(int signo, siginfo_t* info, void* ucontext) {\n  if (!v8::TryHandleWebAssemblyTrapPosix(signo, info, ucontext)) {\n    auto prev = previous_sigsegv_action.load();\n    if (prev != nullptr) {\n      prev(signo, info, ucontext);"
+  },
+  {
+    "id" : "05c74963-c1ec-4922-abe7-e52ebdf2588e",
+    "prId" : 27246,
+    "prUrl" : "https://github.com/nodejs/node/pull/27246#pullrequestreview-234423636",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "2eb269a3-b444-4738-9737-be615faf516a",
+        "parentId" : null,
+        "authorId" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "body" : "Not a blocker in the slightest but you could fit this on one line and it'd arguably be a little easier to read:\r\n```c++\r\n                           void (*handler)(int, siginfo_t*, void*),\r\n```",
+        "createdAt" : "2019-05-07T10:02:03Z",
+        "updatedAt" : "2019-05-16T17:33:45Z",
+        "lastEditedBy" : "4224fcfe-ee22-4bd8-9ed5-4e8efd7a90bc",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "70c7686df50870ac48e85855fbc0d0854d02cd68",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +469,473 @@                           void (*handler)(int signal,\n                                           siginfo_t* info,\n                                           void* ucontext),\n                           bool reset_handler) {\n#if NODE_USE_V8_WASM_TRAP_HANDLER"
   }
 ]
