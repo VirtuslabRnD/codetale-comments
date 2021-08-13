@@ -1,0 +1,288 @@
+[
+  {
+    "id" : "66801817-b26b-49fe-a262-d76ad956766d",
+    "prId" : 18805,
+    "prUrl" : "https://github.com/numpy/numpy/pull/18805#pullrequestreview-639866215",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "988c11f8-14ad-4467-8c6d-4521b28bd3d8",
+        "parentId" : null,
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "This is not quite true. The old strategy was backward compatible. The worst thing that could happen is that you allocate a huge chunk, create an array with it, set OWNDATA and then the free will put it into a \"too large\" bucket (wasting memory).  But overall, there was never any API change the way the cache was implemented.\r\n\r\nThis PR has a tiny chance of that, because _if_ an external project would replace `ndarray->data` (i.e. realloc or use free/malloc), that would have worked before but it will stop working if the allocation strategy was modified.\r\n\r\nNow, I am not worried about that. Nobody should be doing that, and it can only be a problem if you use one project modifying the allocation strategy AND a project modifying `ndarray->data` together.\r\n\r\nYour PR makes sure that if the user provides the data (and may have allocated it), we will end up using the normal `free` strategy, so no issue exists for arrays created from passed in `data`.",
+        "createdAt" : "2021-04-19T22:06:05Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5769c74e-0275-4a8a-98f8-a97026d14468",
+        "parentId" : "988c11f8-14ad-4467-8c6d-4521b28bd3d8",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "(same also applies to `->shape`, but that is even crazier, since the shape and strides were always allocated together, so you have to dig into NumPy code to get it right.  Overall, it makes me almost wonder if we could get away with breaking ABI and replacing the allocation strategy there with `PyMem_Malloc()` by default, but I guess it doesn't matter.)",
+        "createdAt" : "2021-04-19T22:20:01Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9fc4ca3f-3275-4b85-86cf-e625abc0f6a8",
+        "parentId" : "988c11f8-14ad-4467-8c6d-4521b28bd3d8",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "I didn't change the shape/strides allocation in the PR. Should I make it explicit in the NEP that the policy only touches the data and not the shape/strides ?",
+        "createdAt" : "2021-04-19T22:58:46Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "db7bd5eb-7ac5-4f31-83a0-b033891ebd75",
+        "parentId" : "988c11f8-14ad-4467-8c6d-4521b28bd3d8",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Yeah, I think I misread the abstract a bit and got sidetracked.  Maybe rearrange the second paragraph of the abstract slightly would set the track clearer (brainstorming here):\r\n\r\n> This NEP proposes a mechanism to override the memory management strategy used for `ndarray->data` with user-provided alternatives.  This allocation holds the arrays data and is can be very large.  As this is the data that operations work on it can benefit from custom allocation strategies to guarantee data alignment or placement in memory shared with the GPU.\r\n\r\n\r\nEDIT: To be clear, I think its fine, but maybe could be a bit clearer there.",
+        "createdAt" : "2021-04-19T23:05:03Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a8c421a-2901-4a63-a8e7-a481c4c248fe",
+        "parentId" : "988c11f8-14ad-4467-8c6d-4521b28bd3d8",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Updated.",
+        "createdAt" : "2021-04-20T12:09:36Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "67095c4f4ebc94cbabf558dbc8a55cbd79e0812e",
+    "line" : 85,
+    "diffHunk" : "@@ -1,1 +83,87 @@management strategy and should restore\n``ndarray->data`` before calling ``Py_DECREF``. As mentioned above, the change\nin size should not impact end-users.\n\nDetailed description"
+  },
+  {
+    "id" : "28bbbf32-d2ac-41f8-852d-63b40ca997c6",
+    "prId" : 18805,
+    "prUrl" : "https://github.com/numpy/numpy/pull/18805#pullrequestreview-645405302",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "dffa75c9-15f5-4a25-a234-5d0dba2149f8",
+        "parentId" : null,
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Seems fine here, in line with my questions below, it might be nice to have one paragraph that explains how users will benefit (that is probably the users of the libraries that modify the allocation strategy).\r\n\r\nI assume this are things like: Alignment guarantees or NUMA core pinning can speed up their code. Allocating in memory shared by GPU and CPU speeds up certain operations?",
+        "createdAt" : "2021-04-19T22:16:37Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fcbdbd31-9898-4fa6-a9ca-1e40180a2914",
+        "parentId" : "dffa75c9-15f5-4a25-a234-5d0dba2149f8",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "> Alignment guarantees or NUMA core pinning can speed up their code\r\n\r\nYes. There are libraries like `pnumpy` that would like to keep data on a specific core or hardware where unaligned memory is expensive (like ARMv7).",
+        "createdAt" : "2021-04-19T23:11:00Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6da55aa7-a03d-4e6b-a55c-554fbd26070b",
+        "parentId" : "dffa75c9-15f5-4a25-a234-5d0dba2149f8",
+        "authorId" : "73d6f7d8-2c7d-4a48-8754-5ce4a97a850f",
+        "body" : "Can you guarantee \"pinned\" memory in the CUDA sense as well? I believe that means that the memory is banned from swapping so the CPU doesn't have to be used. I've seen this special memory type used for passing seamlessly between CPU and GPU; however, the allocation of \"formally\" pinned memory in this sense normally uses the CUDA C API.",
+        "createdAt" : "2021-04-20T02:31:49Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "73d6f7d8-2c7d-4a48-8754-5ce4a97a850f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0c999eed-fc5a-4723-8c28-d267bbdf746d",
+        "parentId" : "dffa75c9-15f5-4a25-a234-5d0dba2149f8",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "I think using pinned memory would hit some snags due to `memcpy`. A future enhancement might be to enable user-supplied `memcpy` routines and using them inside numPy when creating a copy of an ndarray.",
+        "createdAt" : "2021-04-20T02:44:18Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "101c4f9b-e05e-455b-8673-f4b43ea6a010",
+        "parentId" : "dffa75c9-15f5-4a25-a234-5d0dba2149f8",
+        "authorId" : "54bf9b3d-75f0-4091-b7f1-e3fab84b2c34",
+        "body" : "Just FYI. CuPy recently added a few APIs to allocate pinned memory that backs a NumPy array: \r\n> For using pinned memory more conveniently, we also provide a few high-level APIs in the cupyx namespace, including cupyx.empty_pinned(), cupyx.empty_like_pinned(), cupyx.zeros_pinned(), and cupyx.zeros_like_pinned(). They return NumPy arrays backed by pinned memory. If CuPy’s pinned memory pool is in use, the pinned memory is allocated from the pool.\r\n\r\nhttps://docs.cupy.dev/en/stable/user_guide/memory.html#memory-management. I think PyCUDA also have similar APIs. \r\n\r\nIndeed, memcpy could be an issue for D2H transfers, but not H2D (at least in CuPy, `arr_cp[:] = arr_np_on_pinned` would handle this properly). It's something I am working to circumvent (by calling `arr_np_on_pinned = cp.asnumpy(arr_cp, out=arr_np_on_pinned)`).",
+        "createdAt" : "2021-04-27T04:14:23Z",
+        "updatedAt" : "2021-04-27T04:14:23Z",
+        "lastEditedBy" : "54bf9b3d-75f0-4091-b7f1-e3fab84b2c34",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "67095c4f4ebc94cbabf558dbc8a55cbd79e0812e",
+    "line" : 73,
+    "diffHunk" : "@@ -1,1 +71,75 @@``ndarray`` object. It is a necessary price to pay for this approach. We\ncan be reasonably sure that the change in size will have a minimal impact on\nend-user code because NumPy version 1.20 already changed the object size.\n\nThe implementation preserves the use of ``PyTraceMalloc_Track`` to track"
+  },
+  {
+    "id" : "4613f6d1-2a8d-4b9a-b0f6-39625c9e467e",
+    "prId" : 18805,
+    "prUrl" : "https://github.com/numpy/numpy/pull/18805#pullrequestreview-641649814",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "20f3ba92-f5cf-4168-9c48-017cf217c566",
+        "parentId" : null,
+        "authorId" : "8ffdfffb-d8d9-40f6-9de3-dd0dee381149",
+        "body" : "This could use `.. code-block:: c`",
+        "createdAt" : "2021-04-21T07:13:23Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "8ffdfffb-d8d9-40f6-9de3-dd0dee381149",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a2910d5b-50e8-4553-906c-1c4977c72264",
+        "parentId" : "20f3ba92-f5cf-4168-9c48-017cf217c566",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "ok",
+        "createdAt" : "2021-04-22T00:05:43Z",
+        "updatedAt" : "2021-04-22T01:26:05Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "67095c4f4ebc94cbabf558dbc8a55cbd79e0812e",
+    "line" : 154,
+    "diffHunk" : "@@ -1,1 +152,156 @@\n.. code-block:: c\n\n    #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION\n    #include <numpy/arrayobject.h>"
+  },
+  {
+    "id" : "5d539f30-08f8-4ca6-82d4-36d1f71cf293",
+    "prId" : 18805,
+    "prUrl" : "https://github.com/numpy/numpy/pull/18805#pullrequestreview-653314938",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "5fa70790-12ac-445d-abe6-6ed00e32d7b2",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "I wasn't aware this had any effect - doesn't an array in a struct only contribute it's element size to the alignment?",
+        "createdAt" : "2021-05-03T19:27:11Z",
+        "updatedAt" : "2021-05-03T19:27:29Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76410fd4-ae05-4f78-bc53-1224cdbdbbfc",
+        "parentId" : "5fa70790-12ac-445d-abe6-6ed00e32d7b2",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "@eric-wieser I understood it as relying on the assumption that the struct itself is 64 byte (cache-line) aligned. In that case the interesting part of the struct will remain aligned if the `name` is a multiple of 64 byte.\r\n\r\nBut, I might be misunderstanding it and I think you are right that it may make sense to add some attributes/pragma to ensure the struct itself is cache-line aligned.  (Although, that is not part of the header.)",
+        "createdAt" : "2021-05-03T19:44:49Z",
+        "updatedAt" : "2021-05-03T19:44:49Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ecc4834b-3763-4c08-b3e7-e70fe7caacfb",
+        "parentId" : "5fa70790-12ac-445d-abe6-6ed00e32d7b2",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "On another note - Python doesn't use static char buffers for any of its object names, as I remember. Is there a reason for doing so here rather than using a `char*`?",
+        "createdAt" : "2021-05-03T19:51:58Z",
+        "updatedAt" : "2021-05-03T19:51:58Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "25389510-6e20-442b-b9b8-69a4af6a2e3f",
+        "parentId" : "5fa70790-12ac-445d-abe6-6ed00e32d7b2",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "How can we make it clear who allocates and frees the content of the `char *` and prevent corruption?",
+        "createdAt" : "2021-05-06T10:46:05Z",
+        "updatedAt" : "2021-05-06T10:46:06Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33de535d-12f6-4392-beff-681ae2d4afe9",
+        "parentId" : "5fa70790-12ac-445d-abe6-6ed00e32d7b2",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "I just posted to the mailing list with a related comment, which I'll repeat here for ease.\r\nIt's easy to think of allocators that have other state besides the name, for which we need to solve this problem anyway:\r\n\r\n> Consider an allocator that aligns to `N` bytes, where `N` is configurable from a python call in someone else's extension module. Where do they store `N`?\r\n> They can hide it in `PyDataMem_Handler::name` but that's obviously an abuse of the API.\r\n> They can store it as a global variable, but then obviously the idea of tracking the allocator used to construct an array doesn't work, as the state ends up changing with the global allocator.\r\n> \r\n> The easy way out here would be to add a `void* context` field to the structure, and pass it into all the methods.\r\n> This doesn't really solve the problem though, as now there's no way to cleanup any allocations used to populate `context`, or worse decrement references to python objects stored within `context`.\r\n> I think we want to bundle `PyDataMem_Handler` in a `PyObject` somehow, either via a new C type, or by using the PyCapsule API which has the cleanup and state hooks we need.\r\n> `PyDataMem_GetHandlerName` would then return this PyObject rather than an opaque name.",
+        "createdAt" : "2021-05-06T11:09:11Z",
+        "updatedAt" : "2021-05-06T11:09:56Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b437bf6d-748b-4a6f-bc0a-8932c8322f5b",
+        "parentId" : "5fa70790-12ac-445d-abe6-6ed00e32d7b2",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "So I guess more concretely, my suggestion is:\r\n```C\r\ntypedef void *(PyDataMem_AllocFunc)(PyObject *self, size_t size);\r\ntypedef void *(PyDataMem_ZeroedAllocFunc)(PyObject *self, size_t nelems, size_t elsize);\r\ntypedef void (PyDataMem_FreeFunc)(PyObject *self, void *ptr, size_t size);\r\ntypedef void *(PyDataMem_ReallocFunc)(PyObject *self, void *ptr, size_t size);\r\n\r\ntypedef struct {\r\n    PyObject_HEAD\r\n    PyDataMem_AllocFunc *alloc;\r\n    PyDataMem_ZeroedAllocFunc *zeroed_alloc;\r\n    PyDataMem_FreeFunc *free;\r\n    PyDataMem_ReallocFunc *realloc;\r\n} PyDataMem_HandlerObject;\r\n\r\n// I haven't used the CAPI in a while, but there's not much boilerplate here anyway\r\nPyType_Spec PyDataMem_HandlerTypeSpec =\r\n{\r\n    .name = \"numpy.core.datamemhandler\",\r\n    .basicsize = sizeof(PyDataMem_HandlerObject),\r\n    .itemsize = 0,\r\n    .flags = Py_TPFLAGS_BASETYPE\r\n};\r\n```\r\n\r\nUsers who are fine with a stateless allocator would use:\r\n```C\r\nPyDataMem_HandlerObject *handler = PyObject_New(PyDataMem_HandlerObject, &PyDataMem_HandlerType)\r\n```\r\nand then can set the fields as appropriate.\r\n\r\nUsers who want a stateful allocator can then just create a derived type with some extra state, eg:\r\n```C\r\ntypedef struct {\r\n    PyDataMem_HandlerObject handler;\r\n    npy_uintp alignment;\r\n} MyAlignedHandlerObject;\r\n\r\n// similar boilerplate to above\r\nPyType_Spec MyAlignedHandlerObject_HandlerTypeSpec = ...;\r\n```",
+        "createdAt" : "2021-05-06T11:24:47Z",
+        "updatedAt" : "2021-05-06T11:51:57Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6a9d9cc4-f849-487e-89a4-5068b605071c",
+        "parentId" : "5fa70790-12ac-445d-abe6-6ed00e32d7b2",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Responded on the mailing list.",
+        "createdAt" : "2021-05-06T11:43:30Z",
+        "updatedAt" : "2021-05-06T11:43:30Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "67095c4f4ebc94cbabf558dbc8a55cbd79e0812e",
+    "line" : 114,
+    "diffHunk" : "@@ -1,1 +112,116 @@\n        typedef struct {\n            char name[128];  /* multiple of 64 to keep the struct aligned */\n            PyDataMem_AllocFunc *alloc;\n            PyDataMem_ZeroedAllocFunc *zeroed_alloc;"
+  },
+  {
+    "id" : "0b2dd133-8c54-4e06-ae5a-2fcdb395b979",
+    "prId" : 18805,
+    "prUrl" : "https://github.com/numpy/numpy/pull/18805#pullrequestreview-653272241",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "4d57739d-01bd-4a2c-b12a-552ec97f11c3",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "I assume by gcc you mean \"the c runtime\"?",
+        "createdAt" : "2021-05-03T19:30:52Z",
+        "updatedAt" : "2021-05-03T19:30:52Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "854d65d4-6735-4051-bb70-4cb6722aeb90",
+        "parentId" : "4d57739d-01bd-4a2c-b12a-552ec97f11c3",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "fixed",
+        "createdAt" : "2021-05-06T10:49:48Z",
+        "updatedAt" : "2021-05-06T10:49:48Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "67095c4f4ebc94cbabf558dbc8a55cbd79e0812e",
+    "line" : 188,
+    "diffHunk" : "@@ -1,1 +186,190 @@            fprintf(stdout, \"uh-oh, unmatched shift_free, \"\n                    \"no appropriate prefix\\\\n\");\n            /* Make gcc crash by calling free on the wrong address */\n            free((char *)p + 10);\n            /* free(real); */"
+  }
+]
