@@ -1197,5 +1197,104 @@
     "commit" : "695b836eb5d1e25363795ceed35b142d062c9056",
     "line" : 108,
     "diffHunk" : "@@ -1,1 +399,403 @@    \"\"\"\n    res = empty_like(a, dtype=dtype, order=order, subok=subok, shape=shape)\n    multiarray.copyto(res, fill_value, casting='unsafe')\n    return res\n"
+  },
+  {
+    "id" : "8503038d-deff-4e7a-a85b-ad11868a865a",
+    "prId" : 13506,
+    "prUrl" : "https://github.com/numpy/numpy/pull/13506#pullrequestreview-240092587",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c37b5be0-c8e7-477e-883c-746f825d3362",
+        "parentId" : null,
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "Since for the dense case `res` is guaranteed to be much bigger than the sparse arrays that constitute it, I'd just calculate the indices first and then use those to create the dense array. This allows one to simplify this to:\r\n```\r\nindices = tuple(arange(dim, dtype=dtype).reshape(\r\n            shape[:i] + (dim,) + shape[i+1:]) for i, dim in enumerate(dimensions))\r\nif sparse:\r\n    return indices\r\nelse:\r\n    return np.stack(np.broadcast_arrays(*indices))\r\n```\r\n",
+        "createdAt" : "2019-05-15T15:43:20Z",
+        "updatedAt" : "2019-05-21T14:38:11Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5e56fd80-eaaa-41d2-bffa-af6c841621b6",
+        "parentId" : "c37b5be0-c8e7-477e-883c-746f825d3362",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Does that work when `N == 0`?",
+        "createdAt" : "2019-05-15T16:14:13Z",
+        "updatedAt" : "2019-05-21T14:38:11Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "646bd6dc-c2ee-49d8-b10f-9c3d0e92e308",
+        "parentId" : "c37b5be0-c8e7-477e-883c-746f825d3362",
+        "authorId" : "de2e54e1-0db1-4009-aac0-cf3a0349e0f6",
+        "body" : "Unfortunately it doesn't, because `np.stack` needs at lease one array to stack and fails for `np.stack([])`, so it fails for the `dimensions==()` case. So this needs at least a special path for this case. I still like it more then the old solution, however it is a more severe code change overall.",
+        "createdAt" : "2019-05-16T09:05:45Z",
+        "updatedAt" : "2019-05-21T14:38:11Z",
+        "lastEditedBy" : "de2e54e1-0db1-4009-aac0-cf3a0349e0f6",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "81190eea-287b-4055-b709-294f19c6790a",
+        "parentId" : "c37b5be0-c8e7-477e-883c-746f825d3362",
+        "authorId" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "body" : "@Ablinne - multiple options:\r\n1. `return np.stack(...) if N > 0 else np.array([], dtype=dtype)`\r\n2. Stick with what you have.\r\n3. Still make the empty array and loop with the insertions but after creating the tuple:\r\n```\r\n# TODO: once stack allows an empty tuple, this could be replaced with\r\n# np.stack(np.broadcast_arrays(*indices))\r\nres = empty((N,)+dimensions, dtype=dtype)\r\nfor r, index in zip(res, indices):\r\n    r[...] = index\r\nreturn res\r\n```",
+        "createdAt" : "2019-05-16T13:01:21Z",
+        "updatedAt" : "2019-05-21T14:38:11Z",
+        "lastEditedBy" : "1794b506-aeff-4fdc-9354-7fd193f97b33",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7241884c-e46c-4ec8-a540-32d7d041d7c8",
+        "parentId" : "c37b5be0-c8e7-477e-883c-746f825d3362",
+        "authorId" : "de2e54e1-0db1-4009-aac0-cf3a0349e0f6",
+        "body" : "I am going to stick with the current version",
+        "createdAt" : "2019-05-21T14:39:52Z",
+        "updatedAt" : "2019-05-21T14:39:52Z",
+        "lastEditedBy" : "de2e54e1-0db1-4009-aac0-cf3a0349e0f6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9c1850f4cef208fe4f45fa771545b21f9e7a44c3",
+    "line" : 95,
+    "diffHunk" : "@@ -1,1 +1695,1699 @@    shape = (1,)*N\n    if sparse:\n        res = tuple()\n    else:\n        res = empty((N,)+dimensions, dtype=dtype)"
+  },
+  {
+    "id" : "5bdfd7c1-a5fa-4aa6-821b-59c619f5d3a3",
+    "prId" : 13506,
+    "prUrl" : "https://github.com/numpy/numpy/pull/13506#pullrequestreview-239189241",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "cf3046fa-0211-4756-a57f-42c33801905d",
+        "parentId" : null,
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Oh, @Ablinne I forgot, this needs a `.. versionadded:: 1.17` (one empty line, before and after). I suppose depending on how fast 1.17 is, this may also be in 1.18, since I guess we should feature freeze soon (although we rarely did a hard freeze).",
+        "createdAt" : "2019-05-17T16:28:33Z",
+        "updatedAt" : "2019-05-21T14:38:12Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "12cd8f86-e3c9-4a25-8751-a1d0306eda8d",
+        "parentId" : "cf3046fa-0211-4756-a57f-42c33801905d",
+        "authorId" : "de2e54e1-0db1-4009-aac0-cf3a0349e0f6",
+        "body" : "Like this?",
+        "createdAt" : "2019-05-18T07:55:29Z",
+        "updatedAt" : "2019-05-21T14:38:12Z",
+        "lastEditedBy" : "de2e54e1-0db1-4009-aac0-cf3a0349e0f6",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9c1850f4cef208fe4f45fa771545b21f9e7a44c3",
+    "line" : 30,
+    "diffHunk" : "@@ -1,1 +1623,1627 @@        Return a sparse representation of the grid instead of a dense\n        representation. Default is False.\n\n        .. versionadded:: 1.17\n"
   }
 ]
