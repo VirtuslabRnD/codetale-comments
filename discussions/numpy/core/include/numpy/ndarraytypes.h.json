@@ -735,5 +735,423 @@
     "commit" : "22ee97190db0e2432e21d3d830e04776feb0f0a6",
     "line" : 62,
     "diffHunk" : "@@ -1,1 +1891,1895 @@        PyArray_ArrFuncs *f;\n\n        /* DType methods, these could be moved into its own struct */\n        discover_descr_from_pyobject_function *discover_descr_from_pyobject;\n        is_known_scalar_type_function *is_known_scalar_type;"
+  },
+  {
+    "id" : "aac4e76f-05c0-45bc-a7d0-f1c8923e227c",
+    "prId" : 16938,
+    "prUrl" : "https://github.com/numpy/numpy/pull/16938#pullrequestreview-515217019",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "parentId" : null,
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Could we use flags to version this struct and indicate whether `_buffer_info` exists or not? If it doesn't exist we should raise an error when trying to use it.",
+        "createdAt" : "2020-07-24T06:29:06Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "375e1a26-d90a-491c-9282-d9b34ce28d70",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "I am not sure I am following.  We could add a version, but I guess we already have the NumPy version to find out how large the struct will be (or even the type object).  If we would version it, C-side subclassers (if we can even figure out someone is that), would need to opt-in with a flag and we otherwise keep using the global? (and maybe try to give a deprecation warning)",
+        "createdAt" : "2020-07-24T15:21:43Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc2ed0a5-f91d-4809-a860-0176dc05ddc6",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "I was thinking more along the lines of \"Detect that we did not set up this `PyArrayObject_fields`, refuse to do any buffer processing\". That would force anyone mimicking our struct to also add the field and update the flag, otherwise they would get errors. So then there are two parts: \r\n- set something inside the struct itself to show it has this extra field\r\n- detect this thing and raise an error rather than write past the end of the struct\r\n\r\nIt needs to be inside the struct since the struct can be fed in by C-API consumers. ",
+        "createdAt" : "2020-07-24T15:36:59Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5bfe980e-44aa-425d-a10c-f286b5903363",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "I would be happy to get rid of the global registry and force the few people who reproduce the `PyArrayObject_fields` struct to update or fail.",
+        "createdAt" : "2020-07-24T15:39:00Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2a08f96e-3473-4293-88e9-8744f535e40f",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Good point, I have to think whether its feasible/easy, since python subclasses must not notice any of such things.",
+        "createdAt" : "2020-07-24T15:47:12Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0dfc2ac7-df60-4850-97c1-a39feaf2991c",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "@mattip, I guess we could initialize the field with a singleton/garbage (instead of NULL), in the hope that it makes clashes/crashes more likely.  The only usage that would really find, is if the subclasser also initializes the field to NULL and does not end up using it consistently.  (Since any non-NULL value should lead to a crash during dealloc.)\r\n\r\nI am not sure there is a good way to find C-side subclassing, aside from checking whether the types `basicsize` changed, which would be the case unless the subclasser added a single pointer at the end.  So that is something we can do: raise an error if the types size differs, but there isn't some additional flag set.  But it seems a bit convoluted? We would have to set that flag on each instance probably, or require reimplementation of the buffer export, which seems strange?",
+        "createdAt" : "2020-08-03T20:25:53Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "760aeb46-2175-4bb9-84e4-d914e61d928c",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "This is the scenario that worries me:\r\n- Someone uses the older C-API to create an ndarray, using something like `PyArray_NewFromDescr`. Now they have a `PyArrayObject` that is smaller than the one after this PR.\r\n- They somehow pass it to a newer NumPy. Now we get a `PyObject*`, and \r\n- NumPy 1.20 casts it to a `PyArrayObject`. Whoops, we will read this field off the end of the memory they gave us.\r\n\r\nThis is similar to the problems we were having with Cython compiled code like cython/cython#2221 that led to cython/cython#2627.\r\n\r\n`sizeof()` or junk memory will not help here. I think the only way to detect this is to have some kind of versioning in the struct itself, which is why I suggested we add a value to the flag, I think something like `#define NPY_ARRAY_HAS_BUFFER_INFO 0x4000` might work. Then we can set the flag whenever we allocate and initialize a new `PyArrayObject_fields`, and check that the flag has that value set whenever we wish to manipulate the `_buffer_info`.",
+        "createdAt" : "2020-08-03T20:43:53Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d1170d2f-e4b5-4251-9232-3ea73c6eb06b",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "`basicsize` might work as well.",
+        "createdAt" : "2020-08-03T20:45:27Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c033b8d0-476d-47f4-84b9-8046f6196919",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "So the example we want to guard against is mainly this type of thing?:\r\n```\r\ncimport numpy as npc\r\n\r\ncdef class sub(npc.ndarray):\r\n    pass\r\n```\r\nwithout any extra fields the struct will be too small (I thought cpython would check this, but it does not), if we add more fields they will be incompatible.  The case where the struct is too small is simple though: We can just raise an error in `tp_alloc`.  But if you add a single new field there, we will not know and need the flag (or hope for the best with guards).\r\nI am actually not sure where the flag should be set. `tp_alloc` is plausible, but not sure its available in cython, I guess in cython you may have to set it in `__array_finalize__` (but only if numpy is new enough).\r\n\r\nFor heaptypes, we would have to walk the mro (to see if there is a static subclass involved) – they always have at least one additional field `tp_dict`, and may have more for `__slots__`. Or simply assume that there is no static subclass involved.\r\n\r\nI am not sure about `PyArray_NewFromDescr`, you can't create an incompatible `ndarray` in any reasonable way I think. (It would have to be a stack allocated array, which is possible, but pretty dirty – at least outside of NumPy).",
+        "createdAt" : "2020-08-03T21:40:10Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8c3b9906-5c54-4f2d-948d-c60f5752353c",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : " Let's discuss the implications at the next triage meeting.",
+        "createdAt" : "2020-10-20T08:21:38Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bb768290-d496-45ac-a7b0-829ed166c3c9",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "OK, thinking about it a bit more. I don't have a big new idea.  We noted flags in the meeting, there is the option to:\r\n\r\n1. Add a flag to indicate that a buffer was exported, the only use would be a sanity check on `dealloc` (so that we do not crash hard).\r\n2. Somehow allow downstream to indicate that they are aware of a growing struct. But I don't see how downstream can add a flag here, since it needs to be flagged on the type object.\r\n\r\nThere is no perfect solution, since point 1 can easily crash hard if an array exports a buffer and then the field gets modified.  That is super rare, but I thought an alternative could be to tag the pointer to give us a chance to convert the hard crash into a useful message.\r\n\r\nI was going to polish this up a bit, but it would be good to finish gh-16936 and gh-17295 since it modifies the same code.",
+        "createdAt" : "2020-10-22T00:04:40Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b46e61d7-6e21-43f1-a14e-91c25f47a866",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Isn't [the `PyArray_GetNDArrayCVersion` mechnism](https://numpy.org/doc/stable/reference/c-api/array.html?highlight=pyarray_getndarraycversion#c.PyArray_GetNDArrayCVersion) supposed to adequately protect us from ABI changes?",
+        "createdAt" : "2020-10-22T08:39:44Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "78b2e3cf-568f-47c8-8310-1f048f067d0c",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Ooops, yeah. That forces everyone to recompile even though almost nobody will have to, but is maybe best. But, it seems the current check won't allow to easily compile against both versions of NumPy, which is probably still problematic (unless we assume that this happens so rarely that packaging isn't probably an issue for these projects)?",
+        "createdAt" : "2020-10-22T13:47:22Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c76a77b5-4605-4c43-95d1-2f6232e9b5d2",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "Maybe try building this PR and running it against an version of SciPy compiled for 1.19 or older",
+        "createdAt" : "2020-10-22T13:57:31Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb1169f0-f3e7-4eca-8b8b-34a6a44a0e57",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "I think PyArray_GetNDArrayCVersion works properly when mixing NumPy versions in, say, SciPy and Numpy. Otherwise we would have heard loud screams when we modified PyUFuncObject in v1.16 and changed the ABI version number. So I am 99% sure this discussion is a non-issue. I guess one way to find out is to merge this now, and wait for the weekly builds to percolate through the system.",
+        "createdAt" : "2020-10-22T15:04:29Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f1b6a2a0-4e63-411b-b335-aec176c7a486",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "... which means fixing the merge conflict and getting tests to pass.",
+        "createdAt" : "2020-10-22T15:05:10Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "23ac7cce-2c8e-4700-88d0-3d1df7a93423",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "I hope it is, but check here:\r\n\r\nhttps://github.com/numpy/numpy/blame/39c915c1236d61debb4b3e10dfadf910da6c9b30/numpy/core/setup_common.py#L24\r\n\r\nWe have the API version and the ABI version. The API version we can increase easily, since it will only affect anything if you compile against a new NumPy version and then run it on an old one (which we can assume nobody does). But the ABI version has not been touched in 10 years.  Now I don't know how well that worked out 10 years ago, but it seems like a time before widespread comfortable pip?",
+        "createdAt" : "2020-10-22T15:15:45Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a7b2882f-4a72-48ea-b99c-0f86ff2d428f",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "OK, then I guess we need to do some testing to make sure.",
+        "createdAt" : "2020-10-22T16:05:55Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c76a2bef-140e-4f6c-8625-7da47c5046fa",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "I played with this for a while with `pip install scipy` and a local `numpy` build (after changing `C_ABI_VERSION` in `numpy/core/setup_common.py`. I also modified `_import_array` in `b/numpy/core/code_generators/generate_numpy_api.py` to print when it is called. If I import `scipy`, I see it calls `_impport_array`, and the `C_ABI_VERSION` is the new one. Which makes sense, the function is exposed via `_multiarrayumath.so`, which comes from NumPy, but I just wanted to confirm.",
+        "createdAt" : "2020-10-22T22:33:33Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "69da52ca-5450-4ac6-81a8-50c3bd10d05b",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "I don't understand.  I just tried as well. First, I had to clean up to get the new C-ABI version, I think.  Second `import_array` is defined as part of `__multiarray_api.h` and should be included as a header and not linked? If it is linked, that would defeat the purpose.  So I assume your pip install compiled scipy?\r\n\r\nImporting the system ScPy after incrementing the C-ABI version, I get this (version was 100009 or so before):\r\n```\r\nIn [2]: f\"{np.core._multiarray_umath._get_ndarray_c_version():x}\"                                                       \r\nOut[2]: '200000a'\r\n\r\nIn [3]: from scipy import linalg                                                                                        \r\n---------------------------------------------------------------------------\r\nRuntimeError                              Traceback (most recent call last)\r\nRuntimeError: module compiled against ABI version 0x1000009 but this version of numpy is 0x200000a\r\n---------------------------------------------------------------------------\r\nImportError                               Traceback (most recent call last)\r\nImportError: numpy.core.multiarray failed to import\r\n```",
+        "createdAt" : "2020-10-22T22:56:37Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9a8b2665-dc91-4b26-8207-7e64926fe2e4",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "OK, I didn't try importing scipy.linalg (which I guess is compiled by cython). Thanks for checking more deeply. So we cannot change C_ABI_VERSION without recompiling the world.\r\n\r\nWhere does that leave us with this PR (and the one to configure memory allocations)?",
+        "createdAt" : "2020-10-22T23:03:38Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bdc8b8b8-d891-4553-b670-f63817087dde",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "I guess we either:\r\n\r\n1. Wait until some day where we actually do a big bang NumPy 2.0 (I am fan of a 2.0, but not of recompile the world 2.0)\r\n2. Define the size of these structs as \"undefined\"? Placing it into the downstream responsibility of checking for binary compatibility in this case (this is what cython normally does, although with a warning? I have yet to test it here though).\r\n3. We think about some extremely slow route, with compile time warnings...?\r\n\r\nMy opinion about option 2 has not changed (with two caveats):\r\n\r\n* I would like to give a reasonable error/warning at least in the majority of (hypothetical) cases. This is to *decrease the severity* if the issue appears.\r\n* No big \"user\" of this shows up and shouts loudly. Which is, unfortunately, plausible.\r\n\r\nOf course, if you go by strict policies, you might just dismiss my opinion. But IMO, we should be using quality assurance type triaging, which means map out how likely it is (how many users are affected), how sever it is:\r\n\r\n* Affects: Exceedingly few users (we are not aware of any, none of the large open source ~pages~ projects seem affected)\r\n* Severity: Crash bug, which is easy to fix by recompiling once the issue is found.  That is fairly sever, but *not* super high, since it is seems pretty much impossible that you get wrong results without a loud crash as well.  (EDIT: missing not)\r\n\r\nSo because it should be reasonable to fix, and be a loud crash that affects very few users. My personal opinion is that it might well be much lower impact than some \"bug fixes\".\r\n\r\nOf course, you have to weigh that with the benefit. In this case probably a few percent of speedup for many scripts relying on small to mid-sized arrays and simpler code.  And later your change, which might make some big-data  use cases much faster.",
+        "createdAt" : "2020-10-22T23:24:52Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0ca64b16-ff53-4f2e-9917-b02b648e553f",
+        "parentId" : "61b9e6fb-9255-4343-ae6a-42c892366e76",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "On the up-side here, I was trying around with cython code such as:\r\n```\r\ncdef class myarr(np.ndarray):\r\n    cdef int myint  # or just pass\r\n```\r\nAnd even that crashes hard. I guess because cython supports cyclic GC, but we do not.  So that rules out one set of potential users who run into this unwittingly...\r\n\r\nI wonder if could declare `np.ndarray` as final in the `__init__.pyd`. Or in some other way telling cython that `cdef` style subclassing is *not* valid (or at least not simple).",
+        "createdAt" : "2020-10-23T01:11:27Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a216c5b3508a2c9c62a4e37c133350832ce26f86",
+    "line" : 1,
+    "diffHunk" : "@@ -1,1 +699,703 @@    PyArray_Descr *descr;\n    /* Flags describing array -- see below */\n    int flags;\n    /* For weak references */\n    PyObject *weakreflist;"
+  },
+  {
+    "id" : "ab27b56d-fce6-4462-a3e4-ad6b0a92808b",
+    "prId" : 16938,
+    "prUrl" : "https://github.com/numpy/numpy/pull/16938#pullrequestreview-537771425",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "parentId" : null,
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "What was wrong with this?",
+        "createdAt" : "2020-11-23T23:19:17Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fedd4331-449e-489a-ada7-eb72e1e7fcd9",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Nothing as such, but it is a trap, and most code that uses it, such as:\r\n```\r\nstruct MySubclass {\r\n    char space_for_ndarray[NPY_SIZEOF_PYARRAYOBJECT];\r\n    int myslot;\r\n}\r\n```\r\nis probably problematic and most likely not be binary compatible with all numpy versions.  So it gives a false sense security?",
+        "createdAt" : "2020-11-23T23:24:20Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c251d156-f37c-4603-8238-faebca162d89",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "I don't see why, it is defined at compile time just as before. The API is changed anyway, so apps compiled against 1.20 are not guaranteed to be backwards compatible.",
+        "createdAt" : "2020-11-23T23:32:23Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ecb6a3b8-cdbc-41b5-b07e-2a0d9778e36f",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "And code that extends NumPy internals has never been guaranteed to be forward compatible.",
+        "createdAt" : "2020-11-23T23:34:33Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b715940e-58c1-4fa3-940e-6987df82e878",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "True, this is only interesting for forward compatibility with possible future size changes.  I would have a faint hope that it may help someone realize that since their module doesn't compile on 1.20+, it has to be modified even if you compile it with an earlier version to run in 1.20+...\r\n\r\nI agree, we probably never promised not to modify struct sizes in this way, we have certainly done with many structs (aside from `ndarray` itself).\r\n\r\nThe first version here, I replaced the macro with `PyArray_Type.tp_basicsize` to make it a runtime constan, which is safe and will still fail if used for static sizes. (It is also probably a pretty useless macro, but...)",
+        "createdAt" : "2020-11-23T23:42:40Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "033bb43e-126b-493b-9fbf-039723e44dae",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "I suppose the argument is to break the compilation of downstream apps that extend the structure, but if they are compiling against 1.20 they cannot expect to be backwards compatible in any case, and their solution would be the same workaround you use here. ",
+        "createdAt" : "2020-11-23T23:45:34Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c1b58b22-ebba-4d71-80dc-bde7bd1f30a6",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "body" : "This macro is misleading, since its name seems to guarantee it will faithfully return the size of the struct, but it cannot do so at compile time. Hopefully people who use `PyArray_Type.tp_basicsize` will realize they can only do so at runtime. Removing the macro seems like a good way to signal to people who might have been using it - \"don't do that\".",
+        "createdAt" : "2020-11-24T06:23:08Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "919d650d-5f9e-4069-90f7-968e2cf7bb16",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0f2483d0-3e03-4b84-801a-5a7df5683411",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "> but it cannot do so at compile time.\r\n\r\nCould you explain that? `sizeof` is a compiler operator.\r\n\r\n> Sizeof is a much used operator in the C or C++. It is a compile time unary operator which can be used to compute the size of its operand.",
+        "createdAt" : "2020-11-24T15:17:46Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c1c99dfb-3566-4ee6-94ed-49726e07f211",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "But someone who uses this macro currently will incorrectly believe that their code is forward compatible. They are even avoiding the \"deprecated API\" to ensure binary compatibility with a potential NumPy release messing with the structs internals.",
+        "createdAt" : "2020-11-24T16:01:41Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1fd26a71-d0a8-4626-a57e-a3676cde3ce6",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "Why not just rename it then? Put an underscore on it or something. ",
+        "createdAt" : "2020-11-24T17:11:42Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9352c529-cc07-4397-83be-1546188db20c",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "At least just comment it out with an explanation of why it is done. The first place people will look for an explanation of trouble will be in the include file.",
+        "createdAt" : "2020-11-24T17:19:35Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ab08cb96-5f5e-41c0-a826-4165352f7230",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "OK, let me make this macro a static assert as Matti posted.  Even if a compiler should not support it the compiler error will point to some text regarding to what is going on...",
+        "createdAt" : "2020-11-24T17:48:53Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "47c6583e-cf66-44ab-86ed-3bee5b2f96fa",
+        "parentId" : "3716a943-eb1d-41c1-bb58-99d1b966db6f",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "Hmm, although, I am not sure that actually compiles well always (i.e. without super confusing things). The stack-overflow posts seem to a be a bit unsure about it. Some people seem to suggest the weird:\r\n```\r\nstatic int assert_NPY_SIZEOF_PYARRAYOBJECT_was_removed_because_it_is_misleading_see_1_20_Release_Notes[-1]\r\n```\r\ninstead, which is weird, hmmmpf.",
+        "createdAt" : "2020-11-24T17:58:41Z",
+        "updatedAt" : "2020-11-26T06:06:54Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a216c5b3508a2c9c62a4e37c133350832ce26f86",
+    "line" : 25,
+    "diffHunk" : "@@ -1,1 +734,738 @@ */\n\n\n/* Array Flags Object */\ntypedef struct PyArrayFlagsObject {"
   }
 ]
