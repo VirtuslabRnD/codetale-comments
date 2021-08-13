@@ -1,0 +1,90 @@
+[
+  {
+    "id" : "9d09156a-873f-44c3-9bdf-c3bffb1dbfef",
+    "prId" : 21264,
+    "prUrl" : "https://github.com/nodejs/node/pull/21264#pullrequestreview-129353114",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "507b0f89-72fa-49ed-80c1-6098abbb7e74",
+        "parentId" : null,
+        "authorId" : "4b71aeaa-5376-4bc0-be81-0ae8df38206e",
+        "body" : "Right now we seem to have two implicit \"subclasses\" of `GetNameInfoReqWrap`: one having a `.callback` property and is used for `dns`, while the other has `.resolve` and `.reject` properties. I would rather make this distinction explicit by having a `GetAddrInfoPromiseReqWrap` subclass that extends `GetAddrInfoReqWrap`.\r\n\r\nSame for the other wrapper classes.",
+        "createdAt" : "2018-06-15T03:35:42Z",
+        "updatedAt" : "2018-06-20T17:46:12Z",
+        "lastEditedBy" : "4b71aeaa-5376-4bc0-be81-0ae8df38206e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3dc6690c-9f2d-4bbd-b52c-7b5bccb9e56c",
+        "parentId" : "507b0f89-72fa-49ed-80c1-6098abbb7e74",
+        "authorId" : "ff334962-2ee8-45f1-ad4a-cfb65ffd6744",
+        "body" : "@TimothyGu I was aiming to avoid a lot of unnecessary duplicate code. The wraps behave exactly the same in the C++ layer.",
+        "createdAt" : "2018-06-15T11:34:47Z",
+        "updatedAt" : "2018-06-20T17:46:12Z",
+        "lastEditedBy" : "ff334962-2ee8-45f1-ad4a-cfb65ffd6744",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f852d4e3-3ce6-4601-8074-d7e28b265574",
+        "parentId" : "507b0f89-72fa-49ed-80c1-6098abbb7e74",
+        "authorId" : "4b71aeaa-5376-4bc0-be81-0ae8df38206e",
+        "body" : "@cjihrig Yeah I understand. What I'm trying to say is that you can have a JavaScript `class` that `extends GetAddrInfoReqWrap`. As long as its constructor calls `super()` properly it should work just fine. No duplication in C++ needed.",
+        "createdAt" : "2018-06-15T22:59:09Z",
+        "updatedAt" : "2018-06-20T17:46:12Z",
+        "lastEditedBy" : "4b71aeaa-5376-4bc0-be81-0ae8df38206e",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7451bd75-82b0-40de-b70f-041a2e32ba8b",
+        "parentId" : "507b0f89-72fa-49ed-80c1-6098abbb7e74",
+        "authorId" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "body" : "@TimothyGu It still seems a bit complex if we hang all the data (`host`, `port`, `bindingName`, etc.) onto a req wrap with C++ binding even though the C++ binding may not necessarily read those properties from the req wrap. The only property that matters to C++ should be `wrap.oncomplete`, so it may be cleaner if we create two JS classes, one for the callback and the other one for promises, each with a `.handle` (or a symbol property) pointing to those req wraps and add the data properties to the JS instances of those classes. Then the main difference between those two classes would just be how we call `resolve`/`reject`/`callback(null, result)`/`callback(dnsException(...))` in `handle.oncomplete`. (That's basically what the two types of wraps do in the fs promises implementation although those are implemented in C++)\r\n\r\n(It's a bit unfortunate that the resolves have a `ChannelWrap` that's not req wrap as `_handle` though)",
+        "createdAt" : "2018-06-16T03:39:53Z",
+        "updatedAt" : "2018-06-20T17:46:12Z",
+        "lastEditedBy" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "76dc1cf7-f2fb-45d8-8b77-8e4d1774d890",
+        "parentId" : "507b0f89-72fa-49ed-80c1-6098abbb7e74",
+        "authorId" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "body" : "On a second thought, it may not be feasible to separate the data properties to an outer object since we have been allowing users to retrieve them via the `this` bound to the callback...\r\n\r\nEDIT: but we do not always bind the callback to the req wrap e.g. `dns.lookup('127.0.0.1', function() { console.log(this) }` gives you the global.",
+        "createdAt" : "2018-06-16T03:54:18Z",
+        "updatedAt" : "2018-06-20T17:46:12Z",
+        "lastEditedBy" : "fd6121e5-716b-4d0d-aef4-eef51dd23a40",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a77b30ca7fa9d2d945bf04707ed38e885acb0626",
+    "line" : 84,
+    "diffHunk" : "@@ -1,1 +82,86 @@    req.oncomplete = all ? onlookupall : onlookup;\n    req.resolve = resolve;\n    req.reject = reject;\n\n    const err = getaddrinfo(req, hostname, family, hints, verbatim);"
+  },
+  {
+    "id" : "13e9daab-92a9-4992-bd1a-cc5aebd1d3f2",
+    "prId" : 21264,
+    "prUrl" : "https://github.com/nodejs/node/pull/21264#pullrequestreview-129526362",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "e37be509-7b4a-4c78-a909-f3dfe0b12dd5",
+        "parentId" : null,
+        "authorId" : "23c9565c-5fe0-4faf-82b2-dc40116c9bfa",
+        "body" : "I would really prefer it if this method dind't do so much explicit construction:\r\n\r\n```js\r\nasync function createLookupPromise(family, hostname, all, hints, verbatim) {\r\n  if (!hostname) {\r\n    if (all) return [];\r\n   else \r\n     return { address: null, family: family === 6 ? 6 : 4 };\r\n  }\r\n  const matchedFamily = isIP(hostname);\r\n  if (matchedFamily !== 0) {\r\n    const result = { address: hostname, family: matchedFamily }\r\n    if(all) return [result];\r\n    return result;\r\n  }\r\n  return await new Promise((resolve, reject) => {\r\n    const req = new GetAddrInfoReqWrap();\r\n    // ...\r\n    req.resolve = resolve;\r\n  }\r\n}\r\n```",
+        "createdAt" : "2018-06-18T11:46:12Z",
+        "updatedAt" : "2018-06-20T17:46:12Z",
+        "lastEditedBy" : "23c9565c-5fe0-4faf-82b2-dc40116c9bfa",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a77b30ca7fa9d2d945bf04707ed38e885acb0626",
+    "line" : 55,
+    "diffHunk" : "@@ -1,1 +53,57 @@}\n\nfunction createLookupPromise(family, hostname, all, hints, verbatim) {\n  return new Promise((resolve, reject) => {\n    if (!hostname) {"
+  }
+]
