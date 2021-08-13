@@ -889,5 +889,82 @@
     "commit" : "adfaafba9f45cea66a344d0d67916bee38b79ce2",
     "line" : 8,
     "diffHunk" : "@@ -1,1 +2500,2504 @@     * Prevent DECREFing dtype in fail codepath by setting to NULL\n     */\n    dtype = NULL;\n    if (ret == NULL) {\n        goto fail;"
+  },
+  {
+    "id" : "0ccc3b6d-2d27-45cb-b80a-51f59bf9f8e8",
+    "prId" : 13046,
+    "prUrl" : "https://github.com/numpy/numpy/pull/13046#pullrequestreview-208407538",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "868b6d38-3f05-4885-8ccc-b12d32a2cf4d",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "What if prototype.ndim != len(shape)?",
+        "createdAt" : "2019-02-26T20:28:07Z",
+        "updatedAt" : "2019-04-19T16:40:22Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "62e3a9e4-e800-41fa-83bc-63908ae41908",
+        "parentId" : "868b6d38-3f05-4885-8ccc-b12d32a2cf4d",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "This is still broken - the strides array is off a different length to ndim. This isn't just an implementation bug, this is a design problem. What does it mean to say \"create an Nd array matching the order of this Md one\" when M != N\r\n\r\nMy hunch would be to say \"it's meaningless, require the caller to insert dimensions to match by erroring\"",
+        "createdAt" : "2019-02-27T04:03:33Z",
+        "updatedAt" : "2019-04-19T16:40:22Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c7778502-eac3-4c54-a108-025771ab7ffd",
+        "parentId" : "868b6d38-3f05-4885-8ccc-b12d32a2cf4d",
+        "authorId" : "6e17f0b6-e8c6-47b6-83f4-6aa30f051dc0",
+        "body" : "I guess you're talking exclusively about the new case, creating an array with a different shape, right? In that case you're right, looking at the strides of the original array makes no sense, I will change it such that arrays with new shapes will always fall into the simpler `order != NPY_KEEPORDER` condition, where strides are ignored.",
+        "createdAt" : "2019-02-27T09:14:44Z",
+        "updatedAt" : "2019-04-19T16:40:22Z",
+        "lastEditedBy" : "6e17f0b6-e8c6-47b6-83f4-6aa30f051dc0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "695b836eb5d1e25363795ceed35b142d062c9056",
+    "line" : 62,
+    "diffHunk" : "@@ -1,1 +1260,1264 @@\n        PyArray_CreateSortedStridePerm(ndim,\n                                        PyArray_STRIDES(prototype),\n                                        strideperm);\n"
+  },
+  {
+    "id" : "2502e6e4-732f-4cbc-8413-bfa0b40e9057",
+    "prId" : 13046,
+    "prUrl" : "https://github.com/numpy/numpy/pull/13046#pullrequestreview-230477027",
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "472d6d92-e350-4618-9ab1-df8f19d80aff",
+        "parentId" : null,
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "My 1.ii proposal would look like changing everything between the new line 1261 and here to:\r\n```C\r\nif (PyArray_NDIM(prototype) >= ndim) {\r\n    int leading_dims = PyArray_NDIM(prototype) - ndim;\r\n\r\n    /* Use only the trailing strides */\r\n    PyArray_CreateSortedStridePerm(ndim,\r\n                                   PyArray_STRIDES(prototype) + leading_dims,\r\n                                   strideperm);\r\n    /* Build the new strides */\r\n    stride = dtype->elsize;\r\n    for (idim = ndim-1; idim >= 0; --idim) {\r\n        npy_intp i_perm = strideperm[idim].perm;\r\n        strides[i_perm] = stride;\r\n        stride *= shape[i_perm];\r\n    }\r\n}\r\nelse {\r\n    int leading_dims = ndim - PyArray_NDIM(prototype);\r\n    /* Use all the strides */\r\n    PyArray_CreateSortedStridePerm(PyArray_NDIM(prototype),\r\n                                   PyArray_STRIDES(prototype),\r\n                                   strideperm);\r\n\r\n    /* Build the new trailing strides */\r\n    stride = dtype->elsize;\r\n    for (idim = PyArray_NDIM(prototype)-1; idim >= 0; --idim) {\r\n        npy_intp i_perm = strideperm[idim].perm + leading_dims;\r\n        strides[i_perm] = stride;\r\n        stride *= shape[i_perm];\r\n    }\r\n\r\n    /* Create remaining leading strides as C order */\r\n    for (idim = leading_dims; idim >= 0; --idim) {\r\n        strides[idim] = stride;\r\n        stride *= shape[idim];\r\n    }\r\n}\r\n```",
+        "createdAt" : "2019-04-25T06:33:16Z",
+        "updatedAt" : "2019-04-25T06:39:53Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5f90d9ba-b47c-4d18-9bb5-87e6dc4850e2",
+        "parentId" : "472d6d92-e350-4618-9ab1-df8f19d80aff",
+        "authorId" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "body" : "Or trading branching for state:\r\n```C\r\n/* not sure if this is clearer via min/max */\r\nint leading_src_dims = 0;  // max(src.ndim - dst.ndim, 0)\r\nint leading_dst_dims = 0;  // max(dst.ndim - src.ndim, 0)\r\nint shared_dims;  // min(src.ndim, dst.ndim\r\nif (PyArray_NDIM(prototype) >= ndim) {\r\n    shared_dims = ndim;\r\n    leading_src_dims = PyArray_NDIM(prototype) - ndim;\r\n}\r\nelse {\r\n    shared_dims = PyArray_NDIM(prototype);\r\n    leading_dst_dims = ndim - PyArray_NDIM(prototype);\r\n}\r\n\r\n/* Use only the trailing strides from the source */\r\nPyArray_CreateSortedStridePerm(shared_dims,\r\n                               PyArray_STRIDES(prototype) + leading_src_dims,\r\n                               strideperm);\r\n\r\n/* Build the destrination trailing strides */\r\nstride = dtype->elsize;\r\nfor (idim = ndim-1; idim >= 0; --idim) {\r\n    npy_intp i_perm = strideperm[idim].perm + leading_dst_dims;\r\n    strides[i_perm] = stride;\r\n    stride *= shape[i_perm];\r\n}\r\n\r\n/* Create remaining leading strides as C order */\r\nfor (idim = leading_dst_dims; idim >= 0; --idim) {\r\n    strides[idim] = stride;\r\n    stride *= shape[idim];\r\n}\r\n```",
+        "createdAt" : "2019-04-25T07:01:45Z",
+        "updatedAt" : "2019-04-25T07:03:30Z",
+        "lastEditedBy" : "ab55dc5f-f626-43b1-ba83-3d8843d79a45",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "695b836eb5d1e25363795ceed35b142d062c9056",
+    "line" : 71,
+    "diffHunk" : "@@ -1,1 +1269,1273 @@            strides[i_perm] = stride;\n            stride *= dims[i_perm];\n        }\n\n        /* Finally, allocate the array */"
   }
 ]
