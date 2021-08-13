@@ -438,5 +438,258 @@
     "commit" : "b6d0263239926e8b14ebc26a0d7b9469fa7866d4",
     "line" : 10,
     "diffHunk" : "@@ -1,1 +1091,1095 @@                    atol = max(atol, np.sqrt(np.finfo(p.dtype).eps))\n\n            p = <ndarray>PyArray_ContiguousFromObject(p, NPY_DOUBLE, 1, 1)\n            pix = <double*>PyArray_DATA(p)\n"
+  },
+  {
+    "id" : "18601ded-c323-4b41-a04d-26bbd83ec146",
+    "prId" : 6910,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d33ba627-032f-4b81-bbf1-3e556f14e3e5",
+        "parentId" : null,
+        "authorId" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "body" : "Ah, this is how you got around the issue that I was addressing in #6885.  Cool.\n",
+        "createdAt" : "2016-01-01T04:27:28Z",
+        "updatedAt" : "2016-01-03T03:05:39Z",
+        "lastEditedBy" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bc2a97bde26a026e75adec7ec70566be3005c47c",
+    "line" : 406,
+    "diffHunk" : "@@ -1,1 +1273,1277 @@        with self.lock:\n            return randfunc(low, high - 1, size, self.state_address)\n\n    def bytes(self, npy_intp length):\n        \"\"\""
+  },
+  {
+    "id" : "0bfbc738-ad71-4f36-ad6f-2586158a0adf",
+    "prId" : 6910,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c2f74ede-4486-45c0-a64f-c7a7052e408b",
+        "parentId" : null,
+        "authorId" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "body" : "Question: why is everything in the `else` block (save `array`) being casted as `np.uint32` when we are returning a random array of `np.int32`?  Similar question for `rand_int64`.\n",
+        "createdAt" : "2016-01-01T07:43:13Z",
+        "updatedAt" : "2016-01-03T03:05:39Z",
+        "lastEditedBy" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0b83f198-7932-4e1a-8c47-eac1003d41f9",
+        "parentId" : "c2f74ede-4486-45c0-a64f-c7a7052e408b",
+        "authorId" : "34105ae0-9fd2-4403-be9b-7c550a729828",
+        "body" : "Because it works, the magic of two's complement I guess... Say you pass in a range of -5 to 5, and for brevity let's pretend this was an 8 bit version. The range is properly converted to a uint8 10, but low gets converted to uint8 251, 11111011 in binary. When the `rk_random_uint32` function e.g. adds 6, 00000110 in binary, to low, the result would be 257, 100000001 in binary, but because we have fixed width integers, and unsigned addition overflow is not undefined, the high bit is discarded, and you get the correct 1 value.\n\nPerhaps it is worth a comment somewhere: it wasn't obvious to me either.\n",
+        "createdAt" : "2016-01-01T12:46:49Z",
+        "updatedAt" : "2016-01-03T03:05:39Z",
+        "lastEditedBy" : "34105ae0-9fd2-4403-be9b-7c550a729828",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d07c1d5-b21d-42e1-a3f2-f39939a9139b",
+        "parentId" : "c2f74ede-4486-45c0-a64f-c7a7052e408b",
+        "authorId" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "body" : "Ah, okay, that's fair.  I think @charris made comments about numbers wrapping in `randomkit.c` in the case that `off` is large.  Though it would seem useful to make a minor comment somewhere in `mtrand.pyx` too as you suggested.\n",
+        "createdAt" : "2016-01-01T13:13:53Z",
+        "updatedAt" : "2016-01-03T03:05:39Z",
+        "lastEditedBy" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bea42263-fdb6-4040-8c3f-7cbd529c0b72",
+        "parentId" : "c2f74ede-4486-45c0-a64f-c7a7052e408b",
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "At the bit level, there is no difference between signed/unsigned addition and subtraction on two's complement machines. However, unsigned arithmetic is specified to be modular, so overflow is always ignored. For signed integers the behavior may be undefined. Here we need to be careful to convert signed integers to two's complement signed binary integers and then treat those integers as unsigned, hence the double cast in some cases. The difference needs to be a positive so the generated random offsets can the added to the offset. To see how this works in practice, think of the unsigned numbers a located on a circle, increasing clockwise, with 0 just after the largest, and call 0 the wrapping point. Signed arithmetic is on the same circle, but the wrapping point is chosen to be at the most negative value represented by `0x100....0` on the circle. Addition of positive numbers moves a point clockwise around the circle in both cases. To make sure every thing works as expected the low and high bounds are checked before the call so that proceeding clockwise from the lowest to the highest never crosses the chosen wrapping point.\n\nNote that another option for representing signed numbers is offset binary, which can be advantageous in some circuit designs and DSP.\n",
+        "createdAt" : "2016-01-03T18:24:11Z",
+        "updatedAt" : "2016-01-03T18:24:11Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e9e70a78-b205-4439-96d1-a0aab7dceb03",
+        "parentId" : "c2f74ede-4486-45c0-a64f-c7a7052e408b",
+        "authorId" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "body" : "Right, that is true.  What you did is perfectly fine.  I was just confused initially because the return type and castings were slightly different.  Thanks @charris and @jaimefrio for clarifying!\n",
+        "createdAt" : "2016-01-03T21:07:54Z",
+        "updatedAt" : "2016-01-03T21:07:54Z",
+        "lastEditedBy" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bc2a97bde26a026e75adec7ec70566be3005c47c",
+    "line" : 175,
+    "diffHunk" : "@@ -1,1 +732,736 @@        with nogil:\n            rk_random_uint32(off, rng, cnt, out, state)\n        return array\n\n"
+  },
+  {
+    "id" : "40e49753-7684-434a-86bb-92b6f19bf698",
+    "prId" : 6910,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "be6bfdd7-859e-4b38-b432-6402a8466d02",
+        "parentId" : null,
+        "authorId" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "body" : "Just curious: in light of the recent discussion surrounding half-open and closed intervals, is it worth deprecating this function in this release (or rather, this PR)?\n",
+        "createdAt" : "2016-01-01T22:00:04Z",
+        "updatedAt" : "2016-01-03T03:05:39Z",
+        "lastEditedBy" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bc2a97bde26a026e75adec7ec70566be3005c47c",
+    "line" : 346,
+    "diffHunk" : "@@ -1,1 +1194,1198 @@                [ True,  True]]], dtype=bool)\n\n        \"\"\"\n        return disc0_array(self.internal_state, rk_long, size, self.lock)\n"
+  },
+  {
+    "id" : "d2768d7f-62c8-4a55-bb8e-990067b7bdf8",
+    "prId" : 6910,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "8d4d54d3-a26a-4a09-aa98-667bac74c4b8",
+        "parentId" : null,
+        "authorId" : "85b881e8-d8a0-43d4-81d3-7e233dc5f1ae",
+        "body" : "Quotes.\n",
+        "createdAt" : "2016-01-03T22:30:56Z",
+        "updatedAt" : "2016-01-03T22:30:56Z",
+        "lastEditedBy" : "85b881e8-d8a0-43d4-81d3-7e233dc5f1ae",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bc2a97bde26a026e75adec7ec70566be3005c47c",
+    "line" : 372,
+    "diffHunk" : "@@ -1,1 +1222,1226 @@        dtype : dtype, optional\n            Desired dtype of the result. All dtypes are determined by their\n            name, i.e., 'int64', 'int`, etc, so byteorder is not available\n            and a specific precision may have different C types depending\n            on the platform. The default value is 'l' (C long)."
+  },
+  {
+    "id" : "17160b66-0eb3-473e-abec-25db9dafe89a",
+    "prId" : 6933,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "d4959f1d-4048-4c3c-a5de-7a7b76f46aff",
+        "parentId" : null,
+        "authorId" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "body" : "Why the cast to `size_t`?\n",
+        "createdAt" : "2016-01-12T17:44:20Z",
+        "updatedAt" : "2016-01-17T04:57:35Z",
+        "lastEditedBy" : "e6b1ca39-8ea5-45f7-ae52-a080cee1181b",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "258a7c49-14c3-4161-8cc9-abbe6cb6f714",
+        "parentId" : "d4959f1d-4048-4c3c-a5de-7a7b76f46aff",
+        "authorId" : "4b199d8d-ad49-4d20-ac90-89741ac9c7bb",
+        "body" : "Because Cython interprets `<char*>python_object` as casting a bytes object (_not_ an object supporting the buffer protocol) to a `char*`, but `<char*>c_object` as a C-style cast.  (If you try it you'll get \"TypeError: expected bytes, int (or whatever you pass in) found\")\n",
+        "createdAt" : "2016-01-12T18:18:43Z",
+        "updatedAt" : "2016-01-17T04:57:35Z",
+        "lastEditedBy" : "4b199d8d-ad49-4d20-ac90-89741ac9c7bb",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "309fdd4cd1400fc392acfa418226bd7f8b10073d",
+    "line" : 32,
+    "diffHunk" : "@@ -1,1 +4991,4995 @@            # Only for non-empty, 1d objects of class ndarray (subclasses such\n            # as MaskedArrays may not support this approach).\n            x_ptr = <char*><size_t>x.ctypes.data\n            stride = x.strides[0]\n            itemsize = x.dtype.itemsize"
+  },
+  {
+    "id" : "2b44c728-df15-4044-8275-8c0cca56fda4",
+    "prId" : 6997,
+    "prUrl" : null,
+    "prSource" : "GitHub",
+    "comments" : [
+      {
+        "id" : "c32fa25c-083a-400e-b820-9315f6bd1602",
+        "parentId" : null,
+        "authorId" : "34105ae0-9fd2-4403-be9b-7c550a729828",
+        "body" : "Is `dtype=int` the correct value to always get a C `long`? Hopefully Appveyor will tell us if this breaks for 64 bit Windows and its 32 bit longs...\n",
+        "createdAt" : "2016-01-20T09:09:37Z",
+        "updatedAt" : "2016-01-20T11:47:56Z",
+        "lastEditedBy" : "34105ae0-9fd2-4403-be9b-7c550a729828",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f3ed2ba5-6eb8-44ee-a786-cc911b92e8b3",
+        "parentId" : "c32fa25c-083a-400e-b820-9315f6bd1602",
+        "authorId" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "body" : "I was following what had been done in the `else` block, but now I suddenly see that there is a gap in the testing there because the `test_binomial` function (and I suspect other functions as well) never tests broadcasting and hence the `else` block is not reached in the tests.\n\nIs there perhaps a safer `dtype` we could use?  Perhaps `np.long`?\n",
+        "createdAt" : "2016-01-20T09:16:47Z",
+        "updatedAt" : "2016-01-20T11:47:56Z",
+        "lastEditedBy" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a83aee7e-8c2a-478d-8bf7-f9db127d427d",
+        "parentId" : "c32fa25c-083a-400e-b820-9315f6bd1602",
+        "authorId" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "body" : "`int` always translates to `np.int_` which always translates to long (since ths is the python object, not some Cython stuff).That said, np.long is much more clear and I agree we should prefer that if we mean a C long equivalent.\n",
+        "createdAt" : "2016-01-20T09:36:05Z",
+        "updatedAt" : "2016-01-20T11:47:56Z",
+        "lastEditedBy" : "b0342685-bd89-441f-a04f-0e75db24c07f",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "435a79de-b1cd-4a26-be1b-923ce9320444",
+        "parentId" : "c32fa25c-083a-400e-b820-9315f6bd1602",
+        "authorId" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "body" : ":+1: - done.\n",
+        "createdAt" : "2016-01-20T11:16:56Z",
+        "updatedAt" : "2016-01-20T11:47:56Z",
+        "lastEditedBy" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e40e814-6c3f-4b81-bdf7-6a0718500660",
+        "parentId" : "c32fa25c-083a-400e-b820-9315f6bd1602",
+        "authorId" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "body" : "Hmm...apparently `np.long` is <b>not</b> the way to go, as Travis failed on the 32-bit build <a href=\"https://travis-ci.org/numpy/numpy/builds/103579150\">here</a>.  Reverting to `np.int`.\n",
+        "createdAt" : "2016-01-20T11:36:40Z",
+        "updatedAt" : "2016-01-20T11:47:56Z",
+        "lastEditedBy" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5b18d0ee-fa87-40f1-87c6-7de87e7fed47",
+        "parentId" : "c32fa25c-083a-400e-b820-9315f6bd1602",
+        "authorId" : "85b881e8-d8a0-43d4-81d3-7e233dc5f1ae",
+        "body" : "Just use `int`. `np.int` is an unnecessary alias.\n",
+        "createdAt" : "2016-01-20T11:44:43Z",
+        "updatedAt" : "2016-01-20T11:47:56Z",
+        "lastEditedBy" : "85b881e8-d8a0-43d4-81d3-7e233dc5f1ae",
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "731b6bb7-72e9-4da0-917a-4d67834d2027",
+        "parentId" : "c32fa25c-083a-400e-b820-9315f6bd1602",
+        "authorId" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "body" : "Fair enough.  Done.\n",
+        "createdAt" : "2016-01-20T11:48:17Z",
+        "updatedAt" : "2016-01-20T11:48:17Z",
+        "lastEditedBy" : "11f18e00-52bd-4b68-b13d-17d0c3237df0",
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0b150b8cfafa4d8c75e47e6e9c8b3b23d7c0a2b6",
+    "line" : 105,
+    "diffHunk" : "@@ -1,1 +367,371 @@    if size is None:\n        multi = <broadcast>np.broadcast(on, op)\n        array = <ndarray>np.empty(multi.shape, dtype=int)\n    else:\n        array = <ndarray>np.empty(size, dtype=int)"
   }
 ]
